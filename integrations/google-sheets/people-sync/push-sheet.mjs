@@ -262,13 +262,15 @@ const main = async () => {
             })
 
             if (deployResult.status === 0) {
-              console.log(`   ✨ Deployed Successfully!`)
+              const deployingTime = new Date().toLocaleString();
+              console.log(`   ✨ [${deployingTime}] Deployed Successfully!`)
             } else {
               console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
             }
           } else {
             // Optional: Check generic pattern if simple replace didn't work? 
             // current convention is strict: PEOPLE_SHEET_SCRIPT_LAM -> PEOPLE_SHEET_DEPLOY_LAM
+            console.log(`   ℹ️ No deploy ID found for ${profile.key} (Expected: ${deployEnvKey})`)
           }
 
         } else {
@@ -346,10 +348,13 @@ const main = async () => {
         })
 
         if (deployResult.status === 0) {
-          console.log(`   ✨ Deployed Successfully!`)
+          const deployingTime = new Date().toLocaleString()
+          console.log(`   ✨ [${deployingTime}] Deployed Successfully!`)
         } else {
           console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
         }
+      } else {
+        console.log(`   ℹ️ No deploy ID found for ${profileKey} (Expected: ${deployEnvKey})`)
       }
     }
   }

@@ -190,7 +190,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const attempt = await supabase
       .from('people')
       .select(
-        'id, created_at, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
+        'id, created_at, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_bank_info, sheet_linked_bank_id, sheet_show_qr_image'
       )
       .order('name', { ascending: true })
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
@@ -200,7 +200,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         .order('name', { ascending: true })
       return { data: fallback.data, error: fallback.error }
     }
-    return attempt
+    return attempt as any
   }
 
   const [
@@ -700,6 +700,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       google_sheet_url: person.google_sheet_url,
       sheet_full_img: (person as any).sheet_full_img ?? null,
       sheet_show_bank_account: (person as any).sheet_show_bank_account ?? false,
+      sheet_bank_info: (person as any).sheet_bank_info ?? null,
+      sheet_linked_bank_id: (person as any).sheet_linked_bank_id ?? null,
       sheet_show_qr_image: (person as any).sheet_show_qr_image ?? false,
       is_owner: (person as any).is_owner ?? null,
       is_archived: (person as any).is_archived ?? null,
@@ -797,6 +799,8 @@ export async function updatePerson(
     google_sheet_url?: string | null
     sheet_full_img?: string | null
     sheet_show_bank_account?: boolean
+    sheet_bank_info?: string | null
+    sheet_linked_bank_id?: string | null
     sheet_show_qr_image?: boolean
     subscriptionIds?: string[]
     is_owner?: boolean
@@ -819,6 +823,8 @@ export async function updatePerson(
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
   if (typeof data.sheet_full_img !== 'undefined') payload.sheet_full_img = data.sheet_full_img?.trim() || null
   if (typeof data.sheet_show_bank_account === 'boolean') payload.sheet_show_bank_account = data.sheet_show_bank_account
+  if (typeof data.sheet_bank_info !== 'undefined') payload.sheet_bank_info = data.sheet_bank_info?.trim() || null
+  if (typeof data.sheet_linked_bank_id !== 'undefined') payload.sheet_linked_bank_id = data.sheet_linked_bank_id || null
   if (typeof data.sheet_show_qr_image === 'boolean') payload.sheet_show_qr_image = data.sheet_show_qr_image
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
@@ -862,7 +868,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     const attempt = await supabase
       .from('people')
       .select(
-        'id, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
+        'id, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_bank_info, sheet_linked_bank_id, sheet_show_qr_image'
       )
       .eq('id', id)
       .maybeSingle()
@@ -950,6 +956,8 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     google_sheet_url: (profile as any).google_sheet_url,
     sheet_full_img: (profile as any).sheet_full_img ?? null,
     sheet_show_bank_account: (profile as any).sheet_show_bank_account ?? false,
+    sheet_bank_info: (profile as any).sheet_bank_info ?? null,
+    sheet_linked_bank_id: (profile as any).sheet_linked_bank_id ?? null,
     sheet_show_qr_image: (profile as any).sheet_show_qr_image ?? false,
     is_owner: (profile as any).is_owner ?? null,
     is_archived: (profile as any).is_archived ?? null,

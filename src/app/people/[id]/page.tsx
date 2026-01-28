@@ -21,10 +21,39 @@ import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { Button } from "@/components/ui/button"
 import { getPersonWithSubs } from '@/services/people.service'
 import { TransactionTrigger } from '@/components/transaction/slide-v2/transaction-trigger'
+import { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>,
+  searchParams: Promise<{ tab?: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const { tab } = await searchParams
+  const person = await getPersonWithSubs(id)
+
+  if (!person) return { title: 'Person Not Found' }
+
+  let tabName = 'Detail'
+  if (tab === 'history') tabName = 'History'
+  if (tab === 'split-bill') tabName = 'Split Bill'
+
+  return {
+    title: `${person.name} ${tabName}`,
+  }
+}
+
+export default async function PeopleDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>,
+  searchParams: Promise<{ tab?: string }>
+}) {
   const { id: personId } = await params
 
   // First, get person details to determine the actual debt account ID
@@ -168,6 +197,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   defaultType="repayment"
                   defaultPersonId={actualAccountId}
                   defaultAmount={Math.abs(balance)}
+                  defaultTargetAccountId={person.sheet_linked_bank_id || undefined}
                   buttonClassName="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
                   triggerContent={
                     <>
@@ -181,6 +211,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   buttonText="Repay"
                   defaultType="repayment"
                   defaultPersonId={actualAccountId}
+                  defaultTargetAccountId={person.sheet_linked_bank_id || undefined}
                   buttonClassName="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
                   triggerContent={
                     <>
@@ -220,6 +251,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             googleSheetUrl={person.google_sheet_url}
             sheetFullImg={person.sheet_full_img}
             showBankAccount={person.sheet_show_bank_account ?? undefined}
+            sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
             showQrImage={person.sheet_show_qr_image ?? undefined}
             transactions={transactions}
             cycleSheets={cycleSheets}

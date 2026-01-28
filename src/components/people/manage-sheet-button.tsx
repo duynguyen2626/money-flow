@@ -3,18 +3,22 @@
 import { useEffect, useState, useTransition } from 'react'
 import type { MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileSpreadsheet, RefreshCcw, ExternalLink, Settings2, Save } from 'lucide-react'
+import { FileSpreadsheet, RefreshCcw, ExternalLink, Settings2, Save, Link2, FileJson, Landmark, QrCode, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ManageCycleSheetResponse } from '@/types/sheet.types'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select-shadcn'
+import { Combobox, ComboboxItem } from '@/components/ui/combobox'
+import { Search, ChevronDown, Check, ChevronsUpDown } from 'lucide-react'
 import { isYYYYMM } from '@/lib/month-tag'
 import { updatePersonAction } from '@/actions/people-actions'
 import { SyncReportDialog } from './sync-report-dialog'
+import { Account } from '@/types/moneyflow.types'
 
 function isValidLink(value: string | null | undefined): boolean {
   if (!value) return false
@@ -30,7 +34,10 @@ export interface ManageSheetButtonProps {
   googleSheetUrl?: string | null
   sheetFullImg?: string | null
   showBankAccount?: boolean
+  sheetBankInfo?: string | null
+  sheetLinkedBankId?: string | null
   showQrImage?: boolean
+  accounts?: Account[]
   className?: string
   buttonClassName?: string
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'default'
@@ -53,7 +60,10 @@ export function ManageSheetButton({
   googleSheetUrl = null,
   sheetFullImg = null,
   showBankAccount = false,
+  sheetBankInfo = null,
+  sheetLinkedBankId = null,
   showQrImage = false,
+  accounts = [],
   className,
   buttonClassName,
   size = 'sm',
@@ -70,7 +80,7 @@ export function ManageSheetButton({
   const [sheetUrl, setSheetUrl] = useState<string | null>(initialSheetUrl ?? null)
   const [isManaging, startManageTransition] = useTransition()
   const [isSaving, startSaveTransition] = useTransition()
-  const [showDialog, setShowDialog] = useState(false)
+  const [showPopover, setShowPopover] = useState(false)
 
   // Sync Report State
   const [showReport, setShowReport] = useState(false)
@@ -81,7 +91,10 @@ export function ManageSheetButton({
   const [currentSheetUrl, setCurrentSheetUrl] = useState(googleSheetUrl ?? '')
   const [currentSheetImg, setCurrentSheetImg] = useState(sheetFullImg ?? '')
   const [currentShowBankAccount, setCurrentShowBankAccount] = useState(showBankAccount)
+  const [currentBankInfo, setCurrentBankInfo] = useState(sheetBankInfo ?? '')
+  const [currentLinkedBankId, setCurrentLinkedBankId] = useState<string | null>(sheetLinkedBankId ?? null)
   const [currentShowQrImage, setCurrentShowQrImage] = useState(showQrImage)
+  const [accountSearch, setAccountSearch] = useState('')
 
   const router = useRouter()
 
@@ -89,15 +102,17 @@ export function ManageSheetButton({
     setSheetUrl(initialSheetUrl ?? null)
   }, [initialSheetUrl])
 
-  // Reset state when dialog opens
+  // Reset state when popover opens
   useEffect(() => {
-    if (!showDialog) return
+    if (!showPopover) return
     setCurrentScriptLink(scriptLink ?? '')
     setCurrentSheetUrl(googleSheetUrl ?? '')
     setCurrentSheetImg(sheetFullImg ?? '')
     setCurrentShowBankAccount(showBankAccount)
+    setCurrentBankInfo(sheetBankInfo ?? '')
+    setCurrentLinkedBankId(sheetLinkedBankId ?? null)
     setCurrentShowQrImage(showQrImage)
-  }, [scriptLink, googleSheetUrl, sheetFullImg, showBankAccount, showQrImage, showDialog])
+  }, [scriptLink, googleSheetUrl, sheetFullImg, showBankAccount, sheetBankInfo, sheetLinkedBankId, showQrImage, showPopover])
 
   const label = sheetUrl ? linkedLabel : unlinkedLabel
   const icon = sheetUrl ? RefreshCcw : FileSpreadsheet
@@ -111,6 +126,8 @@ export function ManageSheetButton({
     currentSheetUrl !== (googleSheetUrl ?? '') ||
     currentSheetImg !== (sheetFullImg ?? '') ||
     currentShowBankAccount !== showBankAccount ||
+    currentBankInfo !== (sheetBankInfo ?? '') ||
+    currentLinkedBankId !== (sheetLinkedBankId ?? null) ||
     currentShowQrImage !== showQrImage
 
   const handleTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
@@ -123,14 +140,19 @@ export function ManageSheetButton({
       return
     }
 
+    setShowPopover(false)
     startSaveTransition(async () => {
-      const toastId = toast.loading('Saving settings...')
+      const toastId = toast.loading('Saving settings...', {
+        description: 'Updating person profile details',
+      })
       try {
         const ok = await updatePersonAction(personId, {
           sheet_link: currentScriptLink.trim() || null,
           google_sheet_url: currentSheetUrl.trim() || null,
           sheet_full_img: currentSheetImg.trim() || null,
           sheet_show_bank_account: currentShowBankAccount,
+          sheet_bank_info: currentBankInfo.trim() || null,
+          sheet_linked_bank_id: currentLinkedBankId || null,
           sheet_show_qr_image: currentShowQrImage,
         })
         if (!ok) {
@@ -158,8 +180,11 @@ export function ManageSheetButton({
       return
     }
 
+    setShowPopover(false)
     startManageTransition(async () => {
-      const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...')
+      const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...', {
+        description: `Processing cycle ${cycleTag}`,
+      })
       try {
         const res = await fetch('/api/sheets/manage', {
           method: 'POST',
@@ -183,28 +208,27 @@ export function ManageSheetButton({
         toast.dismiss(toastId)
 
         if (data.status === 'created' || data.status === 'synced') {
-          // Success! Show report instead of just a toast
+          // Success! Store stats but don't auto-open modal
           setSyncStats({
             syncedCount: data.syncedCount,
             manualPreserved: data.manualPreserved,
             totalRows: data.totalRows,
             sheetUrl: nextUrl
           })
-          setShowDialog(false) // Close settings dialog
-          setShowReport(true) // Open report dialog
 
-          if (data.status === 'created') {
-            toast.success('Sheet created & synced.')
-          }
+          toast.success(data.status === 'created' ? 'Sheet created & synced' : 'Sheet synced successfully', {
+            id: toastId,
+            description: `Synced ${data.syncedCount} transactions.`,
+            action: {
+              label: 'View Report',
+              onClick: () => setShowReport(true)
+            },
+          })
         } else {
-          toast.error('Failed to sync sheet.')
+          toast.error('Failed to sync sheet.', { id: toastId })
         }
 
         router.refresh()
-        // Removed auto-open since we now show the report dialog which has an Open button
-        // if (openAfterSuccess && nextUrl) {
-        //   window.open(nextUrl, '_blank', 'noopener,noreferrer')
-        // }
       } catch (error) {
         toast.dismiss(toastId)
         toast.error('Manage sheet failed.')
@@ -221,7 +245,7 @@ export function ManageSheetButton({
         cycleTag={cycleTag}
       />
 
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Popover open={showPopover} onOpenChange={setShowPopover}>
         {splitMode ? (
           <>
             {/* Sync Action Button */}
@@ -244,20 +268,36 @@ export function ManageSheetButton({
             </Button>
 
             {/* Settings Trigger Icon */}
-            <DialogTrigger asChild>
+            <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size={size === 'md' ? 'default' : size}
-                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500"
+                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500 border-l border-slate-200"
                 disabled={isDisabled}
                 onClick={handleTriggerClick}
               >
                 <Settings2 className="h-4 w-4" />
               </Button>
-            </DialogTrigger>
+            </PopoverTrigger>
+
+            {/* Open Sheet Link (New) */}
+            {currentSheetUrl && isValidLink(currentSheetUrl) && (
+              <Button
+                variant="ghost"
+                size={size === 'md' ? 'default' : size}
+                className="rounded-none px-2 hover:bg-slate-100 h-8 text-emerald-600 border-l border-slate-200"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(currentSheetUrl, '_blank', 'noopener,noreferrer')
+                }}
+                title="Open Google Sheet"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            )}
           </>
         ) : (
-          <DialogTrigger asChild>
+          <PopoverTrigger asChild>
             <Button
               variant="outline"
               size={size === 'md' ? 'default' : size}
@@ -268,161 +308,196 @@ export function ManageSheetButton({
               <Icon className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
               {!iconOnly && label}
             </Button>
-          </DialogTrigger>
+          </PopoverTrigger>
         )}
 
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings2 className="h-5 w-5" />
-              Sheet Settings
-            </DialogTitle>
-            <DialogDescription>
-              Configure Google Apps Script and sheet settings for {cycleTag}
-            </DialogDescription>
-          </DialogHeader>
+        <PopoverContent className="w-[380px] p-0" align="end" sideOffset={8}>
+          <div className="flex items-center gap-2 p-3 border-b border-slate-100 bg-slate-50/50">
+            <Settings2 className="h-4 w-4 text-slate-500" />
+            <h4 className="font-bold text-sm text-slate-900">Sheet Configuration</h4>
+          </div>
 
-          <div className="space-y-6 mt-6">
-            {/* Script Link */}
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Google Apps Script URL</Label>
-              <Input
-                value={currentScriptLink}
-                onChange={(e) => setCurrentScriptLink(e.target.value)}
-                placeholder="https://script.google.com/macros/s/AKfycbx-9meyYDFzAk6Qth3hINqeOhQkATgRAp4mGsmiS0K6yUs0Orvh3DUDuwP7uNvrr4OT/exec"
-                className="font-mono text-xs"
-              />
-              <p className="text-xs text-muted-foreground">
-                Deploy your Google Apps Script as a web app and paste the URL here
-              </p>
-            </div>
+          <div className="p-4 space-y-4">
+            {/* 1. Scripts & Links */}
+            <div className="space-y-3">
+              <div className="relative">
+                <FileJson className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  value={currentScriptLink}
+                  onChange={(e) => setCurrentScriptLink(e.target.value)}
+                  placeholder="https://script.google.com/.../exec"
+                  className="h-8 pl-8 text-xs font-mono"
+                />
+              </div>
 
-            {/* Sheet URL + Bank Account Toggle */}
-            <div className="space-y-3 p-4 border rounded-lg bg-slate-50">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Google Sheet URL</Label>
+              <div className="relative">
+                <Link2 className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <Input
                   value={currentSheetUrl}
                   onChange={(e) => setCurrentSheetUrl(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/1ABCxyz123..."
-                  className="font-mono text-xs bg-white"
-                />
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div className="flex-1">
-                  <Label htmlFor={`bank-${personId}`} className="text-sm font-medium cursor-pointer">
-                    Show Bank Account
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Display bank info in sheet (L6:N6 merged)
-                  </p>
-                </div>
-                <Switch
-                  id={`bank-${personId}`}
-                  checked={currentShowBankAccount}
-                  onCheckedChange={setCurrentShowBankAccount}
-                  disabled={isSaving}
+                  placeholder="Google Sheet URL"
+                  className="h-8 pl-8 text-xs font-mono"
                 />
               </div>
             </div>
 
-            {/* QR Image + Toggle */}
-            <div className="space-y-3 p-4 border rounded-lg bg-slate-50">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <Label htmlFor={`qr-${personId}`} className="text-sm font-semibold cursor-pointer">
-                    Send QR Image
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Include QR code in sheet (L6)
-                  </p>
+            {/* 2. Bank & Sync Configuration */}
+            <div className="space-y-4">
+              {/* always visible Linked Bank for Quick Repay */}
+              <div className="flex flex-col p-3 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <Landmark className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900">Default Bank Account</span>
+                    <span className="text-[10px] text-slate-500 font-medium tracking-tight">Auto-filled for repayment transactions</span>
+                  </div>
                 </div>
-                <Switch
-                  id={`qr-${personId}`}
-                  checked={currentShowQrImage}
-                  onCheckedChange={setCurrentShowQrImage}
-                  disabled={isSaving}
+
+                <Combobox
+                  items={(accounts || [])
+                    .filter(a => a.type === 'bank')
+                    .map(acc => ({
+                      value: acc.id,
+                      label: acc.name,
+                      description: acc.account_number || undefined,
+                      icon: acc.image_url ? (
+                        <img src={acc.image_url} className="w-4 h-4 rounded-none object-contain bg-white" />
+                      ) : undefined
+                    }))
+                  }
+                  value={currentLinkedBankId || undefined}
+                  onValueChange={(val) => {
+                    setCurrentLinkedBankId(val || null)
+                    if (val) {
+                      const acc = (accounts || []).find(a => a.id === val)
+                      if (acc) {
+                        const info = [acc.name, acc.account_number, acc.receiver_name].filter(Boolean).join(' ')
+                        setCurrentBankInfo(info)
+                      }
+                    }
+                  }}
+                  placeholder="Link a bank account..."
+                  className="h-9 text-xs"
                 />
               </div>
 
-              {currentShowQrImage && (
-                <div className="space-y-2 pt-3 border-t animate-in fade-in slide-in-from-top-1">
-                  <Label className="text-sm font-medium">QR Code Image URL</Label>
-                  <Input
-                    value={currentSheetImg}
-                    onChange={(e) => setCurrentSheetImg(e.target.value)}
-                    placeholder="https://example.com/qr-code.png"
-                    className="font-mono text-xs bg-white"
-                  />
-                  {currentSheetImg && isValidLink(currentSheetImg) && (
-                    <div className="mt-3 relative h-32 w-32 rounded-md border border-slate-200 overflow-hidden bg-white flex items-center justify-center">
-                      <img
-                        src={currentSheetImg}
-                        alt="QR Preview"
-                        className="h-full w-full object-contain"
-                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+              {/* Sync Controls Grid */}
+              <div className="grid grid-cols-1 gap-3">
+                {/* Sync Bank Toggle */}
+                <div className={cn(
+                  "flex flex-col p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 transition-all",
+                  currentShowBankAccount && "border-emerald-200 bg-emerald-50/30"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileJson className={cn("h-3.5 w-3.5", currentShowBankAccount ? "text-emerald-500" : "text-slate-500")} />
+                      <div className="flex flex-col">
+                        <span className={cn("text-[11px] font-bold", currentShowBankAccount ? "text-emerald-900" : "text-slate-700")}>Sync Bank Info to Sheet</span>
+                        {currentShowBankAccount && <span className="text-[9px] text-emerald-600 font-medium">Auto-populates bank details on sheet</span>}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={currentShowBankAccount}
+                      onCheckedChange={setCurrentShowBankAccount}
+                      disabled={isSaving}
+                      className="scale-75 origin-right"
+                    />
+                  </div>
+
+                  {currentShowBankAccount && (
+                    <div className="mt-2 pt-2 border-t border-emerald-100 animate-in fade-in slide-in-from-top-1 space-y-2">
+                      <Label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Manual Override / Bank Text</Label>
+                      <Input
+                        value={currentBankInfo}
+                        onChange={(e) => setCurrentBankInfo(e.target.value)}
+                        placeholder="Bank Name - Account Number - Receiver"
+                        className="h-8 text-xs bg-white/50 border-emerald-200/50 focus:bg-white transition-colors"
                       />
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Sync Section */}
-            {showCycleAction && (
-              <div className="space-y-3 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Sync Cycle Sheet</p>
-                    <p className="text-xs text-muted-foreground">Create or update sheet for {cycleTag}</p>
+                {/* QR Sync Toggle */}
+                <div className={cn(
+                  "flex flex-col p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 transition-all",
+                  currentShowQrImage && "border-indigo-200 bg-indigo-50/30"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <QrCode className={cn("h-3.5 w-3.5", currentShowQrImage ? "text-indigo-500" : "text-slate-500")} />
+                      <div className="flex flex-col">
+                        <span className={cn("text-[11px] font-bold", currentShowQrImage ? "text-indigo-900" : "text-slate-700")}>Show QR Code on Sheet</span>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={currentShowQrImage}
+                      onCheckedChange={setCurrentShowQrImage}
+                      disabled={isSaving}
+                      className="scale-75 origin-right"
+                    />
                   </div>
-                  {sheetUrl && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => window.open(sheetUrl, '_blank', 'noopener,noreferrer')}
-                    >
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Open
-                    </Button>
+
+                  {currentShowQrImage && (
+                    <div className="mt-2 pt-2 border-t border-indigo-100 animate-in fade-in slide-in-from-top-1 px-1">
+                      <div className="relative">
+                        <Link2 className="absolute left-2 top-2 h-3 w-3 text-slate-400" />
+                        <Input
+                          value={currentSheetImg}
+                          onChange={(e) => setCurrentSheetImg(e.target.value)}
+                          placeholder="Public Image URL (Direct link)"
+                          className="h-7 pl-7 text-[10px] font-mono bg-white/50 border-indigo-200/50"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
-                <Button
-                  variant="default"
-                  className="w-full"
-                  onClick={handleManageCycle}
-                  disabled={!hasValidScriptLink || isManaging}
-                >
-                  <RefreshCcw className={cn('h-4 w-4 mr-2', isManaging && 'animate-spin')} />
-                  {isManaging ? 'Syncing...' : 'Sync Now'}
-                </Button>
               </div>
-            )}
+            </div>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t">
-              <Button
-                variant={hasUnsavedChanges ? "default" : "secondary"}
-                onClick={() => {
-                  handleSaveSettings()
-                  setShowDialog(false)
-                }}
-                disabled={isSaving || !hasUnsavedChanges}
-                className="flex-1"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                {isSaving ? 'Saving...' : 'Save & Close'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowDialog(false)}
-              >
-                Cancel
-              </Button>
+            {/* 3. Actions */}
+            <div className="pt-2 flex flex-col gap-2">
+              {hasUnsavedChanges && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="w-full h-8 bg-slate-900 hover:bg-slate-800"
+                  onClick={handleSaveSettings}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={!hasUnsavedChanges ? "default" : "secondary"}
+                  className={cn("flex-1 h-8", hasUnsavedChanges && "opacity-50")}
+                  onClick={handleManageCycle}
+                  disabled={isManaging || !hasValidScriptLink || isSaving}
+                >
+                  <RefreshCcw className={cn("h-3.5 w-3.5 mr-2", isManaging && "animate-spin")} />
+                  {isManaging ? 'Syncing...' : 'Sync Sheet Now'}
+                </Button>
+
+                {currentSheetUrl && isValidLink(currentSheetUrl) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2.5"
+                    onClick={() => window.open(currentSheetUrl, '_blank', 'noopener,noreferrer')}
+                    title="Open Sheet"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }

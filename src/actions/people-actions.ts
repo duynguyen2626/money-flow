@@ -69,6 +69,8 @@ export type UpdatePersonPayload = {
   google_sheet_url?: string | null
   sheet_full_img?: string | null
   sheet_show_bank_account?: boolean
+  sheet_bank_info?: string | null
+  sheet_linked_bank_id?: string | null
   sheet_show_qr_image?: boolean
   subscriptionIds?: string[]
   is_owner?: boolean
@@ -173,10 +175,19 @@ export async function rolloverDebtAction(
     return { success: false, error: 'Could not resolve debt account for person' }
   }
 
-  // Ensure 'Bank' shop exists
+  // Ensure 'Bank' shop exists for Settlement (Transaction 1)
   const bankShopId = await findOrCreateBankShop()
 
-  // Transaction 1: Settlement (IN) for the OLD cycle
+  // Ensure 'Shopee' shop exists for Opening (Transaction 2)
+  const shopeeShopId = await (async () => {
+    const shops = await getShops()
+    const shopee = shops.find(s => s.name.toLowerCase() === 'shopee')
+    if (shopee) return shopee.id
+    const newShop = await createShop({ name: 'Shopee' })
+    return newShop?.id
+  })()
+
+  // Transaction 1: Settlement (IN) for the OLD cycle (Debt Repayment)
   // This reduces the balance of the old month to 0 (or less)
   const settleNote = `Rollover to ${toCycle}`
   const settleRes = await createTransaction({
@@ -187,6 +198,7 @@ export async function rolloverDebtAction(
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
+    category_id: 'e0000000-0000-0000-0000-000000000096', // Debt Repayment
     shop_id: bankShopId ?? undefined,
   })
 
@@ -194,7 +206,7 @@ export async function rolloverDebtAction(
     return { success: false, error: 'Failed to create settlement transaction' }
   }
 
-  // Transaction 2: Opening Balance (OUT) for the NEW cycle
+  // Transaction 2: Opening Balance (OUT) for the NEW cycle (Lending)
   // This increases the balance of the new month
   const openNote = `Rollover from ${fromCycle}`
   const openRes = await createTransaction({
@@ -205,7 +217,8 @@ export async function rolloverDebtAction(
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
-    shop_id: bankShopId ?? undefined,
+    category_id: 'e0000000-0000-0000-0000-000000000089', // Lending (Expense/Debt)
+    shop_id: shopeeShopId ?? undefined,
   })
 
   if (!openRes) {

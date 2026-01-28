@@ -34,6 +34,8 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
     const [lastSubmittedAccountId, setLastSubmittedAccountId] = useState<string | null>(null);
 
+    const targetId = useWatch({ control: form.control, name: "target_account_id" });
+
     // Load last submitted person and account on mount
     useEffect(() => {
         try {
@@ -46,6 +48,19 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
             console.error("Failed to load last submitted data", e);
         }
     }, []);
+
+    // Phase 8X: Auto-select linked bank for repayments if person is selected
+    useEffect(() => {
+        if (type === 'repayment' && personId) {
+            const p = people.find(x => x.id === personId);
+            if (p?.sheet_linked_bank_id) {
+                // If the current source is not the linked bank, and we just switched to repayment or person changed,
+                // we should set it. But only if it's not already set to something valid.
+                // To avoid conflict with the "recent" logic, we force linked bank for repayments.
+                form.setValue('source_account_id', p.sheet_linked_bank_id);
+            }
+        }
+    }, [type, personId, people, form]); // Remove sourceId from deps to allow override once
 
     // Filter accounts based on type and toggle
     const validAccounts = accounts.filter(a => {
@@ -216,7 +231,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                             <FormItem>
                                 <div className="flex items-center justify-between h-5 mb-1">
                                     <FormLabel className="text-xs font-semibold text-slate-500">
-                                        {type === 'income' ? 'Deposit To' : 'Pay With'}
+                                        {(type === 'income' || type === 'repayment') ? 'Deposit To' : 'Pay With'}
                                     </FormLabel>
                                     {type === 'transfer' && (
                                         <div className="flex items-center gap-2">

@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { TransactionWithDetails, Person, PersonCycleSheet } from '@/types/moneyflow.types'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 
-interface DebtCycle {
+export interface DebtCycle {
     tag: string
     transactions: TransactionWithDetails[]
     latestDate: number

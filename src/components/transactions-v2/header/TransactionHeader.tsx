@@ -145,6 +145,17 @@ export function TransactionHeader({
     selectedCycle, date, dateRange, dateMode
   ])
 
+  // Debounced Search Effect
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (localSearchTerm !== searchTerm) {
+        onSearchChange(localSearchTerm)
+      }
+    }, 500) // 500ms delay
+
+    return () => clearTimeout(handler)
+  }, [localSearchTerm, searchTerm, onSearchChange])
+
   // --- Filter Options Logic ---
   const filteredPeople = useMemo(() => {
     if (!availablePersonIds) return people
@@ -366,15 +377,28 @@ export function TransactionHeader({
               placeholder="Search by notes or ID..."
               value={localSearchTerm}
               onChange={(e) => setLocalSearchTerm(e.target.value)}
-              className="pr-8"
+              className="pr-16" // More padding for X and Search icons
               onKeyDown={(e) => e.key === 'Enter' && handleSearchConfirm()}
             />
-            <button
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full"
-              onClick={handleSearchConfirm}
-            >
-              <Search className="w-4 h-4 opacity-50" />
-            </button>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {localSearchTerm && (
+                <button
+                  className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                  onClick={() => {
+                    setLocalSearchTerm('')
+                    onSearchChange('') // Clear immediately
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                className="p-1 hover:bg-slate-100 rounded-full"
+                onClick={handleSearchConfirm}
+              >
+                <Search className="w-4 h-4 opacity-50" />
+              </button>
+            </div>
           </div>
           <AddTransactionDropdown onSelect={onAdd} />
         </div>
