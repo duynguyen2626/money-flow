@@ -3,50 +3,46 @@
 ## 1. Project Context
 Enhancing the Bank Account selection for individual people and automating the Repayment workflow to reduce manual input and errors. Also polished the Google Sheet synchronization for a more premium reporting experience.
 
-## 2. Recent Changes (Updated: Jan 28, 2026)
+## 2. Recent Changes (Updated: Jan 28, 2026 - Final)
 
 ### ✅ Bank Linking & UI (Manage Sheet Button)
-1. **Refined Bank Selector**: 
-   - Replaced custom searchable list with standard `Combobox` component for consistency.
-   - Bank logos are displayed with `object-contain` to avoid cropping.
-   - Filtered to show only accounts with `type === 'bank'`.
-2. **Automated Manual Info**:
-   - Selecting a linked bank automatically populates the "Manual Bank Info" field with the format: `Bank Name - Account Number - Receiver`.
-   - Manual info field is clearly visible and editable below the selector.
+1. **Separated UX & Reporting**: 
+   - Moved "Default Bank Account" to a clear, always-visible section for **Quick Repay** automation.
+   - Isolated "Sync Settings" (Show Bank Info, QR) to independent toggles to allow fast repayments without exposing data to the Sheet.
+2. **Enhanced Popover UX**:
+   - **Instant Feedback**: Popover closes immediately after clicking "Save" or "Sync".
+   - **Background Toasts**: Uses non-blocking toasts with loading spinners and detailed status.
+   - **Smart Reports**: "Sync Report" modal no longer auto-opens; it's available via a "View Report" action link within the success toast.
 
 ### ✅ Repayment Workflow Automation (Slide V2)
-1. **Auto-Prefill Amount**: 
-   - When clicking "Repay" from a person's detail page, the `amount` is automatically set to the `activeCycle.remains` value.
-2. **Auto-Select Linked Bank**:
-   - The "Deposit To" (source_account_id) field is automatically set to the person's `sheet_linked_bank_id` if available.
-   - Fixed conflict with "recent account" pre-population to prioritize the specific linked bank for repayments.
-3. **UI Label Improvements**:
-   - Label dynamically changes to **"Deposit To"** for `repayment` and `income` types, and **"Pay With"** for `expense` types.
+1. **Auto-Prefill Logic**: 
+   - `amount` auto-sets to `activeCycle.remains`.
+   - `source_account_id` auto-sets to `sheet_linked_bank_id` (linked profile bank).
+2. **Dynamic UI**: Improved labels and visibility for repayment switches.
 
-### ✅ Google Sheet Sync (Code.js v7.1)
-1. **Premium Aesthetics**:
-   - Headers (`Row 1`) and Summary Header now use a vibrant **Indigo (#4f46e5)** background with white text.
-   - Headers are forced to indigo every sync to ensure visibility on new sheets.
-2. **Structure & Layout**:
-   - Column **M (No.)** narrowed to `25` for better spacing.
-   - Column **N (Summary)** and **O (Value)** adjusted for optimal readability.
-   - **M7:O26** area is properly merged and protected for QR/Summary images.
-3. **Intelligent Shop Column**:
-   - Formula handles both text and icons.
-   - If a mapping is a URL (`http...`), it uses `IMAGE(..., 1)` to **fit-width** while maintaining aspect ratio.
-   - Data rows height set to `30` to make icons clear and easy to see.
+### ✅ Google Sheet Sync (Code.js v7.2)
+1. **Layout Optimization**:
+   - Narrowed **Shop (D)** column to 60 for a cleaner look.
+   - Widened **% Back (G)** and **đ Back (H)** to 65/70 to prevent header truncation.
+2. **Accounting Logic**:
+   - `In (Gross)` in the summary table now correctly displays as a **negative** value (`* -1`) to match credit principles.
+3. **Safety & Headers**: Improved script versioning and forced styling for new sheets.
 
-## 3. Build & Test Status
+## 3. Mandatory Rules for Agents
+When modifying the Google Apps Script (`integrations/google-sheets/people-sync/Code.js`):
+1. **Update Version Header**: ALWAYS increment the version number in the file header (`@version X.Y`).
+2. **Update Timestamp**: Update the `@date` field with the current YYYY-MM-DD HH:mm.
+3. **Update Sheet Note**: Update the `Script Version` note in the `setupNewSheet` function to match the header.
+4. **Push Locally**: Run `pnpm run sheet:people` to verify the push logic works before committing.
+
+## 4. Build & Test Status
 - **Google Sheet Push**: ✅ Successfully pushed to all 4 profiles (Anh, Lam, My, Tuan).
-- **TypeScript**: ✅ Verified `sheet_linked_bank_id` in database type definitions.
-- **UI Testing**: ✅ Verified Combobox behavior and auto-fill logic in `member-detail-view.tsx`.
+- **TypeScript**: ✅ Passed `npx tsc --noEmit`.
+- **UI Testing**: ✅ Verified background toasts and "Quick Repay" bank linking.
 
-## 4. Key Files Modified
-- `src/components/people/manage-sheet-button.tsx`: New Combobox-based bank selector.
-- `src/app/people/details/member-detail-view.tsx`: Auto-populate amount and account for repayments.
-- `src/components/transaction/slide-v2/single-mode/account-selector.tsx`: Repayment label and linked bank override.
-- `integrations/google-sheets/people-sync/Code.js`: Major layout and styling overhaul.
-
-## 5. Next Steps
-- Continue refining the synchronization logic if the user requests more summary details on the sheet.
-- Ensure all new users have their bank accounts correctly linked to benefit from the auto-repayment feature.
+## 5. Key Files Modified
+- `src/components/people/manage-sheet-button.tsx`: Complete UX overhaul (popover closing, toasts, separated settings).
+- `src/app/people/details/member-detail-view.tsx`: Auto-populate amount and bank for repayments.
+- `src/services/sheet.service.ts`: Handle privacy toggles before syncing to the cloud.
+- `integrations/google-sheets/people-sync/Code.js` (v7.2): Final layout and accounting logic fixes.
+- `src/app/people/[id]/page.tsx` & `src/app/accounts/[id]/page.tsx`: Added dynamic metadata for browser tab titles.

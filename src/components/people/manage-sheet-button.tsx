@@ -140,8 +140,11 @@ export function ManageSheetButton({
       return
     }
 
+    setShowPopover(false)
     startSaveTransition(async () => {
-      const toastId = toast.loading('Saving settings...')
+      const toastId = toast.loading('Saving settings...', {
+        description: 'Updating person profile details',
+      })
       try {
         const ok = await updatePersonAction(personId, {
           sheet_link: currentScriptLink.trim() || null,
@@ -177,8 +180,11 @@ export function ManageSheetButton({
       return
     }
 
+    setShowPopover(false)
     startManageTransition(async () => {
-      const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...')
+      const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...', {
+        description: `Processing cycle ${cycleTag}`,
+      })
       try {
         const res = await fetch('/api/sheets/manage', {
           method: 'POST',
@@ -202,21 +208,24 @@ export function ManageSheetButton({
         toast.dismiss(toastId)
 
         if (data.status === 'created' || data.status === 'synced') {
-          // Success! Show report instead of just a toast
+          // Success! Store stats but don't auto-open modal
           setSyncStats({
             syncedCount: data.syncedCount,
             manualPreserved: data.manualPreserved,
             totalRows: data.totalRows,
             sheetUrl: nextUrl
           })
-          setShowPopover(false) // Close settings popover
-          setShowReport(true) // Open report dialog
 
-          if (data.status === 'created') {
-            toast.success('Sheet created & synced.')
-          }
+          toast.success(data.status === 'created' ? 'Sheet created & synced' : 'Sheet synced successfully', {
+            id: toastId,
+            description: `Synced ${data.syncedCount} transactions.`,
+            action: {
+              label: 'View Report',
+              onClick: () => setShowReport(true)
+            },
+          })
         } else {
-          toast.error('Failed to sync sheet.')
+          toast.error('Failed to sync sheet.', { id: toastId })
         }
 
         router.refresh()
@@ -332,102 +341,118 @@ export function ManageSheetButton({
               </div>
             </div>
 
-            {/* 2. Toggles Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Bank Info Support */}
-              <div className={cn("flex flex-col p-2 rounded-lg border border-slate-100 bg-slate-50/50 transition-all", currentShowBankAccount && "border-indigo-200 bg-indigo-50/30 col-span-2")}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <Landmark className={cn("h-3.5 w-3.5", currentShowBankAccount ? "text-indigo-500" : "text-slate-500")} />
-                    <span className={cn("text-xs font-medium", currentShowBankAccount ? "text-indigo-900" : "text-slate-700")}>Bank Info</span>
+            {/* 2. Bank & Sync Configuration */}
+            <div className="space-y-4">
+              {/* always visible Linked Bank for Quick Repay */}
+              <div className="flex flex-col p-3 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <Landmark className="h-4 w-4 text-indigo-600" />
                   </div>
-                  <Switch
-                    checked={currentShowBankAccount}
-                    onCheckedChange={setCurrentShowBankAccount}
-                    disabled={isSaving}
-                    className="scale-75 origin-right"
-                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900">Default Bank Account</span>
+                    <span className="text-[10px] text-slate-500 font-medium tracking-tight">Auto-filled for repayment transactions</span>
+                  </div>
                 </div>
-                {currentShowBankAccount && (
-                  <div className="mt-2 animate-in fade-in slide-in-from-top-1 space-y-3">
-                    {/* Searchable Account Selector using Combobox style */}
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Linked Bank Account</Label>
-                      <Combobox
-                        items={(accounts || [])
-                          .filter(a => a.type === 'bank')
-                          .map(acc => ({
-                            value: acc.id,
-                            label: acc.name,
-                            description: acc.account_number || undefined,
-                            icon: acc.image_url ? (
-                              <img src={acc.image_url} className="w-4 h-4 rounded-none object-contain bg-white" />
-                            ) : undefined
-                          }))
-                        }
-                        value={currentLinkedBankId || undefined}
-                        onValueChange={(val) => {
-                          setCurrentLinkedBankId(val || null)
-                          if (val) {
-                            const acc = (accounts || []).find(a => a.id === val)
-                            if (acc) {
-                              const info = [acc.name, acc.account_number, acc.receiver_name].filter(Boolean).join(' ')
-                              setCurrentBankInfo(info)
-                            }
-                          }
-                        }}
-                        placeholder="Search & select bank..."
-                        className="h-9 text-xs"
-                      />
-                    </div>
 
-                    {/* Manual Info Section */}
-                    <div className="space-y-1.5 pt-1 border-t border-slate-100/50">
-                      <Label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Manual Bank Info</Label>
+                <Combobox
+                  items={(accounts || [])
+                    .filter(a => a.type === 'bank')
+                    .map(acc => ({
+                      value: acc.id,
+                      label: acc.name,
+                      description: acc.account_number || undefined,
+                      icon: acc.image_url ? (
+                        <img src={acc.image_url} className="w-4 h-4 rounded-none object-contain bg-white" />
+                      ) : undefined
+                    }))
+                  }
+                  value={currentLinkedBankId || undefined}
+                  onValueChange={(val) => {
+                    setCurrentLinkedBankId(val || null)
+                    if (val) {
+                      const acc = (accounts || []).find(a => a.id === val)
+                      if (acc) {
+                        const info = [acc.name, acc.account_number, acc.receiver_name].filter(Boolean).join(' ')
+                        setCurrentBankInfo(info)
+                      }
+                    }
+                  }}
+                  placeholder="Link a bank account..."
+                  className="h-9 text-xs"
+                />
+              </div>
+
+              {/* Sync Controls Grid */}
+              <div className="grid grid-cols-1 gap-3">
+                {/* Sync Bank Toggle */}
+                <div className={cn(
+                  "flex flex-col p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 transition-all",
+                  currentShowBankAccount && "border-emerald-200 bg-emerald-50/30"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileJson className={cn("h-3.5 w-3.5", currentShowBankAccount ? "text-emerald-500" : "text-slate-500")} />
+                      <div className="flex flex-col">
+                        <span className={cn("text-[11px] font-bold", currentShowBankAccount ? "text-emerald-900" : "text-slate-700")}>Sync Bank Info to Sheet</span>
+                        {currentShowBankAccount && <span className="text-[9px] text-emerald-600 font-medium">Auto-populates bank details on sheet</span>}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={currentShowBankAccount}
+                      onCheckedChange={setCurrentShowBankAccount}
+                      disabled={isSaving}
+                      className="scale-75 origin-right"
+                    />
+                  </div>
+
+                  {currentShowBankAccount && (
+                    <div className="mt-2 pt-2 border-t border-emerald-100 animate-in fade-in slide-in-from-top-1 space-y-2">
+                      <Label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Manual Override / Bank Text</Label>
                       <Input
                         value={currentBankInfo}
                         onChange={(e) => setCurrentBankInfo(e.target.value)}
                         placeholder="Bank Name - Account Number - Receiver"
-                        className="h-8 text-xs bg-white/50 border-slate-200 focus:bg-white transition-colors"
+                        className="h-8 text-xs bg-white/50 border-emerald-200/50 focus:bg-white transition-colors"
                       />
-                      <p className="text-[9px] text-slate-400 italic">This text is sent to Google Sheets when sync.</p>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className={cn("flex flex-col p-2 rounded-lg border border-slate-100 bg-slate-50/50 transition-all", currentShowQrImage && "border-indigo-200 bg-indigo-50/30 col-span-2")}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2">
-                    <QrCode className={cn("h-3.5 w-3.5", currentShowQrImage ? "text-indigo-500" : "text-slate-500")} />
-                    <span className={cn("text-xs font-medium", currentShowQrImage ? "text-indigo-900" : "text-slate-700")}>QR Image</span>
-                  </div>
-                  <Switch
-                    checked={currentShowQrImage}
-                    onCheckedChange={setCurrentShowQrImage}
-                    disabled={isSaving}
-                    className="scale-75 origin-right"
-                  />
+                  )}
                 </div>
-                {/* QR Image URL Input if enabled */}
-                {currentShowQrImage && (
-                  <div className="mt-2 animate-in fade-in slide-in-from-top-1">
-                    <div className="relative">
-                      <Link2 className="absolute left-2.5 top-2 h-3 w-3 text-slate-400" />
-                      <Input
-                        value={currentSheetImg}
-                        onChange={(e) => setCurrentSheetImg(e.target.value)}
-                        placeholder="QR Code Image URL"
-                        className="h-7 pl-8 text-xs font-mono bg-white/50"
-                      />
-                    </div>
-                    {currentSheetImg && isValidLink(currentSheetImg) && (
-                      <div className="mt-2 text-[10px] text-emerald-600 font-medium flex items-center gap-1">
-                        <Link2 className="h-3 w-3" /> Valid Link
+
+                {/* QR Sync Toggle */}
+                <div className={cn(
+                  "flex flex-col p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 transition-all",
+                  currentShowQrImage && "border-indigo-200 bg-indigo-50/30"
+                )}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <QrCode className={cn("h-3.5 w-3.5", currentShowQrImage ? "text-indigo-500" : "text-slate-500")} />
+                      <div className="flex flex-col">
+                        <span className={cn("text-[11px] font-bold", currentShowQrImage ? "text-indigo-900" : "text-slate-700")}>Show QR Code on Sheet</span>
                       </div>
-                    )}
+                    </div>
+                    <Switch
+                      checked={currentShowQrImage}
+                      onCheckedChange={setCurrentShowQrImage}
+                      disabled={isSaving}
+                      className="scale-75 origin-right"
+                    />
                   </div>
-                )}
+
+                  {currentShowQrImage && (
+                    <div className="mt-2 pt-2 border-t border-indigo-100 animate-in fade-in slide-in-from-top-1 px-1">
+                      <div className="relative">
+                        <Link2 className="absolute left-2 top-2 h-3 w-3 text-slate-400" />
+                        <Input
+                          value={currentSheetImg}
+                          onChange={(e) => setCurrentSheetImg(e.target.value)}
+                          placeholder="Public Image URL (Direct link)"
+                          className="h-7 pl-7 text-[10px] font-mono bg-white/50 border-indigo-200/50"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

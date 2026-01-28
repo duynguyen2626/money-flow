@@ -1,9 +1,9 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 6.9 (Safety Fallback - User Recommended)
- * @date 2026-01-28
+ * @version 7.2 (Layout Optimized & UX Refined)
+ * @date 2026-01-28 17:01
  *
- * LAYOUT v6.9 (Explicit Columns):
+ * LAYOUT v7.2 (Explicit Columns):
  * A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
  * F: Amount | G: % Back | H: đ Back | I: Σ Back | J: Final | K: Src
  */
@@ -543,12 +543,12 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
     try {
         sheet.setColumnWidth(2, 50);  // B: Type
         sheet.setColumnWidth(3, 80);  // C: Date
-        sheet.setColumnWidth(4, 120); // D: Shop
+        sheet.setColumnWidth(4, 60);  // D: Shop
         sheet.setColumnWidth(5, 250); // E: Notes
         sheet.setColumnWidth(6, 100); // F: Amount
-        sheet.setColumnWidth(7, 45);
-        sheet.setColumnWidth(8, 65);
-        sheet.setColumnWidth(9, 75);
+        sheet.setColumnWidth(7, 65);  // G: % Back
+        sheet.setColumnWidth(8, 70);  // H: đ Back
+        sheet.setColumnWidth(9, 75);  // I: Σ Back
         sheet.setColumnWidth(10, 95);
         sheet.setColumnWidth(12, 10); // Blank L
         sheet.setColumnWidth(13, 25);  // No. M (Very Narrow)
@@ -583,7 +583,7 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 6.9');
+    sheet.getRange('A1').setNote('Script Version: 7.2');
     setMonthTabColor(sheet);
 
     sheet.getRange('A:O').setFontSize(12);
@@ -612,12 +612,12 @@ function setupNewSheet(sheet, summaryOptions) {
     try {
         sheet.setColumnWidth(2, 50);  // B: Type
         sheet.setColumnWidth(3, 80);  // C: Date
-        sheet.setColumnWidth(4, 120); // D: Shop
+        sheet.setColumnWidth(4, 60);  // D: Shop
         sheet.setColumnWidth(5, 250); // E: Notes
         sheet.setColumnWidth(6, 100); // F: Amount
-        sheet.setColumnWidth(7, 45);
-        sheet.setColumnWidth(8, 65);
-        sheet.setColumnWidth(9, 75);
+        sheet.setColumnWidth(7, 65);  // G: % Back
+        sheet.setColumnWidth(8, 70);  // H: đ Back
+        sheet.setColumnWidth(9, 75);  // I: Σ Back
         sheet.setColumnWidth(10, 95);
         sheet.setColumnWidth(12, 10); // Blank L
         sheet.setColumnWidth(13, 25);  // No. M
@@ -711,8 +711,8 @@ function setupSummaryTable(sheet, summaryOptions) {
     // FORMULAS UPDATE v6.9
     // B=Type, F=Amount, I=SumBack, J=FinalPrice
 
-    // In (Gross): Sum of Amount (F) where Type (B) == "In"
-    sheet.getRange(2, startCol + 2).setFormula('=SUMIFS(F:F;B:B;"In")');
+    // In (Gross): Sum of Amount (F) where Type (B) == "In" (Showing as negative credit)
+    sheet.getRange(2, startCol + 2).setFormula('=SUMIFS(F:F;B:B;"In") * -1');
     sheet.getRange(2, startCol + 2).setFontColor('#14532d'); // Dark Green
 
     // Out (Gross): Sum of Amount (F) where Type (B) == "Out"
