@@ -248,13 +248,29 @@ export function ManageSheetButton({
               <Button
                 variant="ghost"
                 size={size === 'md' ? 'default' : size}
-                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500"
+                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500 border-l border-slate-200" // Added border-l
                 disabled={isDisabled}
                 onClick={handleTriggerClick}
               >
                 <Settings2 className="h-4 w-4" />
               </Button>
             </DialogTrigger>
+
+            {/* Open Sheet Link (New) */}
+            {currentSheetUrl && isValidLink(currentSheetUrl) && (
+              <Button
+                variant="ghost"
+                size={size === 'md' ? 'default' : size}
+                className="rounded-none px-2 hover:bg-slate-100 h-8 text-emerald-600 border-l border-slate-200"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(currentSheetUrl, '_blank', 'noopener,noreferrer')
+                }}
+                title="Open Google Sheet"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            )}
           </>
         ) : (
           <DialogTrigger asChild>

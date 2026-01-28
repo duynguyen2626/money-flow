@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
-import { EditPersonDialog } from './edit-person-dialog'
+import { PersonSlideV2 } from '@/components/people/slide-v2/person-slide-v2'
 import { Person, Subscription } from '@/types/moneyflow.types'
 
 interface EditPersonButtonProps {
@@ -25,12 +25,11 @@ export function EditPersonButton({ person, subscriptions }: EditPersonButtonProp
             </button>
 
             {showDialog && (
-                <EditPersonDialog
+                <PersonSlideV2
                     person={person}
                     subscriptions={subscriptions}
-                    initiallyOpen={true}
-                    showTrigger={false}
-                    onClose={() => setShowDialog(false)}
+                    open={showDialog}
+                    onOpenChange={setShowDialog}
                 />
             )}
         </>

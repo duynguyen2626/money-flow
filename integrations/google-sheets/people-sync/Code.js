@@ -1,18 +1,13 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 6.4 (Summary Area Protection)
- * @date 2026-01-23
+ * @version 6.5 (Shop Column Fixed)
+ * @date 2026-01-28
  * 
- * CRITICAL FIXES (v6.4):
- * - Fix #1-5: Use clearContent() instead of deleteRow() to prevent row shifts
- * - Sort A2:J only (excludes Summary area L:N)
- * - Preserve L6:N35 merge protection during all operations
- * - Added validateSheetStructure() for integrity checks
- * 
- * RULES:
- * - System IDs: Must be >5 chars (UUID). Short/empty values in Col A = Manual Row
- * - Auto Backup: Creates `Backup_[Name]` before sync
- * - Smart Merge: Neutralizes matching manual rows (sets I = F)
+ * CRITICAL FIXES (v6.5):
+ * - Moved Shop Name storage from Col O to Col K (hidden) to ensure it sorts with data.
+ * - Moved Visual Shop Column to Col B (User Request).
+ * - New Layout: ID(A), Shop(B), Type(C), Date(D), Notes(E), Amount(F)...
+ * - Sort Range extended to A2:K to include Shop Source.
  */
 
 /*
@@ -128,25 +123,21 @@ function handleSyncTransactions(payload) {
 
     var syncOptions = buildSheetSyncOptions(payload);
 
-    // --- UPSERT STRATEGY v6.3 (Memory-Safe Update) ---
-    // Objective: Read ALL data, Update in-place, Append new, Write ALL back.
-    // This prevents "filtering out" manual rows.
+    // --- UPSERT STRATEGY v6.5 ---
+    // Objective: Read ALL data (A:K), Update in-place, Append new, Write ALL back.
 
-    // 1. READ ALL DATA (A:O)
-    // Using getDataRange to ensure we capture all disjoint data
+    // 1. READ ALL DATA (A:K)
     var range = sheet.getDataRange();
-    var allValues = range.getValues(); // Includes Headers at index 0
-    // If empty sheet, init array to allow appends
+    var allValues = range.getValues();
     if (allValues.length === 0) {
         allValues = [];
     }
 
     // Index System Rows by ID
-    // rowMap: ID -> rowIndex (in allValues array)
     var rowMap = {};
     var manualRowIndices = [];
 
-    // Start from 1 to skip Header (if exists)
+    // Start from 1 to skip Header
     var startIndex = allValues.length > 0 && allValues[0][0] === 'ID' ? 1 : 0;
 
     for (var i = startIndex; i < allValues.length; i++) {
@@ -157,8 +148,10 @@ function handleSyncTransactions(payload) {
         if (hasId) {
             rowMap[idVal] = i;
         } else {
-            // Potential manual row for Smart Merge
-            // Only consider it if it has some data
+            // Manual Row Check: Data usually in C (Type), F (Amount), D (Date)
+            // Need to be robust to column shifting. Old manual rows might be in old format?
+            // Assuming we are converting or this is a fresh sync on format.
+            // Let's check generally if row has data.
             var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
             if (hasData) {
                 manualRowIndices.push(i);
@@ -171,7 +164,7 @@ function handleSyncTransactions(payload) {
 
     // 3. PROCESS TRANSACTIONS
     var validTxns = transactions.filter(function (txn) { return txn.status !== 'void'; });
-    // Sort transactions by Date ASC for cleaner appending
+    // Sort transactions by Date ASC
     validTxns.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
 
     var newRows = [];
@@ -182,19 +175,19 @@ function handleSyncTransactions(payload) {
         var amt = Math.abs(txn.amount);
         var dateObj = new Date(txn.date);
 
-        // Prepare Row Data (Array size 15 - matching A:O)
-        var rowData = new Array(15);
+        // Prepare Row Data (Array size 11 - matching A:K)
+        var rowData = new Array(11);
         rowData[0] = txn.id;
-        rowData[1] = type;
-        rowData[2] = dateObj;
-        rowData[3] = '=IFERROR(VLOOKUP(D_CELL;Shop!A:B;2;FALSE);D_CELL)'; // Placeholder
+        rowData[1] = '=IFERROR(VLOOKUP(K_CELL;Shop!A:B;2;FALSE);K_CELL)'; // Placeholder B: Visual Shop
+        rowData[2] = type;      // C: Type
+        rowData[3] = dateObj;   // D: Date
         rowData[4] = txn.notes || "";
         rowData[5] = amt;
         rowData[6] = txn.percent_back || 0;
         rowData[7] = txn.fixed_back || 0;
         rowData[8] = 0; // I -> ArrayFormula
         rowData[9] = ""; // J -> ArrayFormula
-        rowData[14] = txn.shop || ""; // O -> Shop Name
+        rowData[10] = txn.shop || ""; // K: Shop Source (Hidden Sortable)
 
         var targetIndex = -1;
 
@@ -208,8 +201,14 @@ function handleSyncTransactions(payload) {
                 if (mIdx === -1) continue;
 
                 var mRow = allValues[mIdx];
-                var mType = mRow[1];
-                var mDate = mRow[2];
+                // Check Type, Date, Amount. 
+                // Need to assume they might be in Old Col positions if mixed? 
+                // Safer to assume re-format will fix them.
+                // Or check multiple cols.
+
+                // Let's assume standard mapping: Type=C(2), Date=D(3), Amount=F(5)
+                var mType = mRow[2];
+                var mDate = mRow[3];
                 var mAmt = Math.abs(Number(mRow[5]));
 
                 // Check Type, Amount (<1 diff), Date (<24h)
@@ -217,7 +216,10 @@ function handleSyncTransactions(payload) {
                 if (Math.abs(mAmt - amt) >= 1) continue;
 
                 var mDateObj = new Date(mDate);
-                if (Math.abs(mDateObj - dateObj) >= 86400000) continue;
+                // Try catch date
+                try {
+                    if (Math.abs(mDateObj - dateObj) >= 86400000) continue;
+                } catch (e) { continue; }
 
                 // MATCH FOUND!
                 targetIndex = mIdx;
@@ -227,28 +229,24 @@ function handleSyncTransactions(payload) {
         }
 
         if (targetIndex !== -1) {
-            // Update Existing Row (System or Merged Manual)
+            // Update Existing Row
             allValues[targetIndex][0] = rowData[0];
             allValues[targetIndex][1] = rowData[1];
             allValues[targetIndex][2] = rowData[2];
-            // We update Col D placeholder formula if needed, but usually leave it or let applyBorders fix it?
-            // Let's set it to valid placeholder for consistency
             allValues[targetIndex][3] = rowData[3];
-
             allValues[targetIndex][4] = rowData[4];
             allValues[targetIndex][5] = rowData[5];
             allValues[targetIndex][6] = rowData[6];
             allValues[targetIndex][7] = rowData[7];
-            allValues[targetIndex][14] = rowData[14];
+            allValues[targetIndex][10] = rowData[10];
         } else {
             newRows.push(rowData);
         }
     }
 
     // 4. WRITE BACK
-    // Filter out empty rows from allValues to prevent "phantom" rows pushing new data down
     var cleanedExistingValues = allValues.filter(function (row, index) {
-        if (index === 0) return true; // Always keep header
+        if (index === 0) return true; // Keep Header
         var idVal = (row[0] || "").toString().trim();
         if (idVal.length > 5) return true; // Keep System Rows
 
@@ -259,29 +257,28 @@ function handleSyncTransactions(payload) {
 
     var finalData = cleanedExistingValues.concat(newRows);
 
-    // Fix Cell References in Formulas (Col D)
+    // Fix Cell References in Formulas (Col B)
     for (var i = 1; i < finalData.length; i++) { // Skip header
         var r = i + 1; // 1-based row index
-        finalData[i][3] = '=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')';
+        finalData[i][1] = '=IFERROR(VLOOKUP(K' + r + ';Shop!A:B;2;FALSE);K' + r + ')';
     }
 
     // 5. CLEAR & SET
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
-        // Clear everything to ensure clean rewrite
-        sheet.getRange(2, 1, lastRow, 15).clearContent();
-        sheet.getRange(2, 1, lastRow, 15).setBorder(false, false, false, false, false, false).setBackground(null);
+        // Clear A:O just to be safe (wipes old Col O shop if present)
+        try { sheet.getRange(2, 1, lastRow, 15).clearContent(); } catch (e) { }
+        try { sheet.getRange(2, 1, lastRow, 15).setBorder(false, false, false, false, false, false).setBackground(null); } catch (e) { }
     }
 
-    // Write finalData (excluding header at index 0)
+    // Write finalData (11 columns)
     var dataToWrite = finalData.slice(1);
 
     if (dataToWrite.length > 0) {
-        // Write A2
-        sheet.getRange(2, 1, dataToWrite.length, 15).setValues(dataToWrite);
+        sheet.getRange(2, 1, dataToWrite.length, 11).setValues(dataToWrite);
 
         // Restore Formatting
-        sheet.getRange(2, 3, dataToWrite.length, 1).setNumberFormat('dd-MM');
+        sheet.getRange(2, 4, dataToWrite.length, 1).setNumberFormat('dd-MM'); // Date in D
         sheet.getRange(2, 6, dataToWrite.length, 1).setNumberFormat('#,##0');
     }
 
@@ -316,7 +313,7 @@ function handleSingleTransaction(payload, action) {
         if (rowIndex > 0) {
             // Clear row content instead of deleting to preserve row positions
             // This prevents Summary area (L7:N35) from shifting when rows change
-            var range = sheet.getRange(rowIndex, 1, 1, 15); // A:O
+            var range = sheet.getRange(rowIndex, 1, 1, 11); // A:K
             range.clearContent();
             range.setBackground('white');
             Logger.log('Row ' + rowIndex + ' cleared (not deleted) - Summary area protected');
@@ -340,19 +337,18 @@ function handleSingleTransaction(payload, action) {
     }
 
     sheet.getRange(targetRow, 1).setValue(payload.id);
-    sheet.getRange(targetRow, 2).setValue(normalizeType(payload.type, payload.amount));
-    sheet.getRange(targetRow, 3).setValue(new Date(payload.date));
+    sheet.getRange(targetRow, 3).setValue(normalizeType(payload.type, payload.amount)); // C: Type
+    sheet.getRange(targetRow, 4).setValue(new Date(payload.date)); // D: Date
     sheet.getRange(targetRow, 5).setValue(payload.notes || "");
 
     var amt = Math.abs(payload.amount);
-    // User requested ABSOLUTE value for Col F. J Formula handles sign.
-    // if (normalizeType(payload.type, payload.amount) === 'In') { amt = -amt; } // Removed
     sheet.getRange(targetRow, 6).setValue(amt);
 
     sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0);
     sheet.getRange(targetRow, 8).setValue(payload.fixed_back || 0);
-    sheet.getRange(targetRow, 15).setValue(payload.shop || "");
-    applyFormulasToRow(sheet, targetRow);
+    sheet.getRange(targetRow, 11).setValue(payload.shop || ""); // K: ShopSource
+
+    applyFormulasToRow(sheet, targetRow); // Updates Col B formula
 
     SpreadsheetApp.flush();
     applyBordersAndSort(sheet, syncOptions.summaryOptions);
@@ -379,105 +375,95 @@ function getLastSystemRow(sheet) {
 
 
 function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
-    // 0. ENSURE HEADERS EXIST (Fix: Headers can go missing after delete+sync)
+    // 0. ENSURE HEADERS EXIST
     try {
-        var headerRange = sheet.getRange('A1:J1');
-        if (headerRange.isBlank() || headerRange.getValue() !== 'ID') {
-            var headers = ['ID', 'Type', 'Date', 'Shop', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price'];
+        var headerRange = sheet.getRange('A1:K1');
+        var headers = ['ID', 'Shop', 'Type', 'Date', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price', 'ShopSource'];
+        if (headerRange.isBlank() || headerRange.getValue() !== 'ID' || sheet.getRange('B1').getValue() !== 'Shop') {
             headerRange.setValues([headers]);
             headerRange.setFontWeight('bold').setBackground('#E5E7EB').setFontColor('#111827').setFontSize(12).setBorder(true, true, true, true, true, true);
             sheet.setFrozenRows(1);
-            Logger.log('Headers restored in A1:J1');
+            Logger.log('Headers restored in A1:K1');
         }
     } catch (e) {
         Logger.log('Header restore error: ' + e);
     }
 
-    // 0. SELF-HEALING: Remove completely empty rows to prevent gaps
+    // 0. SELF-HEALING: Remove completely empty rows
     cleanupEmptyRows(sheet);
 
     // 1. DATA STYLING & SORTING (Only System Rows)
-    // If systemRowCount is not provided, use getLastSystemRow to guess.
     var lastSortRow = systemRowCount ? (systemRowCount + 1) : getLastSystemRow(sheet);
 
     if (lastSortRow >= 2) {
         clearImageMerges(sheet);
         var rowCount = lastSortRow - 1;
 
-        // FORCE COMMIT before sorting to ensure new values are registered
         Utilities.sleep(300);
         SpreadsheetApp.flush();
 
-        // CRITICAL FIX: Sort ONLY transaction data (A2:J) - NOT Summary area (L:N)
-        // Summary area at L7:N35 must NOT be included in sort operations
-        var dataRange = sheet.getRange(2, 1, rowCount, 10); // A2:J only (10 columns)
-        // Robust Sort: Date (Col 3) ASC, then ID (Col 1) ASC
-        dataRange.sort([{ column: 3, ascending: true }, { column: 1, ascending: true }]);
+        // SORT A:K (Includes Hidden Shop Source)
+        var dataRange = sheet.getRange(2, 1, rowCount, 11);
+        // Sort Date (Col 4 - D), then ID (Col 1 - A)
+        dataRange.sort([{ column: 4, ascending: true }, { column: 1, ascending: true }]);
         Logger.log('Sorted transaction data range: ' + dataRange.getA1Notation() + ' (Summary protected)');
 
-        // ... (VLOOKUP & Formatting for System Rows Only)
-        // ...
-
-
-        var arrD = new Array(rowCount);
+        // SET FORMULA IN B referencing K
+        var arrB = new Array(rowCount);
         for (var i = 0; i < rowCount; i++) {
             var r = i + 2;
-            arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
+            arrB[i] = ['=IFERROR(VLOOKUP(K' + r + ';Shop!A:B;2;FALSE);K' + r + ')'];
         }
-        sheet.getRange(2, 4, rowCount, 1).setValues(arrD);
+        sheet.getRange(2, 2, rowCount, 1).setValues(arrB); // Set B
 
         ensureArrayFormulas(sheet);
 
-        // Fix Grey Background: Force White for all data rows
         var maxRow = sheet.getLastRow();
         if (maxRow >= 2) {
             var totalRows = maxRow - 1;
-            var dataRange = sheet.getRange(2, 1, totalRows, 15); // A:O
-
-            // 1. Borders & Background
-            sheet.getRange(2, 1, totalRows, 10) // A:J
+            // Borders A:K
+            sheet.getRange(2, 1, totalRows, 11)
                 .setBorder(true, true, true, true, true, true)
                 .setBackground('#FFFFFF')
                 .setFontWeight('normal');
 
-            // 2. Alignment
-            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center'); // Date
+            // Alignment
+            sheet.getRange(2, 4, totalRows, 1).setHorizontalAlignment('center'); // Date (D)
+            sheet.getRange(2, 2, totalRows, 1).setHorizontalAlignment('center').setVerticalAlignment('middle'); // Shop (B)
+            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center'); // Type (C)
 
-            // 3. Number Format for F (Amount), I (Σ Back), J (Final Price)
-            // Using '#,##0' to match Summary Table
-            sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0'); // F
-            sheet.getRange(2, 9, totalRows, 2).setNumberFormat('#,##0'); // I, J
+            sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0');
+            sheet.getRange(2, 9, totalRows, 2).setNumberFormat('#,##0');
         }
     }
 
-    // 2. ALWAYS Re-draw Summary Table (Regardless of data rows)
-    // Fix Summary Table area - Clear content, borders, AND background colors
+    // 2. ALWAYS Re-draw Summary Table
     try {
         var maxRows = sheet.getMaxRows();
-        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
+        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L:N
         clearRange.clearContent();
         clearRange.setBorder(false, false, false, false, false, false);
         clearRange.setBackground(null);
-        // NOTE: DO NOT call breakApart() - it will destroy the L6:N35 merge we just created
     } catch (e) { }
 
     setupSummaryTable(sheet, summaryOptions);
 
-    // 3. RE-APPLY COLUMN VISIBILITY & WIDTHS (A and O should always be hidden)
+    // 3. RE-APPLY COLUMN VISIBILITY & WIDTHS
     try {
-        sheet.showColumns(1, 15); // Unhide all first to reset
+        sheet.showColumns(1, 15);
         sheet.hideColumns(1); // Hide A (ID)
-        sheet.hideColumns(15); // Hide O (Shop Name)
-        Logger.log('Column visibility reset: A hidden, O hidden');
+        sheet.hideColumns(11); // Hide K (Shop Source) - NEW!
+        sheet.hideColumns(15); // Hide O (Old Shop if exists)
+        Logger.log('Column visibility reset: A hidden, K hidden');
     } catch (e) {
         Logger.log('Column visibility error: ' + e);
     }
 
-    // 4. RESTORE COLUMN WIDTHS (Fix: Format gets reset after sort operations)
+    // 4. RESTORE COLUMN WIDTHS
     try {
-        sheet.setColumnWidth(2, 70);   // B: Type
-        sheet.setColumnWidth(3, 100);  // C: Date
-        sheet.setColumnWidth(4, 50);   // D: Shop
+        sheet.setColumnWidth(2, 50);   // B: Shop
+        sheet.setColumnWidth(3, 70);   // C: Type
+        sheet.setColumnWidth(4, 100);  // D: Date
         sheet.setColumnWidth(5, 400);  // E: Notes
         sheet.setColumnWidth(6, 110);  // F: Amount
         sheet.setColumnWidth(7, 70);   // G: % Back
@@ -510,13 +496,13 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 6.3');
+    sheet.getRange('A1').setNote('Script Version: 6.5');
     setMonthTabColor(sheet);
 
     sheet.getRange('A:O').setFontSize(12);
 
-    var headers = ['ID', 'Type', 'Date', 'Shop', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price'];
-    var headerRange = sheet.getRange('A1:J1');
+    var headers = ['ID', 'Shop', 'Type', 'Date', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price', 'ShopSource'];
+    var headerRange = sheet.getRange('A1:K1');
 
     if (headerRange.isBlank() || headerRange.getValue() !== 'ID') {
         headerRange.setValues([headers]);
@@ -525,39 +511,29 @@ function setupNewSheet(sheet, summaryOptions) {
     }
 
     try {
-        sheet.hideColumns(1);
-        sheet.setColumnWidth(2, 70);
-        sheet.setColumnWidth(3, 100);
-        sheet.setColumnWidth(4, 50);
-        sheet.setColumnWidth(5, 400);
+        sheet.hideColumns(1); // A
+        sheet.hideColumns(11); // K: ShopSource
+        sheet.setColumnWidth(2, 50); // B: Shop (Visual)
+        sheet.setColumnWidth(3, 70); // C: Type
+        sheet.setColumnWidth(4, 100); // D: Date
+        sheet.setColumnWidth(5, 400); // E: Notes
         sheet.setColumnWidth(6, 110);
         sheet.setColumnWidth(7, 70);
         sheet.setColumnWidth(8, 80);
         sheet.setColumnWidth(9, 90);
         sheet.setColumnWidth(10, 110);
-        sheet.setColumnWidth(11, 50);
         sheet.hideColumns(15);
     } catch (e) { }
 
-    sheet.getRange('D2:D').setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange('B2:B').setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sheet.getRange('C2:D').setHorizontalAlignment('center');
     sheet.getRange('F2:J').setHorizontalAlignment('right');
+    sheet.getRange('D2:D').setNumberFormat('dd-MM');
+    sheet.getRange('F2:J').setNumberFormat('#,##0');
 
-    // AGGRESSIVE DATE ALIGNMENT
-    sheet.getRange('C:C').setHorizontalAlignment('center');
-    sheet.getRange('C2:C').setNumberFormat('dd-MM');
-
-    sheet.getRange('F2:F').setNumberFormat('#,##0');
-    sheet.getRange('G2:H').setNumberFormat('#,##0');
-    sheet.getRange('I2:J').setNumberFormat('#,##0');
-
-    var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
+    // Conditional Formatting: Type is in Col C
+    var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$C2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:K')]).build();
     sheet.setConditionalFormatRules([rule1]);
-
-    var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
-    sheet.setConditionalFormatRules([rule1]);
-
-    // setupSummaryTable REMOVED from here to prevent shifting during row insertion.
-    // It should only be called at the end of the process.
 
     ensureShopSheet(sheet.getParent());
     ensureBankInfoSheet(sheet.getParent());
@@ -806,7 +782,7 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
     if (!imgUrl) return;
 
     var targetRange = showBankAccount ? accountRange : baseRange;
-    
+
     // CRITICAL FIX: Ensure accountRange (L6:M35) is properly merged
     // This prevents Summary image from shifting when rows above are modified
     if (showBankAccount) {
@@ -942,10 +918,10 @@ function cleanupEmptyRows(sheet) {
 function validateSheetStructure() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getActiveSheet();
-    
+
     Logger.log("=== VALIDATION START: Sheet Structure Check ===");
     Logger.log("Sheet: " + sheet.getName());
-    
+
     var validation = {
         summaryMerged: false,
         noRefErrors: true,
@@ -953,13 +929,13 @@ function validateSheetStructure() {
         summaryPosition: 'L6:N35',
         errors: []
     };
-    
+
     // Check 1: Verify L6:N35 is merged
     try {
         var summaryRange = sheet.getRange('L6:N35');
         validation.summaryMerged = summaryRange.isMerged();
         Logger.log("✓ Summary merged (L6:N35): " + validation.summaryMerged);
-        
+
         if (!validation.summaryMerged) {
             validation.errors.push("Summary area not merged - may be corrupted");
         }
@@ -967,13 +943,13 @@ function validateSheetStructure() {
         validation.errors.push("Error checking Summary merge: " + e);
         Logger.log("✗ Error checking Summary merge: " + e);
     }
-    
+
     // Check 2: Check for #REF! errors in Summary
     try {
         var summaryRange = sheet.getRange('L6:N35');
         var values = summaryRange.getValues();
         var refErrors = [];
-        
+
         for (var i = 0; i < values.length; i++) {
             for (var j = 0; j < values[i].length; j++) {
                 var cell = values[i][j];
@@ -983,19 +959,19 @@ function validateSheetStructure() {
                 }
             }
         }
-        
+
         if (validation.noRefErrors) {
             Logger.log("✓ No #REF! errors in Summary area");
         } else {
             Logger.log("✗ Found #REF! errors in Summary area:");
-            refErrors.forEach(function(err) { Logger.log("  - " + err); });
+            refErrors.forEach(function (err) { Logger.log("  - " + err); });
             validation.errors = validation.errors.concat(refErrors);
         }
     } catch (e) {
         validation.errors.push("Error checking Summary values: " + e);
         Logger.log("✗ Error checking Summary values: " + e);
     }
-    
+
     // Check 3: Verify transaction range
     try {
         var lastRow = sheet.getLastRow();
@@ -1005,18 +981,18 @@ function validateSheetStructure() {
         validation.errors.push("Error reading transaction range: " + e);
         Logger.log("✗ Error reading transaction range: " + e);
     }
-    
+
     // Final validation
     validation.structureValid = validation.summaryMerged && validation.noRefErrors;
-    
+
     Logger.log("");
     if (validation.structureValid) {
         Logger.log("✓✓✓ VALIDATION PASSED - Sheet structure is healthy");
     } else {
         Logger.log("✗✗✗ VALIDATION FAILED - Issues detected:");
-        validation.errors.forEach(function(err) { Logger.log("  - " + err); });
+        validation.errors.forEach(function (err) { Logger.log("  - " + err); });
     }
     Logger.log("=== VALIDATION END ===");
-    
+
     return validation;
 }
