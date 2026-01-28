@@ -3,8 +3,8 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Person } from '@/types/moneyflow.types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { EditPersonDialog } from '@/components/people/edit-person-dialog'
 import { StatsPopover } from './StatsPopover'
-import { EditPersonButton } from '@/components/people/edit-person-button'
 
 interface PeopleHeaderProps {
     person: Person
@@ -180,7 +180,7 @@ export function PeopleHeader({
                     Split
                 </button>
 
-                <EditPersonButton
+                <EditPersonDialog
                     person={person}
                     subscriptions={[]}
                     trigger={

@@ -275,9 +275,9 @@ export async function syncTransactionToSheet(
         .single()
       if (acc) {
         const parts = [
-          acc.name,
-          acc.account_number,
-          acc.receiver_name
+          (acc as any).name,
+          (acc as any).account_number,
+          (acc as any).receiver_name
         ].filter(Boolean)
         resolvedBankInfo = parts.join(' ') || manualBankInfo
       }
@@ -641,9 +641,9 @@ export async function syncCycleTransactions(
         .single()
       if (acc) {
         const parts = [
-          acc.name,
-          acc.account_number,
-          acc.receiver_name
+          (acc as any).name,
+          (acc as any).account_number,
+          (acc as any).receiver_name
         ].filter(Boolean)
         resolvedBankInfo = parts.join(' ') || manualBankInfo
       }

@@ -13,6 +13,7 @@ import { AccountContentWrapper } from '@/components/moneyflow/account-content-wr
 import { TagFilterProvider } from '@/context/tag-filter-context'
 
 import { AccountTabs } from '@/components/moneyflow/account-tabs'
+import { Metadata } from 'next'
 
 type PageProps = {
   params: Promise<{
@@ -21,6 +22,22 @@ type PageProps = {
   searchParams: Promise<{
     tab?: string
   }>
+}
+
+export async function generateMetadata({
+  params,
+  searchParams
+}: PageProps): Promise<Metadata> {
+  const { id } = await params
+  const { tab } = await searchParams
+  const account = await getAccountDetails(id)
+
+  if (!account) return { title: 'Account Not Found' }
+
+  const tabName = tab === 'cashback' ? 'Cashback' : 'Transactions'
+  return {
+    title: `${account.name} ${tabName}`,
+  }
 }
 
 export default async function AccountPage({ params, searchParams }: PageProps) {

@@ -59,6 +59,7 @@ export function AddTransactionDialog({
   defaultType,
   buttonClassName,
   defaultSourceAccountId,
+  defaultTargetAccountId,
   defaultDebtAccountId,
   defaultAmount,
   triggerContent,

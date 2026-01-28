@@ -21,10 +21,39 @@ import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { Button } from "@/components/ui/button"
 import { getPersonWithSubs } from '@/services/people.service'
 import { TransactionTrigger } from '@/components/transaction/slide-v2/transaction-trigger'
+import { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export async function generateMetadata({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>,
+  searchParams: Promise<{ tab?: string }>
+}): Promise<Metadata> {
+  const { id } = await params
+  const { tab } = await searchParams
+  const person = await getPersonWithSubs(id)
+
+  if (!person) return { title: 'Person Not Found' }
+
+  let tabName = 'Detail'
+  if (tab === 'history') tabName = 'History'
+  if (tab === 'split-bill') tabName = 'Split Bill'
+
+  return {
+    title: `${person.name} ${tabName}`,
+  }
+}
+
+export default async function PeopleDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>,
+  searchParams: Promise<{ tab?: string }>
+}) {
   const { id: personId } = await params
 
   // First, get person details to determine the actual debt account ID
