@@ -1,7 +1,13 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 6.5 (Shop Column Fixed)
+ * @version 6.6 (Legacy Migration Fix)
  * @date 2026-01-28
+ * 
+ * CRITICAL FIXES (v6.6):
+ * - Added 'Legacy Layout Compatibility' (auto-detects if B=Type).
+ * - Implemented Auto-Migration for Manual Rows from Old Layout -> New Layout.
+ * - Optimized Manual Row Detection logic.
+ * - Fixed Smart Merge for Legacy Layouts.
  * 
  * CRITICAL FIXES (v6.5):
  * - Moved Shop Name storage from Col O to Col K (hidden) to ensure it sorts with data.
@@ -123,14 +129,26 @@ function handleSyncTransactions(payload) {
 
     var syncOptions = buildSheetSyncOptions(payload);
 
-    // --- UPSERT STRATEGY v6.5 ---
+    // --- UPSERT STRATEGY v6.6 (Legacy Support) ---
     // Objective: Read ALL data (A:K), Update in-place, Append new, Write ALL back.
 
-    // 1. READ ALL DATA (A:K)
+    // 1. READ & DETECT LAYOUT
     var range = sheet.getDataRange();
     var allValues = range.getValues();
     if (allValues.length === 0) {
         allValues = [];
+    }
+
+    // DETECT LAYOUT VERSION
+    // Legacy (v6.3): Col B = 'Type'
+    // V6.5+: Col B = 'Shop'
+    var isLegacyLayout = false;
+    if (allValues.length > 0) {
+        var headerB = (allValues[0][1] || "").toString().trim(); // Row 1, Col B (Index 1)
+        if (headerB === 'Type') {
+            isLegacyLayout = true;
+            Logger.log("⚠️ Legacy Layout Detected (B=Type). Auto-migrating...");
+        }
     }
 
     // Index System Rows by ID
@@ -148,11 +166,16 @@ function handleSyncTransactions(payload) {
         if (hasId) {
             rowMap[idVal] = i;
         } else {
-            // Manual Row Check: Data usually in C (Type), F (Amount), D (Date)
-            // Need to be robust to column shifting. Old manual rows might be in old format?
-            // Assuming we are converting or this is a fresh sync on format.
-            // Let's check generally if row has data.
-            var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
+            // Manual Row Check
+            var hasData = false;
+            // Legacy: Data in B(1), C(2), F(5)
+            // New: Data in C(2), D(3), F(5)
+            if (isLegacyLayout) {
+                hasData = row[1] || row[2] || row[5];
+            } else {
+                hasData = row[2] || row[4] || row[5];
+            }
+
             if (hasData) {
                 manualRowIndices.push(i);
             }
@@ -201,17 +224,18 @@ function handleSyncTransactions(payload) {
                 if (mIdx === -1) continue;
 
                 var mRow = allValues[mIdx];
-                // Check Type, Date, Amount. 
-                // Need to assume they might be in Old Col positions if mixed? 
-                // Safer to assume re-format will fix them.
-                // Or check multiple cols.
+                var mType, mDate, mAmt;
 
-                // Let's assume standard mapping: Type=C(2), Date=D(3), Amount=F(5)
-                var mType = mRow[2];
-                var mDate = mRow[3];
-                var mAmt = Math.abs(Number(mRow[5]));
+                if (isLegacyLayout) {
+                    mType = mRow[1]; // B
+                    mDate = mRow[2]; // C
+                    mAmt = Math.abs(Number(mRow[5]));
+                } else {
+                    mType = mRow[2]; // C
+                    mDate = mRow[3]; // D
+                    mAmt = Math.abs(Number(mRow[5]));
+                }
 
-                // Check Type, Amount (<1 diff), Date (<24h)
                 if (mType !== type) continue;
                 if (Math.abs(mAmt - amt) >= 1) continue;
 
@@ -244,18 +268,46 @@ function handleSyncTransactions(payload) {
         }
     }
 
-    // 4. WRITE BACK
-    var cleanedExistingValues = allValues.filter(function (row, index) {
-        if (index === 0) return true; // Keep Header
+    // 4. WRITE BACK & MIGRATE
+    var validOutputRows = [];
+    validOutputRows.push(['ID', 'Shop', 'Type', 'Date', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price', 'ShopSource']);
+
+    for (var i = startIndex; i < allValues.length; i++) {
+        var row = allValues[i];
         var idVal = (row[0] || "").toString().trim();
-        if (idVal.length > 5) return true; // Keep System Rows
+        var hasId = idVal.length > 5;
+        // Keep Manual Rows if they were not consumed (value is index, not -1)
+        var isPreservedManual = manualRowIndices.includes(i);
 
-        // Keep Manual Rows with Data
-        var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
-        return !!hasData;
-    });
+        if (hasId || isPreservedManual) {
+            var outRow = new Array(11);
+            var isNewFormat = (typeof row[1] === 'string' && row[1].toString().startsWith('='));
 
-    var finalData = cleanedExistingValues.concat(newRows);
+            if (isLegacyLayout && !isNewFormat) {
+                // MIGRATE ROW
+                outRow[0] = row[0];
+                outRow[1] = '=IFERROR(VLOOKUP(K_CELL;Shop!A:B;2;FALSE);K_CELL)'; // New B placeholder
+                outRow[2] = row[1]; // Old B -> New C
+                outRow[3] = row[2]; // Old C -> New D
+                outRow[4] = row[4];
+                outRow[5] = row[5];
+                outRow[6] = row[6];
+                outRow[7] = row[7];
+                outRow[8] = 0;
+                outRow[9] = "";
+                outRow[10] = (row.length > 14) ? row[14] : "";
+            } else {
+                // COPY EXISTING
+                for (var k = 0; k < 11; k++) outRow[k] = row[k] || "";
+            }
+            validOutputRows.push(outRow);
+        }
+    }
+
+    // Add New Rows
+    for (var i = 0; i < newRows.length; i++) validOutputRows.push(newRows[i]);
+
+    var finalData = validOutputRows;
 
     // Fix Cell References in Formulas (Col B)
     for (var i = 1; i < finalData.length; i++) { // Skip header
