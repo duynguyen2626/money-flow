@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Users, DollarSign } from 'lucide-react'
+import { Plus, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Users, DollarSign, CreditCard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface AddOption {
@@ -54,15 +54,47 @@ const ADD_OPTIONS: AddOption[] = [
     color: 'text-indigo-700',
     bgColor: 'hover:bg-indigo-50',
   },
+  {
+    type: 'credit_pay',
+    label: 'Credit Pay',
+    icon: <CreditCard className="w-4 h-4" />,
+    color: 'text-violet-700',
+    bgColor: 'hover:bg-violet-50',
+  },
 ]
 
 interface AddTransactionDropdownProps {
   onSelect: (type?: string) => void
+  accountType?: 'credit_card' | 'bank' | 'savings' | 'ewallet' | 'cash' | 'debt' | 'investment' | 'asset' | 'system'
 }
 
-export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps) {
+export function AddTransactionDropdown({ onSelect, accountType }: AddTransactionDropdownProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  // Filter options based on account type
+  const availableOptions = ADD_OPTIONS.filter(opt => {
+    // All accounts can create expense and income
+    if (opt.type === 'expense' || opt.type === 'income') return true
+    
+    // Transfer only for bank, savings, ewallet, cash
+    if (opt.type === 'transfer') {
+      return accountType && ['bank', 'savings', 'ewallet', 'cash'].includes(accountType)
+    }
+    
+    // Debt/Lend for all
+    if (opt.type === 'debt') return true
+    
+    // Repay for all
+    if (opt.type === 'repayment') return true
+    
+    // Credit Pay only for credit cards
+    if (opt.type === 'credit_pay') {
+      return accountType === 'credit_card'
+    }
+    
+    return false
+  })
 
   // Get recent types from localStorage
   const getRecentTypes = (): string[] => {
@@ -102,10 +134,10 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
 
   const recentTypes = getRecentTypes()
   const recentOptions = recentTypes
-    .map(t => ADD_OPTIONS.find(opt => opt.type === t))
+    .map(t => availableOptions.find(opt => opt.type === t))
     .filter(Boolean) as AddOption[]
 
-  const allOptions = ADD_OPTIONS.filter(
+  const otherOptions = availableOptions.filter(
     opt => !recentTypes.includes(opt.type)
   )
 
@@ -159,7 +191,7 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
           <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             New Transaction
           </div>
-          {allOptions.map(option => (
+          {otherOptions.map(option => (
             <button
               key={option.type}
               onClick={() => handleSelect(option.type)}

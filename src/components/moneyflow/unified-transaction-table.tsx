@@ -2279,7 +2279,7 @@ export function UnifiedTransactionTable({
                             key="from"
                             className={cn(
                               "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
-                              isDetailContext ? "bg-orange-200 text-orange-900 border-orange-300" : "bg-orange-100 text-orange-700 border-orange-200"
+                              "bg-emerald-50 text-emerald-700 border-emerald-200"
                             )}
                           >
                             FROM
@@ -2290,7 +2290,7 @@ export function UnifiedTransactionTable({
                             key="to"
                             className={cn(
                               "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
-                              isDetailContext ? "bg-sky-200 text-sky-900 border-sky-300" : "bg-sky-100 text-sky-700 border-sky-200"
+                              "bg-rose-50 text-rose-700 border-rose-200"
                             )}
                           >
                             TO

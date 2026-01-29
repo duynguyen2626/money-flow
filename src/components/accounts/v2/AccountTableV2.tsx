@@ -159,12 +159,12 @@ export function AccountTableV2({
     };
 
     return (
-        <div className="rounded-md border bg-card">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="overflow-x-auto max-h-[calc(100vh-200px)] overflow-y-auto">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50/95 backdrop-blur-sm text-xs uppercase font-black text-slate-500 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+                    <thead className="bg-white/95 backdrop-blur-sm text-xs uppercase font-black text-slate-500 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
                         <tr>
-                            <th className="w-10 px-2 py-3 text-center border-r border-slate-200 bg-slate-50/95 align-middle">
+                            <th className="w-10 px-2 py-3 text-center border-r border-slate-200 bg-white/95 align-middle">
                                 {expandedRows.size > 0 && (
                                     <Button
                                         variant="ghost"
@@ -179,7 +179,7 @@ export function AccountTableV2({
                             </th>
                             {visibleCols.map((col, idx) => (
                                 <th key={col.key} className={cn(
-                                    "px-4 py-3 whitespace-nowrap group bg-slate-50/95", // bg required for sticky coverage
+                                    "px-4 py-3 whitespace-nowrap group bg-white/95", // bg required for sticky coverage
                                     idx < visibleCols.length - 1 && "border-r border-slate-200"
                                 )}>
                                     <div className="flex items-center justify-between gap-2">

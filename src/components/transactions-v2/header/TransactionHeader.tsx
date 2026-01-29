@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Account, Person } from '@/types/moneyflow.types'
 import { MonthYearPickerV2 } from '@/components/transactions-v2/header/MonthYearPickerV2'
 import { QuickFilterDropdown } from '@/components/transactions-v2/header/QuickFilterDropdown'
@@ -8,11 +8,15 @@ import { TypeFilterDropdown } from '@/components/transactions-v2/header/TypeFilt
 import { StatusDropdown } from '@/components/transactions-v2/header/StatusDropdown'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
 import { CycleFilterDropdown } from '@/components/transactions-v2/header/CycleFilterDropdown'
-import { FilterX, ListFilter, X, Search, Filter } from 'lucide-react'
+import { FilterX, ListFilter, X, Search, Filter, Trash2, ChevronDown, Clipboard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 import { DateRange } from 'react-day-picker'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Dialog,
   DialogContent,
@@ -81,6 +85,83 @@ interface TransactionHeaderProps {
   // Dynamic Filter Options
   availableAccountIds?: Set<string>
   availablePersonIds?: Set<string>
+}
+
+interface ClearDropdownButtonProps {
+  onReset?: () => void
+  setConfirmClearOpen: (open: boolean) => void
+  handleApplyFilters: () => void
+}
+
+function ClearDropdownButton({ onReset, setConfirmClearOpen, handleApplyFilters }: ClearDropdownButtonProps) {
+  const [open, setOpen] = useState(false)
+  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    closeTimeout.current = setTimeout(() => setOpen(false), 120)
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="h-9 px-3 gap-1.5 font-medium"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <FilterX className="w-4 h-4" />
+          <span className="hidden sm:inline text-xs">Clear</span>
+          <ChevronDown className="w-3 h-3 opacity-70" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent 
+        className="w-[260px] p-1" 
+        align="start"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="space-y-0.5">
+          {/* Clear Filter */}
+          <button
+            onClick={() => {
+              setConfirmClearOpen(true)
+              setOpen(false)
+            }}
+            className="w-full flex items-start gap-2 px-2 py-2 text-sm rounded-sm hover:bg-accent transition-colors text-left"
+          >
+            <FilterX className="h-4 w-4 mt-0.5 shrink-0 opacity-70" />
+            <div className="flex-1">
+              <div className="font-medium">Clear Filter</div>
+              <div className="text-xs text-muted-foreground">Keep search</div>
+            </div>
+          </button>
+
+          {/* Clear All */}
+          <button
+            onClick={() => {
+              setConfirmClearOpen(true)
+              setOpen(false)
+            }}
+            className="w-full flex items-start gap-2 px-2 py-2 text-sm rounded-sm hover:bg-accent transition-colors text-left text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mt-0.5 shrink-0 opacity-70" />
+            <div className="flex-1">
+              <div className="font-medium">Clear All</div>
+              <div className="text-xs text-muted-foreground">Including search</div>
+            </div>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function TransactionHeader({
@@ -171,7 +252,7 @@ export function TransactionHeader({
 
 
   // --- Hybrid Real-time Handlers ---
-  const handleFilterChange = (setter: (val: any) => void, propHandler: (val: any) => void) => (val: any) => {
+  const handleFilterChange = <T,>(setter: (val: T) => void, propHandler: (val: T) => void) => (val: T) => {
     setter(val)
     if (hasActiveFilters) {
       propHandler(val)
@@ -188,11 +269,11 @@ export function TransactionHeader({
 
   // Wrapper for MonthYearPicker
   const handleDateUpdate = (
-    updates: {
-      date?: Date,
-      range?: DateRange | undefined,
-      mode?: 'month' | 'range' | 'date'
-    }
+    updates: Partial<{
+      date: Date
+      range: DateRange | undefined
+      mode: 'month' | 'range' | 'date'
+    }>
   ) => {
     if (updates.date !== undefined) setLocalDate(updates.date)
     if (updates.range !== undefined) setLocalDateRange(updates.range)
@@ -289,33 +370,23 @@ export function TransactionHeader({
       />
 
       {/* Filter Action Button */}
-      <Button
-        variant={hasActiveFilters ? 'destructive' : 'default'}
-        size="sm"
-        onClick={() => {
-          if (hasActiveFilters) {
-            setConfirmClearOpen(true)
-          } else {
-            handleApplyFilters()
-          }
-        }}
-        className={cn(
-          "h-9 px-3 gap-1.5 font-medium transition-all min-w-[90px]",
-          hasActiveFilters ? "" : "bg-primary text-primary-foreground"
-        )}
-      >
-        {hasActiveFilters ? (
-          <>
-            <X className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs">Clear</span>
-          </>
-        ) : (
-          <>
-            <Filter className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs">Filter</span>
-          </>
-        )}
-      </Button>
+      {!hasActiveFilters ? (
+        <Button
+          variant="default"
+          size="sm"
+          onClick={handleApplyFilters}
+          className="h-9 px-3 gap-1.5 font-medium bg-primary text-primary-foreground"
+        >
+          <Filter className="w-4 h-4" />
+          <span className="hidden sm:inline text-xs">Filter</span>
+        </Button>
+      ) : (
+        <ClearDropdownButton
+          onReset={onReset}
+          setConfirmClearOpen={setConfirmClearOpen}
+          handleApplyFilters={handleApplyFilters}
+        />
+      )}
     </div>
   )
 
@@ -373,17 +444,33 @@ export function TransactionHeader({
 
         <div className="flex items-center gap-2 flex-1 ml-2 relative">
           <div className="relative flex-1 max-w-sm">
+            <Clipboard 
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" 
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText()
+                  setLocalSearchTerm(text)
+                } catch (err) {
+                  const error = err as Error & { name?: string }
+                  if (error.name === 'NotAllowedError') {
+                    toast.error("Clipboard permission denied")
+                  } else {
+                    toast.error("Failed to read clipboard")
+                  }
+                }
+              }}
+            />
             <Input
               placeholder="Search by notes or ID..."
               value={localSearchTerm}
               onChange={(e) => setLocalSearchTerm(e.target.value)}
-              className="pr-16" // More padding for X and Search icons
+              className="pl-9 pr-16"
               onKeyDown={(e) => e.key === 'Enter' && handleSearchConfirm()}
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
               {localSearchTerm && (
                 <button
-                  className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                  className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors"
                   onClick={() => {
                     setLocalSearchTerm('')
                     onSearchChange('') // Clear immediately
@@ -393,8 +480,9 @@ export function TransactionHeader({
                 </button>
               )}
               <button
-                className="p-1 hover:bg-slate-100 rounded-full"
+                className="p-1 hover:bg-slate-100 rounded"
                 onClick={handleSearchConfirm}
+                disabled={!localSearchTerm.trim()}
               >
                 <Search className="w-4 h-4 opacity-50" />
               </button>

@@ -13,7 +13,7 @@ import { normalizeMonthTag } from '@/lib/month-tag'
 export type CreateTransactionInput = {
   occurred_at: string;
   note: string;
-  type: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment';
+  type: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment' | 'credit_pay';
   source_account_id: string;
   person_id?: string | null;
   destination_account_id?: string | null;

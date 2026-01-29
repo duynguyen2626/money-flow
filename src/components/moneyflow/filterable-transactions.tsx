@@ -644,7 +644,7 @@ export function FilterableTransactions({
     const isEmbedded = variant === 'embedded'
     return (
         <div className={cn(
-            "flex flex-col w-full bg-slate-50/50",
+            "flex flex-col w-full bg-white",
             isEmbedded ? "h-auto overflow-visible" : "h-full overflow-hidden",
             className
         )}>
@@ -652,23 +652,25 @@ export function FilterableTransactions({
                 "flex-1 flex flex-col min-h-0",
                 isEmbedded ? "overflow-visible" : "overflow-hidden"
             )}>
-                <div className="w-full px-4 lg:px-10 py-4 flex flex-col gap-4">
+                <div className="w-full px-6 py-4 flex flex-col gap-4">
                     {/* Desktop Toolbar: One Row Design */}
                     <div className="hidden lg:flex items-center gap-3">
-                        <div className="flex-1 max-w-sm">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search transactions..."
-                                    className="w-full pl-9 pr-4 h-9 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
-                                />
+                        {!isEmbedded && (
+                            <div className="flex-1 max-w-sm">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search transactions..."
+                                        className="w-full pl-9 pr-4 h-9 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {!hideStatusTabs && (
+                        {!hideStatusTabs && !isEmbedded && (
                             <QuickTabs
                                 activeTab={activeTab}
                                 onTabChange={setActiveTab}
@@ -676,24 +678,7 @@ export function FilterableTransactions({
                             />
                         )}
 
-                        <div className="h-6 w-px bg-slate-200" />
-
-                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                            {(['all', 'income', 'expense', 'lend', 'repay', 'transfer'] as const).map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => setSelectedType(type)}
-                                    className={cn(
-                                        "px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-md border transition-all whitespace-nowrap",
-                                        selectedType === type
-                                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700"
-                                    )}
-                                >
-                                    {type}
-                                </button>
-                            ))}
-                        </div>
+                        {/* Removed old filter buttons - use TypeFilterDropdown component instead */}
 
                         <div className="h-6 w-px bg-slate-200" />
 
@@ -817,19 +802,21 @@ export function FilterableTransactions({
                         </div>
 
                         {/* Row 2: Search + Add Button */}
-                        <div className="flex items-center gap-2 w-full">
-                            <SearchBox
-                                value={searchTerm}
-                                onChange={setSearchTerm}
-                                variant="mobile"
-                            />
-                            <AddTransactionDialog
-                                accounts={accounts}
-                                categories={categories}
-                                people={people}
-                                shops={shops}
-                            />
-                        </div>
+                        {!isEmbedded && (
+                            <div className="flex items-center gap-2 w-full">
+                                <SearchBox
+                                    value={searchTerm}
+                                    onChange={setSearchTerm}
+                                    variant="mobile"
+                                />
+                                <AddTransactionDialog
+                                    accounts={accounts}
+                                    categories={categories}
+                                    people={people}
+                                    shops={shops}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* Floating Action Bar (Replaces Mobile/Inline Actions) */}
@@ -1070,11 +1057,11 @@ export function FilterableTransactions({
                 {/* 2. Table & Footer Card Container */}
                 <div className={cn(
                     "flex-1 min-h-0 overflow-hidden relative",
-                    isMobile ? "bg-white border-t" : "w-full px-4 lg:px-10 pb-4 bg-slate-50/50"
+                    isMobile ? "bg-white border-t" : "w-full px-6 pb-6 bg-white"
                 )}>
                     <div className={cn(
                         "flex flex-col h-full min-h-0 overflow-hidden",
-                        isMobile ? "" : "bg-white rounded-2xl border border-slate-200 shadow-sm"
+                        isMobile ? "" : "bg-white rounded-xl border border-slate-200 shadow-sm"
                     )}>
                         {/* Table Region */}
                         <div className="flex-1 overflow-hidden relative">

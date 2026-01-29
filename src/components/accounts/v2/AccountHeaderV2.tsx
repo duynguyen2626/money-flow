@@ -1,15 +1,7 @@
-"use client"
-
-import React from 'react';
-import { Search, Plus, Filter, LayoutGrid, List, Check } from "lucide-react";
+import { Search, Plus, Landmark, LayoutGrid, List } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
 
 interface AccountHeaderProps {
     searchQuery: string;
@@ -37,93 +29,92 @@ export function AccountHeaderV2({
     closedCount,
 }: AccountHeaderProps) {
     const filters = [
-        { id: 'accounts_cards' as const, label: 'Accounts & Cards', count: activeCount, color: 'text-blue-600', bg: 'bg-blue-50' },
-        { id: 'credit' as const, label: 'Credit', count: 0, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-        { id: 'savings' as const, label: 'Savings', count: 0, color: 'text-amber-600', bg: 'bg-amber-50' },
-        { id: 'debt' as const, label: 'Debt', count: debtCount, color: 'text-rose-600', bg: 'bg-rose-50' },
+        { id: 'accounts_cards' as const, label: 'Accounts & Cards' },
+        { id: 'credit' as const, label: 'Credit' },
+        { id: 'savings' as const, label: 'Savings' },
+        { id: 'debt' as const, label: 'Debt' },
     ];
-    // NOTE: The counts above are placeholders because the parent doesn't provide breakdown yet.
-    // I will implement the UI first.
 
     return (
-        <div className="flex flex-col sm:flex-row items-center gap-2 p-4 border-b bg-white sticky top-0 z-20 shadow-sm transition-all duration-200">
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 no-scrollbar">
+        <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky top-0 z-20 shadow-sm transition-all duration-200">
+            {/* Left Group: Title & Stats */}
+            <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+                    <Landmark className="h-5 w-5" />
+                </div>
+                <div className="flex flex-col">
+                    <h1 className="text-xl font-black text-slate-900 leading-none tracking-tight">Accounts & Cards</h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Directory</span>
+                        <span className="h-1 w-1 rounded-full bg-slate-300" />
+                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{activeCount} Active</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Center Group: Filter Tabs */}
+            <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg border border-slate-200 shadow-inner">
                 {filters.map((f) => (
                     <button
                         key={f.id}
                         onClick={() => onFilterChange(f.id)}
                         className={cn(
-                            "flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border",
+                            "flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
                             activeFilter === f.id
-                                ? `bg-slate-900 text-white border-slate-900 shadow-md`
-                                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                ? `bg-white text-slate-900 shadow-sm border border-slate-200`
+                                : "text-slate-500 hover:text-slate-800"
                         )}
                     >
                         <span>{f.label}</span>
-                        {/* <span className={cn(
-                            "text-[9px] px-1.5 py-0 rounded-full font-black",
-                            activeFilter === f.id ? "bg-white/20 text-white" : f.bg + " " + f.color
-                        )}>
-                            {f.count}
-                        </span> */}
                     </button>
                 ))}
             </div>
 
-            {/* Search Bar - Flex to fill remaining space */}
-            <div className="relative flex-1 max-w-lg mr-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                    placeholder="Search by name, ids..."
-                    className="pl-9 pr-8 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg font-medium shadow-sm hover:border-slate-300"
-                    value={searchQuery}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                />
-                {searchQuery && (
-                    <button
-                        onClick={() => onSearchChange('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                        <span className="sr-only">Clear</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-                    </button>
-                )}
-            </div>
+            {/* Right Group: Search and Action */}
+            <div className="flex items-center gap-3">
+                <div className="relative w-48 lg:w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                        placeholder="Search accounts..."
+                        className="pl-9 h-9 bg-slate-50/50 border-slate-200 focus:bg-white transition-all rounded-lg font-medium shadow-sm hover:border-slate-300 text-xs"
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                    />
+                </div>
 
-            <div className="flex items-center gap-3 ml-auto">
-                <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+                <div className="h-6 w-px bg-slate-200 mx-1 hidden lg:block" />
+
+                <div className="flex items-center gap-1 bg-slate-100/50 p-0.5 rounded-lg border border-slate-200">
                     <Button
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-8 w-8 rounded-md transition-all",
-                            viewMode === 'table' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+                            "h-7 w-7 rounded-md transition-all",
+                            viewMode === 'table' ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"
                         )}
                         onClick={() => onViewModeChange('table')}
-                        title="Table View"
                     >
-                        <List className="h-4 w-4" />
+                        <List className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-8 w-8 rounded-md transition-all",
-                            viewMode === 'grid' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+                            "h-7 w-7 rounded-md transition-all",
+                            viewMode === 'grid' ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"
                         )}
                         onClick={() => onViewModeChange('grid')}
-                        title="Grid View"
                     >
-                        <LayoutGrid className="h-4 w-4" />
+                        <LayoutGrid className="h-3.5 w-3.5" />
                     </Button>
                 </div>
 
                 <Button
-                    className="h-10 px-4 bg-slate-900 hover:bg-black text-white rounded-lg gap-2 font-black shadow-sm transition-all active:scale-95"
+                    className="h-9 px-4 bg-slate-900 hover:bg-black text-white rounded-lg gap-2 font-black shadow-sm transition-all active:scale-95 text-xs uppercase tracking-wider"
                     onClick={onAdd}
                 >
-                    <Plus className="h-4 w-4" />
-                    <span className="uppercase tracking-wider text-xs">Add Account</span>
+                    <Plus className="h-3.5 w-3.5" />
+                    Add
                 </Button>
             </div>
         </div>

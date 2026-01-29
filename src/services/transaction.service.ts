@@ -26,7 +26,7 @@ type TransactionStatus =
   | "waiting_refund"
   | "refunded"
   | "completed";
-type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment";
+type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment" | "credit_pay";
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -104,6 +104,7 @@ function resolveBaseType(
 ): "income" | "expense" | "transfer" {
   if (type === "repayment") return "income";
   if (type === "debt") return "expense";
+  if (type === "credit_pay") return "transfer";
   if (type === "transfer") return "transfer";
   return type;
 }

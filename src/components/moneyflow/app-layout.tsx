@@ -186,7 +186,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0 bg-slate-50">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0 bg-white">
         {/* Mobile Header */}
         <div className="md:hidden sticky top-0 z-30 flex items-center justify-between border-b bg-white px-4 py-3 shadow-sm">
           <div className="flex items-center gap-2">
@@ -246,7 +246,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="text-lg font-bold text-slate-800">{currentPageTitle}</span>
           </div>
         </div>
-        <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 flex-1 min-h-0 bg-white">
+        <div className="mx-auto w-full max-w-[1920px] flex-1 min-h-0 bg-white">
           {children}
         </div>
       </main>

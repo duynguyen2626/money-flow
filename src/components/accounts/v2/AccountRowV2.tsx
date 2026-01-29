@@ -18,9 +18,7 @@ import {
     ArrowUpRight,
     Loader2,
     LucideIcon,
-    BookOpen,
     Network,
-    Users
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -104,7 +102,7 @@ export function AccountRowV2({
             <tr
                 className={cn(
                     "transition-all duration-200 group/row",
-                    isExpanded ? "bg-indigo-50/30 border-b-0" : "hover:bg-slate-50 border-b",
+                    isExpanded ? "bg-indigo-50/20 border-b-0" : "hover:bg-indigo-50/10 border-b",
                     (() => {
                         if (account.type !== 'credit_card' && account.type !== 'debt') return "";
                         const now = new Date();
@@ -125,23 +123,23 @@ export function AccountRowV2({
                             }
                         }
 
-                        if (dueDays < 5 || ruleDays < 5) {
-                            return "bg-rose-100 border-rose-200 hover:bg-rose-200 shadow-[inset_4px_0_0_0_#e11d48]";
+                        if (dueDays < 10 || ruleDays < 10) {
+                            return "bg-rose-50/50 border-rose-200 hover:bg-rose-100/60 shadow-[inset_4px_0_0_0_#e11d48] transition-all duration-300";
                         }
                         if (dueDays !== Infinity || ruleDays !== Infinity) {
-                            return "bg-rose-50/50 border-rose-100 hover:bg-rose-100/50 shadow-[inset_4px_0_0_0_#fb7185]";
+                            return "bg-slate-50/30 border-slate-100 hover:bg-indigo-50/20 shadow-[inset_4px_0_0_0_#94a3b8]";
                         }
 
                         const remaining = (account.stats?.min_spend || 0) - (account.stats?.spent_this_cycle || 0);
                         if (account.stats?.min_spend && !account.stats?.is_qualified && remaining > 0) {
-                            return "bg-amber-50 border-amber-200 hover:bg-amber-100 shadow-[inset_4px_0_0_0_#f59e0b]";
+                            return "bg-amber-50/20 border-amber-100 shadow-[inset_4px_0_0_0_#f59e0b]";
                         }
 
                         if (account.stats?.is_qualified) {
-                            return "bg-emerald-50/30 border-emerald-100 hover:bg-emerald-100/30";
+                            return "bg-emerald-50/10 border-emerald-100 shadow-[inset_4px_0_0_0_#10b981]";
                         }
 
-                        return "";
+                        return "bg-white border-b";
                     })()
                 )}
             >
@@ -238,40 +236,40 @@ function renderCell(
 
     const renderRoleBadge = (role: 'parent' | 'child' | 'standalone') => {
         if (role === 'parent') {
-            return <span className={`${badgeBase} bg-amber-100 text-amber-800 border-amber-300`}><Network className="w-3.5 h-3.5" />Parent</span>;
+            return <span className={`${badgeBase} bg-amber-50 text-amber-700 border-amber-200`}><ArrowRightLeft className="w-3 h-3" />Parent</span>;
         }
         if (role === 'child') {
-            return <span className={`${badgeBase} bg-indigo-100 text-indigo-800 border-indigo-300`}><Users className="w-3.5 h-3.5" />Child</span>;
+            return <span className={`${badgeBase} bg-indigo-50 text-indigo-700 border-indigo-200`}><Network className="w-3 h-3" />Child</span>;
         }
-        return <span className={`${badgeBase} bg-slate-100 text-slate-700 border-slate-300`}>Standalone</span>;
+        return <span className={`${badgeBase} bg-slate-50 text-slate-500 border-slate-200`}>Standalone</span>;
     };
 
     const formatMoneyVND = (amount: number) => new Intl.NumberFormat('vi-VN').format(Math.abs(amount));
 
+    const getPlaceholderIcon = (type: string): LucideIcon => {
+        switch (type) {
+            case 'credit_card': return CreditCard;
+            case 'bank': return Banknote;
+            case 'ewallet': return Wallet;
+            case 'savings': return ArrowUpRight;
+            case 'debt': return HandCoins;
+            default: return Wallet;
+        }
+    };
+
+    const renderIcon = (type: string, url: string | null | undefined, name: string, sizeClass: string = "w-4 h-4") => {
+        if (url) return <img src={url} className={cn(sizeClass, "object-contain rounded-sm")} alt="" />;
+        const Icon = getPlaceholderIcon(type);
+        return (
+            <div className={cn(sizeClass, "flex items-center justify-center bg-indigo-50/50 rounded text-indigo-400 p-0.5 shadow-inner")}>
+                <Icon className="w-full h-full" />
+            </div>
+        );
+    };
+
     switch (key) {
         case 'account': {
             const children = allAccounts?.filter((a: Account) => a.parent_account_id === account.id) || [];
-
-            const getPlaceholderIcon = (type: string): LucideIcon => {
-                switch (type) {
-                    case 'credit_card': return CreditCard;
-                    case 'bank': return Banknote;
-                    case 'ewallet': return Wallet;
-                    case 'savings': return ArrowUpRight;
-                    case 'debt': return HandCoins;
-                    default: return Wallet;
-                }
-            };
-
-            const renderIcon = (type: string, url: string | null | undefined, name: string, sizeClass: string = "w-4 h-4") => {
-                if (url) return <img src={url} className={cn(sizeClass, "object-contain rounded-sm")} alt="" />;
-                const Icon = getPlaceholderIcon(type);
-                return (
-                    <div className={cn(sizeClass, "flex items-center justify-center bg-slate-100 rounded text-slate-400 p-0.5")}> 
-                        <Icon className="w-full h-full" />
-                    </div>
-                );
-            };
 
             const MainPlaceholderIcon = getPlaceholderIcon(account.type);
 
@@ -282,7 +280,7 @@ function renderCell(
                             {account.image_url ? (
                                 <img src={account.image_url} alt="" className="w-full h-full object-contain" />
                             ) : (
-                                <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400 p-2 rounded">
+                                <div className="w-full h-full bg-white border border-slate-100 flex items-center justify-center text-slate-300 p-2 rounded">
                                     <MainPlaceholderIcon className="w-full h-full" />
                                 </div>
                             )}
@@ -306,114 +304,83 @@ function renderCell(
                                 </Link>
                             </div>
                             <div className="flex flex-wrap items-center gap-2 justify-end">
-                        {account.secured_by_account_id ? (
-                            <TooltipProvider>
-                                <Tooltip delayDuration={300}>
-                                    <TooltipTrigger asChild>
-                                        <span className={`${badgeBase} bg-indigo-100 text-indigo-800 border-indigo-300`}>
-                                            <BookOpen className="w-3.5 h-3.5" />
-                                            Secured
-                                        </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <div className="flex items-center gap-2">
-                                            {(() => {
-                                                const secured = allAccounts?.find(a => a.id === account.secured_by_account_id);
-                                                return secured ? (
-                                                    <>
-                                                        {renderIcon(secured.type, secured.image_url, secured.name)}
-                                                        <span>Secured by {secured.name}</span>
-                                                    </>
-                                                ) : 'Secured by collateral';
-                                            })()}
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        ) : null}
-
-                        {account.relationships?.is_parent ? (
-                            <TooltipProvider>
-                                <Tooltip delayDuration={300}>
-                                    <TooltipTrigger asChild>
-                                        <div className="cursor-help">{renderRoleBadge('parent')}</div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <div className="space-y-1">
-                                            <p className="font-bold">Child Accounts:</p>
-                                            {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
-                                                <div key={child.id} className="flex items-center gap-2">
-                                                    {renderIcon(child.type, child.image_url, child.name)}
-                                                    <span>{child.name}</span>
+                                {account.relationships?.is_parent ? (
+                                    <TooltipProvider>
+                                        <Tooltip delayDuration={300}>
+                                            <TooltipTrigger asChild>
+                                                <div className="cursor-help">{renderRoleBadge('parent')}</div>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <div className="space-y-1">
+                                                    <p className="font-bold">Child Accounts:</p>
+                                                    {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
+                                                        <div key={child.id} className="flex items-center gap-2">
+                                                            {renderIcon(child.type, child.image_url, child.name)}
+                                                            <span>{child.name}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        ) : account.relationships?.parent_info ? (
-                            <TooltipProvider>
-                                <Tooltip delayDuration={300}>
-                                    <TooltipTrigger asChild>
-                                        <div className="cursor-help">{renderRoleBadge('child')}</div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <div className="flex items-center gap-2">
-                                            {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name)}
-                                            <span>Parent: {account.relationships.parent_info.name}</span>
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        ) : (
-                            renderRoleBadge('standalone')
-                        )}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ) : account.relationships?.parent_info ? (
+                                    <TooltipProvider>
+                                        <Tooltip delayDuration={300}>
+                                            <TooltipTrigger asChild>
+                                                <div className="cursor-help">{renderRoleBadge('child')}</div>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <div className="flex items-center gap-2">
+                                                    {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name)}
+                                                    <span>Parent: {account.relationships.parent_info.name}</span>
+                                                </div>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                ) : (
+                                    renderRoleBadge('standalone')
+                                )}
 
-                        {(() => {
-                            const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
-                            const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
-                            let daysLeft = Infinity;
-                            if (dueDate) {
-                                const diffTime = dueDate.getTime() - new Date().getTime();
-                                daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            }
+                                {(() => {
+                                    const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
+                                    const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
+                                    let daysLeft = Infinity;
+                                    if (dueDate) {
+                                        const diffTime = dueDate.getTime() - new Date().getTime();
+                                        daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                    }
 
-                            const formatDate = (date: Date | null) => date ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date) : '';
+                                    const formatDate = (date: Date | null) => date ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date) : '';
 
-                            if (!isDueAccount || daysLeft === Infinity) {
-                                const typeLabels: Record<string, { icon: React.ComponentType<any>, label: string }> = {
-                                    'bank': { icon: Banknote, label: 'Bank Account' },
-                                    'ewallet': { icon: Wallet, label: 'E-Wallet' },
-                                    'savings': { icon: ArrowUpRight, label: 'Savings' },
-                                    'cash': { icon: Wallet, label: 'Cash' },
-                                };
-                                const info = typeLabels[account.type] || { icon: Wallet, label: 'Account' };
-                                const Icon = info.icon;
-                                return (
-                                    <span className={`${badgeBase} bg-slate-100 text-slate-600 border-slate-300 w-[140px]`}>
-                                        <Icon className="w-3.5 h-3.5" />
-                                        {info.label}
-                                    </span>
-                                );
-                            }
+                                    if (!isDueAccount) return null;
 
-                            const tone = daysLeft <= 0
-                                ? "bg-rose-100 text-rose-800 border-rose-300"
-                                : daysLeft <= 5
-                                    ? "bg-amber-100 text-amber-800 border-amber-300"
-                                    : "bg-emerald-100 text-emerald-800 border-emerald-300";
+                                    if (daysLeft === Infinity) {
+                                        return (
+                                            <span className={`${badgeBase} bg-slate-50 text-slate-500 border-slate-200 w-[100px]`}>
+                                                No Due
+                                            </span>
+                                        );
+                                    }
 
-                            const dayNumber = Math.abs(daysLeft);
-                            const labelDate = formatDate(dueDate);
+                                    const tone = daysLeft <= 0
+                                        ? "bg-rose-100 text-rose-800 border-rose-300"
+                                        : daysLeft <= 10
+                                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                                            : "bg-emerald-100 text-emerald-800 border-emerald-300";
 
-                            return (
-                                <span className={`${badgeBase} ${tone} w-[140px]`}>
-                                    <span className="font-black text-base">{dayNumber}d</span>
-                                    <span className="text-slate-400">•</span>
-                                    <span className="font-bold">{labelDate}</span>
-                                </span>
-                            );
-                        })()}
+                                    const dayNumber = Math.abs(daysLeft);
+                                    const labelDate = formatDate(dueDate);
+                                    // Split labelDate "Feb 5" -> ["Feb", "5"]
+                                    const [month, day] = labelDate.split(' ');
+
+                                    return (
+                                        <span className={`${badgeBase} ${tone} w-[140px]`}>
+                                            <span className="font-medium text-xs"><b className="font-extrabold">{dayNumber}</b> Days</span>
+                                            <span className="text-slate-400 mx-0.5">-</span>
+                                            <span className="font-medium text-xs">{month} <b className="font-extrabold">{day}</b></span>
+                                        </span>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -478,25 +445,63 @@ function renderCell(
             const limitProgress = displayLimit > 0 ? Math.min(100, (debtAbs / displayLimit) * 100) : 0;
 
             return (
-                <div className="flex flex-col gap-1.5 min-w-[120px] items-end justify-center py-1">
-                    <div className="tabular-nums font-black text-slate-600 text-[11px] text-right">
-                        {displayLimit ? formatMoneyVND(displayLimit) : '—'}
+                <div className="flex flex-col items-end gap-1 min-w-[140px] py-1">
+                    {/* Line 1: Badge + Limit Amount (Aligned with Rewards status) */}
+                    <div className="flex items-center gap-1.5 justify-end w-full px-0.5 min-h-[17px]">
+                        {account.secured_by_account_id && (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <div className="h-3.5 px-1 flex items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[3px] text-[8px] font-black uppercase tracking-tight cursor-help leading-none">
+                                            SECURED
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="flex items-center gap-2">
+                                            {(() => {
+                                                const secured = allAccounts?.find(a => a.id === account.secured_by_account_id);
+                                                return secured ? (
+                                                    <>
+                                                        {renderIcon(secured.type, secured.image_url, secured.name)}
+                                                        <span>Secured by {secured.name}</span>
+                                                    </>
+                                                ) : 'Secured by collateral';
+                                            })()}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                        <span className="font-black text-slate-700 text-[11px] tabular-nums leading-none">
+                            {displayLimit ? formatMoneyVND(displayLimit) : '—'}
+                        </span>
                     </div>
+
+                    {/* Line 2: Progress Bar with Embedded Usage Text */}
                     {displayLimit > 0 && (
-                        <div className="w-full max-w-[100px] space-y-1">
-                            <div className="h-2.5 bg-slate-200 rounded-full overflow-hidden relative border border-slate-300/50">
-                                <div
-                                    className={cn(
-                                        "h-full rounded-full transition-all duration-500",
-                                        limitProgress > 90 ? "bg-rose-500" : limitProgress > 70 ? "bg-amber-500" : "bg-indigo-500"
-                                    )}
-                                    style={{ width: `${Math.max(limitProgress, 2)}%` }}
-                                />
-                            </div>
-                            <div className="text-[9px] font-bold text-slate-400 text-right flex items-center justify-end gap-1">
-                                <span title="Total Family Debt">{formatMoneyVND(debtAbs)}</span>
-                                <span className="text-slate-300">/</span>
-                                <span>{limitProgress.toFixed(0)}%</span>
+                        <div className="relative w-full h-6 bg-slate-50 rounded-md border border-slate-200 overflow-hidden group">
+                            {/* Progress Fill */}
+                            <div
+                                className={cn(
+                                    "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
+                                    limitProgress > 90 ? "bg-rose-500" : limitProgress > 70 ? "bg-amber-500" : "bg-indigo-500"
+                                )}
+                                style={{ width: `${Math.max(limitProgress, 0)}%` }}
+                            />
+                            {/* Line at bottom */}
+                            <div
+                                className={cn(
+                                    "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
+                                    limitProgress > 90 ? "bg-rose-500" : limitProgress > 70 ? "bg-amber-500" : "bg-indigo-500"
+                                )}
+                                style={{ width: `${Math.max(limitProgress, 0)}%` }}
+                            />
+
+                            {/* Embedded Text */}
+                            <div className="absolute inset-0 flex items-center justify-end px-2 pointer-events-none">
+                                <span className="text-[10px] font-bold text-slate-600 tabular-nums drop-shadow-sm">
+                                    {formatMoneyVND(debtAbs)} <span className="text-slate-400 mx-0.5">/</span> {limitProgress.toFixed(0)}%
+                                </span>
                             </div>
                         </div>
                     )}

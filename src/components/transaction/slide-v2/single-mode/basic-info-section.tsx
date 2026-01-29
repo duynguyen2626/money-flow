@@ -36,7 +36,7 @@ type BasicInfoSectionProps = {
 export function BasicInfoSection({ shops, categories, people, onAddNewCategory }: BasicInfoSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
-    const isShopHidden = ['income', 'repayment', 'transfer'].includes(transactionType);
+    const isShopHidden = ['income', 'repayment', 'transfer', 'credit_pay'].includes(transactionType);
 
     // Sync Tag with Date
     const occurredAt = useWatch({ control: form.control, name: "occurred_at" });
@@ -52,7 +52,7 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory }
         const catType = c.type.toLowerCase();
         const txType = transactionType?.toLowerCase() || 'expense';
 
-        if (txType === 'expense' || txType === 'debt') return catType === 'expense';
+        if (txType === 'expense' || txType === 'debt' || txType === 'credit_pay') return catType === 'expense';
         if (txType === 'income' || txType === 'repayment') return catType === 'income';
         // For transfer, usually we want 'transfer' categories, but sometimes 'expense' (e.g. fees)
         if (txType === 'transfer') return catType === 'transfer';

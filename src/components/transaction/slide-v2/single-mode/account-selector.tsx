@@ -68,8 +68,26 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
             // For transfer, usually hide credit cards unless toggled
             return a.type !== 'credit_card';
         }
+        if (type === 'credit_pay') {
+            // Credit pay only works with credit cards
+            return a.type === 'credit_card';
+        }
         return true;
     });
+
+    // Watch for source account changes
+    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
+
+    // Auto-set source and target for credit_pay (same account)
+    useEffect(() => {
+        if (type === 'credit_pay' && sourceId) {
+            const isCreditCard = accounts.find(a => a.id === sourceId)?.type === 'credit_card';
+            if (isCreditCard) {
+                // Target should be same as source for credit pay
+                form.setValue('target_account_id', sourceId);
+            }
+        }
+    }, [type, sourceId, accounts, form]);
 
     const creditAccounts = validAccounts.filter(a => a.type === 'credit_card');
     const cashAccounts = validAccounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
@@ -80,9 +98,6 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
         label: a.name,
         icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-none" /> : undefined
     });
-
-    // Recent Accounts Logic (Current + Last Submitted)
-    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
     const recentAccountItems: any[] = [];
 
     // 1. Current Selection
@@ -177,13 +192,13 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                 </div>
 
                                 {/* LEVEL 2: Sub-Types */}
-                                {['expense', 'income', 'transfer'].includes(field.value) ? (
+                                {['expense', 'income', 'transfer', 'credit_pay'].includes(field.value) ? (
                                     <Tabs
                                         value={field.value}
                                         onValueChange={(val) => field.onChange(val as any)}
                                         className="w-full"
                                     >
-                                        <TabsList className="grid w-full grid-cols-3 h-9 bg-slate-100/50">
+                                        <TabsList className={cn("h-9 bg-slate-100/50", field.value === 'credit_pay' ? "grid w-full grid-cols-1" : "grid w-full grid-cols-4")}>
                                             <TabsTrigger
                                                 value="expense"
                                                 className="text-xs gap-1.5 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm hover:text-rose-600 transition-colors"
@@ -205,6 +220,13 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                                 <ArrowRightLeft className="w-3.5 h-3.5" />
                                                 Transfer
                                             </TabsTrigger>
+                                            <TabsTrigger
+                                                value="credit_pay"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700 data-[state=active]:shadow-sm hover:text-violet-600 transition-colors"
+                                            >
+                                                <RefreshCcw className="w-3.5 h-3.5" />
+                                                Credit Pay
+                                            </TabsTrigger>
                                         </TabsList>
                                     </Tabs>
                                 ) : (
@@ -219,10 +241,10 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
             {/* ACCOUNT SELECTION GRID */}
             <div className="grid grid-cols-2 gap-4">
 
-                {/* SOURCE ACCOUNT: Full width for Expense/Income */}
+                {/* SOURCE ACCOUNT: Full width for Expense/Income/CreditPay */}
                 <div className={cn(
                     "space-y-2",
-                    (type === 'expense' || type === 'income') ? "col-span-2" : "col-span-1"
+                    (type === 'expense' || type === 'income' || type === 'credit_pay') ? "col-span-2" : "col-span-1"
                 )}>
                     <FormField
                         control={form.control}
