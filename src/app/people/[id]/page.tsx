@@ -239,7 +239,7 @@ export default async function PeopleDetailPage({
         </div>
 
         {/* Section 2: Content - The Cycle List */}
-        <div className="flex-1 min-h-0 p-4 space-y-4 bg-slate-50/50">
+        <div className="flex-1 min-h-0 px-6 py-4 space-y-4 bg-white">
           <PersonDetailTabs
             accounts={accounts}
             categories={categories}

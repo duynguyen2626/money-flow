@@ -15,6 +15,7 @@ interface QuickFilterItem {
   id: string
   name: string
   image?: string | null
+  type?: 'person' | 'account'  // Optional type for image rounding
 }
 
 interface QuickFilterDropdownProps {
@@ -82,7 +83,10 @@ export function QuickFilterDropdown({
                 <img
                   src={selectedItem.image}
                   alt={selectedItem.name}
-                  className="w-4 h-4 rounded-none object-contain bg-white shrink-0"
+                  className={cn(
+                    "w-4 h-4 object-contain bg-white shrink-0",
+                    selectedItem.type === 'person' ? 'rounded-full' : 'rounded-sm'
+                  )}
                 />
               )}
               <span className="truncate">{selectedItem.name}</span>
@@ -156,7 +160,10 @@ export function QuickFilterDropdown({
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="w-5 h-5 rounded-none object-contain bg-white"
+                        className={cn(
+                          "w-5 h-5 object-contain bg-white",
+                          item.type === 'person' ? 'rounded-full' : 'rounded-sm'
+                        )}
                       />
                     )}
                     <span className="truncate">{item.name}</span>

@@ -3,17 +3,14 @@ import { getAccountDetails, getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
-import { getAccountBatchStats } from '@/services/batch.service'
 import { getAccountSpendingStats } from '@/services/cashback.service'
 import { loadTransactions } from '@/services/transaction.service'
-import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
-import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
-import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
-import { AccountContentWrapper } from '@/components/moneyflow/account-content-wrapper'
 import { TagFilterProvider } from '@/context/tag-filter-context'
-
-import { AccountTabs } from '@/components/moneyflow/account-tabs'
+import { AccountDetailViewV2 } from '@/components/accounts/v2/AccountDetailViewV2'
 import { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+
+export const dynamic = 'force-dynamic'
 
 type PageProps = {
   params: Promise<{
@@ -46,91 +43,39 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
   const activeTab = tab === 'cashback' ? 'cashback' : 'transactions'
 
   if (!id || id === 'undefined') {
-    return (
-      <div className="p-6">
-        <p className="text-center text-sm text-gray-500">Invalid account ID.</p>
-      </div>
-    )
+    notFound()
   }
 
   const account = await getAccountDetails(id)
 
   if (!account) {
-    return (
-      <div className="p-6">
-        <p className="text-center text-sm text-gray-500">Account not found.</p>
-      </div>
-    )
+    notFound()
   }
 
-  const [allAccounts, categories, people, shops, batchStats, cashbackStats, transactions] = await Promise.all([
+  // Pre-fetch everything needed for V2 view
+  const [allAccounts, categories, people, shops, cashbackStats, transactions] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
-    getAccountBatchStats(id),
     getAccountSpendingStats(id, new Date()),
-    // CashbackAnalysisView fetches its own data.
-    activeTab === 'transactions' ? loadTransactions({ accountId: id, context: 'account', limit: 1000 }) : Promise.resolve([]),
+    loadTransactions({ accountId: id, context: 'account', limit: 2000 }), // Increased limit for V2
   ])
 
-  // Derived data for header
-  const savingsAccounts = allAccounts.filter(a => a.type === 'savings' || a.type === 'investment' || a.type === 'asset')
-  const collateralAccount = account.secured_by_account_id ? allAccounts.find(a => a.id === account.secured_by_account_id) ?? null : null
-
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-slate-50">
-      <TagFilterProvider>
-        {/* Header - Reduced Spacing */}
-        <div className="mx-6 mt-6 mb-3 space-y-3">
-          <AccountDetailHeader
-            account={account}
-            categories={categories}
-            people={people}
-            allAccounts={allAccounts}
-            savingsAccounts={savingsAccounts}
-            collateralAccount={collateralAccount}
-            statTotals={{ inflow: 0, outflow: 0, net: 0 }}
-            cashbackStats={cashbackStats ?? null}
-            isAssetAccount={account.type === 'asset'}
-            assetConfig={null}
-            shops={shops}
-            batchStats={batchStats}
-            backHref="/accounts"
-          />
-
-          <AccountTabs accountId={account.id} activeTab={activeTab} />
-        </div>
-
-        {/* Content Area */}
-        <AccountContentWrapper>
-          <Suspense fallback={<div className="p-6 text-sm text-slate-500">Loading section...</div>}>
-            {activeTab === 'transactions' ? (
-              <FilterableTransactions
-                transactions={transactions}
-                accounts={allAccounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                accountId={account.id}
-                accountType={account.type}
-                contextId={account.id}
-                context="account"
-              />
-            ) : (
-              <div className="h-full overflow-y-auto p-6">
-                <CashbackAnalysisView
-                  accountId={account.id}
-                  accounts={allAccounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                />
-              </div>
-            )}
-          </Suspense>
-        </AccountContentWrapper>
-      </TagFilterProvider>
-    </div>
+    <TagFilterProvider>
+      <Suspense fallback={<div className="flex h-screen items-center justify-center text-slate-400">Loading Account Details...</div>}>
+        <AccountDetailViewV2
+          account={account}
+          allAccounts={allAccounts}
+          categories={categories}
+          people={people}
+          shops={shops}
+          initialTransactions={transactions}
+          initialCashbackStats={cashbackStats ?? null}
+        />
+      </Suspense>
+    </TagFilterProvider>
   )
 }
+

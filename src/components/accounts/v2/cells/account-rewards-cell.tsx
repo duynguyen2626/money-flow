@@ -214,45 +214,73 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                 : `Reward ${formatCompactMoney(realAwarded || projectedAwarded || earnedSoFar)}`);
 
         spentContent = (
-            <div className="flex flex-col gap-2 w-[240px]">
-                {/* Status Text - Outside Bar */}
-                {!isMet && (
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-black text-rose-700 flex items-center gap-1.5">
-                            <span className="text-base">⚠️</span>
+            <div className="flex flex-col gap-1 w-[200px]">
+                {/* Line 1: Status Text Only (Aligned with Limit column) */}
+                <div className="flex items-center justify-between px-0.5 min-h-[17px]">
+                    {!isMet ? (
+                        <span className="text-[11px] font-black text-rose-600 flex items-center gap-1.5 leading-none">
+                            <span className="text-xs">⚠️</span>
                             {statusLabel}
                         </span>
-                    </div>
-                )}
+                    ) : (
+                        <span className="text-[11px] font-black text-emerald-600 leading-none">
+                            Qualified
+                        </span>
+                    )}
+                </div>
 
+                {/* Line 2: Progress Bar with Embedded Percentage (Matching Limit column) */}
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild>
-                            <div className="relative w-full cursor-pointer group border border-slate-200 rounded-md p-1 hover:border-indigo-200 transition-colors">
-                                <Progress
-                                    value={progress}
-                                    className="h-5 rounded-sm bg-slate-100 shadow-sm"
-                                    indicatorClassName={cn(
-                                        isMet ? (isCapped && availableSpend === 0 ? "bg-gradient-to-r from-amber-500 to-amber-600" : "bg-gradient-to-r from-emerald-500 to-emerald-600") : "bg-gradient-to-r from-orange-500 to-orange-600"
+                            <div className="relative h-6 w-full cursor-pointer group border border-slate-200 rounded-md bg-slate-50 hover:border-indigo-300 transition-all overflow-hidden">
+                                {/* Progress Fill */}
+                                <div
+                                    className={cn(
+                                        "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
+                                        isMet ? (isCapped && availableSpend === 0 ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
                                     )}
+                                    style={{ width: `${Math.max(progress, 0)}%` }}
                                 />
-                                {/* Text inside bar */}
-                                <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
+                                {/* Progress Line at bottom */}
+                                <div
+                                    className={cn(
+                                        "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
+                                        isMet ? (isCapped && availableSpend === 0 ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
+                                    )}
+                                    style={{ width: `${Math.max(progress, 0)}%` }}
+                                />
+
+                                {/* Content Inside Bar: Cycle + Percentage */}
+                                <div className="absolute inset-0 flex items-center justify-between px-2">
+                                    {/* Left: Cycle Date (Clickable, with background) */}
+                                    {cycleDisplay ? (
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenTransactions?.();
+                                            }}
+                                            className="pointer-events-auto flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 rounded cursor-pointer group/cycle transition-colors"
+                                        >
+                                            <CalendarRange className="w-3 h-3 text-indigo-500 group-hover/cycle:text-indigo-600 transition-colors" />
+                                            <span className="text-[9px] font-bold text-indigo-600 group-hover/cycle:text-indigo-700 transition-colors whitespace-nowrap leading-none">
+                                                {cycleDisplay}
+                                            </span>
+                                        </div>
+                                    ) : <div />}
+
+                                    {/* Right: Percentage */}
                                     <span className={cn(
-                                        "text-[10px] font-black drop-shadow-sm",
-                                        isMet ? "text-white" : "text-slate-900"
+                                        "text-[10px] font-bold tabular-nums pointer-events-none",
+                                        isMet ? "text-emerald-700" : "text-rose-700"
                                     )}>
-                                        {isMet ? 'Qualified' : `${Math.round(progress)}%`}
-                                    </span>
-                                    <span className={cn(
-                                        "text-[10px] font-black drop-shadow-sm",
-                                        isMet ? "text-white" : "text-slate-900"
-                                    )}>
-                                        {percentLabel}
+                                        {Math.round(progress)}%
                                     </span>
                                 </div>
                             </div>
                         </TooltipTrigger>
+
+                        {/* Tooltip Content */}
                         <TooltipContent side="top" className="p-3 bg-slate-50 border-2 border-slate-200 z-50 shadow-xl w-[440px]">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between border-b-2 border-slate-200 pb-2">
@@ -378,28 +406,14 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                         )}
                                     </div>
                                 </div>
-                                <div className="text-[9px] text-slate-400">*Default uses program base rate when no rule matches.</div>
+                                <div className="text-[9px] text-slate-400 border-t border-slate-200 pt-1 flex justify-between">
+                                    <span>*Default uses program base rate when no rule matches.</span>
+                                    <span className="font-bold text-slate-600">{claimLabel}</span>
+                                </div>
                             </div>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
-
-                <div className="flex items-center justify-between text-[10px] font-bold">
-                    {cycleDisplay && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenTransactions?.();
-                            }}
-                            className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
-                            title="View cycle transactions"
-                        >
-                            <CalendarRange className="w-2.5 h-2.5" />
-                            {cycleDisplay}
-                        </button>
-                    )}
-                    <span className="text-slate-800 text-[11px] tabular-nums">{claimLabel}</span>
-                </div>
             </div>
         );
 
@@ -410,16 +424,63 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
         const availableSpend = (!isUnlimited && currentRate > 0) ? Math.floor(remainingReward / currentRate) : null;
 
         spentContent = (
-            <div className="flex flex-col gap-2 w-[220px]">
+            <div className="flex flex-col gap-1 w-[200px]">
+                {/* Status Text - Above Bar */}
+                <div className="flex items-center justify-between px-0.5">
+                    <span className="text-[11px] font-black text-slate-600 leading-none">
+                        Cashback
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-600 leading-none">
+                        {formatCompactMoney(earnedSoFar)}
+                        {!isUnlimited && <span className="text-slate-400 font-normal"> / {formatCompactMoney(maxBudgetVal)}</span>}
+                    </span>
+                </div>
+
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild>
-                            <div className="w-full cursor-pointer border border-slate-200 rounded-md p-1 hover:border-indigo-200 transition-colors">
-                                <Progress
-                                    value={maxBudgetVal > 0 ? Math.min(100, (earnedSoFar / maxBudgetVal) * 100) : 0}
-                                    className="h-4 bg-slate-100 rounded-sm shadow-sm"
-                                    indicatorClassName={earnedSoFar >= maxBudgetVal ? "bg-amber-500" : "bg-emerald-500"}
+                            <div className="relative h-6 w-full cursor-pointer group border border-slate-200 rounded-md bg-slate-50 hover:border-indigo-300 transition-all overflow-hidden">
+                                {/* Progress Bar Background */}
+                                <div
+                                    className={cn(
+                                        "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
+                                        earnedSoFar >= maxBudgetVal ? "bg-amber-500" : "bg-emerald-500"
+                                    )}
+                                    style={{ width: `${maxBudgetVal > 0 ? Math.min(100, (earnedSoFar / maxBudgetVal) * 100) : 0}%` }}
                                 />
+                                {/* Solid Key Line */}
+                                <div
+                                    className={cn(
+                                        "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
+                                        earnedSoFar >= maxBudgetVal ? "bg-amber-500" : "bg-emerald-500"
+                                    )}
+                                    style={{ width: `${maxBudgetVal > 0 ? Math.min(100, (earnedSoFar / maxBudgetVal) * 100) : 0}%` }}
+                                />
+
+                                <div className="absolute inset-0 flex items-center justify-between px-2">
+                                    {/* Left: Cycle Date (Clickable, with background) */}
+                                    {cycleDisplay ? (
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenTransactions?.();
+                                            }}
+                                            className="pointer-events-auto flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 rounded cursor-pointer group/cycle transition-colors"
+                                        >
+                                            <CalendarRange className="w-3 h-3 text-indigo-500 group-hover/cycle:text-indigo-600 transition-colors" />
+                                            <span className="text-[9px] font-bold text-indigo-600 group-hover/cycle:text-indigo-700 transition-colors whitespace-nowrap leading-none">
+                                                {cycleDisplay}
+                                            </span>
+                                        </div>
+                                    ) : <div />}
+
+                                    {/* Center/Right: Percentage if capped, or just nothing */}
+                                    {maxBudgetVal > 0 && (
+                                        <span className="text-[10px] font-bold pointer-events-none leading-none text-slate-600">
+                                            {Math.round((earnedSoFar / maxBudgetVal) * 100)}%
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="p-3 bg-slate-50 text-slate-900 z-50 shadow-xl border-2 border-slate-200 w-[360px]">
@@ -444,23 +505,6 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
-
-                <div className="flex items-center justify-between text-[10px] font-bold">
-                    {cycleDisplay && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenTransactions?.();
-                            }}
-                            className="flex items-center gap-1 px-1.5 py-0.5 bg-slate-50 rounded border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all"
-                            title="View cycle transactions"
-                        >
-                            <CalendarRange className="w-2.5 h-2.5" />
-                            {cycleDisplay}
-                        </button>
-                    )}
-                    <span className="text-slate-800 text-[11px] tabular-nums">{formatCompactMoney(earnedSoFar)}{!isUnlimited && ` / ${formatCompactMoney(maxBudgetVal)}`}</span>
-                </div>
             </div>
         );
     }

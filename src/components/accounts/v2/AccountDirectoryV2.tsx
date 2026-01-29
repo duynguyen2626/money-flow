@@ -178,7 +178,7 @@ export function AccountDirectoryV2({
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/50">
+        <div className="flex flex-col h-full bg-white">
             <AccountHeaderV2
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -192,7 +192,7 @@ export function AccountDirectoryV2({
                 closedCount={closedCount}
             />
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6">
+            <div className="flex-1 overflow-auto px-6 py-4">
                 {viewMode === 'table' ? (
                     <AccountTableV2
                         accounts={filteredAccounts}

@@ -24,6 +24,7 @@ interface MonthYearPickerV2Props {
   onModeChange: (mode: 'month' | 'range' | 'date') => void
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
+  accountCycleTags?: string[] // Cycle tags for auto-set (e.g., ['2025-01', '2025-02'])
   fullWidth?: boolean
   locked?: boolean
 }
@@ -37,6 +38,7 @@ export function MonthYearPickerV2({
   onModeChange,
   disabledRange,
   availableMonths,
+  accountCycleTags,
   fullWidth,
   locked,
 }: MonthYearPickerV2Props) {
@@ -46,6 +48,24 @@ export function MonthYearPickerV2({
   const [localMode, setLocalMode] = useState<'month' | 'range' | 'date'>(mode)
   const [localDate, setLocalDate] = useState<Date>(date)
   const [localRange, setLocalRange] = useState<DateRange | undefined>(dateRange)
+
+  // Smart cycle detection: if account has cycles and filter not active, auto-set range
+  useEffect(() => {
+    if (!open && accountCycleTags && accountCycleTags.length > 0 && localMode === 'range') {
+      // Parse first cycle tag (format: "2025-01" or "25.01-24.02")
+      const cycleTag = accountCycleTags[0]
+      if (cycleTag && cycleTag.includes('-') && !cycleTag.includes('.')) {
+        // ISO format: "2025-01-25"
+        const parsed = new Date(cycleTag)
+        if (!isNaN(parsed.getTime())) {
+          setLocalRange({
+            from: parsed,
+            to: parsed
+          })
+        }
+      }
+    }
+  }, [accountCycleTags, localMode])
 
   // Sync local state when prop changes (only if closed)
   useEffect(() => {

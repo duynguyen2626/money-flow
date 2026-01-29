@@ -30,7 +30,7 @@ export function AccountGroupHeader({
                 "group-header-row cursor-pointer transition-colors border-b select-none",
                 section === 'credit' && "bg-indigo-50/50 hover:bg-indigo-50",
                 section === 'loans' && "bg-rose-50/50 hover:bg-rose-50",
-                section === 'savings' && "bg-slate-50/50 hover:bg-slate-50"
+                section === 'savings' && "bg-white hover:bg-slate-50"
             )}
             onClick={onToggle}
         >

@@ -12,7 +12,7 @@ export const singleTransactionSchema = z.object({
     occurred_at: z.date(),
     amount: z.coerce.number().min(0, "Amount must be positive"),
     note: z.string().optional(),
-    type: z.enum(["expense", "income", "debt", "transfer", "repayment"]),
+    type: z.enum(["expense", "income", "debt", "transfer", "repayment", "credit_pay"]),
 
     // Relations
     source_account_id: z.string().min(1, "Source account is required"),
