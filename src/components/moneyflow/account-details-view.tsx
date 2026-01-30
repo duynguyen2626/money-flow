@@ -24,7 +24,7 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 })
 
-type SortKey = 'date' | 'amount'
+type SortKey = 'date' | 'amount' | 'final_price'
 type SortDir = 'asc' | 'desc'
 
 type BulkActionState = {

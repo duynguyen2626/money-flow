@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
@@ -338,6 +338,36 @@ export function AccountDetailTransactions({
 
         return result
     }, [transactions, statusFilter, isFilterActive, filterType, searchTerm, selectedTargetId, selectedCycle, dateMode, date, dateRange])
+
+    // Handle URL parameters for cycle tag and date range filters
+    const searchParams = useSearchParams()
+    useEffect(() => {
+        const tag = searchParams.get('tag')
+        const dateFrom = searchParams.get('dateFrom')
+        const dateTo = searchParams.get('dateTo')
+        
+        if (tag || dateFrom || dateTo) {
+            // Set cycle if tag is provided
+            if (tag) {
+                setSelectedCycle(tag)
+            }
+            
+            // Set date range if both dates are provided
+            if (dateFrom && dateTo) {
+                try {
+                    const fromDate = parseISO(dateFrom)
+                    const toDate = parseISO(dateTo)
+                    setDateRange({ from: fromDate, to: toDate })
+                    setDateMode('range')
+                } catch (err) {
+                    console.error('Failed to parse date range from URL:', err)
+                }
+            }
+            
+            // Activate filters
+            setIsFilterActive(true)
+        }
+    }, [searchParams])
 
     // Warn user when closing with active filters
     useEffect(() => {

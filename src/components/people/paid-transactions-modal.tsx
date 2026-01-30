@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { CheckCircle2 } from 'lucide-react'
 
 interface PaidTransactionsModalProps {
@@ -196,16 +196,19 @@ export function PaidTransactionsModal({
 
             {/* Edit Transaction Dialog */}
             {editingTransactionId && (
-                <AddTransactionDialog
+                <TransactionSlideV2
+                    open={!!editingTransactionId}
+                    onOpenChange={(open) => {
+                        if (!open) setEditingTransactionId(null)
+                    }}
+                    mode="single"
+                    editingId={editingTransactionId}
                     accounts={accounts}
                     categories={categories}
                     people={people}
                     shops={shops}
-                    transactionId={editingTransactionId}
-                    mode="edit"
-                    isOpen={!!editingTransactionId}
-                    onOpenChange={(open) => {
-                        if (!open) setEditingTransactionId(null)
+                    onSuccess={() => {
+                        setEditingTransactionId(null)
                     }}
                 />
             )}

@@ -20,11 +20,11 @@
 
 ## Critical Business Logic
 **Transactions are the single source of truth.** All financial data flows from the `transactions` table:
-- **Debt:** Derived from transactions with `person_id` (not a separate "Debt Accounts" table). Calculate via `debt.service.ts`
+- **Debt:** Derived from transactions with `person_id` (not a separate "Debt Accounts" table). Calculate via debt.service.ts
 - **Installments:** Use `is_installment` flag on transaction_lines; DO NOT double-count parent + children in balance calculations
 - **Refund Chain:** ENFORCE **Parent → Void → Refund**. Never edit/void a parent if children exist; delete children first via `transaction.service.deleteTransaction()`
 - **Duplicates:** Batch flows must dedupe on `transaction_date + amount + details` to prevent duplicate imports
-- **Transaction Types:** `income | expense | transfer | debt | repayment` (see `transaction.service.ts:29`)
+- **Transaction Types:** `income | expense | transfer | debt | repayment` (see transaction.service.ts)
 
 ## Data Access Patterns
 - **Server Components/Actions:** `createClient()` from `src/lib/supabase/server.ts`
@@ -47,7 +47,7 @@ export async function myAction(input: T): Promise<{ success: boolean; error?: st
   }
 }
 ```
-See: `src/actions/transaction-actions.ts`, `src/actions/account-actions.ts`, `src/actions/batch-actions.ts`
+See: transaction-actions.ts, account-actions.ts, batch-actions.ts
 
 ## Key Services & Their Purpose
 - `transaction.service.ts` – Create, update, void, restore, refund transactions; split bills; load unified views
@@ -104,7 +104,7 @@ Server Action (src/actions/transaction-actions.ts)
   - **Merge "Account" + "People"** into "**Accounts ➜ People**" column (Flow) with Source (Left) → Arrow (Center) → Target (Right)
 - **Cycle Badges:** Display ranges (e.g., "25.10 - 24.11"), not raw tags
 - **Cashback Badges:** Show "Need to Spend" in yellow/amber if `minSpendTarget` unmet; all badges are 24px height
-- **Components:** Reuse Shadcn UI primitives; reference [unified-transaction-table.tsx](src/components/moneyflow/unified-transaction-table.tsx)
+- **Components:** Reuse Shadcn UI primitives; reference unified-transaction-table.tsx
 
 ## Form & Validation
 - **Framework:** react-hook-form + zod schemas
@@ -138,7 +138,7 @@ Example: `src/app/transactions/page.tsx` loads via `getAccounts()`, `getUnifiedT
 
 ## Integrations & External Workflows
 - **Google Sheets:** People/Batch sync via Google Apps Script in `integrations/google-sheets/`. Run `pnpm sheet:people` before deploying sheet changes
-- **Database:** Consolidated schema in `.agent/schema/full_schema_from_migrations.sql`; migrations archived in `.agent/schema/migrations_archive`
+- **Database:** Consolidated schema in full_schema_from_migrations.sql; migrations archived in migrations_archive
 
 ## Testing & Quality
 - Framework: vitest + testing-library
@@ -178,6 +178,6 @@ Example: `src/app/transactions/page.tsx` loads via `getAccounts()`, `getUnifiedT
 2. `README.md` – Project status, Phase 3 notes, UI refactor
 3. `.agent/README.md` – Transaction Slide V2 architecture
 4. `.cursorrules` section 4 & 6 – Business logic & cashback details
-5. `.agent/CASHBACK_GUIDE_VI.md` – Complete cashback flow walkthrough
+5. CASHBACK_GUIDE_VI.md – Complete cashback flow walkthrough
 
 **Ask for clarification on avatar shapes, refund chains, or transaction integrity patterns if unclear.**

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Person, TransactionWithDetails, PersonCycleSheet, Account, Category, Shop } from '@/types/moneyflow.types'
 import { usePersonDetails } from '@/hooks/use-person-details'
 import { SplitBillManager } from '@/components/people/split-bill-manager'
@@ -11,6 +11,9 @@ import { PeopleHeader } from '@/components/people/v2/PeopleHeader'
 import { TransactionControlBar } from '@/components/people/v2/TransactionControlBar'
 import { toYYYYMMFromDate } from '@/lib/month-tag'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
+import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
+import { parseISO, isWithinInterval } from 'date-fns'
 
 interface MemberDetailViewProps {
     person: Person
@@ -40,7 +43,11 @@ export function MemberDetailView({
     const [activeTab, setActiveTab] = useState<'timeline' | 'history' | 'split-bill'>('timeline')
     const [selectedYear, setSelectedYear] = useState<string | null>(new Date().getFullYear().toString())
     const [searchTerm, setSearchTerm] = useState('')
+    const [filterType, setFilterType] = useState<FilterType>('all')
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+    const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [showPaidModal, setShowPaidModal] = useState(false)
+    const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>(undefined)
 
     // Slide State
     const [isSlideOpen, setIsSlideOpen] = useState(false)
@@ -49,6 +56,44 @@ export function MemberDetailView({
     const [slideOverrideType, setSlideOverrideType] = useState<string | undefined>(undefined)
 
     const router = useRouter()
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        const tabLabel = activeTab === 'history' ? 'History' : activeTab === 'split-bill' ? 'Split Bill' : 'Transactions'
+        document.title = `${person.name} ${tabLabel}`
+    }, [person.name, activeTab])
+
+    // Handle URL parameters for tag and date range filter
+    useEffect(() => {
+        const tag = searchParams.get('tag')
+        const dateFrom = searchParams.get('dateFrom')
+        const dateTo = searchParams.get('dateTo')
+        
+        // Handle tag parameter
+        if (tag) {
+            if (tag === 'all') {
+                // Show all history
+                setSelectedYear(null)
+            } else {
+                // Sync cycle tag from URL
+                setActiveCycleTag(tag)
+                // Extract year from tag (e.g., "2025-12" -> "2025")
+                const year = tag.split('-')[0]
+                setSelectedYear(year)
+            }
+        }
+        
+        // Handle date range
+        if (dateFrom && dateTo) {
+            try {
+                const fromDate = parseISO(dateFrom)
+                const toDate = parseISO(dateTo)
+                setDateRangeFilter({ from: fromDate, to: toDate })
+            } catch (err) {
+                console.error('Failed to parse date range from URL:', err)
+            }
+        }
+    }, [searchParams])
 
     const { debtCycles, availableYears } = usePersonDetails({
         person,
@@ -56,6 +101,19 @@ export function MemberDetailView({
         debtTags,
         cycleSheets,
     })
+
+    const accountItems = useMemo(() => {
+        const ids = new Set<string>()
+        transactions.forEach(t => {
+            if (t.source_account_id) ids.add(t.source_account_id)
+            if (t.target_account_id) ids.add(t.target_account_id)
+            if (t.account_id) ids.add(t.account_id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toAccountId = (t as any).to_account_id as string | undefined
+            if (toAccountId) ids.add(toAccountId)
+        })
+        return accounts.filter(a => ids.has(a.id))
+    }, [transactions, accounts])
 
     // Active cycle
     const currentMonthTag = toYYYYMMFromDate(new Date())
@@ -66,23 +124,71 @@ export function MemberDetailView({
 
     const activeCycle = debtCycles.find(c => c.tag === activeCycleTag)
 
-    // Transactions for active cycle
-    const cycleTransactions = useMemo(() => {
-        if (!activeCycle) return []
-        let txns = activeCycle.transactions
+    const applyFilters = (txns: TransactionWithDetails[]) => {
+        let result = txns
 
-        // Apply search filter
+        if (statusFilter === 'void') {
+            result = result.filter(t => t.status === 'void')
+        } else if (statusFilter === 'pending') {
+            result = result.filter(t => t.status === 'pending' || t.status === 'waiting_refund')
+        } else {
+            result = result.filter(t => t.status !== 'void')
+        }
+
+        if (filterType !== 'all') {
+            const matchType = filterType === 'lend' ? 'debt' : (filterType === 'repay' ? 'repayment' : filterType)
+            result = result.filter(t => (t.type || '').toLowerCase() === matchType)
+        }
+
+        if (selectedAccountId) {
+            result = result.filter(t => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const toAccountId = (t as any).to_account_id as string | undefined
+                return t.source_account_id === selectedAccountId
+                    || t.target_account_id === selectedAccountId
+                    || t.account_id === selectedAccountId
+                    || toAccountId === selectedAccountId
+            })
+        }
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase()
-            txns = txns.filter(t =>
+            result = result.filter(t =>
                 t.note?.toLowerCase().includes(term) ||
                 t.shop?.name?.toLowerCase().includes(term) ||
-                t.category?.name?.toLowerCase().includes(term)
+                t.category?.name?.toLowerCase().includes(term) ||
+                t.id?.toLowerCase().includes(term)
             )
         }
 
-        return txns
-    }, [activeCycle, searchTerm])
+        // Apply date range filter if set (from URL params)
+        if (dateRangeFilter) {
+            result = result.filter(t => {
+                const txDate = parseISO(t.occurred_at || t.created_at || '')
+                return isWithinInterval(txDate, { start: dateRangeFilter.from, end: dateRangeFilter.to })
+            })
+        }
+
+        return result
+    }
+
+    // Transactions for active cycle or all (if selectedYear is null)
+    const cycleTransactions = useMemo(() => {
+        // If selectedYear is null, show all transactions (All History mode)
+        // Otherwise, show active cycle transactions
+        if (!activeCycle) return []
+        
+        const baseTransactions = selectedYear === null
+            ? transactions  // Show all transactions when "All history" selected
+            : activeCycle.transactions
+            
+        return applyFilters(baseTransactions)
+    }, [activeCycle, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter, transactions])
+
+    const historyTransactions = useMemo(() => {
+        const base = transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))
+        return applyFilters(base)
+    }, [transactions, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter])
 
     // Calculate stats for Header based on Selected Year or All Time
     const headerStats = useMemo(() => {
@@ -158,12 +264,23 @@ export function MemberDetailView({
         }
     }, [selectedTxn, slideMode, slideOverrideType, person.id])
 
+    // Calculate paid count from cycleTransactions matching PaidTransactionsModal logic
+    const paidCount = useMemo(() => {
+        if (!activeCycle) return 0
+        return activeCycle.transactions.filter(t => {
+            if (t.type !== 'repayment' && t.type !== 'income') return false
+            const metadata = t.metadata as any
+            return metadata?.is_settled === true || metadata?.paid_at !== null
+        }).length
+    }, [activeCycle])
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             {/* V2 Header */}
             <PeopleHeader
                 person={person}
                 balanceLabel={balanceLabel}
+                activeCycle={activeCycle}
                 stats={headerStats}
                 selectedYear={selectedYear}
                 availableYears={availableYears}
@@ -180,9 +297,21 @@ export function MemberDetailView({
                         activeCycle={activeCycle}
                         allCycles={debtCycles}
                         onCycleChange={setActiveCycleTag}
+                        availableYears={availableYears}
+                        selectedYear={selectedYear}
+                        onYearChange={setSelectedYear}
                         transactionCount={cycleTransactions.length}
+                        paidCount={paidCount}
+                        onViewPaid={() => setShowPaidModal(true)}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
+                        filterType={filterType}
+                        onFilterTypeChange={setFilterType}
+                        statusFilter={statusFilter}
+                        onStatusChange={setStatusFilter}
+                        selectedAccountId={selectedAccountId}
+                        onAccountChange={setSelectedAccountId}
+                        accountItems={accountItems}
                         accounts={accounts}
                         categories={categories}
                         shops={shops}
@@ -210,7 +339,7 @@ export function MemberDetailView({
                 <div className="flex-1 overflow-y-auto px-4 py-3">
                     {/* Reuse filtering logic or search for history? Passing all transactions */}
                     <SimpleTransactionTable
-                        transactions={transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))}
+                        transactions={historyTransactions}
                         accounts={accounts}
                         categories={categories}
                         people={people}
@@ -235,11 +364,11 @@ export function MemberDetailView({
                 </div>
             )}
 
-            {/* Paid Transactions Modal */}
+            {/* Paid Transactions Modal - Show only current cycle transactions */}
             <PaidTransactionsModal
                 open={showPaidModal}
                 onOpenChange={setShowPaidModal}
-                transactions={transactions}
+                transactions={activeCycle?.transactions || []}
                 personId={person.id}
                 accounts={accounts}
                 categories={categories}

@@ -1,7 +1,7 @@
 "use client"
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, isSameMonth, format } from 'date-fns'
-import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import { useCallback, useEffect, useMemo, useState, useRef, isValidElement } from "react"
 import { createPortal } from "react-dom"
 import {
   ArrowUpDown,
@@ -20,6 +20,8 @@ import {
   Wallet,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
+  ArrowLeft,
   Trash2,
   RotateCcw,
   Ban,
@@ -34,6 +36,8 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   User,
+  UserPlus,
+  UserMinus,
   RefreshCcw,
   MoveRight,
   Wrench,
@@ -101,7 +105,7 @@ import { ColumnKey } from "@/components/app/table/transactionColumns"
 
 
 
-type SortKey = 'date' | 'amount'
+type SortKey = 'date' | 'amount' | 'final_price'
 type SortDir = 'asc' | 'desc'
 
 type BulkActionState = {
@@ -279,7 +283,7 @@ export function UnifiedTransactionTable({
     }
   }, [])
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date & Type", defaultWidth: 140, minWidth: 120 },
+    { key: "date", label: "Date", defaultWidth: 140, minWidth: 120 },
     { key: "shop", label: "Note & Category", defaultWidth: 420, minWidth: 300 },
     { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
     { key: "account", label: "Flow", defaultWidth: 260, minWidth: 250 },
@@ -976,6 +980,10 @@ export function UnifiedTransactionTable({
         const amtA = Math.abs(a.amount ?? 0)
         const amtB = Math.abs(b.amount ?? 0)
         return sortState.dir === 'asc' ? amtA - amtB : amtB - amtA
+      } else if (sortState.key === 'final_price') {
+        const netA = Math.abs(a.final_price ?? 0)
+        const netB = Math.abs(b.final_price ?? 0)
+        return sortState.dir === 'asc' ? netA - netB : netB - netA
       }
       return 0
     })
@@ -1435,25 +1443,55 @@ export function UnifiedTransactionTable({
                             </button>
                           </div>
                         ) : col.key === 'amount' ? (
-                          <button
-                            className="flex items-center gap-1 group w-full justify-end"
-                            onClick={() => {
-                              const nextDir =
-                                sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
-                              setSortState({ key: col.key as SortKey, dir: nextDir })
-                            }}
+                          <CustomTooltip 
+                            content={sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
+                            side="top"
                           >
-                            {columnLabel}
-                            {sortState.key === col.key ? (
-                              sortState.dir === 'asc' ? (
-                                <ArrowUp className="h-3 w-3 text-blue-600" />
+                            <button
+                              className="flex items-center gap-1 group w-full justify-end"
+                              onClick={() => {
+                                const nextDir =
+                                  sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                                setSortState({ key: 'amount', dir: nextDir })
+                              }}
+                            >
+                              {columnLabel}
+                              {sortState.key === 'amount' ? (
+                                sortState.dir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-blue-600" />
+                                )
                               ) : (
-                                <ArrowDown className="h-3 w-3 text-blue-600" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            )}
-                          </button>
+                                <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </button>
+                          </CustomTooltip>
+                        ) : col.key === 'final_price' ? (
+                          <CustomTooltip 
+                            content={sortState.key === 'final_price' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
+                            side="top"
+                          >
+                            <button
+                              className="flex items-center gap-1 group w-full justify-end"
+                              onClick={() => {
+                                const nextDir =
+                                  sortState.key === 'final_price' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                                setSortState({ key: 'final_price', dir: nextDir })
+                              }}
+                            >
+                              {columnLabel}
+                              {sortState.key === 'final_price' ? (
+                                sortState.dir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-blue-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </button>
+                          </CustomTooltip>
                         ) : col.key === 'actions' ? (
                           <div className="flex items-center justify-center w-full relative group">
                             <span className="mr-6">{columnLabel}</span>
@@ -2093,6 +2131,47 @@ export function UnifiedTransactionTable({
                         const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
                         const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
 
+                        // --- Type Badge Helper ---
+                        const buildTypeBadge = (txnType: string, compact = false) => {
+                          const badgeBaseClass = compact
+                            ? "inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold border shrink-0 h-5 w-5"
+                            : "inline-flex items-center justify-center gap-1 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[60px] shrink-0 h-6"
+                          
+                          let typeBadge = null
+                          if (txnType === 'expense') {
+                            typeBadge = (
+                              <span key="type" className={cn(badgeBaseClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100")} title="Expense">
+                                {compact ? <ArrowUpRight className="h-3 w-3" /> : <><ArrowUpRight className="h-3 w-3" />OUT</>}
+                              </span>
+                            )
+                          } else if (txnType === 'income') {
+                            typeBadge = (
+                              <span key="type" className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100")} title="Income">
+                                {compact ? <ArrowDownLeft className="h-3 w-3" /> : <><ArrowDownLeft className="h-3 w-3" />IN</>}
+                              </span>
+                            )
+                          } else if (txnType === 'transfer') {
+                            typeBadge = (
+                              <span key="type" className={cn(badgeBaseClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")} title="Transfer">
+                                {compact ? <ArrowRightLeft className="h-3 w-3" /> : <><ArrowRightLeft className="h-3 w-3" />TF</>}
+                              </span>
+                            )
+                          } else if (txnType === 'debt' || txnType === 'loan') {
+                            typeBadge = (
+                              <span key="type" className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100")} title="Debt">
+                                {compact ? <History className="h-3 w-3" /> : <><History className="h-3 w-3" />DEBT</>}
+                              </span>
+                            )
+                          } else if (txnType === 'repayment') {
+                            typeBadge = (
+                              <span key="type" className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100")} title="Repayment">
+                                {compact ? <RefreshCcw className="h-3 w-3" /> : <><RefreshCcw className="h-3 w-3" />REPAY</>}
+                              </span>
+                            )
+                          }
+                          return typeBadge
+                        }
+
                         // Cycle Label Logic removed - using CycleBadge component directly
                         // (Lines 2125-2136 removed)
 
@@ -2105,11 +2184,13 @@ export function UnifiedTransactionTable({
                           isSquare = true,
                           badges = [],
                           contextBadge = null,
+                          contextBadgeBeforeIcon = false,
                           isTarget = false,
                           badgeClassName,
                           inlineBadges = false,
                           leadingElement = null,
-                          trailingElement = null
+                          trailingElement = null,
+                          linkTooltip = null
                         }: {
                           name: string,
                           icon?: string | null,
@@ -2117,11 +2198,13 @@ export function UnifiedTransactionTable({
                           isSquare?: boolean,
                           badges?: React.ReactNode[],
                           contextBadge?: React.ReactNode,
+                          contextBadgeBeforeIcon?: boolean,
                           isTarget?: boolean,
                           badgeClassName?: string,
                           inlineBadges?: boolean,
                           leadingElement?: React.ReactNode,
-                          trailingElement?: React.ReactNode
+                          trailingElement?: React.ReactNode,
+                          linkTooltip?: string | null
                         }) => {
                           const baseBadgeClasses = "rounded-lg py-1 px-2 h-10 w-full hover:bg-slate-100 transition-colors"
                           const defaultColors = "bg-slate-50 border border-slate-200"
@@ -2147,19 +2230,19 @@ export function UnifiedTransactionTable({
                               {inlineBadges ? (
                                 <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
                                   {/* Context Badge (To) */}
-                                  {contextBadge}
-                                  {/* Badges Inline */}
-                                  {badges.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                      {badges}
-                                    </div>
-                                  )}
+                                  {!contextBadgeBeforeIcon && contextBadge}
                                   {/* Name */}
                                   <CustomTooltip content={name}>
                                     <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
                                       {name}
                                     </span>
                                   </CustomTooltip>
+                                  {/* Badges Inline - Fixed Width Container */}
+                                  {badges.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-shrink-0 min-w-[96px] w-[96px] justify-end ml-auto">
+                                      {badges}
+                                    </div>
+                                  )}
                                 </div>
                               ) : (
                                 // Original behavior (flex-col)
@@ -2183,6 +2266,7 @@ export function UnifiedTransactionTable({
 
                               {/* Icon - After Text */}
                               <div className="shrink-0 flex items-center gap-1">
+                                {contextBadgeBeforeIcon && contextBadge}
                                 {renderAvatar(icon, name, isSquare)}
                                 {trailingElement && <div className="shrink-0">{trailingElement}</div>}
                               </div>
@@ -2192,6 +2276,7 @@ export function UnifiedTransactionTable({
                             <div className={cn("flex items-center gap-2 min-w-0 w-full", badgeClasses)}>
                               {/* Icon - Increased Size */}
                               <div className="shrink-0 flex items-center gap-1">
+                                {contextBadgeBeforeIcon && contextBadge}
                                 {leadingElement && <div className="shrink-0">{leadingElement}</div>}
                                 {renderAvatar(icon, name, isSquare)}
                               </div>
@@ -2199,16 +2284,16 @@ export function UnifiedTransactionTable({
                               {inlineBadges ? (
                                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden h-full">
                                   {/* Context Badge (From) */}
-                                  {contextBadge}
+                                  {!contextBadgeBeforeIcon && contextBadge}
                                   {/* Name */}
                                   <CustomTooltip content={name}>
                                     <span className="text-[0.85em] font-bold text-slate-700 truncate block cursor-help leading-tight">
                                       {name}
                                     </span>
                                   </CustomTooltip>
-                                  {/* Badges Inline */}
+                                  {/* Badges Inline - Fixed Width Container */}
                                   {badges.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+                                    <div className="flex items-center gap-1 flex-shrink-0 ml-auto min-w-[96px] w-[96px] justify-end">
                                       {badges}
                                     </div>
                                   )}
@@ -2237,11 +2322,17 @@ export function UnifiedTransactionTable({
                           )
 
                           if (link) {
-                            return (
+                            const linkedContent = (
                               <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
                                 {Content}
                               </Link>
                             )
+
+                            return linkTooltip ? (
+                              <CustomTooltip content={linkTooltip}>
+                                <div className="block w-full">{linkedContent}</div>
+                              </CustomTooltip>
+                            ) : linkedContent
                           }
                           return <div className="block w-full p-0.5 opacity-80">{Content}</div>
                         }
@@ -2268,6 +2359,16 @@ export function UnifiedTransactionTable({
                           />
                         ) : null
 
+                        // Non-Cycle badge for accounts without cashback config
+                        const nonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
+                          <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                            Non-Cycle
+                          </span>
+                        ) : null
+
+                        // Use cycleBadge if available, otherwise nonCycleBadge
+                        const accountBadge = cycleBadge || nonCycleBadge
+
                         const tagBadge = (cycleTag || debtTag) ? (
                           <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
                             {cycleTag || debtTag}
@@ -2278,10 +2379,11 @@ export function UnifiedTransactionTable({
                           <span
                             key="from"
                             className={cn(
-                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
-                              "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
+                              "bg-rose-50 text-rose-700 border-rose-200"
                             )}
                           >
+                            <ArrowUpRight className="h-3 w-3" />
                             FROM
                           </span>
                         )
@@ -2289,30 +2391,73 @@ export function UnifiedTransactionTable({
                           <span
                             key="to"
                             className={cn(
-                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
-                              "bg-rose-50 text-rose-700 border-rose-200"
+                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
+                              "bg-emerald-50 text-emerald-700 border-emerald-200"
                             )}
                           >
+                            <ArrowDownLeft className="h-3 w-3" />
                             TO
                           </span>
                         )
 
-                        // Custom People Badge Logic - Icon + MMM, yy format
+                        const buildDirectionBadge = (variant: 'from' | 'to', icon?: React.ReactNode) => (
+                          <span
+                            key={variant}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
+                              variant === 'from'
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            )}
+                          >
+                            {icon ?? (variant === 'from' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />)}
+                            {variant === 'from' ? 'FROM' : 'TO'}
+                          </span>
+                        )
+
+                        // Custom People Badge Logic - Icon + YYYY-MM format
                         const peopleDebtTag = txn.tag ? (
-                          <span key="people-debt" className="inline-flex items-center gap-1 rounded-[4px] bg-amber-50 border border-amber-200 text-amber-700 px-1.5 h-6 text-[11px] font-bold whitespace-nowrap">
+                          <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-50 border border-amber-200 text-amber-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
                             <User className="h-3 w-3" />
-                            {(() => {
-                              // Parse "2026-01" -> "Jan, 26"
-                              try {
-                                const [y, m] = txn.tag.split('-')
-                                const date = new Date(parseInt(y), parseInt(m) - 1, 1)
-                                return format(date, 'MMM, yy')
-                              } catch {
-                                return txn.tag
-                              }
-                            })()}
+                            {txn.tag}
                           </span>
                         ) : null
+
+                        const buildTagFilterLink = (baseLink: string | null, tag: string | null, dateRange?: { start: Date; end: Date } | null) => {
+                          if (!baseLink || !tag) return null
+                          const separator = baseLink.includes('?') ? '&' : '?'
+                          let url = `${baseLink}${separator}tag=${encodeURIComponent(tag)}`
+                          
+                          // Add date range if available (for account cycles)
+                          if (dateRange) {
+                            const startStr = format(dateRange.start, 'yyyy-MM-dd')
+                            const endStr = format(dateRange.end, 'yyyy-MM-dd')
+                            url += `&dateFrom=${startStr}&dateTo=${endStr}`
+                          }
+                          
+                          return url
+                        }
+
+                        const wrapBadgeWithFilter = (badge: React.ReactNode, href: string | null, tooltip: string) => {
+                          if (!href) return badge
+                          const badgeKey = isValidElement(badge) ? badge.key : null
+                          return (
+                            <CustomTooltip key={badgeKey ?? undefined} content={tooltip} side="left">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  window.open(href, '_blank', 'noopener,noreferrer')
+                                }}
+                                onMouseDown={(event) => event.stopPropagation()}
+                                className="cursor-pointer"
+                              >
+                                {badge}
+                              </button>
+                            </CustomTooltip>
+                          )
+                        }
 
                         // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
 
@@ -2321,90 +2466,206 @@ export function UnifiedTransactionTable({
                         // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
                         if (isPersonContext && contextId && personEntity && personId === contextId) {
                           const isRepaymentTxn = txn.type === 'repayment';
-                          // For Repayment: Person -> Account. We hide Person (Context). Show Target (Account).
-                          // For Debt: Account -> Person. We hide Person (Context). Show Source (Account).
-
-                          if (isRepaymentTxn) {
-                            // REPAY: Show Target Account with TO badge
-                            return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={accountEntity.name}
-                                    icon={accountEntity.icon}
-                                    link={accountEntity.link}
-                                    isTarget={true}
-                                    badgeClassName="bg-emerald-50 border border-emerald-200"
-                                    inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
-                                  />
-                                </div>
-                              </div>
-                            )
-                          } else {
-                            // DEBT: Show Source Account with FROM badge
-                            return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={accountEntity.name}
-                                    icon={accountEntity.icon}
-                                    link={accountEntity.link}
-                                    badgeClassName="bg-red-50 border border-red-200"
-                                    inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
-                                  />
-                                </div>
-                              </div>
-                            )
+                          const cardDirectionIcon = (
+                            <span className="inline-flex items-center gap-0.5">
+                              <CreditCard className="h-3 w-3" />
+                              {isRepaymentTxn ? <Plus className="h-2.5 w-2.5" /> : <Minus className="h-2.5 w-2.5" />}
+                            </span>
+                          )
+                          const directionBadge = buildDirectionBadge(isRepaymentTxn ? 'to' : 'from', cardDirectionIcon)
+                          
+                          // Type Badge
+                          const typeBadge = buildTypeBadge(txn.type, false)
+                          
+                          const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
+                            <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                              Non-Cycle
+                            </span>
+                          ) : null
+                          const detailCycleBadge = sourceAccountForBadge ? (
+                            <CycleBadge
+                              key="cycle"
+                              account={sourceAccountForBadge}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                              compact={false}
+                              className="h-6 min-w-[96px] text-[10px] px-1"
+                            />
+                          ) : null
+                          const detailAccountBadge = detailCycleBadge || detailNonCycleBadge
+                          
+                          // Compute cycle date range for URL params
+                          let cycleDateRange: { start: Date; end: Date } | null = null
+                          if (sourceAccountForBadge && cycleTag && sourceAccountForBadge.cashback_config) {
+                            const config = parseCashbackConfig(sourceAccountForBadge.cashback_config)
+                            const refDate = parseISO(txn.occurred_at || txn.created_at)
+                            cycleDateRange = getCashbackCycleRange(config, refDate) || null
                           }
+                          
+                          const detailTagLink = buildTagFilterLink(accountEntity.link, cycleTag, cycleDateRange)
+                          const detailAccountBadgeWithLink = detailAccountBadge
+                            ? wrapBadgeWithFilter(
+                                detailAccountBadge,
+                                detailTagLink,
+                                `Open ${accountEntity.name} with cycle ${cycleTag || ''}`.trim()
+                              )
+                            : null
+
+                          return (
+                            <div className="flex items-center w-full">
+                              <RenderEntity
+                                name={accountEntity.name}
+                                icon={accountEntity.icon}
+                                link={accountEntity.link}
+                                contextBadge={directionBadge}
+                                contextBadgeBeforeIcon={true}
+                                badges={[detailAccountBadgeWithLink, typeBadge].filter(Boolean)}
+                                inlineBadges={true}
+                                isTarget={false}
+                                badgeClassName={isRepaymentTxn ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}
+                                linkTooltip={`Open ${accountEntity.name} in new tab`}
+                              />
+                            </div>
+                          )
                         }
 
                         // SCENARIO 2: VIEWING ACCOUNT PAGE (Context = Account)
                         if (isAccountContext && contextId) {
-                          // Sub-case 2a: Viewing Source Account (Outbound)
+                          // Sub-case 2a: Viewing Source Account (Outbound) - Show Target
                           if (sourceId === contextId) {
-                            // Show: TO [Target] (Person or Account)
-                            // Hide: Source (Self) & Arrow
-
                             if (targetType === 'none') {
                               return <span className="text-slate-400 text-xs italic pl-1">Expense / No Target</span>
                             }
 
+                            const targetAccountForBadge = accounts.find(a => a.id === targetId)
+                            const isTargetPerson = targetType === 'person'
+                            const targetDirectionIcon = isTargetPerson
+                              ? <UserPlus className="h-3 w-3" />
+                              : (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <CreditCard className="h-3 w-3" />
+                                    <Plus className="h-2.5 w-2.5" />
+                                  </span>
+                                )
+                            const targetDirectionBadge = buildDirectionBadge('to', targetDirectionIcon)
+                            
+                            // Type Badge
+                            const targetTypeBadge = buildTypeBadge(txn.type, false)
+                            
+                            const targetNonCycleBadge = targetAccountForBadge && !targetAccountForBadge.cashback_config ? (
+                              <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                                Non-Cycle
+                              </span>
+                            ) : null
+                            const targetAccountBadge = targetType === 'person'
+                              ? peopleDebtTag
+                              : (targetAccountForBadge ? (
+                                  <CycleBadge
+                                    key="cycle"
+                                    account={targetAccountForBadge}
+                                    cycleTag={cycleTag}
+                                    txnDate={txn.occurred_at || txn.created_at}
+                                    compact={false}
+                                    className="h-6 min-w-[96px] text-[10px] px-1"
+                                  />
+                                ) : targetNonCycleBadge)
+                            const targetTagValue = targetType === 'person' ? txn.tag : cycleTag
+                            
+                            // Compute cycle date range for URL params (account only, not people)
+                            let targetCycleDateRange: { start: Date; end: Date } | null = null
+                            if (targetType === 'account' && targetAccountForBadge && cycleTag && targetAccountForBadge.cashback_config) {
+                              const config = parseCashbackConfig(targetAccountForBadge.cashback_config)
+                              const refDate = parseISO(txn.occurred_at || txn.created_at)
+                              targetCycleDateRange = getCashbackCycleRange(config, refDate) || null
+                            }
+                            
+                            const targetTagLink = buildTagFilterLink(targetLink, targetTagValue ?? null, targetCycleDateRange)
+                            const targetAccountBadgeWithLink = targetAccountBadge
+                              ? wrapBadgeWithFilter(
+                                  targetAccountBadge,
+                                  targetTagLink,
+                                  `Open ${targetName} with cycle ${targetTagValue || ''}`.trim()
+                                )
+                              : null
+
                             return (
                               <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={targetName}
-                                    icon={targetIcon}
-                                    link={targetLink}
-                                    badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [cycleBadge || tagBadge].filter(Boolean)}
-                                    contextBadge={toBadge}
-                                    isTarget={true}
-                                    inlineBadges={true}
-                                  />
-                                </div>
+                                <RenderEntity
+                                  name={targetName}
+                                  icon={targetIcon}
+                                  link={targetLink}
+                                  contextBadge={targetDirectionBadge}
+                                  contextBadgeBeforeIcon={true}
+                                  badges={[targetAccountBadgeWithLink, targetTypeBadge].filter(Boolean)}
+                                  inlineBadges={true}
+                                  isTarget={false}
+                                  badgeClassName="bg-emerald-50 border-emerald-200"
+                                  linkTooltip={`Open ${targetName} in new tab`}
+                                />
                               </div>
                             )
                           }
 
-                          // Sub-case 2b: Viewing Target Account (Inbound)
+                          // Sub-case 2b: Viewing Target Account (Inbound) - Show Source
                           if (targetType === 'account' && targetId === contextId) {
-                            // Show: FROM [Source]
-                            // Hide: Target (Self) & Arrow
+                            const sourceDirectionBadge = buildDirectionBadge(
+                              'from',
+                              <span className="inline-flex items-center gap-0.5">
+                                <CreditCard className="h-3 w-3" />
+                                <Minus className="h-2.5 w-2.5" />
+                              </span>
+                            )
+                            
+                            // Type Badge
+                            const sourceTypeBadge = buildTypeBadge(txn.type, false)
+                            
+                            const sourceNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
+                              <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                                Non-Cycle
+                              </span>
+                            ) : null
+                            const sourceAccountBadge = sourceAccountForBadge ? (
+                              <CycleBadge
+                                key="cycle"
+                                account={sourceAccountForBadge}
+                                cycleTag={cycleTag}
+                                txnDate={txn.occurred_at || txn.created_at}
+                                compact={false}
+                                className="h-6 min-w-[96px] text-[10px] px-1"
+                              />
+                            ) : sourceNonCycleBadge
+                            
+                            // Compute cycle date range for URL params
+                            let sourceCycleDateRange: { start: Date; end: Date } | null = null
+                            if (sourceAccountForBadge && cycleTag && sourceAccountForBadge.cashback_config) {
+                              const config = parseCashbackConfig(sourceAccountForBadge.cashback_config)
+                              const refDate = parseISO(txn.occurred_at || txn.created_at)
+                              sourceCycleDateRange = getCashbackCycleRange(config, refDate) || null
+                            }
+                            
+                            const sourceTagLink = buildTagFilterLink(sourceId ? `/accounts/${sourceId}` : null, cycleTag, sourceCycleDateRange)
+                            const sourceAccountBadgeWithLink = sourceAccountBadge
+                              ? wrapBadgeWithFilter(
+                                  sourceAccountBadge,
+                                  sourceTagLink,
+                                  `Open ${sourceName} with cycle ${cycleTag || ''}`.trim()
+                                )
+                              : null
 
                             return (
                               <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={sourceName}
-                                    icon={sourceIcon}
-                                    link={sourceId ? `/accounts/${sourceId}` : null}
-                                    badges={[cycleBadge]}
-                                    contextBadge={fromBadge}
-                                    inlineBadges={true}
-                                  />
-                                </div>
+                                <RenderEntity
+                                  name={sourceName}
+                                  icon={sourceIcon}
+                                  link={sourceId ? `/accounts/${sourceId}` : null}
+                                  contextBadge={sourceDirectionBadge}
+                                  contextBadgeBeforeIcon={true}
+                                  badges={[sourceAccountBadgeWithLink, sourceTypeBadge].filter(Boolean)}
+                                  inlineBadges={true}
+                                  isTarget={false}
+                                  badgeClassName="bg-rose-50 border-rose-200"
+                                  linkTooltip={`Open ${sourceName} in new tab`}
+                                />
                               </div>
                             )
                           }

@@ -40,9 +40,17 @@
 - **Installments:** Installments are linked to `transaction_lines` (or flag `is_installment`). Do not double-count parent and installments in totals.
 
 ## 5. UI/UX Design System (STRICT - PHASE 74)
-- **Images/Avatars:**
-  - **Account/Person/Item Thumbnails:** MUST be **`rounded-none`** (Square). NEVER use `rounded-full` or `rounded-md` in tables.
+- **Images/Avatars (MANDATORY):**
+  - **Account/Item/Shop Thumbnails:** MUST use `rounded-sm` (rounded square). NEVER use `rounded-full`, `rounded-md`, or any border/crop effects.
+  - **Person/People Avatars:** MUST use `rounded-full` (circular only).
   - Standard size: `w-8 h-8` or `w-10 h-10`.
+  - **PROHIBITED:** Do NOT add `border`, `ring`, `outline`, or `crop` effects to images.
+  - **PROHIBITED:** Do NOT use `object-cover` if it causes cropping; prefer `object-contain` or `object-fit: contain`.
+- **Typography (MANDATORY):**
+  - **PROHIBITED:** Do NOT use monospace fonts (`font-mono`, `font-code`, `Courier`, `Consolas`) for UI elements.
+  - Use `font-sans` (default Tailwind) for all text.
+  - Exception: Code blocks in documentation use monospace.
+  - **Number Formatting:** Use `tabular-nums` class to prevent variable-width number rendering.
 - **Transaction Table:**
   - **Columns:** Merge "Account" and "People" into **"Accounts ➜ People"**.
   - **Alignment:** Account (Left) -> Arrow (Center) -> People (Right).

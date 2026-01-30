@@ -30,7 +30,7 @@ import { DateRangeControl } from './toolbar/DateRangeControl'
 import { ColumnKey, defaultColumns } from "@/components/app/table/transactionColumns"
 import { TableViewOptions } from './toolbar/TableViewOptions'
 
-type SortKey = 'date' | 'amount'
+type SortKey = 'date' | 'amount' | 'final_price'
 type SortDir = 'asc' | 'desc'
 
 type FilterableTransactionsProps = {
