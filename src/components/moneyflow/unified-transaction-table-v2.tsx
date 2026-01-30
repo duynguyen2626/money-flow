@@ -113,7 +113,7 @@ import { ColumnKey } from "@/components/app/table/transactionColumns"
 
 
 
-type SortKey = 'date' | 'amount'
+type SortKey = 'date' | 'amount' | 'final_price'
 type SortDir = 'asc' | 'desc'
 
 type BulkActionState = {
@@ -261,7 +261,7 @@ export function UnifiedTransactionTableV2({
     }, 2000)
   }, [])
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date & Type", defaultWidth: 140, minWidth: 120 },
+    { key: "date", label: "Date", defaultWidth: 140, minWidth: 120 },
     { key: "account", label: "Flow", defaultWidth: 300, minWidth: 250 },
     { key: "shop", label: "Note & Category", defaultWidth: 320, minWidth: 250 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
@@ -957,6 +957,10 @@ export function UnifiedTransactionTableV2({
         const amtA = Math.abs(a.amount ?? 0)
         const amtB = Math.abs(b.amount ?? 0)
         return sortState.dir === 'asc' ? amtA - amtB : amtB - amtA
+      } else if (sortState.key === 'final_price') {
+        const netA = Math.abs(a.final_price ?? 0)
+        const netB = Math.abs(b.final_price ?? 0)
+        return sortState.dir === 'asc' ? netA - netB : netB - netA
       }
       return 0
     })
@@ -1415,25 +1419,55 @@ export function UnifiedTransactionTableV2({
                             </button>
                           </div>
                         ) : col.key === 'amount' ? (
-                          <button
-                            className="flex items-center gap-1 group w-full justify-end"
-                            onClick={() => {
-                              const nextDir =
-                                sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
-                              setSortState({ key: col.key as SortKey, dir: nextDir })
-                            }}
+                          <CustomTooltip 
+                            content={sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
+                            side="top"
                           >
-                            {columnLabel}
-                            {sortState.key === col.key ? (
-                              sortState.dir === 'asc' ? (
-                                <ArrowUp className="h-3 w-3 text-blue-600" />
+                            <button
+                              className="flex items-center gap-1 group w-full justify-end"
+                              onClick={() => {
+                                const nextDir =
+                                  sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                                setSortState({ key: 'amount', dir: nextDir })
+                              }}
+                            >
+                              {columnLabel}
+                              {sortState.key === 'amount' ? (
+                                sortState.dir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-blue-600" />
+                                )
                               ) : (
-                                <ArrowDown className="h-3 w-3 text-blue-600" />
-                              )
-                            ) : (
-                              <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            )}
-                          </button>
+                                <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </button>
+                          </CustomTooltip>
+                        ) : col.key === 'final_price' ? (
+                          <CustomTooltip 
+                            content={sortState.key === 'final_price' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
+                            side="top"
+                          >
+                            <button
+                              className="flex items-center gap-1 group w-full justify-end"
+                              onClick={() => {
+                                const nextDir =
+                                  sortState.key === 'final_price' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                                setSortState({ key: 'final_price', dir: nextDir })
+                              }}
+                            >
+                              {columnLabel}
+                              {sortState.key === 'final_price' ? (
+                                sortState.dir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-blue-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </button>
+                          </CustomTooltip>
                         ) : col.key === 'actions' ? (
                           <div className="flex items-center justify-center w-full relative group">
                             <span className="mr-6">{columnLabel}</span>

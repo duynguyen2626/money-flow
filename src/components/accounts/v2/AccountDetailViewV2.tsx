@@ -64,6 +64,11 @@ export function AccountDetailViewV2({
         setActiveTab(tab)
     }, [searchParams])
 
+    useEffect(() => {
+        const tabLabel = activeTab === 'cashback' ? 'Cashback' : 'History'
+        document.title = `${account.name} ${tabLabel}`
+    }, [account.name, activeTab])
+
     const fetchPendingData = useCallback(async () => {
         try {
             const [batchRes, refundRes] = await Promise.all([
