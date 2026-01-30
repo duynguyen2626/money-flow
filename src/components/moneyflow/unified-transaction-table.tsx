@@ -2321,39 +2321,48 @@ export function UnifiedTransactionTable({
                         // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
                         if (isPersonContext && contextId && personEntity && personId === contextId) {
                           const isRepaymentTxn = txn.type === 'repayment';
+                          const contextBadge = isRepaymentTxn ? toBadge : fromBadge
                           // For Repayment: Person -> Account. We hide Person (Context). Show Target (Account).
                           // For Debt: Account -> Person. We hide Person (Context). Show Source (Account).
 
                           if (isRepaymentTxn) {
                             // REPAY: Show Target Account with TO badge
                             return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={accountEntity.name}
-                                    icon={accountEntity.icon}
-                                    link={accountEntity.link}
-                                    isTarget={true}
-                                    badgeClassName="bg-emerald-50 border border-emerald-200"
-                                    inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
-                                  />
+                              <div className="flex items-center justify-center w-full">
+                                <div className="flex items-center gap-2 max-w-full">
+                                  {contextBadge}
+                                  <MoveRight className="h-3.5 w-3.5 text-slate-300" />
+                                  <div className="min-w-0">
+                                    <RenderEntity
+                                      name={accountEntity.name}
+                                      icon={accountEntity.icon}
+                                      link={accountEntity.link}
+                                      isTarget={true}
+                                      badgeClassName="bg-emerald-50 border-emerald-200"
+                                      inlineBadges={true}
+                                      badges={[cycleBadge].filter(Boolean)}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )
                           } else {
                             // DEBT: Show Source Account with FROM badge
                             return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={accountEntity.name}
-                                    icon={accountEntity.icon}
-                                    link={accountEntity.link}
-                                    badgeClassName="bg-red-50 border border-red-200"
-                                    inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
-                                  />
+                              <div className="flex items-center justify-center w-full">
+                                <div className="flex items-center gap-2 max-w-full">
+                                  {contextBadge}
+                                  <MoveRight className="h-3.5 w-3.5 text-slate-300" />
+                                  <div className="min-w-0">
+                                    <RenderEntity
+                                      name={accountEntity.name}
+                                      icon={accountEntity.icon}
+                                      link={accountEntity.link}
+                                      badgeClassName="bg-red-50 border-red-200"
+                                      inlineBadges={true}
+                                      badges={[cycleBadge].filter(Boolean)}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )
@@ -2372,17 +2381,20 @@ export function UnifiedTransactionTable({
                             }
 
                             return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={targetName}
-                                    icon={targetIcon}
-                                    link={targetLink}
-                                    badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [cycleBadge || tagBadge].filter(Boolean)}
-                                    contextBadge={toBadge}
-                                    isTarget={true}
-                                    inlineBadges={true}
-                                  />
+                              <div className="flex items-center justify-center w-full">
+                                <div className="flex items-center gap-2 max-w-full">
+                                  {toBadge}
+                                  <MoveRight className="h-3.5 w-3.5 text-slate-300" />
+                                  <div className="min-w-0">
+                                    <RenderEntity
+                                      name={targetName}
+                                      icon={targetIcon}
+                                      link={targetLink}
+                                      badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [cycleBadge || tagBadge].filter(Boolean)}
+                                      isTarget={true}
+                                      inlineBadges={true}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )
@@ -2394,16 +2406,19 @@ export function UnifiedTransactionTable({
                             // Hide: Target (Self) & Arrow
 
                             return (
-                              <div className="flex items-center w-full">
-                                <div className="flex-1 min-w-0">
-                                  <RenderEntity
-                                    name={sourceName}
-                                    icon={sourceIcon}
-                                    link={sourceId ? `/accounts/${sourceId}` : null}
-                                    badges={[cycleBadge]}
-                                    contextBadge={fromBadge}
-                                    inlineBadges={true}
-                                  />
+                              <div className="flex items-center justify-center w-full">
+                                <div className="flex items-center gap-2 max-w-full">
+                                  {fromBadge}
+                                  <MoveRight className="h-3.5 w-3.5 text-slate-300" />
+                                  <div className="min-w-0">
+                                    <RenderEntity
+                                      name={sourceName}
+                                      icon={sourceIcon}
+                                      link={sourceId ? `/accounts/${sourceId}` : null}
+                                      badges={[cycleBadge]}
+                                      inlineBadges={true}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             )

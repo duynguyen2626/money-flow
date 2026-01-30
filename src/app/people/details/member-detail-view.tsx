@@ -11,6 +11,8 @@ import { PeopleHeader } from '@/components/people/v2/PeopleHeader'
 import { TransactionControlBar } from '@/components/people/v2/TransactionControlBar'
 import { toYYYYMMFromDate } from '@/lib/month-tag'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
+import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
 
 interface MemberDetailViewProps {
     person: Person
@@ -40,6 +42,9 @@ export function MemberDetailView({
     const [activeTab, setActiveTab] = useState<'timeline' | 'history' | 'split-bill'>('timeline')
     const [selectedYear, setSelectedYear] = useState<string | null>(new Date().getFullYear().toString())
     const [searchTerm, setSearchTerm] = useState('')
+    const [filterType, setFilterType] = useState<FilterType>('all')
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+    const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [showPaidModal, setShowPaidModal] = useState(false)
 
     // Slide State
@@ -57,6 +62,19 @@ export function MemberDetailView({
         cycleSheets,
     })
 
+    const accountItems = useMemo(() => {
+        const ids = new Set<string>()
+        transactions.forEach(t => {
+            if (t.source_account_id) ids.add(t.source_account_id)
+            if (t.target_account_id) ids.add(t.target_account_id)
+            if (t.account_id) ids.add(t.account_id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toAccountId = (t as any).to_account_id as string | undefined
+            if (toAccountId) ids.add(toAccountId)
+        })
+        return accounts.filter(a => ids.has(a.id))
+    }, [transactions, accounts])
+
     // Active cycle
     const currentMonthTag = toYYYYMMFromDate(new Date())
     const [activeCycleTag, setActiveCycleTag] = useState<string>(() => {
@@ -66,23 +84,56 @@ export function MemberDetailView({
 
     const activeCycle = debtCycles.find(c => c.tag === activeCycleTag)
 
-    // Transactions for active cycle
-    const cycleTransactions = useMemo(() => {
-        if (!activeCycle) return []
-        let txns = activeCycle.transactions
+    const applyFilters = (txns: TransactionWithDetails[]) => {
+        let result = txns
 
-        // Apply search filter
+        if (statusFilter === 'void') {
+            result = result.filter(t => t.status === 'void')
+        } else if (statusFilter === 'pending') {
+            result = result.filter(t => t.status === 'pending' || t.status === 'waiting_refund')
+        } else {
+            result = result.filter(t => t.status !== 'void')
+        }
+
+        if (filterType !== 'all') {
+            const matchType = filterType === 'lend' ? 'debt' : (filterType === 'repay' ? 'repayment' : filterType)
+            result = result.filter(t => (t.type || '').toLowerCase() === matchType)
+        }
+
+        if (selectedAccountId) {
+            result = result.filter(t => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const toAccountId = (t as any).to_account_id as string | undefined
+                return t.source_account_id === selectedAccountId
+                    || t.target_account_id === selectedAccountId
+                    || t.account_id === selectedAccountId
+                    || toAccountId === selectedAccountId
+            })
+        }
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase()
-            txns = txns.filter(t =>
+            result = result.filter(t =>
                 t.note?.toLowerCase().includes(term) ||
                 t.shop?.name?.toLowerCase().includes(term) ||
-                t.category?.name?.toLowerCase().includes(term)
+                t.category?.name?.toLowerCase().includes(term) ||
+                t.id?.toLowerCase().includes(term)
             )
         }
 
-        return txns
-    }, [activeCycle, searchTerm])
+        return result
+    }
+
+    // Transactions for active cycle
+    const cycleTransactions = useMemo(() => {
+        if (!activeCycle) return []
+        return applyFilters(activeCycle.transactions)
+    }, [activeCycle, searchTerm, filterType, statusFilter, selectedAccountId])
+
+    const historyTransactions = useMemo(() => {
+        const base = transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))
+        return applyFilters(base)
+    }, [transactions, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId])
 
     // Calculate stats for Header based on Selected Year or All Time
     const headerStats = useMemo(() => {
@@ -183,6 +234,13 @@ export function MemberDetailView({
                         transactionCount={cycleTransactions.length}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
+                        filterType={filterType}
+                        onFilterTypeChange={setFilterType}
+                        statusFilter={statusFilter}
+                        onStatusChange={setStatusFilter}
+                        selectedAccountId={selectedAccountId}
+                        onAccountChange={setSelectedAccountId}
+                        accountItems={accountItems}
                         accounts={accounts}
                         categories={categories}
                         shops={shops}
@@ -210,7 +268,7 @@ export function MemberDetailView({
                 <div className="flex-1 overflow-y-auto px-4 py-3">
                     {/* Reuse filtering logic or search for history? Passing all transactions */}
                     <SimpleTransactionTable
-                        transactions={transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))}
+                        transactions={historyTransactions}
                         accounts={accounts}
                         categories={categories}
                         people={people}

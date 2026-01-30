@@ -38,6 +38,13 @@ export function PeopleHeader({
     onTabChange,
 }: PeopleHeaderProps) {
     const isSettled = Math.abs(stats.remains) < 100
+    const totalProgress = Math.max(
+        Math.abs(stats.netLend),
+        Math.abs(stats.repay) + Math.abs(stats.remains),
+        1
+    )
+    const repayPercent = Math.min(100, Math.round((Math.abs(stats.repay) / totalProgress) * 100))
+    const remainsPercent = Math.min(100, Math.round((Math.abs(stats.remains) / totalProgress) * 100))
 
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky top-0 z-20 shadow-sm">
@@ -74,25 +81,25 @@ export function PeopleHeader({
                 </div>
             </div>
 
-            {/* Center: Key Stats */}
-            <div className="flex items-center gap-8 px-4 border-l border-r border-slate-100 mx-4 hidden md:flex">
-                {/* Net Lend */}
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Net Lend</span>
-                    <span className="text-base font-bold text-slate-900">
-                        {numberFormatter.format(stats.netLend)}
-                    </span>
+            {/* Center: Key Stats (Progress Bars) */}
+            <div className="flex items-center gap-4 px-4 border-l border-r border-slate-100 mx-4 hidden md:flex">
+                <div className="flex flex-col gap-1 min-w-[260px]">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Net Lend</span>
+                        <span className="text-[11px] font-bold text-slate-700">
+                            {numberFormatter.format(stats.netLend)}
+                        </span>
+                    </div>
+                    <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className="bg-emerald-500" style={{ width: `${repayPercent}%` }} />
+                        <div className="bg-rose-500" style={{ width: `${remainsPercent}%` }} />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-semibold text-emerald-600">Repay {numberFormatter.format(stats.repay)}</span>
+                        <span className="font-semibold text-rose-600">Remains {numberFormatter.format(stats.remains)}</span>
+                    </div>
                 </div>
 
-                {/* Repay */}
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-wider">Repay</span>
-                    <span className="text-base font-bold text-emerald-600">
-                        {numberFormatter.format(stats.repay)}
-                    </span>
-                </div>
-
-                {/* Remains + Popover */}
                 <StatsPopover
                     originalLend={stats.originalLend}
                     cashback={stats.cashback}
@@ -100,18 +107,8 @@ export function PeopleHeader({
                     repay={stats.repay}
                     remains={stats.remains}
                 >
-                    <button className="flex items-end gap-1 group text-left hover:bg-slate-50 rounded-lg p-1 -m-1 transition-colors outline-none">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-rose-600/70 uppercase tracking-wider">Remains</span>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xl font-bold text-rose-600">
-                                    {numberFormatter.format(stats.remains)}
-                                </span>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-center h-6 w-6 rounded bg-rose-50 text-rose-600 group-hover:bg-rose-100 transition-colors ml-1 mb-0.5">
-                            <FileText className="h-3.5 w-3.5" />
-                        </div>
+                    <button className="flex items-center justify-center h-8 w-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                        <FileText className="h-4 w-4" />
                     </button>
                 </StatsPopover>
             </div>
