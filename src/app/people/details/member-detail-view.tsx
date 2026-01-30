@@ -209,6 +209,12 @@ export function MemberDetailView({
         }
     }, [selectedTxn, slideMode, slideOverrideType, person.id])
 
+    // Calculate paid count from cycleTransactions  
+    const paidCount = useMemo(() => {
+        if (!activeCycle) return 0
+        return activeCycle.transactions.filter(t => t.status === 'repayment' || (t.status !== 'void' && t.type === 'repayment')).length
+    }, [activeCycle])
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             {/* V2 Header */}
@@ -232,6 +238,8 @@ export function MemberDetailView({
                         allCycles={debtCycles}
                         onCycleChange={setActiveCycleTag}
                         transactionCount={cycleTransactions.length}
+                        paidCount={paidCount}
+                        onViewPaid={() => setShowPaidModal(true)}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
                         filterType={filterType}
