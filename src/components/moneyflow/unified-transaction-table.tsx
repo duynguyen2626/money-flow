@@ -20,6 +20,8 @@ import {
   Wallet,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
+  ArrowLeft,
   Trash2,
   RotateCcw,
   Ban,
@@ -2278,10 +2280,11 @@ export function UnifiedTransactionTable({
                           <span
                             key="from"
                             className={cn(
-                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
+                              "inline-flex items-center gap-1 rounded-md px-2 h-5 text-[0.7em] font-extrabold border w-[52px] justify-center",
                               "bg-emerald-50 text-emerald-700 border-emerald-200"
                             )}
                           >
+                            <ArrowRight className="h-2.5 w-2.5" />
                             FROM
                           </span>
                         )
@@ -2289,11 +2292,12 @@ export function UnifiedTransactionTable({
                           <span
                             key="to"
                             className={cn(
-                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
+                              "inline-flex items-center gap-1 rounded-md px-2 h-5 text-[0.7em] font-extrabold border w-[52px] justify-center",
                               "bg-rose-50 text-rose-700 border-rose-200"
                             )}
                           >
                             TO
+                            <ArrowLeft className="h-2.5 w-2.5" />
                           </span>
                         )
 

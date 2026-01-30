@@ -209,10 +209,14 @@ export function MemberDetailView({
         }
     }, [selectedTxn, slideMode, slideOverrideType, person.id])
 
-    // Calculate paid count from cycleTransactions  
+    // Calculate paid count from cycleTransactions matching PaidTransactionsModal logic
     const paidCount = useMemo(() => {
         if (!activeCycle) return 0
-        return activeCycle.transactions.filter(t => t.status === 'repayment' || (t.status !== 'void' && t.type === 'repayment')).length
+        return activeCycle.transactions.filter(t => {
+            if (t.type !== 'repayment' && t.type !== 'income') return false
+            const metadata = t.metadata as any
+            return metadata?.is_settled === true || metadata?.paid_at !== null
+        }).length
     }, [activeCycle])
 
     return (
@@ -301,11 +305,11 @@ export function MemberDetailView({
                 </div>
             )}
 
-            {/* Paid Transactions Modal */}
+            {/* Paid Transactions Modal - Show only current cycle transactions */}
             <PaidTransactionsModal
                 open={showPaidModal}
                 onOpenChange={setShowPaidModal}
-                transactions={transactions}
+                transactions={activeCycle?.transactions || []}
                 personId={person.id}
                 accounts={accounts}
                 categories={categories}

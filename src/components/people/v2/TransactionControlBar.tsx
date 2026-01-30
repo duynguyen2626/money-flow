@@ -95,35 +95,25 @@ export function TransactionControlBar({
             {/* Single Row: Status + Paid + Cycle Selector + Filters + Sheet */}
             <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                 
-                {/* 1. Title */}
-                <span className="font-bold text-slate-900 text-sm flex-shrink-0">Transactions</span>
-                
-                {/* 2. Status Badge */}
+                {/* 1. Status Badge with Rollover integrated */}
                 {!isSettled ? (
-                    <div className="flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold flex-shrink-0">
-                        <History className="h-3.5 w-3.5" />
-                        OUTSTANDING
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-1.5 h-8 px-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold flex-shrink-0">
-                        <Check className="h-3.5 w-3.5" />
-                        SETTLED
-                    </div>
-                )}
-                
-                {/* 3. Rollover Button (if not settled) */}
-                {!isSettled && (
                     <RolloverDebtDialog
                         personId={person.id}
                         currentCycle={activeCycle.tag}
                         remains={activeCycle.remains}
                         trigger={
-                            <button className="flex items-center gap-1.5 h-8 px-3 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-bold text-amber-700 transition-colors flex-shrink-0">
-                                <RefreshCw className="h-3.5 w-3.5" />
-                                Rollover
+                            <button className="flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 rounded-lg text-xs font-bold flex-shrink-0 transition-colors">
+                                <History className="h-3.5 w-3.5" />
+                                OUTSTANDING
+                                <RefreshCw className="h-3 w-3 ml-1 opacity-70" />
                             </button>
                         }
                     />
+                ) : (
+                    <div className="flex items-center gap-1.5 h-8 px-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold flex-shrink-0">
+                        <Check className="h-3.5 w-3.5" />
+                        SETTLED
+                    </div>
                 )}
                 
                 {/* 4. Paid Count Button */}
@@ -270,10 +260,16 @@ export function TransactionControlBar({
                     splitMode={true}
                 />
                 
-                {/* 11. Add Menu */}
+                {/* 11. Add Menu (Hover to open) */}
                 <Popover>
                     <PopoverTrigger asChild>
-                        <button className="flex items-center gap-2 h-9 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex-shrink-0">
+                        <button 
+                            onMouseEnter={(e) => {
+                                const btn = e.currentTarget
+                                btn.click()
+                            }}
+                            className="flex items-center gap-2 h-9 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex-shrink-0"
+                        >
                             <Plus className="h-3.5 w-3.5" />
                             Add
                         </button>
