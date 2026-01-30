@@ -2270,6 +2270,16 @@ export function UnifiedTransactionTable({
                           />
                         ) : null
 
+                        // Non-Cycle badge for accounts without cashback config
+                        const nonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
+                          <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[0.7em] font-extrabold whitespace-nowrap min-w-[72px]">
+                            Non-Cycle
+                          </span>
+                        ) : null
+
+                        // Use cycleBadge if available, otherwise nonCycleBadge
+                        const accountBadge = cycleBadge || nonCycleBadge
+
                         const tagBadge = (cycleTag || debtTag) ? (
                           <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
                             {cycleTag || debtTag}
@@ -2280,11 +2290,11 @@ export function UnifiedTransactionTable({
                           <span
                             key="from"
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-md px-2 h-5 text-[0.7em] font-extrabold border w-[52px] justify-center",
-                              "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
+                              "bg-rose-50 text-rose-700 border-rose-200"
                             )}
                           >
-                            <ArrowRight className="h-2.5 w-2.5" />
+                            <ArrowUpRight className="h-3 w-3" />
                             FROM
                           </span>
                         )
@@ -2292,29 +2302,20 @@ export function UnifiedTransactionTable({
                           <span
                             key="to"
                             className={cn(
-                              "inline-flex items-center gap-1 rounded-md px-2 h-5 text-[0.7em] font-extrabold border w-[52px] justify-center",
-                              "bg-rose-50 text-rose-700 border-rose-200"
+                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
+                              "bg-emerald-50 text-emerald-700 border-emerald-200"
                             )}
                           >
+                            <ArrowDownLeft className="h-3 w-3" />
                             TO
-                            <ArrowLeft className="h-2.5 w-2.5" />
                           </span>
                         )
 
-                        // Custom People Badge Logic - Icon + MMM, yy format
+                        // Custom People Badge Logic - Icon + YYYY-MM format
                         const peopleDebtTag = txn.tag ? (
-                          <span key="people-debt" className="inline-flex items-center gap-1 rounded-[4px] bg-amber-50 border border-amber-200 text-amber-700 px-1.5 h-6 text-[11px] font-bold whitespace-nowrap">
+                          <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-50 border border-amber-200 text-amber-700 px-2 h-6 text-[0.7em] font-extrabold whitespace-nowrap min-w-[72px]">
                             <User className="h-3 w-3" />
-                            {(() => {
-                              // Parse "2026-01" -> "Jan, 26"
-                              try {
-                                const [y, m] = txn.tag.split('-')
-                                const date = new Date(parseInt(y), parseInt(m) - 1, 1)
-                                return format(date, 'MMM, yy')
-                              } catch {
-                                return txn.tag
-                              }
-                            })()}
+                            {txn.tag}
                           </span>
                         ) : null
 
@@ -2342,7 +2343,7 @@ export function UnifiedTransactionTable({
                                     contextBadge={contextBadge}
                                     badgeClassName="bg-emerald-50 border-emerald-200"
                                     inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
+                                    badges={[accountBadge].filter(Boolean)}
                                   />
                                 </div>
                               </div>
@@ -2359,7 +2360,7 @@ export function UnifiedTransactionTable({
                                     contextBadge={contextBadge}
                                     badgeClassName="bg-red-50 border-red-200"
                                     inlineBadges={true}
-                                    badges={[cycleBadge].filter(Boolean)}
+                                    badges={[accountBadge].filter(Boolean)}
                                   />
                                 </div>
                               </div>
@@ -2386,7 +2387,7 @@ export function UnifiedTransactionTable({
                                     icon={targetIcon}
                                     link={targetLink}
                                     contextBadge={toBadge}
-                                    badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [cycleBadge || tagBadge].filter(Boolean)}
+                                    badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [accountBadge || tagBadge].filter(Boolean)}
                                     isTarget={true}
                                     inlineBadges={true}
                                   />
@@ -2407,7 +2408,7 @@ export function UnifiedTransactionTable({
                                   icon={sourceIcon}
                                   link={sourceId ? `/accounts/${sourceId}` : null}
                                   contextBadge={fromBadge}
-                                  badges={[cycleBadge]}
+                                  badges={[accountBadge]}
                                   inlineBadges={true}
                                 />
                               </div>
