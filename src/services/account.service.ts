@@ -193,7 +193,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   if (config.dueDate) {
     const currentDay = now.getDate()
     let targetMonth = now.getMonth()
-    let targetYear = now.getFullYear()
+    const targetYear = now.getFullYear()
 
     if (currentDay > config.dueDate) {
       targetMonth += 1

@@ -14,3 +14,12 @@
 
 ## 3. General Aesthetics
 - **Avatars**: In other contexts (like Profile page), rounding is permitted only if explicitly requested. Default to square-ish (`rounded-md` or `rounded-none`) unless specified `rounded-full`.
+
+## 4. Flow Column (Unified Transaction Table)
+- **Single source of truth**: always use `UnifiedTransactionTable` (no custom Flow UI in detail pages).
+- **Type icon badge**: icon-only with tooltip appears **before** entities.
+- **No direction badges**: never render FROM/TO badges in Flow column.
+- **Alignment**:
+  - Main /transactions: single-flow rows left-aligned.
+  - Detail pages (account/people): single-flow rows centered.
+- **Header borders**: use stronger border contrast (`border-slate-400` or darker) to match table grid.

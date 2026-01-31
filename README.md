@@ -21,6 +21,7 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 ## Current Status: UI Refactor (Jan 2026)
 We are currently refactoring the core UI components to ensure strict consistency.
 - **Transaction Table**: Moved to a fixed-width CSS Grid layout.
+- **Flow Column**: Unified icon-first type badges across /transactions and detail pages (no direction badges).
 - **Image Rendering**: Strict rules for Shapes (Person=Circle, Shop=Rounded Square, Account=Original).
 - **Badges**: Standardized size (24px) and positioning.
 See `.agent/context/ui_standards.md` for detailed specs.
@@ -41,10 +42,10 @@ See `.agent/context/ui_standards.md` for detailed specs.
 - **UI Refinements**: Improved clone loading state, fixed "Rendering" bugs, and standardized bank icon mapping (`MBB`/`VIB`).
 - **CI/CD**: Relaxed lint rules to ensure smoother Vercel deployments while maintaining code quality locally.
 
-### Planned: Phase 4 (Accounts Refactor)
-- **Filter Tabs**: Redesigning into Credit / Account / Savings / Debt.
-- **Card Design**: Modernizing account cards with better image handling and visual hierarchy.
-- **Sorting**: Priority on Due Date and Spend Need.
+### Planned: Phase 10 (Accounts Enhancements)
+- **MCC Column**: Display MCC per account/transaction context.
+- **Annual Fee Waiver Target**: Compute “target met” based on credit card spend rules.
+- **Category Filter**: Add category dropdown to Accounts filters.
 
 ## Getting Started
 

@@ -25,7 +25,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { getAccountTypeLabel } from '@/lib/account-utils'
 import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { AccountSlideV2 } from './AccountSlideV2'
-import { formatCycleTag } from '@/lib/cycle-utils'
+import { formatCycleTag, formatCycleTagWithYear } from '@/lib/cycle-utils'
 import { Calendar } from 'lucide-react'
 
 interface AccountDetailHeaderV2Props {
@@ -37,6 +37,7 @@ interface AccountDetailHeaderV2Props {
     selectedYear: string | null
     availableYears: string[]
     onYearChange: (year: string | null) => void
+    selectedCycle?: string // For dynamic cashback badge display
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -52,14 +53,54 @@ export function AccountDetailHeaderV2({
     selectedYear,
     availableYears,
     onYearChange,
+    selectedCycle,
 }: AccountDetailHeaderV2Props) {
     const [isSlideOpen, setIsSlideOpen] = React.useState(false)
+    const [dynamicCashbackStats, setDynamicCashbackStats] = React.useState<AccountSpendingStats | null>(cashbackStats)
+    const [isCashbackLoading, setIsCashbackLoading] = React.useState(false)
 
     const isCreditCard = account.type === 'credit_card'
     const availableBalance = isCreditCard ? getCreditCardAvailableBalance(account) : account.current_balance ?? 0
     const outstandingBalance = isCreditCard ? Math.abs(account.current_balance ?? 0) : 0
 
     const typeLabel = getAccountTypeLabel(account.type)
+
+    // Recalculate cashback stats when selectedCycle changes
+    React.useEffect(() => {
+        if (!selectedCycle || !isCreditCard) {
+            // Reset to initial stats if no cycle selected
+            setDynamicCashbackStats(cashbackStats)
+            return
+        }
+
+        const fetchCashbackStats = async () => {
+            setIsCashbackLoading(true)
+            try {
+                // Convert cycle tag (YYYY-MM) to a date in the middle of that cycle
+                // Cycle format: 25.01 - 24.02 means Jan 25 to Feb 24
+                // So for cycle tag "2025-02", we want a date in Feb (e.g., Feb 10)
+                const [yearStr, monthStr] = selectedCycle.split('-')
+                const year = parseInt(yearStr, 10)
+                const month = parseInt(monthStr, 10)
+                // Use the 10th of the cycle's end month as reference
+                const cycleDate = new Date(year, month - 1, 10)
+                
+                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&date=${cycleDate.toISOString()}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setDynamicCashbackStats(data)
+                }
+            } catch (error) {
+                console.error('Failed to fetch cashback stats:', error)
+                // Fall back to initial stats on error
+                setDynamicCashbackStats(cashbackStats)
+            } finally {
+                setIsCashbackLoading(false)
+            }
+        }
+
+        fetchCashbackStats()
+    }, [selectedCycle, account.id, isCreditCard, cashbackStats])
 
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky top-0 z-20 shadow-sm">
@@ -79,10 +120,10 @@ export function AccountDetailHeaderV2({
                 </Link>
 
                 <div className="relative">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50 border border-slate-100 shadow-sm">
+                    <div className="w-10 h-10 overflow-hidden flex items-center justify-center">
                         {account.image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={account.image_url} alt="" className="w-full h-full object-contain p-1.5" />
+                            <img src={account.image_url} alt="" className="w-full h-full object-contain" />
                         ) : (
                             <div className="text-lg font-bold text-slate-400 capitalize">{account.name.charAt(0)}</div>
                         )}
@@ -180,18 +221,18 @@ export function AccountDetailHeaderV2({
                         </div>
 
                         {/* Divider */}
-                        {cashbackStats && <div className="h-12 w-px bg-slate-200" />}
+                        {dynamicCashbackStats && <div className="h-12 w-px bg-slate-200" />}
 
                         {/* Section 3: Cashback Progress (if available) */}
-                        {cashbackStats && (
+                        {dynamicCashbackStats && (
                             <div className="flex flex-col gap-1 min-w-[280px]">
                                 {/* Line 1: Status + Need to Spend Text */}
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1.5">
                                         {/* Status Badge + Need Amount */}
                                         {(() => {
-                                            const spendProgress = cashbackStats.currentSpend || 0
-                                            const spendTarget = cashbackStats.minSpend || 0
+                                            const spendProgress = dynamicCashbackStats.currentSpend || 0
+                                            const spendTarget = dynamicCashbackStats.minSpend || 0
                                             const remainingSpend = Math.max(0, spendTarget - spendProgress)
                                             const isMet = spendTarget > 0 && spendProgress >= spendTarget
 
@@ -234,32 +275,61 @@ export function AccountDetailHeaderV2({
                                     </div>
 
                                     {/* Cycle Badge */}
-                                    {cashbackStats.cycle && (
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                                <TooltipTrigger asChild>
-                                                    <div className="flex items-center gap-1 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded cursor-help transition-colors">
-                                                        <Calendar className="h-3 w-3 text-indigo-500" />
-                                                        <span className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide">
-                                                            {formatCycleTag(cashbackStats.cycle.label) || cashbackStats.cycle.label}
-                                                        </span>
-                                                    </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <div className="text-xs">
-                                                        <div className="font-semibold mb-1">Current Billing Cycle</div>
-                                                        <div className="text-slate-500">{formatCycleTag(cashbackStats.cycle.label)}</div>
-                                                    </div>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    )}
+                                    {(() => {
+                                        // Show selected cycle if available, otherwise show current cycle
+                                        const displayCycle = selectedCycle || dynamicCashbackStats?.cycle?.tag
+                                        const displayLabel = selectedCycle 
+                                            ? (dynamicCashbackStats?.cycle?.tag === selectedCycle 
+                                                ? dynamicCashbackStats.cycle.label 
+                                                : formatCycleTag(selectedCycle) || selectedCycle)
+                                            : dynamicCashbackStats?.cycle?.label
+                                        
+                                        if (!displayCycle) return null
+                                        
+                                        const isCurrent = displayCycle === dynamicCashbackStats?.cycle?.tag
+                                        
+                                        return (
+                                            <TooltipProvider>
+                                                <Tooltip delayDuration={200}>
+                                                    <TooltipTrigger asChild>
+                                                        <div className={cn(
+                                                            "flex items-center gap-1 px-2 py-1 border rounded cursor-help transition-colors",
+                                                            isCurrent 
+                                                                ? "bg-indigo-50 hover:bg-indigo-100 border-indigo-200"
+                                                                : "bg-slate-50 hover:bg-slate-100 border-slate-300"
+                                                        )}>
+                                                            <Calendar className={cn(
+                                                                "h-3 w-3",
+                                                                isCurrent ? "text-indigo-500" : "text-slate-500"
+                                                            )} />
+                                                            <span className={cn(
+                                                                "text-[9px] font-bold uppercase tracking-wide",
+                                                                isCurrent ? "text-indigo-600" : "text-slate-600"
+                                                            )}>
+                                                                {displayLabel}
+                                                            </span>
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <div className="text-xs">
+                                                            <div className="font-semibold mb-1">
+                                                                {isCurrent ? 'Current Billing Cycle' : 'Selected Cycle'}
+                                                            </div>
+                                                            <div className="text-slate-400">
+                                                                {formatCycleTagWithYear(displayCycle)}
+                                                            </div>
+                                                        </div>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        )
+                                    })()}
                                 </div>
 
                                 {/* Line 2: Progress Bar */}
                                 {(() => {
-                                    const spendProgress = cashbackStats.currentSpend || 0
-                                    const spendTarget = cashbackStats.minSpend || 0
+                                    const spendProgress = dynamicCashbackStats.currentSpend || 0
+                                    const spendTarget = dynamicCashbackStats.minSpend || 0
                                     const percentage = spendTarget > 0 ? Math.min((spendProgress / spendTarget) * 100, 100) : 0
 
                                     return (
@@ -329,25 +399,24 @@ export function AccountDetailHeaderV2({
 
             {/* Right: Tools & Actions */}
             <div className="flex items-center gap-2 ml-auto">
-                {/* Year Filter */}
-                {availableYears.length > 0 && (
+                {/* Cycle Date Range Display - Only for credit cards with selected cycle */}
+                {isCreditCard && selectedCycle ? (
+                    <div className="h-9 px-3 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-md text-xs font-medium">
+                        <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                        <span className="font-bold text-indigo-700">
+                            {formatCycleTagWithYear(selectedCycle)}
+                        </span>
+                    </div>
+                ) : !isCreditCard && availableYears.length > 0 ? (
+                    /* Year Filter - Only for non-credit accounts */
                     <Popover>
                         <PopoverTrigger asChild>
                             <button className="h-9 px-3 flex items-center gap-2 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 transition-colors text-xs font-medium shadow-sm">
-                                <span className="font-bold">{selectedYear || 'All Time'}</span>
+                                <span className="font-bold">{selectedYear || availableYears[0]}</span>
                                 <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                             </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-32 p-1" align="end">
-                            <button
-                                onClick={() => onYearChange(null)}
-                                className={cn(
-                                    "w-full text-left px-3 py-2 rounded-sm text-xs",
-                                    !selectedYear ? "bg-slate-100 font-bold" : "hover:bg-slate-50"
-                                )}
-                            >
-                                All Time
-                            </button>
                             {availableYears.map(year => (
                                 <button
                                     key={year}
@@ -362,7 +431,7 @@ export function AccountDetailHeaderV2({
                             ))}
                         </PopoverContent>
                     </Popover>
-                )}
+                ) : null}
 
                 <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
 

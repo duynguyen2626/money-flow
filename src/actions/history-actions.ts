@@ -76,7 +76,7 @@ export async function getTransactionHistory(
             .map(r => r.changed_by)
             .filter((id): id is string => id !== null)
 
-        let userEmails: Record<string, string> = {}
+        const userEmails: Record<string, string> = {}
         if (changedByIds.length > 0) {
             // This would require admin access to auth.users - for now we'll skip
             // In production, you'd fetch from a profiles table or similar

@@ -140,7 +140,7 @@ export function AccountSlideV2({
     // Initial load
     useEffect(() => {
         if (open) {
-            let loadedState = "";
+            const loadedState = "";
             if (account) {
                 const config = normalizeCashbackConfig(account.cashback_config);
 
@@ -279,7 +279,7 @@ export function AccountSlideV2({
             }));
 
             // Re-derive the logic for isCategoryRestricted to match what we did in the initialization effect
-            let effectiveInitLevels = loadedLevels;
+            const effectiveInitLevels = loadedLevels;
             if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
                 // This was detected as restricted mode
             }

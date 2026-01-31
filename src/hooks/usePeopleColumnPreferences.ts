@@ -60,7 +60,7 @@ export function usePeopleColumnPreferences() {
         } catch (e) {
             console.error("Failed to load people column settings", e);
         }
-        // eslint-disable-next-line
+         
     }, []);
 
     useEffect(() => {

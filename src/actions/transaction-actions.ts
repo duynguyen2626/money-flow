@@ -187,9 +187,9 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   // Single Table Insertion Logic
   const originalAmount = Math.abs(input.amount);
   let finalAmount = originalAmount;
-  let targetAccountId = input.destination_account_id ?? input.debt_account_id ?? null;
-  let personId = input.person_id ?? null;
-  let categoryId = input.category_id ?? null;
+  const targetAccountId = input.destination_account_id ?? input.debt_account_id ?? null;
+  const personId = input.person_id ?? null;
+  const categoryId = input.category_id ?? null;
 
   let sharePercent: number | null = null;
   let shareFixed: number | null = null;

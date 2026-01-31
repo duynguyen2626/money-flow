@@ -725,7 +725,7 @@ export function QuickAddChat({
           people: [contextPerson],
         };
         // Also pre-calculate cashback/mode immediately
-        let withDefaults = applyDefaultCashbackForPeople(next, { groupMembers, people: individualPeople });
+        const withDefaults = applyDefaultCashbackForPeople(next, { groupMembers, people: individualPeople });
         withDefaults.cashbackMode = resolveCashbackMode(withDefaults.sourceAccount, withDefaults.cashbackSharePercent, withDefaults.cashbackShareFixed);
         return withDefaults;
       });

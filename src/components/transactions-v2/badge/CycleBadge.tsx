@@ -1,9 +1,12 @@
+'use client'
+
 import { Account } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, parseCycleTag } from '@/lib/cashback'
 import { cn } from '@/lib/utils'
 import { parseISO, format, startOfMonth, endOfMonth } from 'date-fns'
 import { Calendar } from 'lucide-react'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
+import { useRouter } from 'next/navigation'
 
 interface CycleBadgeProps {
     account: Account | undefined
@@ -12,9 +15,12 @@ interface CycleBadgeProps {
     className?: string
     mini?: boolean
     compact?: boolean
+    clickable?: boolean // New prop to enable navigation
 }
 
-export function CycleBadge({ account, cycleTag, txnDate, className, mini = false, compact = false }: CycleBadgeProps) {
+export function CycleBadge({ account, cycleTag, txnDate, className, mini = false, compact = false, clickable = true }: CycleBadgeProps) {
+    const router = useRouter()
+    
     if (!account || !account.cashback_config) return null
 
     // Try to use persisted cycle tag if available
@@ -57,14 +63,31 @@ export function CycleBadge({ account, cycleTag, txnDate, className, mini = false
 
     const formattedText = formatRange(range.start, range.end)
 
+    const handleClick = (e: React.MouseEvent) => {
+        if (!clickable) return
+        e.stopPropagation() // Prevent row click
+        e.preventDefault() // Prevent default navigation
+        
+        if (cycleTag && account?.id) {
+            const url = `/accounts/${account.id}?tag=${cycleTag}`
+            // Open in new tab
+            window.open(url, '_blank', 'noopener,noreferrer')
+        }
+    }
+
     if (compact) {
         return (
             <CustomTooltip content={formattedText}>
-                <span className={cn(
-                    "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 cursor-help whitespace-nowrap font-bold",
-                    "px-1 h-6 text-[10px] min-w-[96px]",
-                    className
-                )}>
+                <span 
+                    onClick={handleClick}
+                    className={cn(
+                        "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
+                        "px-1 h-6 text-[10px] min-w-[96px]",
+                        clickable && "cursor-pointer hover:bg-amber-200 hover:border-amber-400 transition-colors",
+                        !clickable && "cursor-help",
+                        className
+                    )}
+                >
                     <Calendar className="h-3 w-3" />
                     {formattedText}
                 </span>
@@ -73,11 +96,15 @@ export function CycleBadge({ account, cycleTag, txnDate, className, mini = false
     }
 
     return (
-        <span className={cn(
-            "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
-            mini ? "px-1 h-4 text-[10px] min-w-[80px]" : "px-1.5 h-7 text-[11px] min-w-[96px]",
-            className
-        )}>
+        <span 
+            onClick={handleClick}
+            className={cn(
+                "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
+                mini ? "px-1 h-4 text-[10px] min-w-[80px]" : "px-1.5 h-7 text-[11px] min-w-[96px]",
+                clickable && "cursor-pointer hover:bg-amber-200 hover:border-amber-400 transition-colors",
+                className
+            )}
+        >
             <Calendar className={cn(mini ? "h-2 w-2" : "h-3 w-3", "mb-[1px]")} />
             {formattedText}
         </span>

@@ -233,6 +233,75 @@ export function UnifiedTransactionsPage({
         (dateMode === 'date') ||
         (dateMode === 'range' && !!dateRange)
 
+    // Calculate available date range from filtered transactions (excluding date filter)
+    const availableDateRange = useMemo(() => {
+        const lowerSearch = search.toLowerCase()
+        const matchedAccountIds = search ? accounts.filter(a => a.name.toLowerCase().includes(lowerSearch)).map(a => a.id) : []
+        const matchedPersonIds = search ? people.filter(p => p.name.toLowerCase().includes(lowerSearch)).map(p => p.id) : []
+
+        const preFiltered = transactions.filter(t => {
+            // Status Filter
+            if (statusFilter === 'active' && t.status === 'void') return false
+            if (statusFilter === 'void' && t.status !== 'void') return false
+            if (statusFilter === 'pending') {
+                const isPendingRefund = t.account_id === REFUND_PENDING_ACCOUNT_ID
+                const isSystemPending = t.status === 'pending'
+                if (!isPendingRefund && !isSystemPending) return false
+            }
+
+            // Account Filter
+            if (selectedAccountId) {
+                if (t.account_id !== selectedAccountId && t.to_account_id !== selectedAccountId) return false
+            }
+
+            // Person Filter
+            if (selectedPersonId) {
+                if (t.person_id !== selectedPersonId) return false
+            }
+
+            // Search
+            if (search) {
+                const match =
+                    t.note?.toLowerCase().includes(lowerSearch) ||
+                    t.shop_name?.toLowerCase().includes(lowerSearch) ||
+                    t.category_name?.toLowerCase().includes(lowerSearch) ||
+                    String(t.amount).includes(lowerSearch) ||
+                    t.id.toLowerCase().includes(lowerSearch) ||
+                    (t.account_id && matchedAccountIds.includes(t.account_id)) ||
+                    (t.to_account_id && matchedAccountIds.includes(t.to_account_id)) ||
+                    (t.person_id && matchedPersonIds.includes(t.person_id))
+                if (!match) return false
+            }
+
+            // Type Filter
+            if (filterType !== 'all') {
+                if (filterType === 'income') return t.type === 'income'
+                if (filterType === 'expense') return t.type === 'expense'
+                if (filterType === 'transfer') return t.type === 'transfer'
+                if (filterType === 'lend') return t.type === 'debt' && (t.amount ?? 0) < 0
+                if (filterType === 'repay') return t.type === 'repayment' || (t.type === 'debt' && (t.amount ?? 0) > 0)
+                return false
+            }
+
+            return true
+        })
+
+        if (preFiltered.length === 0) return undefined
+
+        const dates = preFiltered.map(t => parseISO(t.occurred_at))
+        const minDate = new Date(Math.min(...dates.map(d => d.getTime())))
+        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
+
+        return { from: minDate, to: maxDate }
+    }, [transactions, selectedAccountId, selectedPersonId, search, filterType, statusFilter, accounts, people])
+
+    // Auto-set date range when Filter button clicked
+    useEffect(() => {
+        if (hasActiveFilters && availableDateRange && dateMode === 'range' && !dateRange && !selectedCycle) {
+            setDateRange(availableDateRange)
+        }
+    }, [hasActiveFilters, availableDateRange, dateMode, dateRange, selectedCycle])
+
     // Filter Logic
     const filteredTransactions = useMemo(() => {
         const lowerSearch = search.toLowerCase()
@@ -532,6 +601,7 @@ export function UnifiedTransactionsPage({
                     availableMonths={availableMonths}
                     availableAccountIds={availableAccountIds}
                     availablePersonIds={availablePersonIds}
+                    availableDateRange={availableDateRange}
                 />
             </div>
 

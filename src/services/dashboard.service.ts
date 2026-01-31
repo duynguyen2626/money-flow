@@ -524,7 +524,7 @@ export async function getDashboardStats(
     const recentTransactions = (recentTx as any[])?.map((tx) => {
       let categoryName = 'Uncategorized'
       let categoryIcon = null
-      let type = tx.type
+      const type = tx.type
 
       if (tx.categories) {
         categoryName = tx.categories.name

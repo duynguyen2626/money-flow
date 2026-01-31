@@ -102,6 +102,11 @@ Server Action (src/actions/transaction-actions.ts)
   ```
   - **Row click does nothing** — only Edit/Copy/History buttons and action menus trigger handlers
   - **Merge "Account" + "People"** into "**Accounts ➜ People**" column (Flow) with Source (Left) → Arrow (Center) → Target (Right)
+- **Flow Column (UnifiedTransactionTable):**
+  - **Type icon badge always appears before entities** (icon-only with tooltip)
+  - **Do NOT use direction badges** (FROM/TO) in any context
+  - **Detail pages:** single-flow rows are centered; main /transactions keeps left-aligned single-flow
+  - **Header borders:** use stronger contrast (e.g. `border-slate-400`) to match table grid
 - **Cycle Badges:** Display ranges (e.g., "25.10 - 24.11"), not raw tags
 - **Cashback Badges:** Show "Need to Spend" in yellow/amber if `minSpendTarget` unmet; all badges are 24px height
 - **Components:** Reuse Shadcn UI primitives; reference unified-transaction-table.tsx

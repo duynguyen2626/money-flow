@@ -669,7 +669,7 @@ export function RecentTransactions({
             )
 
             // Smart Source Logic
-            let displayAccountName = txn.account_name ?? "-";
+            const displayAccountName = txn.account_name ?? "-";
 
             // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
             // In this case, we want to show the REAL source (Bank) if possible.

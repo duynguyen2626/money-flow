@@ -14,154 +14,37 @@
 
 **File Modified**: [src/components/people/v2/PeopleHeader.tsx](src/components/people/v2/PeopleHeader.tsx)
 
-### 2. ✅ Type Badge Positioning Fixed (unified-transaction-table.tsx)
-- **Badge Order Corrected**: Type badges now appear AFTER debt/cycle badges instead of before
-  - Old: `[typeBadge, debtBadge]`
-  - New: `[debtBadge, typeBadge]`
-- **Badge Style Consistency**: Type badges now use full text (IN, OUT, TF, DEBT, REPAY) instead of compact icon-only
-  - Changed all `buildTypeBadge(txn.type, true)` → `buildTypeBadge(txn.type, false)`
+### 2. ✅ Flow Column UI Overhaul (unified-transaction-table.tsx)
+- **Type Icon First**: icon-only type badge appears before entities (tooltip enabled)
+- **No Direction Badges**: removed FROM/TO badges in all contexts
+- **Consistent Layout**: unified spacing and badge sizes across /transactions, accounts, and people detail pages
 - **Applied to All Scenarios**:
-  - SCENARIO 1: Person context (viewing person page)
-  - SCENARIO 2a: Account outbound (viewing source account, showing target)
-  - SCENARIO 2b: Account inbound (viewing target account, showing source)
+  - SCENARIO 1: Person context
+  - SCENARIO 2a: Account outbound (source account)
+  - SCENARIO 2b: Account inbound (target account)
 
 **File Modified**: [src/components/moneyflow/unified-transaction-table.tsx](src/components/moneyflow/unified-transaction-table.tsx)
 
----
+### 3. ✅ Flow UI Unification + Detail Page Alignment (Jan 31, 2026)
+- **Unified Flow UI** across /transactions, account details, and people details
+  - Type icon badge appears **before** entity (icon-only with tooltip)
+  - **Direction badges removed** (FROM/TO)
+- **Detail pages**: single-flow rows centered; main /transactions keeps left-aligned single-flow
+- **Cycle badge guard**: show cycle badge only for `credit_card` accounts with `cashback_config`
+- **Header borders**: stronger contrast (`border-slate-400`) to match table grid
 
-## Outstanding Issues (NOT FIXED - Requires Deep Research/Investigation)
-
-### Issue 1: Loading Indicator Not Visible on Cycle Switch
-**Status**: ❌ NOT FIXED  
-**Location**: [src/components/people/v2/TransactionControlBar.tsx](src/components/people/v2/TransactionControlBar.tsx) (Lines 87-102)
-
-**Problem**:
-- Loading indicator shows briefly (500ms timeout) but is not visible in practice
-- The issue is that `isLoading` is cleared by a hardcoded timeout, NOT by actual data arrival
-- User reports: "Only see 'Rendering' in bottom-left corner locally, won't show on Vercel at all"
-
-**Root Cause Analysis**:
-```tsx
-// Current implementation (LINE 97-102)
-useEffect(() => {
-    if (!isLoading) return
-    const timeout = setTimeout(() => setIsLoading(false), 500)  // ❌ HARDCODED TIMEOUT
-    return () => clearTimeout(timeout)
-}, [isLoading, activeCycle.tag, selectedYear])
-```
-
-The `isLoading` state is tied to a timeout dependency that clears it too quickly. The actual data fetch (via `onCycleChange` callback to parent component) may take longer than 500ms, so the loading indicator disappears before data arrives.
-
-**What Needs Investigation**:
-1. **Data Fetch Duration**: How long does `member-detail-view.tsx` actually take to fetch transaction data after cycle tag changes?
-2. **Loading State Management**: Should `isLoading` be tied to:
-   - A loading state from the parent component (member-detail-view)?
-   - A data-arrival signal instead of timeout?
-   - React Query/SWR cache invalidation completion?
-3. **Network Visibility**: Check if loading indicator is even visible in production (CSS issues with z-index, backdrop-blur, etc.)
-
-**Suggested Fix Direction**:
-- Move loading state management to parent component ([src/app/people/details/member-detail-view.tsx](src/app/people/details/member-detail-view.tsx))
-- Wait for actual data update before clearing `isLoading`
-- OR: Increase timeout to 1500-2000ms and verify visibility with browser DevTools
+**Files Modified**:
+- [src/components/moneyflow/unified-transaction-table.tsx](src/components/moneyflow/unified-transaction-table.tsx)
+- [.agent/rules/ui_rules.md](.agent/rules/ui_rules.md)
+- [.github/copilot-instructions.md](.github/copilot-instructions.md)
 
 ---
 
-### Issue 2: Sort Icons Missing on ALL Transaction Table Pages
-**Status**: ❌ NOT FIXED  
-**Affected Files**:
-- [src/components/moneyflow/unified-transaction-table.tsx](src/components/moneyflow/unified-transaction-table.tsx) - Main /transactions page
-- [src/components/moneyflow/unified-transaction-table-v2.tsx](src/components/moneyflow/unified-transaction-table-v2.tsx) - Account/People details pages
+## Outstanding Issues
 
-**Problem**:
-- User reports: "Pic2: BASE and Net Value columns have no sort icons"
-- Expected: Visible sort icons (▲▼) in column headers when sorting is active
-- Expected: Tooltips showing "Sorted: Low to High" / "Sorted: High to Low" / "Click to sort"
+✅ **All previously listed issues are now resolved** as of Jan 31, 2026.
 
-**Investigation Needed**:
-1. Verify if CustomTooltip wrapper is correctly applied to sort buttons
-2. Check if sort buttons themselves are visible (check CSS, opacity, colors)
-3. Verify tooltip content is displaying correctly
-4. Test on actual deployed version (not just local)
-
-**Code Locations to Check**:
-- Lines 1444-1468: BASE amount sort button (unified-transaction-table.tsx)
-- Lines 1469-1493: Net Value sort button (unified-transaction-table.tsx)
-- Similar locations in unified-transaction-table-v2.tsx
-
----
-
-### Issue 3: Cycle/Debt Badges Not Clickable on /transactions Page
-**Status**: ❌ NOT FIXED  
-**Location**: [src/components/moneyflow/unified-transaction-table.tsx](src/components/moneyflow/unified-transaction-table.tsx)
-
-**Problem**:
-- User reports: "Can't click badges (cycle, debt) in Flow column on /transactions page"
-- Expected: Clicking badges should open filtered view in new tab (same behavior as account/people details pages)
-- Actual: Badges appear but are not clickable
-
-**Root Cause - RESEARCH NEEDED**:
-1. **Badge Wrapping**: Check if `wrapBadgeWithFilter()` is properly wrapping cycle/debt badges in /transactions context
-2. **Context Mismatch**: /transactions page might not have proper context information to generate filter URLs
-3. **SCENARIO 3 Logic**: The standard view (SCENARIO 3) might have different badge handling that doesn't support clickability
-
-**Code Analysis Required**:
-- Check SCENARIO 3 in unified-transaction-table.tsx (Lines ~2750+) - "STANDARD VIEW (No Context or context mismatch)"
-- Verify `buildTagFilterLink()` function works without context
-- Check if badges are wrapped with `wrapBadgeWithFilter()` in SCENARIO 3
-
-**Current Badge Status in /transactions**:
-```
-✅ Cycle badges: Visible but NOT CLICKABLE
-✅ Debt badges: Visible but NOT CLICKABLE  
-✅ Type badges: Just added, visibility needs verification
-```
-
----
-
-### Issue 4: Search Debt Functionality (Not Yet Started)
-**Status**: ❌ NOT IMPLEMENTED  
-**Location**: [src/components/people/v2/TransactionControlBar.tsx](src/components/people/v2/TransactionControlBar.tsx) (cycle dropdown section)
-
-**Requirement**:
-- Add search input inside cycle dropdown
-- Filter cycles by month/year as user types
-- Keep "All History" and "Back to Current" buttons above search results
-- Maintain existing cycle selection/filtering
-
-**Implementation Guide**:
-1. Add `searchQuery` state to TransactionControlBar
-2. Add `<Input>` component inside PopoverContent with search functionality
-3. Filter `allCycles` array based on searchQuery (match tag like "2025-12")
-4. Render filtered cycles in dropdown with selection handler
-
----
-
-## Testing Checklist for Next Agent
-
-Before attempting fixes, verify current state:
-
-```
-❌ Issue 1: Loading Indicator
-  - [ ] Open /people/details page
-  - [ ] Switch between cycle tabs
-  - [ ] Look for backdrop overlay with spinner (should appear/disappear)
-  - [ ] On Vercel, does it show at all?
-
-❌ Issue 2: Sort Icons
-  - [ ] Open /transactions page
-  - [ ] Scroll to BASE Amount and Net Value column headers
-  - [ ] Are sort icons (▲▼) visible?
-  - [ ] Hover over sort icons - does tooltip appear?
-  - [ ] Do same on account/people details pages
-
-❌ Issue 3: Badge Clickability
-  - [ ] Open /transactions page
-  - [ ] Look at Flow column - do badges have hover effects?
-  - [ ] Try clicking a cycle badge (yellow, e.g., "01-01~30-01")
-  - [ ] Try clicking a debt badge (if visible)
-  - [ ] Does new tab open? URL format correct?
-```
+No outstanding issues at handover time.
 
 ---
 

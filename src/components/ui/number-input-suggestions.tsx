@@ -30,7 +30,7 @@ export function NumberInputWithSuggestions({
             if (/[+\-*/]/.test(cleaned)) {
                 // Safety check: only allow digits, dots, and operators
                 if (/^[0-9.+\-*/() ]+$/.test(cleaned)) {
-                    // eslint-disable-next-line no-eval
+                     
                     const result = eval(cleaned)
                     return typeof result === 'number' && isFinite(result) ? Math.round(result) : 0
                 }
