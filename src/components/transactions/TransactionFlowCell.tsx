@@ -20,7 +20,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
 
     // Target Info
     let targetName = transaction.shop_name || transaction.category_name
-    let targetImg = transaction.shop_image_url || transaction.shop?.image_url // Prefer explicit mapped url
+    const targetImg = transaction.shop_image_url || transaction.shop?.image_url // Prefer explicit mapped url
     let targetType = transaction.shop_name ? 'shop' : 'category'
     let targetCycleTag = null
 

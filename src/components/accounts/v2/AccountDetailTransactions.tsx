@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
+import { fetchAccountCycleOptionsAction } from '@/actions/cashback.actions'
+import { parseCashbackConfig, getCashbackCycleRange, formatIsoCycleTag } from '@/lib/cashback'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
 import { CycleFilterDropdown } from '@/components/transactions-v2/header/CycleFilterDropdown'
@@ -140,6 +142,8 @@ interface AccountDetailTransactionsProps {
     categories: Category[]
     people: Person[]
     shops: Shop[]
+    selectedCycle?: string
+    onCycleChange?: (cycle: string | undefined) => void
 }
 
 export function AccountDetailTransactions({
@@ -148,15 +152,19 @@ export function AccountDetailTransactions({
     accounts,
     categories,
     people,
-    shops
+    shops,
+    selectedCycle: externalSelectedCycle,
+    onCycleChange
 }: AccountDetailTransactionsProps) {
     const router = useRouter()
+    const [isPending, startTransition] = useTransition()
 
     // Dialog State
     const [isAddSlideOpen, setIsAddSlideOpen] = useState(false)
     const [addInitialData, setAddInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>()
     const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false)
     const [clearType, setClearType] = useState<'filter' | 'all'>('filter')
+    const hasAutoSelectedCycle = useRef(false)
 
     // Filter State
     const [searchTerm, setSearchTerm] = useState('')
@@ -166,7 +174,30 @@ export function AccountDetailTransactions({
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
     const [dateMode, setDateMode] = useState<'month' | 'range' | 'date'>(account.type === 'credit_card' ? 'range' : 'month')
     const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>()
-    const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
+    
+    // Use external state if provided, otherwise use internal
+    const selectedCycle = externalSelectedCycle
+    const setSelectedCycle = onCycleChange || (() => {})
+    
+    const [cycles, setCycles] = useState<Array<{ label: string; value: string }>>([])
+    
+    // Handle cycle changes with URL sync
+    const handleCycleChange = (cycle: string | undefined) => {
+        startTransition(() => {
+            setSelectedCycle(cycle)
+            
+            // Update URL params
+            const params = new URLSearchParams(window.location.search)
+            if (cycle) {
+                params.set('tag', cycle)
+            } else {
+                params.delete('tag')
+            }
+            
+            const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
+            router.replace(newUrl, { scroll: false })
+        })
+    }
     
     // Filter activation - only filters when user clicks "Filter" button
     const [isFilterActive, setIsFilterActive] = useState(false)
@@ -190,19 +221,48 @@ export function AccountDetailTransactions({
         return months
     }, [transactions])
 
-    // Cycles for credit cards
-    const cycles = useMemo(() => {
-        if (account.type !== 'credit_card') return []
-        const cycleTags = new Set<string>()
-        transactions.forEach(t => {
-            const cycle = t.persisted_cycle_tag || t.account_billing_cycle
-            if (cycle) cycleTags.add(cycle)
+    // Fetch proper cycles for credit cards using cashback service
+    useEffect(() => {
+        if (account.type !== 'credit_card') {
+            setCycles([])
+            return
+        }
+        
+        fetchAccountCycleOptionsAction(account.id).then(options => {
+            const cycleOptions = options.map(opt => ({
+                label: opt.label,
+                value: opt.tag
+            }))
+            setCycles(cycleOptions)
+            
+            // Check if URL has a tag parameter first
+            const urlTag = new URLSearchParams(window.location.search).get('tag')
+            if (urlTag) {
+                // URL tag takes priority - set it and mark as auto-selected to prevent override
+                setSelectedCycle(urlTag)
+                setIsFilterActive(true)
+                hasAutoSelectedCycle.current = true
+                return
+            }
+            
+            // Auto-select current cycle ONLY on first mount and only if not already set
+            if (!hasAutoSelectedCycle.current && !selectedCycle && account.cashback_config) {
+                const config = parseCashbackConfig(account.cashback_config)
+                const cycleRange = getCashbackCycleRange(config, new Date())
+                if (cycleRange) {
+                    const currentTag = formatIsoCycleTag(cycleRange.end)
+                    const matchingCycle = cycleOptions.find(c => c.value === currentTag)
+                    if (matchingCycle) {
+                        setSelectedCycle(currentTag)
+                        hasAutoSelectedCycle.current = true
+                    }
+                }
+            }
+        }).catch(err => {
+            console.error('Failed to fetch cycle options:', err)
+            setCycles([])
         })
-        return Array.from(cycleTags).sort().reverse().map(tag => ({
-            label: tag,
-            value: tag
-        }))
-    }, [transactions, account.type])
+    }, [account.id, account.type, account.cashback_config])
 
     // Available targets (accounts + people that appear in transactions)
     const availableTargets = useMemo(() => {
@@ -339,35 +399,35 @@ export function AccountDetailTransactions({
         return result
     }, [transactions, statusFilter, isFilterActive, filterType, searchTerm, selectedTargetId, selectedCycle, dateMode, date, dateRange])
 
-    // Handle URL parameters for cycle tag and date range filters
+    // Handle URL parameters - only accept 'tag' for credit cards
     const searchParams = useSearchParams()
     useEffect(() => {
         const tag = searchParams.get('tag')
-        const dateFrom = searchParams.get('dateFrom')
-        const dateTo = searchParams.get('dateTo')
         
-        if (tag || dateFrom || dateTo) {
-            // Set cycle if tag is provided
-            if (tag) {
-                setSelectedCycle(tag)
-            }
+        // For credit cards, ONLY accept 'tag' param (cycle tag)
+        // Ignore 'dateFrom/dateTo' as they should be derived from cycle
+        if (account.type === 'credit_card' && tag) {
+            setSelectedCycle(tag)
+            setIsFilterActive(true)
+        }
+        // For non-credit accounts, accept date range params
+        else if (account.type !== 'credit_card') {
+            const dateFrom = searchParams.get('dateFrom')
+            const dateTo = searchParams.get('dateTo')
             
-            // Set date range if both dates are provided
             if (dateFrom && dateTo) {
                 try {
                     const fromDate = parseISO(dateFrom)
                     const toDate = parseISO(dateTo)
                     setDateRange({ from: fromDate, to: toDate })
                     setDateMode('range')
+                    setIsFilterActive(true)
                 } catch (err) {
                     console.error('Failed to parse date range from URL:', err)
                 }
             }
-            
-            // Activate filters
-            setIsFilterActive(true)
         }
-    }, [searchParams])
+    }, [searchParams, account.type])
 
     // Warn user when closing with active filters
     useEffect(() => {
@@ -410,46 +470,38 @@ export function AccountDetailTransactions({
                             onChange={setStatusFilter}
                         />
 
-                        {/* Filter Button - Apply/Clear toggle */}
-                        {!isFilterActive ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setIsFilterActive(true)}
-                                disabled={!hasAnyFilterSelected}
-                                className="h-9 gap-1.5"
-                            >
-                                <Filter className="h-4 w-4" />
-                                Filter
-                            </Button>
-                        ) : (
-                            <ClearDropdown
-                                account={account}
-                                filterType={filterType}
-                                statusFilter={statusFilter}
-                                selectedTargetId={selectedTargetId}
-                                selectedCycle={selectedCycle}
-                                date={date}
-                                dateRange={dateRange}
-                                dateMode={dateMode}
-                                searchTerm={searchTerm}
-                                onFilterChange={{
-                                    setFilterType,
-                                    setStatusFilter,
-                                    setSelectedTargetId,
-                                    setSelectedCycle,
-                                    setDate,
-                                    setDateRange,
-                                    setDateMode,
-                                    setSearchTerm,
-                                    setIsFilterActive
-                                }}
-                                onClearConfirmation={(type) => {
-                                    setClearType(type)
+                        {/* Dynamic Filter/Clear Button */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                if (isFilterActive) {
+                                    // Clear filters
+                                    setClearType('filter')
                                     setClearConfirmationOpen(true)
-                                }}
-                            />
-                        )}
+                                } else {
+                                    // Activate filters
+                                    setIsFilterActive(true)
+                                }
+                            }}
+                            disabled={!isFilterActive && !hasAnyFilterSelected}
+                            className={isFilterActive 
+                                ? "h-9 gap-1.5 bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700"
+                                : "h-9 gap-1.5"
+                            }
+                        >
+                            {isFilterActive ? (
+                                <>
+                                    <FilterX className="h-4 w-4" />
+                                    Clear
+                                </>
+                            ) : (
+                                <>
+                                    <Filter className="h-4 w-4" />
+                                    Filter
+                                </>
+                            )}
+                        </Button>
 
                         {/* Filter controls - always enabled, stores selection but only applies when isFilterActive */}
                         <div className="flex items-center gap-2 flex-1">
@@ -492,21 +544,31 @@ export function AccountDetailTransactions({
                                 <CycleFilterDropdown
                                     cycles={cycles}
                                     value={selectedCycle}
-                                    onChange={setSelectedCycle}
+                                    onChange={handleCycleChange}
                                 />
                             )}
 
-                            {/* Date Picker (includes auto-set cycle for credit cards) */}
-                            <MonthYearPickerV2
-                                date={date}
-                                dateRange={dateRange}
-                                mode={dateMode}
-                                onDateChange={setDate}
-                                onRangeChange={setDateRange}
-                                onModeChange={setDateMode}
-                                availableMonths={availableMonths}
-                                accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : []}
-                            />
+                            {/* Date Picker - disabled when cycle filter is active */}
+                            <div 
+                                onClick={() => {
+                                    if (selectedCycle) {
+                                        toast.error('Please clear Cycle filter first to use Date Select')
+                                    }
+                                }}
+                                className={selectedCycle ? 'cursor-not-allowed opacity-50' : ''}
+                            >
+                                <MonthYearPickerV2
+                                    date={date}
+                                    dateRange={dateRange}
+                                    mode={dateMode}
+                                    onDateChange={setDate}
+                                    onRangeChange={setDateRange}
+                                    onModeChange={setDateMode}
+                                    availableMonths={availableMonths}
+                                    accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : []}
+                                    disabled={!!selectedCycle}
+                                />
+                            </div>
 
                             {/* Search with Paste Icon & Search Button */}
                             <div className="relative flex items-center gap-1.5 flex-1 max-w-sm">
@@ -576,7 +638,17 @@ export function AccountDetailTransactions({
                     </div>
                 </div>
 
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
+                {/* Loading Overlay */}
+                {isPending && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-2">
+                            <div className="h-8 w-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                            <span className="text-sm font-medium text-slate-600">Loading cycle data...</span>
+                        </div>
+                    </div>
+                )}
+                
                 <UnifiedTransactionTable
                     transactions={filteredTransactions}
                     accounts={accounts}
@@ -598,13 +670,13 @@ export function AccountDetailTransactions({
                         <span className="font-semibold text-slate-600">Flow Legend:</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">
                             FROM
                         </div>
                         <span className="text-slate-500">= Money received (incoming)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
                             TO
                         </div>
                         <span className="text-slate-500">= Money sent (outgoing)</span>
@@ -634,7 +706,7 @@ export function AccountDetailTransactions({
                                     setFilterType('all')
                                     setStatusFilter('active')
                                     setSelectedTargetId(undefined)
-                                    setSelectedCycle(undefined)
+                                    handleCycleChange(undefined) // Clear URL param
                                     setDate(new Date())
                                     setDateRange(undefined)
                                     setDateMode(account.type === 'credit_card' ? 'range' : 'month')
@@ -644,7 +716,7 @@ export function AccountDetailTransactions({
                                     setFilterType('all')
                                     setStatusFilter('active')
                                     setSelectedTargetId(undefined)
-                                    setSelectedCycle(undefined)
+                                    handleCycleChange(undefined) // Clear URL param
                                     setDate(new Date())
                                     setDateRange(undefined)
                                     setDateMode(account.type === 'credit_card' ? 'range' : 'month')

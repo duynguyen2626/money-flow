@@ -48,7 +48,7 @@ export function SmartAmountInput({
             // Allow only numbers and basic math operators
             if (!/^[0-9+\-*/().\s]+$/.test(expression)) return null;
 
-            // eslint-disable-next-line no-new-func
+             
             const result = new Function(`return ${expression}`)();
 
             if (!isFinite(result) || isNaN(result)) return null;

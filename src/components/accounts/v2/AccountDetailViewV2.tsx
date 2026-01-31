@@ -52,6 +52,9 @@ export function AccountDetailViewV2({
 
     // Year Filter State (for header)
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
+    
+    // Selected Cycle State (for cashback badge in header)
+    const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
 
     // Batch Stats State
     const [pendingItems, setPendingItems] = useState<PendingBatchItem[]>([])
@@ -166,6 +169,13 @@ export function AccountDetailViewV2({
         return Array.from(years).sort().reverse()
     }, [initialTransactions])
 
+    // Initialize selectedYear to first available year if not set
+    useEffect(() => {
+        if (!selectedYear && availableYears.length > 0) {
+            setSelectedYear(availableYears[0])
+        }
+    }, [availableYears, selectedYear])
+
     const pendingBatchAmount = pendingItems.reduce((sum, item) => sum + Math.abs(item.amount ?? 0), 0)
     const pendingTotal = pendingBatchAmount + pendingRefundAmount
 
@@ -181,6 +191,7 @@ export function AccountDetailViewV2({
                 selectedYear={selectedYear}
                 availableYears={availableYears}
                 onYearChange={setSelectedYear}
+                selectedCycle={selectedCycle}
             />
 
             {/* Content Area */}
@@ -193,6 +204,8 @@ export function AccountDetailViewV2({
                         categories={categories}
                         people={people}
                         shops={shops}
+                        selectedCycle={selectedCycle}
+                        onCycleChange={setSelectedCycle}
                     />
                 ) : (
                     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-[600px]">

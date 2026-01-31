@@ -24,9 +24,11 @@ interface MonthYearPickerV2Props {
   onModeChange: (mode: 'month' | 'range' | 'date') => void
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
+  availableDateRange?: DateRange | undefined // Smart date range from filtered transactions
   accountCycleTags?: string[] // Cycle tags for auto-set (e.g., ['2025-01', '2025-02'])
   fullWidth?: boolean
   locked?: boolean
+  disabled?: boolean // New: disable entire picker
 }
 
 export function MonthYearPickerV2({
@@ -38,9 +40,11 @@ export function MonthYearPickerV2({
   onModeChange,
   disabledRange,
   availableMonths,
+  availableDateRange,
   accountCycleTags,
   fullWidth,
   locked,
+  disabled = false,
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
 
@@ -48,6 +52,14 @@ export function MonthYearPickerV2({
   const [localMode, setLocalMode] = useState<'month' | 'range' | 'date'>(mode)
   const [localDate, setLocalDate] = useState<Date>(date)
   const [localRange, setLocalRange] = useState<DateRange | undefined>(dateRange)
+
+  // Combine disabledRange and availableDateRange
+  // Priority: disabledRange (cycle constraint) > availableDateRange (smart filter)
+  const effectiveDisabledMatchers = disabledRange
+    ? [{ before: disabledRange.start }, { after: disabledRange.end }]
+    : availableDateRange?.from && availableDateRange?.to
+    ? [{ before: availableDateRange.from }, { after: availableDateRange.to }]
+    : undefined
 
   // Smart cycle detection: if account has cycles and filter not active, auto-set range
   useEffect(() => {
@@ -116,20 +128,17 @@ export function MonthYearPickerV2({
     return 'Select date'
   })()
 
-  const disabledMatchers = disabledRange
-    ? [{ before: disabledRange.start }, { after: disabledRange.end }]
-    : undefined
-
   return (
     <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           size="sm"
+          disabled={disabled}
           className={cn(
             "gap-2 justify-between font-medium",
             fullWidth ? 'w-full h-10' : 'w-[200px] h-9',
-            locked && "opacity-50 cursor-not-allowed bg-muted/50"
+            (locked || disabled) && "opacity-50 cursor-not-allowed bg-muted/50"
           )}
         >
           <div className="flex items-center gap-1.5 truncate">
@@ -174,7 +183,7 @@ export function MonthYearPickerV2({
                 mode="single"
                 selected={localDate}
                 onSelect={(d) => d && setLocalDate(d)}
-                disabled={disabledMatchers}
+                disabled={effectiveDisabledMatchers}
                 initialFocus
                 className="p-3"
               />
@@ -185,7 +194,7 @@ export function MonthYearPickerV2({
                 selected={localRange}
                 onSelect={setLocalRange}
                 numberOfMonths={2}
-                disabled={disabledMatchers}
+                disabled={effectiveDisabledMatchers}
                 initialFocus
                 className="p-3"
               />

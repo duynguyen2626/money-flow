@@ -7,6 +7,7 @@ Transaction Slide V2 is a modern, full-featured transaction input system for Mon
 ## Status
 
 ✅ **Phase 1 Complete** - Production-ready, available at `/txn/v2`
+✅ **Phase 9 Complete** - Unified Flow UI for transactions + detail pages (icon-first, no direction badges, centered single-flow on detail pages)
 
 ## Features
 
@@ -140,6 +141,11 @@ npm run lint
 - Make V2 the default
 - Deprecate V1
 
+### Phase 10: Accounts Page Enhancements (Planned)
+- Add MCC column to Accounts page table
+- Compute “annual fee waiver target met” based on credit-card spend rules
+- Add Category dropdown to Accounts filters
+
 ## Contributing
 
 ### Before Making Changes
@@ -173,6 +179,6 @@ Internal project - Money Flow 3
 ---
 
 **Version**: 2.0.0
-**Last Updated**: 2026-01-18
+**Last Updated**: 2026-01-31
 **Status**: Production-ready (Phase 1)
 **Test URL**: http://localhost:3000/txn/v2

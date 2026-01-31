@@ -58,6 +58,9 @@ interface TransactionHeaderProps {
   personId?: string
   onPersonChange: (id: string | undefined) => void
 
+  categoryId?: string
+  onCategoryChange: (id: string | undefined) => void
+
   searchTerm: string
   onSearchChange: (val: string) => void
 
@@ -82,9 +85,16 @@ interface TransactionHeaderProps {
   // Available months for constraints
   availableMonths?: Set<string>
 
+  // Available date range for smart filtering
+  availableDateRange?: DateRange | undefined
+
   // Dynamic Filter Options
   availableAccountIds?: Set<string>
   availablePersonIds?: Set<string>
+  availableCategoryIds?: Set<string>
+
+  // Categories
+  categories?: { id: string; name: string; image?: string | null }[]
 }
 
 interface ClearDropdownButtonProps {
@@ -177,6 +187,8 @@ export function TransactionHeader({
   onAccountChange,
   personId,
   onPersonChange,
+  categoryId,
+  onCategoryChange,
   searchTerm,
   onSearchChange,
   filterType,
@@ -191,12 +203,16 @@ export function TransactionHeader({
   onCycleChange,
   disabledRange,
   availableMonths,
+  availableDateRange,
   availableAccountIds,
   availablePersonIds,
+  availableCategoryIds,
+  categories = [],
 }: TransactionHeaderProps) {
   // Local State Buffer
   const [localAccountId, setLocalAccountId] = useState(accountId)
   const [localPersonId, setLocalPersonId] = useState(personId)
+  const [localCategoryId, setLocalCategoryId] = useState(categoryId)
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm)
   const [localFilterType, setLocalFilterType] = useState(filterType)
   const [localStatusFilter, setLocalStatusFilter] = useState(statusFilter)
@@ -214,6 +230,7 @@ export function TransactionHeader({
   useEffect(() => {
     setLocalAccountId(accountId)
     setLocalPersonId(personId)
+    setLocalCategoryId(categoryId)
     setLocalSearchTerm(searchTerm)
     setLocalFilterType(filterType)
     setLocalStatusFilter(statusFilter)
@@ -222,7 +239,7 @@ export function TransactionHeader({
     setLocalDateRange(dateRange)
     setLocalDateMode(dateMode)
   }, [
-    accountId, personId, searchTerm, filterType, statusFilter,
+    accountId, personId, categoryId, searchTerm, filterType, statusFilter,
     selectedCycle, date, dateRange, dateMode
   ])
 
@@ -366,6 +383,7 @@ export function TransactionHeader({
         onModeChange={(m) => handleDateUpdate({ mode: m })}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
+        availableDateRange={availableDateRange}
         locked={!!localCycle}
       />
 
@@ -436,10 +454,6 @@ export function TransactionHeader({
 
       {/* Desktop Header */}
       <div className="hidden md:flex items-center gap-2 px-4 py-3">
-        <div className="flex items-center gap-2 pr-2 border-r shrink-0">
-          <h1 className="text-lg font-semibold leading-none">Transactions</h1>
-        </div>
-
         <DesktopFilters />
 
         <div className="flex items-center gap-2 flex-1 ml-2 relative">

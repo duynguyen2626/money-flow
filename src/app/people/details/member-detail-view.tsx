@@ -49,6 +49,10 @@ export function MemberDetailView({
     const [showPaidModal, setShowPaidModal] = useState(false)
     const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>(undefined)
 
+    // Active cycle - must be declared before useEffects that reference it
+    const currentMonthTag = toYYYYMMFromDate(new Date())
+    const [activeCycleTag, setActiveCycleTag] = useState<string>(currentMonthTag)
+
     // Slide State
     const [isSlideOpen, setIsSlideOpen] = useState(false)
     const [slideMode, setSlideMode] = useState<'add' | 'edit' | 'duplicate'>('add')
@@ -94,6 +98,16 @@ export function MemberDetailView({
             }
         }
     }, [searchParams])
+    
+    // Sync activeCycleTag to URL (for consistency)
+    useEffect(() => {
+        const currentTag = searchParams.get('tag')
+        if (activeCycleTag && currentTag !== activeCycleTag) {
+            const url = new URL(window.location.href)
+            url.searchParams.set('tag', activeCycleTag)
+            router.replace(url.toString())
+        }
+    }, [activeCycleTag, router, searchParams])
 
     const { debtCycles, availableYears } = usePersonDetails({
         person,
@@ -115,12 +129,16 @@ export function MemberDetailView({
         return accounts.filter(a => ids.has(a.id))
     }, [transactions, accounts])
 
-    // Active cycle
-    const currentMonthTag = toYYYYMMFromDate(new Date())
-    const [activeCycleTag, setActiveCycleTag] = useState<string>(() => {
-        const match = debtCycles.find(c => c.tag === currentMonthTag)
-        return match ? match.tag : (debtCycles[0]?.tag || currentMonthTag)
-    })
+    // Initialize activeCycleTag based on available cycles (after debtCycles is computed)
+    useEffect(() => {
+        if (debtCycles.length > 0 && !searchParams.get('tag')) {
+            const match = debtCycles.find(c => c.tag === currentMonthTag)
+            const initialTag = match ? match.tag : (debtCycles[0]?.tag || currentMonthTag)
+            if (initialTag !== activeCycleTag) {
+                setActiveCycleTag(initialTag)
+            }
+        }
+    }, [debtCycles, currentMonthTag, activeCycleTag, searchParams])
 
     const activeCycle = debtCycles.find(c => c.tag === activeCycleTag)
 

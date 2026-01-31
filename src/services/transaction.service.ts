@@ -1325,7 +1325,7 @@ export type PendingRefundItem = {
   tag: string | null;
   amount: number;
   status: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   original_note: string | null;
   original_category: string | null;
   linked_transaction_id?: string;

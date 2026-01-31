@@ -197,7 +197,7 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
 
     // Phase 7X: Smart Installment Matching
     let installmentPlanId: string | null = null;
-    let isInstallment = item.is_installment_payment; // Prioritize checkbox
+    const isInstallment = item.is_installment_payment; // Prioritize checkbox
 
     if (isInstallment) {
         // Find active installments for this account
