@@ -2678,14 +2678,35 @@ export function UnifiedTransactionTable({
 
                         if (targetType === 'none') {
                           // Badges for Source
-                          const sourceBadges = [
-                            <CycleBadge
-                              key="cycle"
-                              account={sourceAccountForBadge}
-                              cycleTag={cycleTag}
-                              txnDate={txn.occurred_at || txn.created_at}
-                            />
-                          ]
+                          // Build filter link for cycle badge (clickable)
+                          const sourceCycleDateRange = sourceAccountForBadge?.statement_day
+                            ? getCashbackCycleRange(txn.occurred_at || txn.created_at, sourceAccountForBadge.statement_day)
+                            : null
+                          const sourceTagLink = buildTagFilterLink(
+                            sourceId ? `/accounts/${sourceId}` : null,
+                            cycleTag,
+                            sourceCycleDateRange
+                          )
+
+                          const cycleBadgeElement = sourceTagLink
+                            ? wrapBadgeWithFilter(
+                                <CycleBadge
+                                  key="cycle"
+                                  account={sourceAccountForBadge}
+                                  cycleTag={cycleTag}
+                                  txnDate={txn.occurred_at || txn.created_at}
+                                />,
+                                sourceTagLink,
+                                "View all transactions in this cycle"
+                              )
+                            : <CycleBadge
+                                key="cycle"
+                                account={sourceAccountForBadge}
+                                cycleTag={cycleTag}
+                                txnDate={txn.occurred_at || txn.created_at}
+                              />
+
+                          const sourceBadges = [cycleBadgeElement]
 
                           // Type Badge Construction
                           // Type Badge Construction
@@ -2741,20 +2762,52 @@ export function UnifiedTransactionTable({
 
                         // 2 Entities -> Source [Type] Target
                         // Badges for Source
-                        const sourceBadges = [
-                          <CycleBadge
-                            key="cycle"
-                            account={sourceAccountForBadge}
-                            cycleTag={cycleTag}
-                            txnDate={txn.occurred_at || txn.created_at}
-                            compact={true} // Compact (Icon Only) if 2 entities
-                          />
-                        ]
+                        // Build filter link for cycle badge (clickable)
+                        const sourceCycleDateRange = sourceAccountForBadge?.statement_day
+                          ? getCashbackCycleRange(txn.occurred_at || txn.created_at, sourceAccountForBadge.statement_day)
+                          : null
+                        const sourceTagLink = buildTagFilterLink(
+                          sourceId ? `/accounts/${sourceId}` : null,
+                          cycleTag,
+                          sourceCycleDateRange
+                        )
+
+                        const cycleBadgeElement = sourceTagLink
+                          ? wrapBadgeWithFilter(
+                              <CycleBadge
+                                key="cycle"
+                                account={sourceAccountForBadge}
+                                cycleTag={cycleTag}
+                                txnDate={txn.occurred_at || txn.created_at}
+                                compact={true} // Compact (Icon Only) if 2 entities
+                              />,
+                              sourceTagLink,
+                              "View all transactions in this cycle"
+                            )
+                          : <CycleBadge
+                              key="cycle"
+                              account={sourceAccountForBadge}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                              compact={true}
+                            />
+
+                        const sourceBadges = [cycleBadgeElement]
 
                         // Badges for Target
-                        const targetBadges = targetType === 'person'
-                          ? [peopleDebtTag].filter(Boolean)
-                          : [tagBadge].filter(Boolean)
+                        let targetBadges: React.ReactNode[] = []
+                        if (targetType === 'person' && peopleDebtTag && personId) {
+                          // Wrap debt badge with filter link to person detail page
+                          const personLink = `/people/details/${personId}`
+                          const wrappedDebtBadge = wrapBadgeWithFilter(
+                            peopleDebtTag,
+                            personLink,
+                            "View person's debt transactions"
+                          )
+                          targetBadges = [wrappedDebtBadge]
+                        } else if (targetType !== 'person') {
+                          targetBadges = [tagBadge].filter(Boolean)
+                        }
 
                         // Type Badge Logic
                         const badgeBaseClass = "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[85px] w-[85px] h-8 shrink-0"
