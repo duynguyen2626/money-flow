@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check } from "lucide-react";
+import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2 } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,6 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { ChevronsUpDown, Loader2, RotateCcw } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -43,6 +42,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
+import { CustomTooltip } from "@/components/ui/custom-tooltip";
 import { DayOfMonthPicker } from "@/components/ui/day-of-month-picker";
 import { CategorySlideV2 } from "@/components/accounts/v2/CategorySlideV2";
 
@@ -546,7 +546,7 @@ export function AccountSlideV2({
                     handleAttemptClose();
                 }
             }}>
-                <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col gap-0 border-l border-slate-200">
+                <SheetContent side="right" className={cn("w-full transition-all duration-300 ease-in-out p-0 flex flex-col gap-0 border-l border-slate-200", isAdvancedCashback ? "sm:max-w-3xl" : "sm:max-w-xl")}>
                     <div className="p-6 bg-slate-50/50 border-b border-slate-200">
                         <SheetHeader className="text-left">
                             <div className="flex items-center gap-3 mb-2">
@@ -1264,8 +1264,10 @@ export function AccountSlideV2({
                                                             </div>
                                                             <div className="space-y-1.5">
                                                                 <div className="flex items-center gap-1.5">
-                                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Default Rate (%)</Label>
-                                                                    <Info className="h-3 w-3 text-slate-300" />
+                                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
+                                                                    <CustomTooltip content="This rate applies to all categories NOT listed in the specific rules below.">
+                                                                        <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                    </CustomTooltip>
                                                                 </div>
                                                                 <SmartAmountInput
                                                                     value={level.defaultRate * 100}
@@ -1306,201 +1308,118 @@ export function AccountSlideV2({
                                                             </div>
 
                                                             <div className="space-y-2">
+                                                                {level.rules.length > 0 && (
+                                                                    <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 px-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                                                        <div>Category</div>
+                                                                        <div className="text-center">Rate</div>
+                                                                        <div className="text-right">Max Reward</div>
+                                                                        <div className="text-center">Action</div>
+                                                                    </div>
+                                                                )}
                                                                 {level.rules.map((rule: any, rIdx: number) => (
-                                                                    <div key={rule.id} className="flex flex-col items-start gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                                                        <div className="w-full space-y-1">
-                                                                            <div className="flex items-center gap-1.5">
-                                                                                <Label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Categories</Label>
-                                                                                <Info className="h-2.5 w-2.5 text-slate-300" />
-                                                                            </div>
-                                                                            <Popover>
-                                                                                <PopoverTrigger asChild>
-                                                                                    <Button
-                                                                                        variant="outline"
-                                                                                        className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium"
-                                                                                    >
-                                                                                        <span className="truncate">
-                                                                                            {(() => {
-                                                                                                const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
-                                                                                                return validCount === 0
-                                                                                                    ? "Select categories..."
-                                                                                                    : `${validCount} categories selected`;
-                                                                                            })()}
-                                                                                        </span>
-                                                                                        <ChevronsUpDown className="h-3 w-3 opacity-50" />
-                                                                                    </Button>
-                                                                                </PopoverTrigger>
-                                                                                <PopoverContent className="w-64 p-0" align="start">
-                                                                                    <Command>
-                                                                                        <CommandInput placeholder="Search category..." className="h-8 text-xs" />
-                                                                                        <CommandList className="max-h-48">
-                                                                                            <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
-                                                                                            <CommandGroup>
-                                                                                                {categories.map((cat: any) => (
-                                                                                                    <CommandItem
-                                                                                                        key={cat.id}
-                                                                                                        value={cat.name}
-                                                                                                        onSelect={() => {
-                                                                                                            const newLevels = [...levels];
-                                                                                                            const currentIds = newLevels[lIdx].rules[rIdx].categoryIds;
-                                                                                                            if (currentIds.includes(cat.id)) {
-                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds = currentIds.filter(id => id !== cat.id);
-                                                                                                            } else {
-                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds.push(cat.id);
-                                                                                                            }
-                                                                                                            setLevels(newLevels);
-                                                                                                        }}
-                                                                                                        className="text-xs"
-                                                                                                    >
-                                                                                                        <div className="flex items-center gap-2 w-full">
-                                                                                                            <div className={cn(
-                                                                                                                "w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors",
-                                                                                                                rule.categoryIds.includes(cat.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
-                                                                                                            )}>
-                                                                                                                <Check className="h-2.5 w-2.5" />
-                                                                                                            </div>
-                                                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                                                {cat.image_url ? (
-                                                                                                                    <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                                                ) : (
-                                                                                                                    <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
-                                                                                                                )}
-                                                                                                            </div>
-                                                                                                            <span>{cat.name}</span>
-                                                                                                        </div>
-                                                                                                    </CommandItem>
-                                                                                                ))}
-                                                                                                {categories.map((category) => (
-                                                                                                    <CommandItem
-                                                                                                        key={category.id}
-                                                                                                        onSelect={() => {
-                                                                                                            // Add category to current rule
-                                                                                                            // Need to handle this via callback or better state management
-                                                                                                            if (activeCategoryCallback) {
-                                                                                                                activeCategoryCallback(category.id);
-                                                                                                            } else {
-                                                                                                                // Fallback: direct update if context allows (it doesn't easily here without passing ID up)
-                                                                                                                const newLevels = [...levels];
-                                                                                                                if (!newLevels[lIdx].rules[rIdx].categoryIds.includes(category.id)) {
-                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds.push(category.id);
-                                                                                                                    setLevels(newLevels);
-                                                                                                                }
-                                                                                                            }
-                                                                                                        }}
-                                                                                                        className="flex items-start gap-2 cursor-pointer py-2 pl-2"
-                                                                                                    >
-                                                                                                        {/* Checkbox */}
-                                                                                                        <div className={cn(
-                                                                                                            "w-3.5 h-3.5 mt-0.5 border rounded flex items-center justify-center transition-colors flex-shrink-0",
-                                                                                                            rule.categoryIds.includes(category.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
-                                                                                                        )}>
-                                                                                                            {rule.categoryIds.includes(category.id) && <Check className="h-2.5 w-2.5" />}
-                                                                                                        </div>
+                                                                    <div key={rule.id} className="bg-slate-50 p-2 rounded-lg border border-slate-200 group">
+                                                                        {/* Desktop/Tablet: Single Row Grid */}
+                                                                        <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 sm:items-start">
 
-                                                                                                        <div className="flex-1 min-w-0">
-                                                                                                            <div className="flex items-center gap-2">
-                                                                                                                <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0">
-                                                                                                                    {category.image_url ? (
-                                                                                                                        <img src={category.image_url} alt="" className="w-full h-full object-cover" />
+                                                                            {/* 1. Categories Column */}
+                                                                            <div className="space-y-1 min-w-0">
+                                                                                <Popover>
+                                                                                    <PopoverTrigger asChild>
+                                                                                        <Button
+                                                                                            variant="outline"
+                                                                                            className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium px-2"
+                                                                                        >
+                                                                                            <span className="truncate">
+                                                                                                {(() => {
+                                                                                                    const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
+                                                                                                    return validCount === 0
+                                                                                                        ? "Select categories..."
+                                                                                                        : `${validCount} categories`;
+                                                                                                })()}
+                                                                                            </span>
+                                                                                            <ChevronsUpDown className="h-3 w-3 opacity-50 flex-shrink-0 ml-1" />
+                                                                                        </Button>
+                                                                                    </PopoverTrigger>
+                                                                                    <PopoverContent className="w-64 p-0" align="start">
+                                                                                        <Command>
+                                                                                            <CommandInput placeholder="Search category..." className="h-8 text-xs" />
+                                                                                            <CommandList className="max-h-48">
+                                                                                                <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
+                                                                                                <CommandGroup>
+                                                                                                    {categories.map((cat: any) => (
+                                                                                                        <CommandItem
+                                                                                                            key={cat.id}
+                                                                                                            value={cat.name}
+                                                                                                            onSelect={() => {
+                                                                                                                const newLevels = [...levels];
+                                                                                                                const currentIds = newLevels[lIdx].rules[rIdx].categoryIds;
+                                                                                                                if (currentIds.includes(cat.id)) {
+                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = currentIds.filter(id => id !== cat.id);
+                                                                                                                } else {
+                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds.push(cat.id);
+                                                                                                                }
+                                                                                                                setLevels(newLevels);
+                                                                                                            }}
+                                                                                                            className="text-xs"
+                                                                                                        >
+                                                                                                            <div className="flex items-center gap-2 w-full">
+                                                                                                                <div className={cn(
+                                                                                                                    "w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors",
+                                                                                                                    rule.categoryIds.includes(cat.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
+                                                                                                                )}>
+                                                                                                                    <Check className="h-2.5 w-2.5" />
+                                                                                                                </div>
+                                                                                                                <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                                                    {cat.image_url ? (
+                                                                                                                        <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
                                                                                                                     ) : (
-                                                                                                                        <span className="text-[10px]">{category.icon || "🏷️"}</span>
+                                                                                                                        <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
                                                                                                                     )}
                                                                                                                 </div>
-                                                                                                                <span className="font-medium text-sm truncate">{category.name}</span>
+                                                                                                                <span>{cat.name}</span>
                                                                                                             </div>
-                                                                                                            {category.mcc_codes && category.mcc_codes.length > 0 && (
-                                                                                                                <div className="text-[10px] text-slate-400 mt-1 ml-6 leading-tight">
-                                                                                                                    MCC: {category.mcc_codes.join(", ")}
-                                                                                                                </div>
-                                                                                                            )}
-                                                                                                        </div>
-                                                                                                    </CommandItem>
-                                                                                                ))}
-                                                                                            </CommandGroup>
-                                                                                        </CommandList>
-                                                                                        <div className="p-1 border-t border-slate-100 bg-slate-50">
-                                                                                            <CommandItem
-                                                                                                onSelect={() => {
-                                                                                                    setActiveCategoryCallback(() => (categoryId: string) => {
-                                                                                                        // This is for cashback level rules - would need different context
-                                                                                                        // For now, just open the dialog
-                                                                                                    });
-                                                                                                    setIsCategoryDialogOpen(true);
-                                                                                                }}
-                                                                                                className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
-                                                                                            >
-                                                                                                <Plus className="mr-2 h-3 w-3" />
-                                                                                                Add New Category
-                                                                                            </CommandItem>
-                                                                                        </div>
-                                                                                    </Command>
-                                                                                </PopoverContent>
-                                                                            </Popover>
+                                                                                                        </CommandItem>
+                                                                                                    ))}
+                                                                                                </CommandGroup>
+                                                                                            </CommandList>
+                                                                                            <div className="p-1 border-t border-slate-100 bg-slate-50">
+                                                                                                <CommandItem
+                                                                                                    onSelect={() => {
+                                                                                                        setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                                            // This is for cashback level rules - would need different context
+                                                                                                        });
+                                                                                                        setIsCategoryDialogOpen(true);
+                                                                                                    }}
+                                                                                                    className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
+                                                                                                >
+                                                                                                    <Plus className="mr-2 h-3 w-3" />
+                                                                                                    Add New Category
+                                                                                                </CommandItem>
+                                                                                            </div>
+                                                                                        </Command>
+                                                                                    </PopoverContent>
+                                                                                </Popover>
+                                                                            </div>
 
-                                                                            {rule.categoryIds.length > 0 && (
-                                                                                <div className="flex flex-wrap gap-1 mt-1.5">
-                                                                                    {rule.categoryIds.map((id: string) => {
-                                                                                        const cat = categories.find(c => c.id === id);
-                                                                                        return cat ? (
-                                                                                            <TooltipProvider key={id}>
-                                                                                                <Tooltip delayDuration={300}>
-                                                                                                    <TooltipTrigger asChild>
-                                                                                                        <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-full truncate h-5">
-                                                                                                            {cat.image_url ? (
-                                                                                                                <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
-                                                                                                            ) : (
-                                                                                                                <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
-                                                                                                            )}
-                                                                                                            <span className="truncate">{cat.name}</span>
-                                                                                                            {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                                                <span className="text-[9px] text-blue-400 font-normal ml-1 hidden sm:inline-block">({cat.mcc_codes.join(', ')})</span>
-                                                                                                            )}
-                                                                                                            <button
-                                                                                                                type="button"
-                                                                                                                onClick={(e) => {
-                                                                                                                    e.stopPropagation(); // Prevent tooltip from interfering
-                                                                                                                    const newLevels = [...levels];
-                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
-                                                                                                                    setLevels(newLevels);
-                                                                                                                }}
-                                                                                                                className="ml-1 hover:text-rose-500 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-blue-100"
-                                                                                                            >
-                                                                                                                &times;
-                                                                                                            </button>
-                                                                                                        </div>
-                                                                                                    </TooltipTrigger>
-                                                                                                    <TooltipContent className="text-xs">
-                                                                                                        <p className="font-bold">{cat.name}</p>
-                                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                                            <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
-                                                                                                        )}
-                                                                                                    </TooltipContent>
-                                                                                                </Tooltip>
-                                                                                            </TooltipProvider>
-                                                                                        ) : null;
-                                                                                    })}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-
-                                                                        <div className="flex items-end gap-2 w-full">
-                                                                            <div className="flex-1 sm:w-20 space-y-1">
-                                                                                <Label className="text-[9px] font-black uppercase text-slate-400 tracking-wider text-right block">Rate (%)</Label>
+                                                                            {/* 2. Rate Column */}
+                                                                            <div>
                                                                                 <SmartAmountInput
-                                                                                    value={rule.rate * 100}
+                                                                                    value={rule.rate !== null ? rule.rate * 100 : undefined}
                                                                                     onChange={(val) => {
                                                                                         const newLevels = [...levels];
-                                                                                        newLevels[lIdx].rules[rIdx].rate = (val ?? 0) / 100;
+                                                                                        // Method 3: If cleared (undefined), store null to inherit Default Rate
+                                                                                        newLevels[lIdx].rules[rIdx].rate = (val !== undefined ? val / 100 : null) as any;
                                                                                         setLevels(newLevels);
                                                                                     }}
                                                                                     unit="%"
                                                                                     hideLabel
-                                                                                    className="h-8 text-xs text-right bg-white"
-                                                                                    placeholder="%"
+                                                                                    className="h-8 text-xs bg-white text-center placeholder:text-slate-300"
+                                                                                    placeholder={level.defaultRate ? `${level.defaultRate * 100}` : "0"}
                                                                                 />
                                                                             </div>
-                                                                            <div className="flex-1 sm:w-28 space-y-1">
-                                                                                <Label className="text-[9px] font-black uppercase text-slate-400 tracking-wider text-right block">Max Reward</Label>
+
+                                                                            {/* 3. Max Reward Column */}
+                                                                            <div>
                                                                                 <SmartAmountInput
                                                                                     value={rule.maxReward ?? undefined}
                                                                                     onChange={(val) => {
@@ -1509,15 +1428,18 @@ export function AccountSlideV2({
                                                                                         setLevels(newLevels);
                                                                                     }}
                                                                                     hideLabel
-                                                                                    className="h-8 text-xs text-right bg-white"
+                                                                                    className="h-8 text-xs bg-white text-right"
                                                                                     placeholder="Max (opt)"
                                                                                 />
                                                                             </div>
-                                                                            <div className="pb-1">
+
+                                                                            {/* 4. Delete Button */}
+                                                                            <div className="flex sm:justify-center pt-0.5 gap-1">
                                                                                 <Button
                                                                                     type="button"
                                                                                     variant="ghost"
                                                                                     size="icon"
+                                                                                    className="h-7 w-7 text-slate-400 hover:text-slate-600"
                                                                                     onClick={() => {
                                                                                         const newLevels = [...levels];
                                                                                         const dupe = JSON.parse(JSON.stringify(rule));
@@ -1525,25 +1447,72 @@ export function AccountSlideV2({
                                                                                         newLevels[lIdx].rules.splice(rIdx + 1, 0, dupe);
                                                                                         setLevels(newLevels);
                                                                                     }}
-                                                                                    className="h-8 w-8 text-slate-400 hover:text-slate-600"
+                                                                                    title="Clone Rule"
                                                                                 >
-                                                                                    <Copy className="h-3 w-3" />
+                                                                                    <Copy className="h-3.5 w-3.5" />
                                                                                 </Button>
                                                                                 <Button
                                                                                     type="button"
                                                                                     variant="ghost"
                                                                                     size="icon"
+                                                                                    className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50"
                                                                                     onClick={() => {
                                                                                         const newLevels = [...levels];
-                                                                                        newLevels[lIdx].rules = level.rules.filter((_, i) => i !== rIdx);
+                                                                                        newLevels[lIdx].rules = newLevels[lIdx].rules.filter((_: any, i: number) => i !== rIdx);
                                                                                         setLevels(newLevels);
                                                                                     }}
-                                                                                    className="h-8 w-8 text-slate-400 hover:text-rose-500"
+                                                                                    title="Delete Rule"
                                                                                 >
-                                                                                    <Trash2 className="h-4 w-4" />
+                                                                                    <Trash2 className="h-3.5 w-3.5" />
                                                                                 </Button>
                                                                             </div>
                                                                         </div>
+
+                                                                        {/* Tags Row (Full Width Below) */}
+                                                                        {rule.categoryIds.length > 0 && (
+                                                                            <div className="flex flex-wrap gap-1 mt-2 border-t border-slate-100 pt-2">
+                                                                                {rule.categoryIds.map((id: string) => {
+                                                                                    const cat = categories.find(c => c.id === id);
+                                                                                    return cat ? (
+                                                                                        <TooltipProvider key={id}>
+                                                                                            <Tooltip delayDuration={300}>
+                                                                                                <TooltipTrigger asChild>
+                                                                                                    <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-full truncate h-5">
+                                                                                                        {cat.image_url ? (
+                                                                                                            <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
+                                                                                                        ) : (
+                                                                                                            <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
+                                                                                                        )}
+                                                                                                        <span className="truncate">{cat.name}</span>
+                                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                            <span className="text-[9px] text-blue-400 font-normal ml-1">({cat.mcc_codes.join(', ')})</span>
+                                                                                                        )}
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={(e) => {
+                                                                                                                e.stopPropagation(); // Prevent tooltip from interfering
+                                                                                                                const newLevels = [...levels];
+                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
+                                                                                                                setLevels(newLevels);
+                                                                                                            }}
+                                                                                                            className="ml-1 hover:text-rose-500 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-blue-100"
+                                                                                                        >
+                                                                                                            &times;
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                </TooltipTrigger>
+                                                                                                <TooltipContent className="text-xs">
+                                                                                                    <p className="font-bold">{cat.name}</p>
+                                                                                                    {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                        <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
+                                                                                                    )}
+                                                                                                </TooltipContent>
+                                                                                            </Tooltip>
+                                                                                        </TooltipProvider>
+                                                                                    ) : null;
+                                                                                })}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 ))}
                                                             </div>

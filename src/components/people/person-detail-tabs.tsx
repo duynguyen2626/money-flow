@@ -369,6 +369,27 @@ export function PersonDetailTabs({
                 )}
             </div>
 
+            {/* Flow Legend Footer */}
+            <div className="border-t border-slate-200 bg-slate-50 px-6 py-3 mt-auto">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-600">Flow Legend:</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="h-5 px-2 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">
+                            FROM
+                        </div>
+                        <span className="text-slate-500">= Money received (incoming)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="h-5 px-2 flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
+                            TO
+                        </div>
+                        <span className="text-slate-500">= Money sent (outgoing)</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Paid Transactions Modal */}
             <PaidTransactionsModal
                 open={showPaidModal}

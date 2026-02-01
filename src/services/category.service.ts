@@ -11,6 +11,7 @@ type CategoryRow = {
   icon: string | null
   image_url: string | null
   kind: Category['kind']
+  mcc_codes?: string[] | null
 }
 
 export async function getCategories(): Promise<Category[]> {
@@ -42,6 +43,7 @@ export async function getCategories(): Promise<Category[]> {
     icon: item.icon,
     image_url: item.image_url,
     kind: item.kind,
+    mcc_codes: item.mcc_codes,
   }))
 }
 

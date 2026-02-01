@@ -1403,7 +1403,7 @@ export function UnifiedTransactionTable({
 
                     const isMobileCategoryDate = isMobile && col.key === 'category'
                     const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
-                    
+
                     // Check if any sort is active
                     const isSorted = sortState.key !== 'date' || sortState.dir !== 'desc'
 
@@ -1427,7 +1427,7 @@ export function UnifiedTransactionTable({
                               onChange={e => handleSelectAll(e.target.checked)}
                               disabled={isExcelMode}
                             />
-                            <CustomTooltip 
+                            <CustomTooltip
                               content={sortState.key === 'date' ? (sortState.dir === 'asc' ? 'Sorted: Oldest to Newest' : 'Sorted: Newest to Oldest') : 'Click to sort'}
                               side="top"
                             >
@@ -1468,7 +1468,7 @@ export function UnifiedTransactionTable({
                             )}
                           </div>
                         ) : col.key === 'amount' ? (
-                          <CustomTooltip 
+                          <CustomTooltip
                             content={sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
                             side="top"
                           >
@@ -2094,51 +2094,52 @@ export function UnifiedTransactionTable({
                         const personId = (txn as any).person_id
                         const personNameLink = (txn as any).person_name
                         const personAvatar = (txn as any).person_image_url
+                        if (personId) targetType = 'person'
 
-                        if (personId) {
-                          targetType = 'person'
-                          targetName = personNameLink || 'Unknown Person'
-                          targetIcon = personAvatar
-                          targetId = personId
-                          targetLink = `/people/details?id=${personId}`
-                        } else if (targetId) {
-                          targetType = 'account'
-                          if (targetName === 'Unknown') {
-                            const foundAcc = accounts.find(a => a.id === targetId)
-                            if (foundAcc) {
-                              targetName = foundAcc.name
-                              targetIcon = foundAcc.image_url
-                            }
-                          }
-                          targetLink = `/accounts/${targetId}`
-                        } else {
-                          targetType = 'none'
-                          targetLink = null
-                        }
-
-                        // Validation: If Source == Target (Draft Fund Bug or Bad Data), treat Target as None
-                        if (sourceId && targetId && sourceId === targetId) {
-                          targetType = 'none'
-                          targetId = undefined
-                          targetLink = null
-                        }
-
-                        // --- 2. Resolve Context & View Mode ---
-                        // "Smart Context"
+                        // --- 2. Resolve Context & View Mode (Smart Context) ---
                         const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
                         const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
-                        const isDetailContext = isPersonContext || isAccountContext;
 
-                        // --- 3. Badges & Tags ---
+                        // --- 3. Helpers & Variables (Moved Up) ---
                         const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
                         const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
 
-                        // --- Type Badge Helper ---
+                        // Helper: Build Direction Badge
+                        const buildDirectionBadge = (direction: 'from' | 'to') => {
+                          const isFrom = direction === 'from';
+                          // Account Context: From=Green, To=Red
+                          // People Context: From=Red, To=Blue
+                          if (isAccountContext) {
+                            return (
+                              <span className={cn(
+                                "inline-flex items-center justify-center gap-0.5 rounded-[4px] px-1 h-5 text-[9px] font-extrabold uppercase tracking-wide border min-w-[36px]",
+                                isFrom
+                                  ? "bg-emerald-50 text-emerald-600 border-emerald-200" // Account: FROM = Green
+                                  : "bg-rose-50 text-rose-700 border-rose-200" // Account: TO = Red
+                              )}>
+                                {isFrom ? "FROM" : "TO"}
+                              </span>
+                            )
+                          }
+                          // Default / People Context
+                          return (
+                            <span className={cn(
+                              "inline-flex items-center justify-center gap-0.5 rounded-[4px] px-1 h-5 text-[9px] font-extrabold uppercase tracking-wide border min-w-[36px]",
+                              isFrom
+                                ? "bg-rose-50 text-rose-700 border-rose-200" // People: FROM = Red
+                                : "bg-blue-50 text-blue-700 border-blue-200" // People: TO = Blue
+                            )}>
+                              {isFrom ? "FROM" : "TO"}
+                            </span>
+                          )
+                        }
+
+                        // Helper: Build Type Badge
                         const buildTypeBadge = (txnType: string, compact = false) => {
                           const badgeBaseClass = compact
-                            ? "inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold border shrink-0 h-5 w-5"
-                            : "inline-flex items-center justify-center gap-1 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[60px] shrink-0 h-6"
-                          
+                            ? "inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold border shrink-0 h-7 w-7" // Increased size to h-7 w-7 to match entity icons
+                            : "inline-flex items-center justify-center gap-1 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[60px] shrink-0 h-7" // Standard h-7 for consistency
+
                           let typeBadge = null
                           if (txnType === 'expense') {
                             typeBadge = (
@@ -2161,24 +2162,22 @@ export function UnifiedTransactionTable({
                           } else if (txnType === 'debt' || txnType === 'loan') {
                             typeBadge = (
                               <span key="type" className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100")} title="Debt">
-                                {compact ? <History className="h-3 w-3" /> : <><History className="h-3 w-3" />DEBT</>}
+                                {compact ? <UserMinus className="h-3 w-3" /> : <><UserMinus className="h-3 w-3" />DEBT</>}
                               </span>
                             )
                           } else if (txnType === 'repayment') {
                             typeBadge = (
                               <span key="type" className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100")} title="Repayment">
-                                {compact ? <RefreshCcw className="h-3 w-3" /> : <><RefreshCcw className="h-3 w-3" />REPAY</>}
+                                {compact ? <UserPlus className="h-3 w-3" /> : <><UserPlus className="h-3 w-3" />REPAY</>}
                               </span>
                             )
                           }
                           return typeBadge
                         }
 
-                        // Cycle Label Logic removed - using CycleBadge component directly
-                        // (Lines 2125-2136 removed)
+                        const typeBadge = buildTypeBadge(txn.type, isAccountContext);
 
-                        // --- 4. Render Helper for Entity ---
-                        // Simplified Entity Renderer that is fully clickable
+                        // Helper: RenderEntity
                         const RenderEntity = ({
                           name,
                           icon,
@@ -2231,9 +2230,7 @@ export function UnifiedTransactionTable({
                             <div className={cn("flex items-center gap-2 min-w-0 w-full justify-end", badgeClasses)}>
                               {inlineBadges ? (
                                 <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
-                                  {/* Context Badge (To) */}
                                   {!contextBadgeBeforeIcon && contextBadge}
-                                  {/* Name */}
                                   <CustomTooltip content={name}>
                                     <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
                                       {name}
@@ -2241,10 +2238,8 @@ export function UnifiedTransactionTable({
                                   </CustomTooltip>
                                 </div>
                               ) : (
-                                // Original behavior (flex-col)
                                 <div className="flex flex-col min-w-0 flex-1 justify-center items-end h-full">
                                   <div className="flex items-center gap-1.5 min-w-0 w-full justify-end">
-                                    {/* From/To Badge */}
                                     {contextBadge}
                                     <CustomTooltip content={name}>
                                       <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight">
@@ -2260,11 +2255,9 @@ export function UnifiedTransactionTable({
                                 </div>
                               )}
 
-                              {/* Icon + Badges After Image */}
                               <div className="shrink-0 flex items-center gap-1">
                                 {contextBadgeBeforeIcon && contextBadge}
                                 {renderAvatar(icon, name, isSquare)}
-                                {/* Badges After Image (for People) */}
                                 {inlineBadges && badges.length > 0 && (
                                   <div className="flex items-center gap-1 flex-shrink-0">
                                     {badges}
@@ -2276,7 +2269,6 @@ export function UnifiedTransactionTable({
                           ) : (
                             // Source Entity: Default layout with Icon Before Text
                             <div className={cn("flex items-center gap-2 min-w-0 w-full", badgeClasses)}>
-                              {/* Icon - Increased Size */}
                               <div className="shrink-0 flex items-center gap-1">
                                 {contextBadgeBeforeIcon && contextBadge}
                                 {leadingElement && <div className="shrink-0">{leadingElement}</div>}
@@ -2285,15 +2277,12 @@ export function UnifiedTransactionTable({
 
                               {inlineBadges ? (
                                 <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden h-full">
-                                  {/* Context Badge (From) */}
                                   {!contextBadgeBeforeIcon && contextBadge}
-                                  {/* Name */}
                                   <CustomTooltip content={name}>
                                     <span className="text-[0.85em] font-bold text-slate-700 truncate block cursor-help leading-tight">
                                       {name}
                                     </span>
                                   </CustomTooltip>
-                                  {/* Badges Inline - Fixed Width Container */}
                                   {badges.length > 0 && (
                                     <div className="flex items-center gap-1 flex-shrink-0 ml-auto min-w-[96px] w-[96px] justify-end">
                                       {badges}
@@ -2301,12 +2290,9 @@ export function UnifiedTransactionTable({
                                   )}
                                 </div>
                               ) : (
-                                // Original behavior (flex-col)
                                 <div className="flex flex-col min-w-0 flex-1 justify-center h-full">
                                   <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    {/* From/To Badge */}
                                     {contextBadge}
-
                                     <CustomTooltip content={name}>
                                       <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 cursor-help">
                                         {name}
@@ -2336,107 +2322,26 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             ) : linkedContent
                           }
-                          return <div className="block w-full p-0.5 opacity-80">{Content}</div>
+
+                          return (
+                            <div className="block w-full p-0.5 relative z-20">
+                              {Content}
+                            </div>
+                          )
                         }
 
-                        const personEntity = personId ? {
-                          name: personNameLink || 'Unknown Person',
-                          icon: personAvatar,
-                          link: `/people/details?id=${personId}`,
-                        } : null
-                        const accountEntity = {
-                          name: sourceName,
-                          icon: sourceIcon,
-                          link: sourceId ? `/accounts/${sourceId}` : null,
-                        }
 
-                        // Badges Construction - Rounded md and Bold Colors
-                        const sourceAccountForBadge = accounts.find(a => a.id === sourceId);
-                        const cycleBadge = sourceAccountForBadge ? (
-                          <CycleBadge
-                            key="cycle"
-                            account={sourceAccountForBadge}
-                            cycleTag={(txn as any).persisted_cycle_tag || txn.tag}
-                            txnDate={txn.occurred_at || txn.created_at}
-                          />
-                        ) : null
-
-                        // Non-Cycle badge for accounts without cashback config
-                        const nonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
-                          <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                            Non-Cycle
-                          </span>
-                        ) : null
-
-                        // Use cycleBadge if available, otherwise nonCycleBadge
-                        const accountBadge = cycleBadge || nonCycleBadge
-
-                        const tagBadge = (cycleTag || debtTag) ? (
-                          <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
-                            {cycleTag || debtTag}
-                          </span>
-                        ) : null
-
-                        const fromBadge = (
-                          <span
-                            key="from"
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
-                              "bg-rose-50 text-rose-700 border-rose-200"
-                            )}
-                          >
-                            <ArrowUpRight className="h-3 w-3" />
-                            FROM
-                          </span>
-                        )
-                        const toBadge = (
-                          <span
-                            key="to"
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
-                              "bg-blue-50 text-blue-700 border-blue-200"
-                            )}
-                          >
-                            <ArrowDownLeft className="h-3 w-3" />
-                            TO
-                          </span>
-                        )
-
-                        const buildDirectionBadge = (variant: 'from' | 'to', icon?: React.ReactNode) => (
-                          <span
-                            key={variant}
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-[4px] px-2 h-6 text-[0.7em] font-extrabold border min-w-[72px] justify-center",
-                              variant === 'from'
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : "bg-blue-50 text-blue-700 border-blue-200"
-                            )}
-                          >
-                            {icon ?? (variant === 'from' ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownLeft className="h-3 w-3" />)}
-                            {variant === 'from' ? 'FROM' : 'TO'}
-                          </span>
-                        )
-
-                        // Custom People Badge Logic - Icon + YYYY-MM format
-                        const peopleDebtTag = txn.tag ? (
-                          <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                            <User className="h-3 w-3" />
-                            {txn.tag}
-                          </span>
-                        ) : null
+                        // Common Variables
+                        const sourceAccountForBadge = txnSourceId ? accounts.find(a => a.id === txnSourceId) : undefined;
 
                         const buildAccountFilterLink = (baseLink: string | null, dateRange?: { start: Date; end: Date } | null, monthTag?: string | null) => {
                           if (!baseLink) return null
-                          
-                          // If we have explicit date range (from statement cycle), use it
                           if (dateRange) {
                             const separator = baseLink.includes('?') ? '&' : '?'
                             const startStr = format(dateRange.start, 'yyyy-MM-dd')
                             const endStr = format(dateRange.end, 'yyyy-MM-dd')
                             return `${baseLink}${separator}dateFrom=${startStr}&dateTo=${endStr}`
                           }
-                          
-                          // For non-credit accounts, derive date range from month tag
                           if (monthTag && /^\d{4}-\d{2}$/.test(monthTag)) {
                             try {
                               const [year, month] = monthTag.split('-').map(Number)
@@ -2446,14 +2351,11 @@ export function UnifiedTransactionTable({
                               const startStr = format(monthStart, 'yyyy-MM-dd')
                               const endStr = format(monthEnd, 'yyyy-MM-dd')
                               return `${baseLink}${separator}dateFrom=${startStr}&dateTo=${endStr}`
-                            } catch {
-                              return null
-                            }
+                            } catch { return null }
                           }
-                          
                           return null
                         }
-                        
+
                         const buildPersonFilterLink = (baseLink: string | null, tag: string | null) => {
                           if (!baseLink || !tag) return null
                           const separator = baseLink.includes('?') ? '&' : '?'
@@ -2481,60 +2383,47 @@ export function UnifiedTransactionTable({
                           )
                         }
 
-                        // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
+                        const peopleDebtTag = debtTag ? wrapBadgeWithFilter((
+                          <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                            <User className="h-3 w-3" />
+                            {txn.tag}
+                          </span>
+                        ), debtTag ? buildPersonFilterLink(`/people/details?id=${personId}`, debtTag) : null, `Filter by ${debtTag}`) : null;
 
-                        // --- 5. Main Render Switch ---
+                        const tagBadge = (cycleTag || debtTag) ? (
+                          <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
+                            {cycleTag || debtTag}
+                          </span>
+                        ) : null
 
-                        // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
-                        if (isPersonContext && contextId && personEntity && personId === contextId) {
+                        const personEntity = personId ? {
+                          name: personNameLink || 'Unknown Person',
+                          icon: personAvatar,
+                          link: `/people/details?id=${personId}`,
+                        } : null
+                        const accountEntity = {
+                          name: sourceName,
+                          icon: sourceIcon,
+                          link: sourceId ? `/accounts/${sourceId}` : null,
+                        }
+
+                        // SCENARIO 2: VIEWING ACCOUNT PAGE - OUTBOUND (Source = This Account)
+                        // Logic: We are the Source. We sent money TO the Target.
+                        // Display: Target Entity.
+                        // Badge: "TO [Target Type]" (or just "TO").
+                        // User Request: "To B".
+                        // Scenario 2 condition: Source is Context.
+                        // EXCEPTION: If type is 'income', it's always Inbound (FROM), even if source_id is weirdly set.
+                        // We must prevent Income from entering this "TO" block.
+                        if (isAccountContext && contextId && sourceId === contextId && txn.type !== 'income') {
                           const isRepaymentTxn = txn.type === 'repayment';
-                          
-                          // Type Badge Logic (Icon Only with Tooltip) - UNIFIED with SCENARIO 3
-                          const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-                          let typeBadge = null;
-                          const tType = txn.type;
-                          if (tType === 'expense') {
-                            typeBadge = (
-                              <CustomTooltip content="OUT - Expense" side="top">
-                                <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'income') {
-                            typeBadge = (
-                              <CustomTooltip content="IN - Income" side="top">
-                                <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'transfer') {
-                            typeBadge = (
-                              <CustomTooltip content="TF - Transfer" side="top">
-                                <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'debt' || tType === 'loan') {
-                            typeBadge = (
-                              <CustomTooltip content="DEBT" side="top">
-                                <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'repayment') {
-                            typeBadge = (
-                              <CustomTooltip content="REPAY - Repayment" side="top">
-                                <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          }
-                          
+
+                          // Context Badge: TO
+                          // If it's a repayment (Outgoing from Account -> Person), it's "TO".
+                          // If it's transfer (Outgoing Account -> Account), it's "TO".
+                          // If expense (Outgoing Account -> Shop), it's "TO".
+                          const contextBadge = buildDirectionBadge('to');
+
                           const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
                             <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
                               Non-Cycle
@@ -2551,7 +2440,230 @@ export function UnifiedTransactionTable({
                             />
                           ) : null
                           const detailAccountBadge = detailCycleBadge || detailNonCycleBadge
-                          
+
+                          // Determine Target Entity to display
+                          let targetName = 'Unknown';
+                          let targetIcon = undefined;
+                          let targetLink = null;
+                          let targetBadges: React.ReactNode[] = [];
+
+                          if (targetId) {
+                            const tAccount = accounts.find(a => a.id === targetId);
+                            if (tAccount) {
+                              targetName = tAccount.name;
+                              targetIcon = tAccount.image_url;
+                              targetLink = `/accounts/${tAccount.id}`;
+                            }
+                          } else if (personId) {
+                            // Expense, Debt (Lend), Repayment
+                            targetName = personNameLink || 'Unknown Person';
+                            targetIcon = personAvatar;
+                            targetLink = `/people/details?id=${personId}`;
+                            if (peopleDebtTag) targetBadges.push(peopleDebtTag);
+                          } else if (txn.shop_id) {
+                            // Expense to Shop
+                            // We need shop data. Assuming available via 'shops' prop or we just show name?
+                            // TransactionWithDetails usually has shop expanded?
+                            // The 'shops' prop is passed to simple table, but maybe not unified?
+                            // 'txn.shop' should be available.
+                            if (txn.shop) {
+                              targetName = txn.shop.name;
+                              targetIcon = txn.shop.icon || undefined; // Shops might not have icon prop consistent with account
+                              // If shop icon is string url
+                            }
+                          }
+
+                          // If we don't have a specific target entity (e.g. untracked expense), show Category?
+                          // The `RenderEntity` expects name/icon.
+                          if (targetName === 'Unknown' && txn.shop) {
+                            targetName = txn.shop.name;
+                            targetIcon = txn.shop.logo || undefined;
+                          }
+
+                          return (
+                            <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
+                              <div className="shrink-0">
+                                {typeBadge}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <RenderEntity
+                                  name={targetName}
+                                  icon={targetIcon}
+                                  link={targetLink}
+                                  badges={targetBadges}
+                                  contextBadge={contextBadge}
+                                  contextBadgeBeforeIcon={true}
+                                  inlineBadges={true}
+                                  isTarget={false} // CHANGED: Force Left Alignment standard flow
+                                  badgeClassName="bg-slate-50 border-slate-200"
+                                  linkTooltip={targetLink ? `Open ${targetName}` : null}
+                                />
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        // SCENARIO 3: VIEWING ACCOUNT PAGE - INBOUND (Target = This Account)
+                        // Logic: We are the Target. Money came FROM Source.
+                        // Display: Source Entity.
+                        // Badge: "FROM [Source Type]" (or just "FROM").
+                        // User Request: "From C, D".
+                        // SCENARIO 3: VIEWING ACCOUNT PAGE - INBOUND (Target = This Account OR Income)
+                        // Logic: We are the Target. Money came FROM Source.
+                        if (isAccountContext && contextId && (targetId === contextId || txn.type === 'income')) {
+                          // Context Badge: FROM
+                          const contextBadge = buildDirectionBadge('from');
+
+                          // Entity to display: Source
+                          // Source could be: Account (Transfer), Person (Income, Repayment from them).
+                          // If Source is Account, we validly have `accountEntity`.
+                          // If Source is Person (e.g. Income), `sourceId` might be null but `personId` is set?
+                          // Wait, `source_account_id` is usually the payer.
+                          // If Income from Person, `source_account_id` might be null?
+                          // If `source_account_id` is present, it's an account transfer context usually.
+                          // Or "Income" with source account?
+
+                          let displayName = 'Unknown';
+                          let displayIcon = undefined;
+                          let displayLink = null;
+                          let displayBadges: React.ReactNode[] = [];
+
+                          if (sourceId) {
+                            const sAccount = accounts.find(a => a.id === sourceId);
+                            if (sAccount) {
+                              displayName = sAccount.name;
+                              displayIcon = sAccount.image_url;
+                              displayLink = `/accounts/${sAccount.id}`;
+                            }
+                          }
+
+                          // If no source account, check other sources (Shop, Person) for Income
+                          if (displayName === 'Unknown') {
+                            if (personId) {
+                              displayName = personNameLink || 'Unknown Person';
+                              displayIcon = personAvatar;
+                              displayLink = `/people/details?id=${personId}`;
+                              if (peopleDebtTag) displayBadges.push(peopleDebtTag);
+                            } else if (txn.shop) {
+                              displayName = txn.shop.name;
+                              displayIcon = txn.shop.logo || undefined;
+                            } else if (txn.type === 'income') {
+                              // Generic Income source if no helper
+                              displayName = "Income";
+                            }
+                          }
+
+                          return (
+                            <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
+                              <div className="shrink-0">
+                                {typeBadge}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <RenderEntity
+                                  name={displayName}
+                                  icon={displayIcon}
+                                  link={displayLink}
+                                  badges={displayBadges}
+                                  contextBadge={contextBadge}
+                                  contextBadgeBeforeIcon={true}
+                                  inlineBadges={true}
+                                  isTarget={false} // FROM alignment (Left)
+                                  badgeClassName="bg-slate-50 border-slate-200"
+                                  linkTooltip={displayLink ? `Open ${displayName}` : null}
+                                />
+                              </div>
+                            </div>
+                          )
+                        }
+                        if (sourceId && targetId && sourceId === targetId) {
+                          targetType = 'none'
+                          targetId = undefined
+                          targetLink = null
+                        }
+
+
+
+                        // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
+
+                        // --- 5. Main Render Switch ---
+
+                        // --- 5. Main Render Switch ---
+
+                        // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
+                        if (isPersonContext && contextId && personEntity && personId === contextId) {
+                          const isRepaymentTxn = txn.type === 'repayment';
+
+                          // Type Badge Logic (Icon Only with Tooltip) - UNIFIED with SCENARIO 3
+                          const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
+                          let personTypeBadge = null;
+                          const tType = txn.type;
+                          if (tType === 'expense') {
+                            personTypeBadge = (
+                              <CustomTooltip content="OUT - Expense" side="top">
+                                <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
+                                  <ArrowUpRight className="h-3.5 w-3.5" />
+                                </span>
+                              </CustomTooltip>
+                            )
+                          } else if (tType === 'income') {
+                            personTypeBadge = (
+                              <CustomTooltip content="IN - Income" side="top">
+                                <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
+                                  <ArrowDownLeft className="h-3.5 w-3.5" />
+                                </span>
+                              </CustomTooltip>
+                            )
+                          } else if (tType === 'transfer') {
+                            personTypeBadge = (
+                              <CustomTooltip content="TF - Transfer" side="top">
+                                <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                </span>
+                              </CustomTooltip>
+                            )
+                          } else if (tType === 'debt' || tType === 'loan') {
+                            personTypeBadge = (
+                              <CustomTooltip content="DEBT" side="top">
+                                <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
+                                  <UserMinus className="h-3.5 w-3.5" />
+                                </span>
+                              </CustomTooltip>
+                            )
+                          } else if (tType === 'repayment') {
+                            personTypeBadge = (
+                              <CustomTooltip content="REPAY - Repayment" side="top">
+                                <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                </span>
+                              </CustomTooltip>
+                            )
+                          }
+
+                          const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
+                            <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
+                              Non-Cycle
+                            </span>
+                          ) : null
+                          const detailCycleBadge = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
+                            <CycleBadge
+                              key="cycle"
+                              account={sourceAccountForBadge}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                              compact={false}
+                              className="h-6 min-w-[96px] text-[10px] px-1"
+                            />
+                          ) : null
+                          const detailAccountBadge = detailCycleBadge || detailNonCycleBadge
+
+                          // Context Badge Logic (Restored)
+                          let contextBadge = null;
+                          if (tType === 'debt' || tType === 'expense' || tType === 'loan') {
+                            contextBadge = buildDirectionBadge('from');
+                          } else if (tType === 'repayment' || tType === 'income') {
+                            contextBadge = buildDirectionBadge('to');
+                          }
+
                           // Compute cycle date range for URL params
                           let cycleDateRange: { start: Date; end: Date } | null = null
                           if (sourceAccountForBadge && cycleTag && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) {
@@ -2559,27 +2671,30 @@ export function UnifiedTransactionTable({
                             const refDate = parseISO(txn.occurred_at || txn.created_at)
                             cycleDateRange = getCashbackCycleRange(config, refDate) || null
                           }
-                          
-                        const detailTagLink = buildAccountFilterLink(accountEntity.link, cycleDateRange, cycleTag)
-                        const detailAccountBadgeWithLink = detailAccountBadge
-                          ? wrapBadgeWithFilter(
+
+                          const detailTagLink = buildAccountFilterLink(accountEntity.link, cycleDateRange, cycleTag)
+                          const detailAccountBadgeWithLink = detailAccountBadge
+                            ? wrapBadgeWithFilter(
                               detailAccountBadge,
                               detailTagLink,
                               `Open ${accountEntity.name} with cycle ${cycleTag || ''}`.trim()
                             )
-                          : null
+                            : null
 
                           return (
                             <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
                               <div className="shrink-0">
-                                {typeBadge}
+                                {personTypeBadge}
                               </div>
-                              <div className="flex-1 min-w-0 max-w-[44%]">
+                              <div className="flex-1 min-w-0">
                                 <RenderEntity
                                   name={accountEntity.name}
                                   icon={accountEntity.icon}
                                   link={accountEntity.link}
                                   badges={[detailAccountBadgeWithLink].filter(Boolean)}
+                                  // Pass contextBadge here
+                                  contextBadge={contextBadge}
+                                  contextBadgeBeforeIcon={true}
                                   inlineBadges={true}
                                   isTarget={false}
                                   badgeClassName={isRepaymentTxn ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}
@@ -2590,222 +2705,7 @@ export function UnifiedTransactionTable({
                           )
                         }
 
-                        // SCENARIO 2: VIEWING ACCOUNT PAGE (Context = Account)
-                        if (isAccountContext && contextId) {
-                          // Sub-case 2a: Viewing Source Account (Outbound) - Show Target
-                          if (sourceId === contextId) {
-                            if (targetType === 'none') {
-                              return <span className="text-slate-400 text-xs italic pl-1">Expense / No Target</span>
-                            }
 
-                            const targetAccountForBadge = accounts.find(a => a.id === targetId)
-                            
-                            // Type Badge Logic (Icon Only with Tooltip) - UNIFIED with SCENARIO 3
-                            const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-                            let typeBadge = null;
-                            const tType = txn.type;
-                            if (tType === 'expense') {
-                              typeBadge = (
-                                <CustomTooltip content="OUT - Expense" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                    <ArrowUpRight className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'income') {
-                              typeBadge = (
-                                <CustomTooltip content="IN - Income" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                    <ArrowDownLeft className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'transfer') {
-                              typeBadge = (
-                                <CustomTooltip content="TF - Transfer" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'debt' || tType === 'loan') {
-                              typeBadge = (
-                                <CustomTooltip content="DEBT" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                    <UserMinus className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'repayment') {
-                              typeBadge = (
-                                <CustomTooltip content="REPAY - Repayment" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                    <UserPlus className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            }
-                            
-                            const targetNonCycleBadge = targetAccountForBadge && !targetAccountForBadge.cashback_config ? (
-                              <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                                Non-Cycle
-                              </span>
-                            ) : null
-                            const targetAccountBadge = targetType === 'person'
-                              ? peopleDebtTag
-                              : (targetAccountForBadge && targetAccountForBadge.type === 'credit_card' && targetAccountForBadge.cashback_config ? (
-                                  <CycleBadge
-                                    key="cycle"
-                                    account={targetAccountForBadge}
-                                    cycleTag={cycleTag}
-                                    txnDate={txn.occurred_at || txn.created_at}
-                                    compact={false}
-                                    className="h-6 min-w-[96px] text-[10px] px-1"
-                                  />
-                                ) : targetNonCycleBadge)
-                            const targetTagValue = targetType === 'person' ? txn.tag : cycleTag
-                            
-                            // Compute cycle date range for URL params (account only, not people)
-                            let targetCycleDateRange: { start: Date; end: Date } | null = null
-                            if (targetType === 'account' && targetAccountForBadge && cycleTag && targetAccountForBadge.type === 'credit_card' && targetAccountForBadge.cashback_config) {
-                              const config = parseCashbackConfig(targetAccountForBadge.cashback_config)
-                              const refDate = parseISO(txn.occurred_at || txn.created_at)
-                              targetCycleDateRange = getCashbackCycleRange(config, refDate) || null
-                            }
-                            
-                          const targetTagLink = buildAccountFilterLink(targetLink, targetCycleDateRange, targetTagValue ?? null)
-                          const targetAccountBadgeWithLink = targetAccountBadge
-                            ? wrapBadgeWithFilter(
-                                targetAccountBadge,
-                                targetTagLink,
-                                `Open ${targetName} with cycle ${targetTagValue || ''}`.trim()
-                              )
-                            : null
-
-                            return (
-                              <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
-                                <div className="shrink-0">
-                                  {typeBadge}
-                                </div>
-                                <div className="flex-1 min-w-0 max-w-[44%]">
-                                  <RenderEntity
-                                    name={targetName}
-                                    icon={targetIcon}
-                                    link={targetLink}
-                                    badges={[targetAccountBadgeWithLink].filter(Boolean)}
-                                    inlineBadges={true}
-                                    isTarget={false}
-                                    badgeClassName="bg-emerald-50 border-emerald-200"
-                                    linkTooltip={`Open ${targetName} in new tab`}
-                                  />
-                                </div>
-                              </div>
-                            )
-                          }
-
-                          // Sub-case 2b: Viewing Target Account (Inbound) - Show Source
-                          if (targetType === 'account' && targetId === contextId) {
-                            
-                            // Type Badge Logic (Icon Only with Tooltip) - UNIFIED with SCENARIO 3
-                            const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-                            let typeBadge = null;
-                            const tType = txn.type;
-                            if (tType === 'expense') {
-                              typeBadge = (
-                                <CustomTooltip content="OUT - Expense" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                    <ArrowUpRight className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'income') {
-                              typeBadge = (
-                                <CustomTooltip content="IN - Income" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                    <ArrowDownLeft className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'transfer') {
-                              typeBadge = (
-                                <CustomTooltip content="TF - Transfer" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'debt' || tType === 'loan') {
-                              typeBadge = (
-                                <CustomTooltip content="DEBT" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                    <UserMinus className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            } else if (tType === 'repayment') {
-                              typeBadge = (
-                                <CustomTooltip content="REPAY - Repayment" side="top">
-                                  <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                    <UserPlus className="h-3.5 w-3.5" />
-                                  </span>
-                                </CustomTooltip>
-                              )
-                            }
-                            
-                            const sourceNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
-                              <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                                Non-Cycle
-                              </span>
-                            ) : null
-                            const sourceAccountBadge = sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config ? (
-                              <CycleBadge
-                                key="cycle"
-                                account={sourceAccountForBadge}
-                                cycleTag={cycleTag}
-                                txnDate={txn.occurred_at || txn.created_at}
-                                compact={false}
-                                className="h-6 min-w-[96px] text-[10px] px-1"
-                              />
-                            ) : sourceNonCycleBadge
-                            
-                            // Compute cycle date range for URL params
-                            let sourceCycleDateRange: { start: Date; end: Date } | null = null
-                            if (sourceAccountForBadge && cycleTag && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) {
-                              const config = parseCashbackConfig(sourceAccountForBadge.cashback_config)
-                              const refDate = parseISO(txn.occurred_at || txn.created_at)
-                              sourceCycleDateRange = getCashbackCycleRange(config, refDate) || null
-                            }
-                            
-                            const sourceTagLink = buildAccountFilterLink(sourceId ? `/accounts/${sourceId}` : null, sourceCycleDateRange, cycleTag ?? null)
-                            const sourceAccountBadgeWithLink = sourceAccountBadge
-                              ? wrapBadgeWithFilter(
-                                  sourceAccountBadge,
-                                  sourceTagLink,
-                                  `Open ${sourceName} with cycle ${cycleTag || ''}`.trim()
-                                )
-                              : null
-                            
-                            return (
-                              <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
-                                <div className="shrink-0">
-                                  {typeBadge}
-                                </div>
-                                <div className="flex-1 min-w-0 max-w-[44%]">
-                                  <RenderEntity
-                                    name={sourceName}
-                                    icon={sourceIcon}
-                                    link={sourceId ? `/accounts/${sourceId}` : null}
-                                    badges={[sourceAccountBadgeWithLink].filter(Boolean)}
-                                    inlineBadges={true}
-                                    isTarget={false}
-                                    badgeClassName="bg-rose-50 border-rose-200"
-                                    linkTooltip={`Open ${sourceName} in new tab`}
-                                  />
-                                </div>
-                              </div>
-                            )
-                          }
-                        }
 
                         // SCENARIO 3: STANDARD VIEW (No Context or context mismatch)
                         // Refactor: Source -> [Type] -> Target
@@ -2828,10 +2728,10 @@ export function UnifiedTransactionTable({
                           // Type Badge Construction (Icon Only with Tooltip)
                           const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
 
-                          let typeBadge = null;
+                          let extraTypeBadge = null;
                           const tType = txn.type;
                           if (tType === 'expense') {
-                            typeBadge = (
+                            extraTypeBadge = (
                               <CustomTooltip content="OUT - Expense" side="top">
                                 <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
                                   <ArrowUpRight className="h-3.5 w-3.5" />
@@ -2839,7 +2739,7 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             )
                           } else if (tType === 'income') {
-                            typeBadge = (
+                            extraTypeBadge = (
                               <CustomTooltip content="IN - Income" side="top">
                                 <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
                                   <ArrowDownLeft className="h-3.5 w-3.5" />
@@ -2847,7 +2747,7 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             )
                           } else if (tType === 'transfer') {
-                            typeBadge = (
+                            extraTypeBadge = (
                               <CustomTooltip content="TF - Transfer" side="top">
                                 <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
                                   <ArrowRightLeft className="h-3.5 w-3.5" />
@@ -2855,7 +2755,7 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             )
                           } else if (tType === 'debt' || tType === 'loan') {
-                            typeBadge = (
+                            extraTypeBadge = (
                               <CustomTooltip content="DEBT" side="top">
                                 <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
                                   <UserMinus className="h-3.5 w-3.5" />
@@ -2863,7 +2763,7 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             )
                           } else if (tType === 'repayment') {
-                            typeBadge = (
+                            extraTypeBadge = (
                               <CustomTooltip content="REPAY - Repayment" side="top">
                                 <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
                                   <UserPlus className="h-3.5 w-3.5" />
@@ -2874,14 +2774,14 @@ export function UnifiedTransactionTable({
 
                           // Single Entity -> Type Badge BEFORE entity, compact layout
                           // Match pill color to transaction type: income=green, expense=red
-                          const singleFlowColor = tType === 'income' 
-                            ? "bg-emerald-50 border-emerald-200" 
+                          const singleFlowColor = tType === 'income'
+                            ? "bg-emerald-50 border-emerald-200"
                             : "bg-rose-50 border-rose-200"
-                          
+
                           return (
                             <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
                               <div className="shrink-0">
-                                {typeBadge}
+                                {extraTypeBadge}
                               </div>
                               <div className="flex-1 min-w-0 max-w-[44%]">
                                 <RenderEntity
@@ -2922,10 +2822,10 @@ export function UnifiedTransactionTable({
                         // Type Badge Logic (Icon Only with Tooltip)
                         const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
 
-                        let typeBadge = null;
+                        let detailTypeBadge = null;
                         const tType = txn.type;
                         if (tType === 'expense') {
-                          typeBadge = (
+                          detailTypeBadge = (
                             <CustomTooltip content="OUT - Expense" side="top">
                               <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
                                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -2933,7 +2833,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
                           )
                         } else if (tType === 'income') {
-                          typeBadge = (
+                          detailTypeBadge = (
                             <CustomTooltip content="IN - Income" side="top">
                               <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
                                 <ArrowDownLeft className="h-3.5 w-3.5" />
@@ -2941,7 +2841,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
                           )
                         } else if (tType === 'transfer') {
-                          typeBadge = (
+                          detailTypeBadge = (
                             <CustomTooltip content="TF - Transfer" side="top">
                               <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
                                 <ArrowRightLeft className="h-3.5 w-3.5" />
@@ -2949,7 +2849,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
                           )
                         } else if (tType === 'debt' || tType === 'loan') {
-                          typeBadge = (
+                          detailTypeBadge = (
                             <CustomTooltip content="DEBT" side="top">
                               <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
                                 <UserMinus className="h-3.5 w-3.5" />
@@ -2957,7 +2857,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
                           )
                         } else if (tType === 'repayment') {
-                          typeBadge = (
+                          detailTypeBadge = (
                             <CustomTooltip content="REPAY - Repayment" side="top">
                               <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
                                 <UserPlus className="h-3.5 w-3.5" />
@@ -2970,15 +2870,15 @@ export function UnifiedTransactionTable({
                         // In DB: source=account, target=person
                         // In UI: Show person FIRST (left/blue), account SECOND (right/green)
                         const isRepay = tType === 'repayment'
-                        
+
                         if (isRepay && targetType === 'person') {
                           // SWAP: Show Person (target in DB) as left/source in UI
                           return (
                             <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
                               <div className="shrink-0">
-                                {typeBadge}
+                                {detailTypeBadge}
                               </div>
-                              
+
                               {/* Left: Person (Target in DB, but source visually) */}
                               <div className="flex-1 min-w-0 max-w-[44%]">
                                 <RenderEntity
@@ -2990,9 +2890,9 @@ export function UnifiedTransactionTable({
                                   badgeClassName="bg-blue-50 border-blue-200"
                                 />
                               </div>
-                              
+
                               <span className="text-slate-300 font-light shrink-0 mx-0.5">|</span>
-                              
+
                               {/* Right: Account (Source in DB, but target visually) */}
                               <div className="flex-1 min-w-0 max-w-[44%]">
                                 <RenderEntity
@@ -3008,7 +2908,7 @@ export function UnifiedTransactionTable({
                             </div>
                           )
                         }
-                        
+
                         // Normal flow: expense=red source, income/transfer=green target
                         const sourceColor = "bg-rose-50 border-rose-200"
                         const targetColor = "bg-emerald-50 border-emerald-200"
@@ -3017,7 +2917,7 @@ export function UnifiedTransactionTable({
                           <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
                             {/* Type Badge BEFORE flows */}
                             <div className="shrink-0">
-                              {typeBadge}
+                              {detailTypeBadge}
                             </div>
 
                             {/* Left: Source */}
@@ -3049,9 +2949,8 @@ export function UnifiedTransactionTable({
                             </div>
                           </div>
                         )
-
-
                       }
+
                       case "tag": {
                         const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
 

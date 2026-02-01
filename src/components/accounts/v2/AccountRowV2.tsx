@@ -341,8 +341,47 @@ function renderCell(
                                     renderRoleBadge('standalone')
                                 )}
 
-                                {/* MCC Badges - placeholder for now, will be aggregated from transactions */}
-                                {/* TODO: Aggregate MCC codes from account transactions */}
+                                {/* Cashback Category Badges */}
+                                {(() => {
+                                    if (!account.cashback_config) return null;
+                                    try {
+                                        const config = typeof account.cashback_config === 'string'
+                                            ? JSON.parse(account.cashback_config)
+                                            : account.cashback_config;
+
+                                        // Get categories from Level 1 (index 0)
+                                        const rules = (config.levels?.[0]?.rules) || [];
+                                        if (!Array.isArray(rules) || rules.length === 0) return null;
+
+                                        // Extract unique category IDs
+                                        const catIds = new Set<string>();
+                                        rules.forEach((r: any) => {
+                                            if (Array.isArray(r.categoryIds)) {
+                                                r.categoryIds.forEach((id: string) => catIds.add(id));
+                                            }
+                                        });
+
+                                        if (catIds.size === 0) return null;
+
+                                        return (
+                                            <div className="flex flex-wrap items-center gap-1 bg-slate-50 border border-slate-100 rounded-md px-1.5 py-0.5 max-w-[200px] justify-end">
+                                                {Array.from(catIds).slice(0, 3).map(cid => {
+                                                    const cat = categories?.find(c => c.id === cid);
+                                                    if (!cat) return null;
+                                                    return (
+                                                        <span key={cid} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-600" title={cat.name}>
+                                                            {cat.icon && <span className="text-[9px]">{cat.icon}</span>}
+                                                            <span className="truncate max-w-[60px]">{cat.name}</span>
+                                                        </span>
+                                                    )
+                                                })}
+                                                {catIds.size > 3 && (
+                                                    <span className="text-[9px] font-bold text-slate-400">+{catIds.size - 3}</span>
+                                                )}
+                                            </div>
+                                        )
+                                    } catch (e) { return null; }
+                                })()}
 
                                 {(() => {
                                     const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
