@@ -377,63 +377,86 @@ export function AccountSlideV2({
     useEffect(() => {
         if (open) {
             if (account) {
-                setName(account.name || "");
-                setType(account.type || 'bank');
-                setAccountNumber(account.account_number || "");
-                setCreditLimit(account.credit_limit || 0);
-                setIsActive(account.is_active !== false);
-                setImageUrl(account.image_url || "");
+                // Initialize with prop data first (instant)
+                const loadFromAccount = (acc: Account) => {
+                    setName(acc.name || "");
+                    setType(acc.type || 'bank');
+                    setAccountNumber(acc.account_number || "");
+                    setCreditLimit(acc.credit_limit || 0);
+                    setIsActive(acc.is_active !== false);
+                    setImageUrl(acc.image_url || "");
 
-                const cb = normalizeCashbackConfig(account.cashback_config) as any;
-                setCycleType(cb.cycleType || 'calendar_month');
-                setStatementDay(cb.statementDay ?? null);
-                setDueDate(cb.dueDate ?? null);
-                setMinSpendTarget(cb.minSpendTarget ?? undefined);
-                setDefaultRate(cb.defaultRate || 0);
-                setMaxCashback(cb.maxBudget ?? undefined);
+                    const cb = normalizeCashbackConfig(acc.cashback_config) as any;
+                    setCycleType(cb.cycleType || 'calendar_month');
+                    setStatementDay(cb.statementDay ?? null);
+                    setDueDate(cb.dueDate ?? null);
+                    setMinSpendTarget(cb.minSpendTarget ?? undefined);
+                    setDefaultRate(cb.defaultRate || 0);
+                    setMaxCashback(cb.maxBudget ?? undefined);
 
-                // New fields
-                setAnnualFee(account.annual_fee || 0);
-                setAnnualFeeWaiverTarget(account.annual_fee_waiver_target || 0);
-                setReceiverName(account.receiver_name || "");
-                setParentAccountId(account.parent_account_id || null);
-                setStartDate((account as any).start_date);
+                    // New fields
+                    setAnnualFee(acc.annual_fee || 0);
+                    setAnnualFeeWaiverTarget(acc.annual_fee_waiver_target || 0);
+                    setReceiverName(acc.receiver_name || "");
+                    setParentAccountId(acc.parent_account_id || null);
+                    setStartDate((acc as any).start_date);
 
-                // Determine main type
-                if (account.type === 'bank') setActiveMainType('bank');
-                else if (account.type === 'credit_card') setActiveMainType('credit');
-                else if (['savings', 'investment'].includes(account.type)) setActiveMainType('savings');
-                else setActiveMainType('others');
+                    // Determine main type
+                    if (acc.type === 'bank') setActiveMainType('bank');
+                    else if (acc.type === 'credit_card') setActiveMainType('credit');
+                    else if (['savings', 'investment'].includes(acc.type)) setActiveMainType('savings');
+                    else setActiveMainType('others');
 
-                const secured = account.secured_by_account_id || "none";
-                setSecuredById(secured);
-                setIsCollateralLinked(secured !== "none");
+                    const secured = acc.secured_by_account_id || "none";
+                    setSecuredById(secured);
+                    setIsCollateralLinked(secured !== "none");
 
-                const loadedLevels = (cb.levels || []).map((lvl: any) => ({
-                    id: lvl.id || Math.random().toString(36).substr(2, 9),
-                    name: lvl.name || "",
-                    minTotalSpend: lvl.minTotalSpend || 0,
-                    defaultRate: lvl.defaultRate || 0,
-                    rules: (lvl.rules || []).map((r: any) => ({
-                        id: r.id || Math.random().toString(36).substr(2, 9),
-                        categoryIds: r.categoryIds || [],
-                        rate: r.rate || 0,
-                        maxReward: r.maxReward || null
-                    }))
-                }));
+                    const loadedLevels = (cb.levels || []).map((lvl: any) => ({
+                        id: lvl.id || Math.random().toString(36).substr(2, 9),
+                        name: lvl.name || "",
+                        minTotalSpend: lvl.minTotalSpend || 0,
+                        defaultRate: lvl.defaultRate || 0,
+                        rules: (lvl.rules || []).map((r: any) => ({
+                            id: r.id || Math.random().toString(36).substr(2, 9),
+                            categoryIds: r.categoryIds || [],
+                            rate: r.rate || 0,
+                            maxReward: r.maxReward || null
+                        }))
+                    }));
 
-                setLevels(loadedLevels);
-                setIsAdvancedCashback(loadedLevels.length > 1 || (loadedLevels.length === 1 && loadedLevels[0].rules.length > 1));
+                    setLevels(loadedLevels);
+                    setIsAdvancedCashback(loadedLevels.length > 1 || (loadedLevels.length === 1 && loadedLevels[0].rules.length > 1));
 
-                // Check if it's a simple restricted config
-                if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
-                    setIsCategoryRestricted(true);
-                    setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
-                    setDefaultRate(loadedLevels[0].rules[0].rate);
-                } else {
-                    setIsCategoryRestricted(false);
-                    setRestrictedCategoryIds([]);
-                }
+                    // Check if it's a simple restricted config
+                    if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
+                        setIsCategoryRestricted(true);
+                        setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
+                        setDefaultRate(loadedLevels[0].rules[0].rate);
+                    } else {
+                        setIsCategoryRestricted(false);
+                        setRestrictedCategoryIds([]);
+                    }
+                };
+
+                loadFromAccount(account);
+
+                // Double check with fresh data from DB (in case props are stale)
+                import('@/services/account.service').then(({ getAccountDetails }) => {
+                    getAccountDetails(account.id).then(fresh => {
+                        if (fresh) {
+                            console.log('[AccountSlideV2] Refreshed data from DB', fresh);
+                            // Only update if critical fields differ (avoid UI flicker for trivial things)
+                            // Or just re-run load logic, React handles diffing.
+                            // Especially important for account_number and receiver_name
+                            if (fresh.account_number !== account.account_number || fresh.receiver_name !== account.receiver_name) {
+                                setAccountNumber(fresh.account_number || "");
+                                setReceiverName(fresh.receiver_name || "");
+                            }
+                            // Update checking other fields reference for completeness
+                            loadFromAccount(fresh);
+                        }
+                    });
+                });
 
             } else {
                 setName("");

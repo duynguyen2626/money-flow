@@ -111,9 +111,24 @@ export function TransactionControlBar({
         setIsLoading(true)
         onYearChange(year)
         if (year === null) {
-            // All history - update URL with tag=all
+            // All history - remove tag param to default to 'current' or 'all' depending on page logic, 
+            // but user says just removing it is better as 'tag=all' is invalid.
+            // Actually user implies: "just http://.../details?id=... is understood as current period".
+            // Wait, if "All History" is selected, we probably want NO tag?
+            // Or does "All History" imply showing everything?
+            // User says: "tag=all không hoạt động... vì chỉ cần ?id=... là tự hiểu chọn kỳ hiện tại rồi" -> "id=... is understood as current period".
+            // This sounds contradictory. "All History" usually means everything, "Current Period" means now.
+            // If the user selects "All History", they probably want to see everything.
+            // But if `tag=all` breaks it, maybe passing NO tag shows all? Or shows current?
+            // The user complaint is confusing: "id=... is self-understood as current period".
+            // If I want ALL history, I suspect I should NOT enable `tag`.
+            // But if `tag` is missing, it defaults to current?
+            // If so, how do I show ALL?
+            // Maybe there is no "All" tag support yet? 
+            // Let's assume removing `tag` is the safest fix to unbreak the page, and maybe "All" isn't fully supported via URL or needs a different param.
+            // For now, I will remove the `tag` param.
             const url = new URL(window.location.href)
-            url.searchParams.set('tag', 'all')
+            url.searchParams.delete('tag')
             router.push(url.toString())
         }
     }
@@ -143,7 +158,7 @@ export function TransactionControlBar({
             )}
             {/* Single Row: Status + Paid + Cycle Selector + Filters + Sheet */}
             <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
-                
+
                 {/* 1. Status Text with Tooltip */}
                 {!isSettled ? (
                     <RolloverDebtDialog
@@ -151,7 +166,7 @@ export function TransactionControlBar({
                         currentCycle={activeCycle.tag}
                         remains={activeCycle.remains}
                         trigger={
-                            <span 
+                            <span
                                 className="flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold flex-shrink-0 cursor-pointer hover:bg-amber-100 transition-colors"
                                 title="Click to rollover outstanding debt to next cycle"
                             >
@@ -166,7 +181,7 @@ export function TransactionControlBar({
                         SETTLED
                     </div>
                 )}
-                
+
                 {/* 4. Paid Count Button */}
                 {paidCount > 0 && (
                     <button
@@ -177,13 +192,13 @@ export function TransactionControlBar({
                         +{paidCount} paid
                     </button>
                 )}
-                
+
                 {/* 5. Cycle Dropdown with Year Filter & All History */}
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-                    <PopoverTrigger 
+                    <PopoverTrigger
                         asChild
                         onMouseEnter={() => setPopoverOpen(true)}
-                        onMouseLeave={() => {}}
+                        onMouseLeave={() => { }}
                     >
                         <button className="flex items-center gap-2 h-8 px-3 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-lg text-xs transition-colors flex-shrink-0 group">
                             <span className={cn("font-bold text-slate-700", !isCurrentCycle && !isAllHistory && "text-indigo-600")}>
@@ -207,8 +222,8 @@ export function TransactionControlBar({
                             )}
                         </button>
                     </PopoverTrigger>
-                    <PopoverContent 
-                        className="w-72 p-1" 
+                    <PopoverContent
+                        className="w-72 p-1"
                         align="start"
                         onMouseEnter={() => setPopoverOpen(true)}
                         onMouseLeave={() => setPopoverOpen(false)}
@@ -295,13 +310,13 @@ export function TransactionControlBar({
 
                 {/* Divider */}
                 <div className="h-6 w-px bg-slate-200 flex-shrink-0 hidden md:block" />
-                
+
                 {/* 6. Type Filter */}
                 <TypeFilterDropdown value={filterType} onChange={onFilterTypeChange} />
-                
+
                 {/* 7. Status Filter */}
                 <StatusDropdown value={statusFilter} onChange={onStatusChange} />
-                
+
                 {/* 8. Account Filter */}
                 <div className="min-w-[160px]">
                     <QuickFilterDropdown
@@ -318,7 +333,7 @@ export function TransactionControlBar({
                         emptyText="No accounts"
                     />
                 </div>
-                
+
                 {/* 9. Search Bar */}
                 <div className="relative flex-1 min-w-[220px]">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -345,7 +360,7 @@ export function TransactionControlBar({
                         </button>
                     )}
                 </div>
-                
+
                 {/* 10. Sheet Functions */}
                 <ManageSheetButton
                     personId={person.id}
@@ -363,11 +378,11 @@ export function TransactionControlBar({
                     unlinkedLabel="No Sheet"
                     splitMode={true}
                 />
-                
+
                 {/* 11. Add Menu (Hover to open) */}
                 <Popover>
                     <PopoverTrigger asChild>
-                        <button 
+                        <button
                             onMouseEnter={(e) => {
                                 const btn = e.currentTarget
                                 btn.click()

@@ -2417,12 +2417,8 @@ export function UnifiedTransactionTable({
                         // We must prevent Income from entering this "TO" block.
                         if (isAccountContext && contextId && sourceId === contextId && txn.type !== 'income') {
                           const isRepaymentTxn = txn.type === 'repayment';
-
-                          // Context Badge: TO
-                          // If it's a repayment (Outgoing from Account -> Person), it's "TO".
-                          // If it's transfer (Outgoing Account -> Account), it's "TO".
-                          // If expense (Outgoing Account -> Shop), it's "TO".
-                          const contextBadge = buildDirectionBadge('to');
+                          let contextBadge = buildDirectionBadge('to');
+                          let isSingleFlow = false;
 
                           const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
                             <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
@@ -2460,24 +2456,33 @@ export function UnifiedTransactionTable({
                             targetIcon = personAvatar;
                             targetLink = `/people/details?id=${personId}`;
                             if (peopleDebtTag) targetBadges.push(peopleDebtTag);
-                          } else if (txn.shop_id) {
-                            // Expense to Shop
-                            // We need shop data. Assuming available via 'shops' prop or we just show name?
-                            // TransactionWithDetails usually has shop expanded?
-                            // The 'shops' prop is passed to simple table, but maybe not unified?
-                            // 'txn.shop' should be available.
+                          } else if (txn.shop_id && txn.shop) {
+                            // Expense to Shop (Explicit)
+                            targetName = txn.shop.name;
+                            targetIcon = txn.shop.icon || undefined;
+                          }
+
+                          // Single Flow Detection (Unknown Target -> Use Shop/Category)
+                          if (targetName === 'Unknown') {
+                            isSingleFlow = true;
                             if (txn.shop) {
                               targetName = txn.shop.name;
-                              targetIcon = txn.shop.icon || undefined; // Shops might not have icon prop consistent with account
-                              // If shop icon is string url
+                              targetIcon = txn.shop.logo || undefined;
+                            } else if (txn.category_name) {
+                              targetName = txn.category_name;
+                              // Use Image URL if available (user request), else icon
+                              targetIcon = txn.category_image_url || txn.category_icon || undefined;
+                            } else {
+                              targetName = "Expense";
                             }
                           }
 
-                          // If we don't have a specific target entity (e.g. untracked expense), show Category?
-                          // The `RenderEntity` expects name/icon.
-                          if (targetName === 'Unknown' && txn.shop) {
-                            targetName = txn.shop.name;
-                            targetIcon = txn.shop.logo || undefined;
+                          // Override Badge for Single Flow
+                          // MF-UI-FIX: User reported icon duplication.
+                          // Since Type Badge (Col 1) already shows the Arrow, we don't need a second badge here.
+                          // Just show [TypeIcon] [CategoryIcon] [Name].
+                          if (isSingleFlow) {
+                            contextBadge = null;
                           }
 
                           return (
@@ -2512,17 +2517,10 @@ export function UnifiedTransactionTable({
                         // Logic: We are the Target. Money came FROM Source.
                         if (isAccountContext && contextId && (targetId === contextId || txn.type === 'income')) {
                           // Context Badge: FROM
-                          const contextBadge = buildDirectionBadge('from');
+                          let contextBadge = buildDirectionBadge('from');
+                          let isSingleFlow = false;
 
                           // Entity to display: Source
-                          // Source could be: Account (Transfer), Person (Income, Repayment from them).
-                          // If Source is Account, we validly have `accountEntity`.
-                          // If Source is Person (e.g. Income), `sourceId` might be null but `personId` is set?
-                          // Wait, `source_account_id` is usually the payer.
-                          // If Income from Person, `source_account_id` might be null?
-                          // If `source_account_id` is present, it's an account transfer context usually.
-                          // Or "Income" with source account?
-
                           let displayName = 'Unknown';
                           let displayIcon = undefined;
                           let displayLink = null;
@@ -2531,15 +2529,33 @@ export function UnifiedTransactionTable({
                           if (sourceId) {
                             const sAccount = accounts.find(a => a.id === sourceId);
                             if (sAccount) {
-                              displayName = sAccount.name;
-                              displayIcon = sAccount.image_url;
-                              displayLink = `/accounts/${sAccount.id}`;
+                              // MF-UI-FIX: If source is THIS account (Self-Income/Cashback), don't show "FROM Msb".
+                              if (sourceId === contextId && txn.type === 'income') {
+                                isSingleFlow = true;
+                                // Try to find a better label than the account itself
+                                if (txn.shop) {
+                                  displayName = txn.shop.name;
+                                  displayIcon = txn.shop.logo || undefined;
+                                } else if (txn.category_name) {
+                                  displayName = txn.category_name;
+                                  displayIcon = txn.category_image_url || txn.category_icon || undefined;
+                                } else {
+                                  displayName = "Income";
+                                }
+                                displayLink = null;
+                              } else {
+                                displayName = sAccount.name;
+                                displayIcon = sAccount.image_url;
+                                displayLink = `/accounts/${sAccount.id}`;
+                              }
                             }
                           }
 
                           // If no source account, check other sources (Shop, Person) for Income
                           if (displayName === 'Unknown') {
+                            isSingleFlow = true; // Implicit single flow if unknown source
                             if (personId) {
+                              isSingleFlow = false; // Person is a specific entity
                               displayName = personNameLink || 'Unknown Person';
                               displayIcon = personAvatar;
                               displayLink = `/people/details?id=${personId}`;
@@ -2547,10 +2563,19 @@ export function UnifiedTransactionTable({
                             } else if (txn.shop) {
                               displayName = txn.shop.name;
                               displayIcon = txn.shop.logo || undefined;
+                            } else if (txn.category_name) {
+                              // Fallback to Category if Source Unknown (common for manual Income)
+                              displayName = txn.category_name;
+                              displayIcon = txn.category_image_url || txn.category_icon || undefined;
                             } else if (txn.type === 'income') {
-                              // Generic Income source if no helper
                               displayName = "Income";
                             }
+                          }
+
+                          // Override Badge for Single Flow Income
+                          // MF-UI-FIX: User reported icon duplication.
+                          if (isSingleFlow) {
+                            contextBadge = null;
                           }
 
                           return (
