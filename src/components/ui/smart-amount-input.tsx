@@ -264,7 +264,7 @@ export function SmartAmountInput({
                     </div>
                 )}
                 {/* Clear Button - Only when focused to avoid badge overlap */}
-                {inputValue && !disabled && isFocused && (
+                {inputValue && !disabled && (
                     <button
                         type="button"
                         onMouseDown={(e) => e.preventDefault()} // Prevent blur
@@ -273,7 +273,7 @@ export function SmartAmountInput({
                             e.stopPropagation();
                             setInputValue('');
                             onChange(undefined);
-                            // Keep focus if it was focused, or just clear
+                            // Ensure focus remains
                             inputRef.current?.focus();
                         }}
                         className="absolute right-10 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 z-10"

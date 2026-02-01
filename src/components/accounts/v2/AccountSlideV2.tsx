@@ -1442,31 +1442,41 @@ export function AccountSlideV2({
                                                                                     {rule.categoryIds.map((id: string) => {
                                                                                         const cat = categories.find(c => c.id === id);
                                                                                         return cat ? (
-                                                                                            <div key={id} className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded-md border border-blue-100 max-w-full">
-                                                                                                {cat.image_url ? (
-                                                                                                    <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
-                                                                                                ) : (
-                                                                                                    <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
-                                                                                                )}
-                                                                                                <span className="truncate mr-1">{cat.name}</span>
-                                                                                                {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                                    <span className="text-[9px] text-blue-400 font-normal mr-1 hidden sm:inline-block">
-                                                                                                        ({cat.mcc_codes.join(', ')})
-                                                                                                    </span>
-                                                                                                )}
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={(e) => {
-                                                                                                        e.stopPropagation();
-                                                                                                        const newLevels = [...levels];
-                                                                                                        newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
-                                                                                                        setLevels(newLevels);
-                                                                                                    }}
-                                                                                                    className="ml-auto hover:text-rose-500 flex-shrink-0"
-                                                                                                >
-                                                                                                    &times;
-                                                                                                </button>
-                                                                                            </div>
+                                                                                            <TooltipProvider key={id}>
+                                                                                                <Tooltip delayDuration={300}>
+                                                                                                    <TooltipTrigger asChild>
+                                                                                                        <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-full truncate h-5">
+                                                                                                            {cat.image_url ? (
+                                                                                                                <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
+                                                                                                            ) : (
+                                                                                                                <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
+                                                                                                            )}
+                                                                                                            <span className="truncate">{cat.name}</span>
+                                                                                                            {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                                <span className="text-[9px] text-blue-400 font-normal ml-1 hidden sm:inline-block">({cat.mcc_codes.join(', ')})</span>
+                                                                                                            )}
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={(e) => {
+                                                                                                                    e.stopPropagation(); // Prevent tooltip from interfering
+                                                                                                                    const newLevels = [...levels];
+                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
+                                                                                                                    setLevels(newLevels);
+                                                                                                                }}
+                                                                                                                className="ml-1 hover:text-rose-500 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-blue-100"
+                                                                                                            >
+                                                                                                                &times;
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </TooltipTrigger>
+                                                                                                    <TooltipContent className="text-xs">
+                                                                                                        <p className="font-bold">{cat.name}</p>
+                                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                            <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
+                                                                                                        )}
+                                                                                                    </TooltipContent>
+                                                                                                </Tooltip>
+                                                                                            </TooltipProvider>
                                                                                         ) : null;
                                                                                     })}
                                                                                 </div>
