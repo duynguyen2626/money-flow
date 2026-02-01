@@ -1245,7 +1245,7 @@ export function AccountSlideV2({
                                                             </div>
                                                         </div>
 
-                                                        <div className="grid grid-cols-2 gap-4">
+                                                        <div className="grid grid-cols-2 gap-3 mb-4">
                                                             <div className="space-y-1.5">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Total Spend</Label>
