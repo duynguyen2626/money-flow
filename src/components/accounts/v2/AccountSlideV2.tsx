@@ -1307,8 +1307,8 @@ export function AccountSlideV2({
 
                                                             <div className="space-y-2">
                                                                 {level.rules.map((rule: any, rIdx: number) => (
-                                                                    <div key={rule.id} className="flex flex-col sm:flex-row items-start gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                                                                        <div className="w-full sm:flex-1 space-y-1">
+                                                                    <div key={rule.id} className="flex flex-col items-start gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                                                        <div className="w-full space-y-1">
                                                                             <div className="flex items-center gap-1.5">
                                                                                 <Label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Categories</Label>
                                                                                 <Info className="h-2.5 w-2.5 text-slate-300" />
@@ -1413,7 +1413,7 @@ export function AccountSlideV2({
                                                                             )}
                                                                         </div>
 
-                                                                        <div className="flex items-end gap-2 w-full sm:w-auto">
+                                                                        <div className="flex items-end gap-2 w-full">
                                                                             <div className="flex-1 sm:w-20 space-y-1">
                                                                                 <Label className="text-[9px] font-black uppercase text-slate-400 tracking-wider text-right block">Rate (%)</Label>
                                                                                 <SmartAmountInput
