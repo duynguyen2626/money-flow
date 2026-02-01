@@ -7,27 +7,17 @@
 ## 📋 Flow for Starting New Chat
 
 ### Step 1: Copy Prompt A (Initial Context)
-Open `.agent/prompts/start_prompts.md` and copy **Prompt A**.
+Open **`.agent/prompts/step1.md`** and copy the prompt template.
 
 **Replace**: `{PHASE_NUMBER}` with current phase (e.g., 12, 13, 14)
 
-**Example for Phase 12**:
-```
-Hi! I'm starting a new chat session for Money Flow 3 development.
+**What it does**:
+- Agent reads `onboarding.md` (project overview, rules, key concepts)
+- Agent reads `HANDOVER_PHASE_X.md` (what was done, what needs to be done)
+- Agent provides a summary of understanding
 
-STEP 1: Please read `.agent/prompts/onboarding.md` to understand the project context.
+**File**: [.agent/prompts/step1.md](./.agent/prompts/step1.md)
 
-STEP 2: After reading onboarding.md, please read `.agent/HANDOVER_PHASE_12.md` for the current phase handover.
-
-STEP 3: Summarize your understanding:
-- What is the current phase number?
-- What are the main objectives for this phase?
-- What files/components will you likely need to work on?
-
-Please confirm you've read both files and provide your summary.
-```
-
-**Paste** this into your new chat session.
 
 ---
 
@@ -42,29 +32,18 @@ The agent will:
 ---
 
 ### Step 3: Copy Prompt B (Ready to Start)
-After the agent confirms understanding, copy **Prompt B** from `start_prompts.md`.
+After the agent confirms understanding, open **`.agent/prompts/step2.md`** and copy the prompt template.
 
 **Replace**: `{PHASE_NUMBER}` with current phase
 
-**Example for Phase 12**:
-```
-Great! Now let's start Phase 12 work.
+**What it does**:
+- Agent reads `PHASE_X_PLAN.md` (detailed implementation plan)
+- Agent creates a new branch
+- Agent starts working on the first objective (S1)
+- Agent commits frequently
 
-STEP 1: Read `.agent/PHASE_12_PLAN.md` for the detailed implementation plan.
+**File**: [.agent/prompts/step2.md](./.agent/prompts/step2.md)
 
-STEP 2: Create a new branch: `fix/phase-12-critical-bugs`
-
-STEP 3: Start with S1 (Category Badges):
-- Investigate if category badges are implemented or missing
-- Check data fetching logic
-- Check rendering logic in unified-transaction-table.tsx
-
-STEP 4: Commit frequently with descriptive messages.
-
-Please confirm you're ready to start and let me know when you've created the branch.
-```
-
-**Paste** this into the chat.
 
 ---
 
@@ -164,14 +143,15 @@ STEP 3: Start with the first objective...
 
 | Step | Action | File to Use |
 |------|--------|-------------|
-| 1 | Copy Prompt A | `.agent/prompts/start_prompts.md` |
+| 1 | Copy Prompt A | [.agent/prompts/step1.md](./.agent/prompts/step1.md) |
 | 2 | Replace `{PHASE_NUMBER}` | Current phase (12, 13, etc.) |
 | 3 | Paste into new chat | - |
 | 4 | Wait for summary | - |
-| 5 | Copy Prompt B | `.agent/prompts/start_prompts.md` |
+| 5 | Copy Prompt B | [.agent/prompts/step2.md](./.agent/prompts/step2.md) |
 | 6 | Replace `{PHASE_NUMBER}` | Current phase |
 | 7 | Paste into chat | - |
 | 8 | Monitor progress | - |
+
 
 ---
 
