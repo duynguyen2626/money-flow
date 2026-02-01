@@ -189,9 +189,15 @@ function LevelItem({
           <p className="text-xs text-slate-400 italic">No category rules. Click "+ Add Rule" to add specific rates.</p>
         )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {rules.length > 0 && (
+          <div className="text-[10px] text-slate-400 mb-2 px-3">
+            <span className="italic">{rules.length} rule{rules.length !== 1 ? 's' : ''} • Scroll to see all</span>
+          </div>
+        )}
+
+        <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 border border-slate-100 rounded-lg p-3 bg-white [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded hover:[&::-webkit-scrollbar-thumb]:bg-slate-400">
           {rules.map((rule, rIndex) => (
-            <div key={rule.id || rIndex} className="relative group rounded-xl border-2 border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-blue-200 hover:bg-white hover:shadow-md space-y-4">
+            <div key={rule.id || rIndex} className="relative group rounded-xl border-2 border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-blue-200 hover:bg-white hover:shadow-md space-y-4 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => setRuleToDelete(rIndex)}
@@ -218,7 +224,7 @@ function LevelItem({
                 </Tooltip>
               </TooltipProvider>
 
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 mb-4">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     Categories
@@ -240,7 +246,7 @@ function LevelItem({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     Rate (%)

@@ -62,11 +62,40 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     loadTransactions({ accountId: id, context: 'account', limit: 2000 }), // Increased limit for V2
   ])
 
+  // Calculate annual fee waiver stats manually for header display
+  let accountWithStats = account
+  if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
+    const waiver_target = account.annual_fee_waiver_target ?? null
+    if (waiver_target && waiver_target > 0) {
+      // Calculate total expense spend from ALL transactions (not just cashback)
+      // Include: expense, transfer, debt types; exclude: income, repayment
+      const spent = transactions
+        .filter(t => {
+          const type = t.type?.toLowerCase()
+          return type === 'expense' || type === 'transfer' || type === 'debt'
+        })
+        .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
+      
+      const progress = Math.min(100, (spent / waiver_target) * 100)
+      const met = spent >= waiver_target
+      
+      accountWithStats = {
+        ...account,
+        stats: {
+          spent_this_cycle: spent,
+          annual_fee_waiver_target: waiver_target,
+          annual_fee_waiver_progress: progress,
+          annual_fee_waiver_met: met,
+        }
+      }
+    }
+  }
+
   return (
     <TagFilterProvider>
       <Suspense fallback={<div className="flex h-screen items-center justify-center text-slate-400">Loading Account Details...</div>}>
         <AccountDetailViewV2
-          account={account}
+          account={accountWithStats}
           allAccounts={allAccounts}
           categories={categories}
           people={people}

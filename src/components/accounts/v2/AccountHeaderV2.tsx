@@ -1,7 +1,9 @@
-import { Search, Plus, Landmark, LayoutGrid, List } from "lucide-react";
+import { Search, Plus, Landmark, LayoutGrid, List, Filter } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Category } from "@/types/moneyflow.types";
+import { Select, SelectItem } from "@/components/ui/select";
 
 interface AccountHeaderProps {
     searchQuery: string;
@@ -14,6 +16,9 @@ interface AccountHeaderProps {
     activeCount: number;
     debtCount: number;
     closedCount: number;
+    categories?: Category[];
+    selectedCategory?: string | null;
+    onCategoryChange?: (categoryId: string | undefined) => void;
 }
 
 export function AccountHeaderV2({
@@ -27,6 +32,9 @@ export function AccountHeaderV2({
     activeCount,
     debtCount,
     closedCount,
+    categories = [],
+    selectedCategory,
+    onCategoryChange,
 }: AccountHeaderProps) {
     const filters = [
         { id: 'accounts_cards' as const, label: 'Accounts & Cards' },
@@ -72,6 +80,20 @@ export function AccountHeaderV2({
 
             {/* Right Group: Search and Action */}
             <div className="flex items-center gap-3">
+                {/* Category Filter */}
+                {categories.length > 0 && onCategoryChange && (
+                    <Select
+                        items={[
+                            { value: 'all', label: 'All Categories' },
+                            ...categories.map((cat) => ({ value: cat.id, label: cat.name }))
+                        ]}
+                        value={selectedCategory || 'all'}
+                        onValueChange={(val) => onCategoryChange(val === 'all' ? undefined : val)}
+                        placeholder="Category"
+                        className="h-9 w-36 text-xs"
+                    />
+                )}
+                
                 <div className="relative w-48 lg:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input

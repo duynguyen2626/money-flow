@@ -341,6 +341,9 @@ function renderCell(
                                     renderRoleBadge('standalone')
                                 )}
 
+                                {/* MCC Badges - placeholder for now, will be aggregated from transactions */}
+                                {/* TODO: Aggregate MCC codes from account transactions */}
+
                                 {(() => {
                                     const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
                                     const dueDate = stats?.due_date ? new Date(stats.due_date) : null;

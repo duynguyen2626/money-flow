@@ -42,6 +42,7 @@ export function AccountDirectoryV2({
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState<'accounts_cards' | 'credit' | 'savings' | 'debt'>('accounts_cards');
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     // CRUD state (Account)
     const [isAccountSlideOpen, setIsAccountSlideOpen] = useState(false);
@@ -177,6 +178,10 @@ export function AccountDirectoryV2({
         setIsTxnSlideOpen(true);
     };
 
+    const handleCategoryChange = (categoryId: string | undefined) => {
+        setSelectedCategory(categoryId || null);
+    };
+
     return (
         <div className="flex flex-col h-full bg-white">
             <AccountHeaderV2
@@ -190,6 +195,9 @@ export function AccountDirectoryV2({
                 activeCount={activeCount}
                 debtCount={debtCount}
                 closedCount={closedCount}
+                categories={categories}
+                selectedCategory={selectedCategory}
+                onCategoryChange={handleCategoryChange}
             />
 
             <div className="flex-1 overflow-auto px-6 py-4">

@@ -61,6 +61,44 @@ export function AccountDetailViewV2({
     const [isConfirmingPending, setIsConfirmingPending] = useState(false)
     const [pendingRefundAmount, setPendingRefundAmount] = useState(0)
 
+    const summary = useMemo(() => {
+        const currentYear = new Date().getFullYear()
+        const categoryMap = new Map(categories.map(c => [c.id, c]))
+        let yearDebtTotal = 0
+        let debtTotal = 0
+        let expensesTotal = 0
+        let cashbackTotal = 0
+
+        initialTransactions.forEach(tx => {
+            const rawDate = tx?.occurred_at || tx?.date || tx?.created_at
+            const date = rawDate ? new Date(rawDate) : null
+            const amount = Math.abs(Number(tx?.amount || 0))
+            const type = String(tx?.type || '').toLowerCase()
+
+            if (type === 'debt') {
+                debtTotal += amount
+                if (date && date.getFullYear() === currentYear) {
+                    yearDebtTotal += amount
+                }
+            }
+
+            if (type === 'expense' || type === 'transfer') {
+                expensesTotal += amount
+            }
+
+            if (type === 'income') {
+                const categoryId = tx?.category_id
+                const category = categoryId ? categoryMap.get(categoryId) : null
+                const categoryName = category?.name?.toLowerCase() || ''
+                if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
+                    cashbackTotal += amount
+                }
+            }
+        })
+
+        return { yearDebtTotal, debtTotal, expensesTotal, cashbackTotal }
+    }, [initialTransactions, categories])
+
     // Sync tab with URL
     useEffect(() => {
         const tab = searchParams.get('tab') === 'cashback' ? 'cashback' : 'transactions'
@@ -192,6 +230,7 @@ export function AccountDetailViewV2({
                 availableYears={availableYears}
                 onYearChange={setSelectedYear}
                 selectedCycle={selectedCycle}
+                summary={summary}
             />
 
             {/* Content Area */}

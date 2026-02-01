@@ -39,6 +39,10 @@ export type AccountStats = {
   real_awarded?: number // For multi-tier progress logic
   virtual_profit?: number // For multi-tier progress logic
   next_level_name?: string
+  // Annual fee waiver
+  annual_fee_waiver_target?: number | null
+  annual_fee_waiver_progress?: number
+  annual_fee_waiver_met?: boolean
 }
 
 export type AccountRelationships = {
@@ -67,6 +71,7 @@ export type Account = {
   total_in?: number;
   total_out?: number;
   annual_fee?: number | null;
+  annual_fee_waiver_target?: number | null;
   stats?: AccountStats | null;
   relationships?: AccountRelationships | null;
   credit_card_info?: {
