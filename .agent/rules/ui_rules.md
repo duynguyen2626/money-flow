@@ -23,3 +23,13 @@
   - Main /transactions: single-flow rows left-aligned.
   - Detail pages (account/people): single-flow rows centered.
 - **Header borders**: use stronger border contrast (`border-slate-400` or darker) to match table grid.
+
+## 5. Typography
+- **NO Monospace Fonts**: Never use monospace fonts (`font-mono`, `Courier`, `Consolas`) for UI text, labels, or data display.
+- **Exception**: Code blocks, terminal output, or technical documentation only.
+- **Reason**: User preference for clean, modern sans-serif aesthetics.
+
+## 6. Image Handling in Documentation
+- **NO Cropping**: When generating or embedding images in documentation (walkthroughs, guides), always use full, uncropped images.
+- **NO Rounding**: Do not apply `rounded-*` classes to documentation images. Use `rounded-none` or omit rounding entirely.
+- **Reason**: Preserve full context and clarity in visual documentation.
