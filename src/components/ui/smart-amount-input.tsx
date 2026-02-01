@@ -48,7 +48,7 @@ export function SmartAmountInput({
             // Allow only numbers and basic math operators
             if (!/^[0-9+\-*/().\s]+$/.test(expression)) return null;
 
-             
+
             const result = new Function(`return ${expression}`)();
 
             if (!isFinite(result) || isNaN(result)) return null;
@@ -81,7 +81,7 @@ export function SmartAmountInput({
         // Check if it's a math expression
         if (/[+\-*/]/.test(rawInput)) {
             const result = evaluateMath(rawInput)
-            if (result !== null) {
+            if (result !== null && !isNaN(result)) {
                 onChange(result)
                 setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(result))
             } else {
@@ -191,7 +191,7 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "text-sm pr-32 font-medium tracking-wide", // Removed h-11, will use parent className
+                        "text-sm pr-32 font-medium tracking-wide h-full py-0 flex items-center", // Removed h-11, will use parent className
                         mathError ? "border-red-300 focus-visible:ring-red-200" : "",
                         className // Apply parent className last so it can override
                     )}
@@ -256,14 +256,15 @@ export function SmartAmountInput({
                     </div>
                 )}
                 {/* Clear Button */}
-                {inputValue && !disabled && isFocused && (
+                {inputValue && !disabled && (
                     <button
                         type="button"
                         onClick={(e) => {
+                            e.preventDefault();
                             e.stopPropagation();
                             setInputValue('');
                             onChange(undefined);
-                            setIsFocused(true);
+                            // Keep focus if it was focused, or just clear
                             inputRef.current?.focus();
                         }}
                         className="absolute right-10 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 z-10"

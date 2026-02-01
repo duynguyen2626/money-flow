@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft } from "lucide-react";
+import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2 } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -1367,6 +1367,45 @@ export function AccountSlideV2({
                                                                                                         </div>
                                                                                                     </CommandItem>
                                                                                                 ))}
+                                                                                                {categories.map((category) => (
+                                                                                                    <CommandItem
+                                                                                                        key={category.id}
+                                                                                                        onSelect={() => {
+                                                                                                            // Add category to current rule
+                                                                                                            // Need to handle this via callback or better state management
+                                                                                                            if (activeCategoryCallback) {
+                                                                                                                activeCategoryCallback(category.id);
+                                                                                                            } else {
+                                                                                                                // Fallback: direct update if context allows (it doesn't easily here without passing ID up)
+                                                                                                                // The current architecture relies on 'activeCategoryCallback' being set BEFORE opening
+                                                                                                                const newLevels = [...levels];
+                                                                                                                if (!newLevels[lIdx].rules[rIdx].categoryIds.includes(category.id)) {
+                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds.push(category.id);
+                                                                                                                    setLevels(newLevels);
+                                                                                                                }
+                                                                                                            }
+                                                                                                            // Don't close popover to allow multiple selections? Or close?
+                                                                                                            // User typically wants to select one by one or stay. Let's keep it open or close.
+                                                                                                            // Existing behavior was just selecting.
+                                                                                                        }}
+                                                                                                        className="flex items-center gap-2 cursor-pointer"
+                                                                                                    >
+                                                                                                        <div className="flex-1">
+                                                                                                            <div className="flex items-center gap-2">
+                                                                                                                <span>{category.icon || "🏷️"}</span>
+                                                                                                                <span className="font-medium">{category.name}</span>
+                                                                                                            </div>
+                                                                                                            {category.mcc_codes && category.mcc_codes.length > 0 && (
+                                                                                                                <div className="text-[9px] text-slate-400 mt-0.5 ml-6">
+                                                                                                                    MCC: {category.mcc_codes.join(", ")}
+                                                                                                                </div>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                        {rule.categoryIds.includes(category.id) && (
+                                                                                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                                                                                        )}
+                                                                                                    </CommandItem>
+                                                                                                ))}
                                                                                             </CommandGroup>
                                                                                         </CommandList>
                                                                                         <div className="p-1 border-t border-slate-100 bg-slate-50">
@@ -1457,7 +1496,7 @@ export function AccountSlideV2({
                                                                                     }}
                                                                                     className="h-8 w-8 text-slate-400 hover:text-slate-600"
                                                                                 >
-                                                                                    <RotateCcw className="h-3 w-3" />
+                                                                                    <Copy className="h-3 w-3" />
                                                                                 </Button>
                                                                                 <Button
                                                                                     type="button"
