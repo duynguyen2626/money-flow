@@ -1320,9 +1320,12 @@ export function AccountSlideV2({
                                                                                         className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium"
                                                                                     >
                                                                                         <span className="truncate">
-                                                                                            {rule.categoryIds.length === 0
-                                                                                                ? "Select categories..."
-                                                                                                : `${rule.categoryIds.length} categories selected`}
+                                                                                            {(() => {
+                                                                                                const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
+                                                                                                return validCount === 0
+                                                                                                    ? "Select categories..."
+                                                                                                    : `${validCount} categories selected`;
+                                                                                            })()}
                                                                                         </span>
                                                                                         <ChevronsUpDown className="h-3 w-3 opacity-50" />
                                                                                     </Button>
@@ -1439,25 +1442,38 @@ export function AccountSlideV2({
                                                                                     {rule.categoryIds.map((id: string) => {
                                                                                         const cat = categories.find(c => c.id === id);
                                                                                         return cat ? (
-                                                                                            <div key={id} className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100">
-                                                                                                {cat.image_url ? (
-                                                                                                    <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1" />
-                                                                                                ) : (
-                                                                                                    <span className="mr-1">{cat.icon || "🏷️"}</span>
-                                                                                                )}
-                                                                                                {cat.name}
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => {
-                                                                                                        const newLevels = [...levels];
-                                                                                                        newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
-                                                                                                        setLevels(newLevels);
-                                                                                                    }}
-                                                                                                    className="ml-1 hover:text-rose-500"
-                                                                                                >
-                                                                                                    &times;
-                                                                                                </button>
-                                                                                            </div>
+                                                                                            <TooltipProvider key={id}>
+                                                                                                <Tooltip delayDuration={300}>
+                                                                                                    <TooltipTrigger asChild>
+                                                                                                        <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-[150px] truncate">
+                                                                                                            {cat.image_url ? (
+                                                                                                                <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
+                                                                                                            ) : (
+                                                                                                                <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
+                                                                                                            )}
+                                                                                                            <span className="truncate">{cat.name}</span>
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={(e) => {
+                                                                                                                    e.stopPropagation(); // Prevent tooltip from interfering
+                                                                                                                    const newLevels = [...levels];
+                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
+                                                                                                                    setLevels(newLevels);
+                                                                                                                }}
+                                                                                                                className="ml-1 hover:text-rose-500 flex-shrink-0"
+                                                                                                            >
+                                                                                                                &times;
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </TooltipTrigger>
+                                                                                                    <TooltipContent className="text-xs">
+                                                                                                        <p className="font-bold">{cat.name}</p>
+                                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                            <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
+                                                                                                        )}
+                                                                                                    </TooltipContent>
+                                                                                                </Tooltip>
+                                                                                            </TooltipProvider>
                                                                                         ) : null;
                                                                                     })}
                                                                                 </div>

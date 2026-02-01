@@ -267,6 +267,7 @@ export function SmartAmountInput({
                 {inputValue && !disabled && isFocused && (
                     <button
                         type="button"
+                        onMouseDown={(e) => e.preventDefault()} // Prevent blur
                         onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
