@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2 } from "lucide-react";
+import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -34,7 +34,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
-import { Check, ChevronsUpDown, Loader2, RotateCcw } from "lucide-react";
+import { ChevronsUpDown, Loader2 } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
@@ -1377,33 +1377,40 @@ export function AccountSlideV2({
                                                                                                                 activeCategoryCallback(category.id);
                                                                                                             } else {
                                                                                                                 // Fallback: direct update if context allows (it doesn't easily here without passing ID up)
-                                                                                                                // The current architecture relies on 'activeCategoryCallback' being set BEFORE opening
                                                                                                                 const newLevels = [...levels];
                                                                                                                 if (!newLevels[lIdx].rules[rIdx].categoryIds.includes(category.id)) {
                                                                                                                     newLevels[lIdx].rules[rIdx].categoryIds.push(category.id);
                                                                                                                     setLevels(newLevels);
                                                                                                                 }
                                                                                                             }
-                                                                                                            // Don't close popover to allow multiple selections? Or close?
-                                                                                                            // User typically wants to select one by one or stay. Let's keep it open or close.
-                                                                                                            // Existing behavior was just selecting.
                                                                                                         }}
-                                                                                                        className="flex items-center gap-2 cursor-pointer"
+                                                                                                        className="flex items-start gap-2 cursor-pointer py-2 pl-2"
                                                                                                     >
-                                                                                                        <div className="flex-1">
+                                                                                                        {/* Checkbox */}
+                                                                                                        <div className={cn(
+                                                                                                            "w-3.5 h-3.5 mt-0.5 border rounded flex items-center justify-center transition-colors flex-shrink-0",
+                                                                                                            rule.categoryIds.includes(category.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
+                                                                                                        )}>
+                                                                                                            {rule.categoryIds.includes(category.id) && <Check className="h-2.5 w-2.5" />}
+                                                                                                        </div>
+
+                                                                                                        <div className="flex-1 min-w-0">
                                                                                                             <div className="flex items-center gap-2">
-                                                                                                                <span>{category.icon || "🏷️"}</span>
-                                                                                                                <span className="font-medium">{category.name}</span>
+                                                                                                                <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0">
+                                                                                                                    {category.image_url ? (
+                                                                                                                        <img src={category.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                                                    ) : (
+                                                                                                                        <span className="text-[10px]">{category.icon || "🏷️"}</span>
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                                <span className="font-medium text-sm truncate">{category.name}</span>
                                                                                                             </div>
                                                                                                             {category.mcc_codes && category.mcc_codes.length > 0 && (
-                                                                                                                <div className="text-[9px] text-slate-400 mt-0.5 ml-6">
+                                                                                                                <div className="text-[10px] text-slate-400 mt-1 ml-6 leading-tight">
                                                                                                                     MCC: {category.mcc_codes.join(", ")}
                                                                                                                 </div>
                                                                                                             )}
                                                                                                         </div>
-                                                                                                        {rule.categoryIds.includes(category.id) && (
-                                                                                                            <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                                                                                                        )}
                                                                                                     </CommandItem>
                                                                                                 ))}
                                                                                             </CommandGroup>
@@ -1433,6 +1440,11 @@ export function AccountSlideV2({
                                                                                         const cat = categories.find(c => c.id === id);
                                                                                         return cat ? (
                                                                                             <div key={id} className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100">
+                                                                                                {cat.image_url ? (
+                                                                                                    <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1" />
+                                                                                                ) : (
+                                                                                                    <span className="mr-1">{cat.icon || "🏷️"}</span>
+                                                                                                )}
                                                                                                 {cat.name}
                                                                                                 <button
                                                                                                     type="button"

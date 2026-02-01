@@ -110,7 +110,8 @@ export function SmartAmountInput({
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value
-        // Allow digits, commas, dots, and math operators
+
+        // Strict allow list: numbers, math operators
         if (!/^[0-9+\-*/().,\s]*$/.test(val)) return
 
         setMathError(null)
@@ -135,8 +136,15 @@ export function SmartAmountInput({
                 setInputValue(val)
             }
         } else {
-            setInputValue(val)
-            if (raw === '') onChange(undefined)
+            // If empty or invalid, just allow if empty, otherwise block?
+            // "val" passed regex, so it must be symbols if not number?
+            // e.g. "("
+            if (raw === '') {
+                setInputValue('')
+                onChange(undefined)
+            } else {
+                setInputValue(val)
+            }
         }
     }
 
@@ -191,7 +199,7 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "text-sm pr-32 font-medium tracking-wide h-full py-0 flex items-center", // Removed h-11, will use parent className
+                        "text-sm pr-20 font-medium tracking-wide h-full py-0 flex items-center", // Adjusted padding
                         mathError ? "border-red-300 focus-visible:ring-red-200" : "",
                         className // Apply parent className last so it can override
                     )}
@@ -255,8 +263,8 @@ export function SmartAmountInput({
                         ))}
                     </div>
                 )}
-                {/* Clear Button */}
-                {inputValue && !disabled && (
+                {/* Clear Button - Only when focused to avoid badge overlap */}
+                {inputValue && !disabled && isFocused && (
                     <button
                         type="button"
                         onClick={(e) => {
