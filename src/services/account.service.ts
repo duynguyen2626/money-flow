@@ -204,6 +204,24 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     due_date = targetDate.toISOString()
   }
 
+  // 5. Annual Fee Waiver Calculation
+  let annual_fee_waiver_target: number | null = null
+  let annual_fee_waiver_progress = 0
+  let annual_fee_waiver_met = false
+
+  if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
+    // Get waiver target from account config, or use minSpendTarget as fallback
+    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpendTarget ?? null
+
+    if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
+      // Calculate annual spend (not just current cycle)
+      // For now, use spent_this_cycle as proxy; in production, aggregate full year
+      const annualSpend = spent_this_cycle // TODO: Implement full year aggregation
+      annual_fee_waiver_progress = Math.min(100, (annualSpend / annual_fee_waiver_target) * 100)
+      annual_fee_waiver_met = annualSpend >= annual_fee_waiver_target
+    }
+  }
+
   return {
     ...baseStats,
     spent_this_cycle,
@@ -216,7 +234,10 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     remains_cap,
     shared_cashback: real_awarded,
     real_awarded,
-    virtual_profit
+    virtual_profit,
+    annual_fee_waiver_target,
+    annual_fee_waiver_progress,
+    annual_fee_waiver_met
   }
 }
 
@@ -227,7 +248,7 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
 
   const { data, error } = await supabase
     .from('accounts')
-    .select('*')
+    .select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target')
   // Remove default sorting to handle custom sort logic
 
   if (error) {
@@ -403,11 +424,15 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     account_number: row.account_number ?? null,
     receiver_name: row.receiver_name ?? null,
     secured_by_account_id: row.secured_by_account_id ?? null,
+    parent_account_id: row.parent_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
+    cashback_config_version: row.cashback_config_version ?? 1,
     is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
     image_url: typeof row.image_url === 'string' ? row.image_url : null,
     total_in: row.total_in ?? 0,
     total_out: row.total_out ?? 0,
+    annual_fee: row.annual_fee ?? null,
+    annual_fee_waiver_target: row.annual_fee_waiver_target ?? null,
   }
 }
 
@@ -488,6 +513,7 @@ export async function updateAccountConfig(
     is_active?: boolean | null
     image_url?: string | null
     annual_fee?: number | null
+    annual_fee_waiver_target?: number | null
     parent_account_id?: string | null
     account_number?: string | null
     receiver_name?: string | null
@@ -547,6 +573,10 @@ export async function updateAccountConfig(
 
   if ('annual_fee' in data) {
     payload.annual_fee = data.annual_fee ?? null
+  }
+
+  if ('annual_fee_waiver_target' in data) {
+    payload.annual_fee_waiver_target = data.annual_fee_waiver_target ?? null
   }
 
   if ('parent_account_id' in data) {

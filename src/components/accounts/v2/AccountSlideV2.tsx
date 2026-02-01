@@ -44,6 +44,7 @@ import {
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { DayOfMonthPicker } from "@/components/ui/day-of-month-picker";
+import { CategorySlideV2 } from "@/components/accounts/v2/CategorySlideV2";
 
 interface AccountSlideV2Props {
     open: boolean;
@@ -75,6 +76,7 @@ export function AccountSlideV2({
     const [loading, setLoading] = useState(false);
     // New fields
     const [annualFee, setAnnualFee] = useState<number>(0);
+    const [annualFeeWaiverTarget, setAnnualFeeWaiverTarget] = useState<number>(0);
     const [receiverName, setReceiverName] = useState("");
     const [securedById, setSecuredById] = useState<string>("none");
     const [isCollateralLinked, setIsCollateralLinked] = useState(false);
@@ -87,6 +89,8 @@ export function AccountSlideV2({
     const [isCategoryRestricted, setIsCategoryRestricted] = useState(false);
     const [restrictedCategoryIds, setRestrictedCategoryIds] = useState<string[]>([]);
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+    const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+    const [activeCategoryCallback, setActiveCategoryCallback] = useState<((categoryId: string) => void) | null>(null);
 
     // Form state
     const [name, setName] = useState("");
@@ -153,6 +157,7 @@ export function AccountSlideV2({
                     isActive: account.is_active !== false,
                     imageUrl: account.image_url || "",
                     annualFee: account.annual_fee || 0,
+                    annualFeeWaiverTarget: account.annual_fee_waiver_target || 0,
                     receiverName: account.receiver_name || "",
                     parentAccountId: account.parent_account_id || null,
                     securedById: account.secured_by_account_id || "none",
@@ -304,6 +309,7 @@ export function AccountSlideV2({
                 isActive: account.is_active !== false,
                 imageUrl: account.image_url || "",
                 annualFee: account.annual_fee || 0,
+                annualFeeWaiverTarget: account.annual_fee_waiver_target || 0,
                 receiverName: account.receiver_name || "",
                 parentAccountId: account.parent_account_id || null,
                 securedById: account.secured_by_account_id || "none",
@@ -388,6 +394,7 @@ export function AccountSlideV2({
 
                 // New fields
                 setAnnualFee(account.annual_fee || 0);
+                setAnnualFeeWaiverTarget(account.annual_fee_waiver_target || 0);
                 setReceiverName(account.receiver_name || "");
                 setParentAccountId(account.parent_account_id || null);
                 setStartDate((account as any).start_date);
@@ -474,6 +481,7 @@ export function AccountSlideV2({
                     is_active: isActive,
                     image_url: imageUrl,
                     annual_fee: annualFee,
+                    annual_fee_waiver_target: annualFeeWaiverTarget,
                     receiver_name: receiverName,
                     parent_account_id: parentAccountId,
                     secured_by_account_id: isCollateralLinked && securedById !== "none" ? securedById : null,
@@ -531,6 +539,7 @@ export function AccountSlideV2({
     };
 
     return (
+        <>
         <Sheet open={open} onOpenChange={(open) => {
             if (!open) {
                 // Intercept closing
@@ -694,12 +703,14 @@ export function AccountSlideV2({
                             </div>
                         </div>
 
-                        <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Parent Account</Label>
-                                    <p className="text-[9px] text-slate-400 font-medium">Link to a main group for shared limits.</p>
-                                </div>
+                        {/* Parent Account - Only for Credit Cards */}
+                        {type === 'credit_card' && (
+                            <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Parent Account</Label>
+                                        <p className="text-[9px] text-slate-400 font-medium">Link to a main group for shared limits.</p>
+                                    </div>
                                 <Popover open={openParentCombo} onOpenChange={setOpenParentCombo}>
                                     <PopoverTrigger asChild>
                                         <Button
@@ -791,6 +802,7 @@ export function AccountSlideV2({
                                 </Popover>
                             </div>
                         </div>
+                        )}
 
                         {type === 'credit_card' && (
                             <div className="space-y-4 pt-2 border-t border-slate-100">
@@ -850,9 +862,27 @@ export function AccountSlideV2({
                                         />
                                     </div>
                                 </div>
+                                {annualFee > 0 && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="waiver-target" className="text-xs font-black uppercase text-slate-500 tracking-wider">
+                                            Fee Waiver Spending Target
+                                        </Label>
+                                        <SmartAmountInput
+                                            value={annualFeeWaiverTarget}
+                                            onChange={(val) => setAnnualFeeWaiverTarget(val ?? 0)}
+                                            hideLabel
+                                            placeholder="Annual spend to waive fee"
+                                            className="h-10 border-slate-200"
+                                        />
+                                        <p className="text-[9px] text-slate-400 font-medium">
+                                            Leave 0 if no waiver program available
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         )}
 
+                        {/* Collateral / Secured By - For all account types */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Collateral / Secured By</Label>
@@ -955,6 +985,7 @@ export function AccountSlideV2({
                             )}
                         </div>
 
+                        {/* Cashback Configuration */}
                         <div className="pt-4 border-t border-slate-200">
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="px-4 py-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
@@ -1103,7 +1134,10 @@ export function AccountSlideV2({
                                                                 <div className="p-1 border-t border-slate-100 bg-slate-50">
                                                                     <CommandItem
                                                                         onSelect={() => {
-                                                                            toast.info("Category creation coming soon");
+                                                                            setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                setRestrictedCategoryIds([...restrictedCategoryIds, categoryId]);
+                                                                            });
+                                                                            setIsCategoryDialogOpen(true);
                                                                         }}
                                                                         className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
                                                                     >
@@ -1338,7 +1372,11 @@ export function AccountSlideV2({
                                                                                     <div className="p-1 border-t border-slate-100 bg-slate-50">
                                                                                         <CommandItem
                                                                                             onSelect={() => {
-                                                                                                toast.info("Category creation coming soon");
+                                                                                                setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                                    // This is for cashback level rules - would need different context
+                                                                                                    // For now, just open the dialog
+                                                                                                });
+                                                                                                setIsCategoryDialogOpen(true);
                                                                                             }}
                                                                                             className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
                                                                                         >
@@ -1550,6 +1588,22 @@ export function AccountSlideV2({
                 </SheetFooter>
             </SheetContent>
         </Sheet>
+
+        {/* Category Slide for creating new categories */}
+        <CategorySlideV2
+            open={isCategoryDialogOpen}
+            onOpenChange={setIsCategoryDialogOpen}
+            defaultType="expense"
+            onBack={() => setIsCategoryDialogOpen(false)}
+            onSuccess={(newCategoryId) => {
+                if (newCategoryId && activeCategoryCallback) {
+                    activeCategoryCallback(newCategoryId);
+                }
+                setIsCategoryDialogOpen(false);
+                toast.success("Category created successfully");
+            }}
+        />
+        </>
     );
 }
 function formatMoneyVND(amount: number) {

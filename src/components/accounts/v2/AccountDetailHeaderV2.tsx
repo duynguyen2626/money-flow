@@ -38,6 +38,12 @@ interface AccountDetailHeaderV2Props {
     availableYears: string[]
     onYearChange: (year: string | null) => void
     selectedCycle?: string // For dynamic cashback badge display
+    summary?: {
+        yearDebtTotal: number
+        debtTotal: number
+        expensesTotal: number
+        cashbackTotal: number
+    }
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -54,6 +60,7 @@ export function AccountDetailHeaderV2({
     availableYears,
     onYearChange,
     selectedCycle,
+    summary,
 }: AccountDetailHeaderV2Props) {
     const [isSlideOpen, setIsSlideOpen] = React.useState(false)
     const [dynamicCashbackStats, setDynamicCashbackStats] = React.useState<AccountSpendingStats | null>(cashbackStats)
@@ -138,14 +145,17 @@ export function AccountDetailHeaderV2({
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
                         <h1 className="text-xl font-bold text-slate-900 leading-none">{account.name}</h1>
-                        <span className={cn(
-                            "text-[9px] uppercase font-black px-1.5 py-0.5 rounded border leading-none tracking-wider",
-                            isCreditCard
-                                ? "bg-indigo-50 text-indigo-700 border-indigo-100"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                        )}>
-                            {typeLabel}
-                        </span>
+                        {/* Type Badge - Only show if NOT credit card with waiver target */}
+                        {!(isCreditCard && account.annual_fee_waiver_target) && (
+                            <span className={cn(
+                                "text-[9px] uppercase font-black px-1.5 py-0.5 rounded border leading-none tracking-wider",
+                                isCreditCard
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-100"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                            )}>
+                                {typeLabel}
+                            </span>
+                        )}
                     </div>
                     {account.account_number && (
                         <span className="text-[10px] font-mono text-slate-400 mt-0.5">
@@ -156,28 +166,12 @@ export function AccountDetailHeaderV2({
             </div>
 
             {/* Center: Main Stats */}
-            <div className="flex items-center gap-6 px-6 border-l border-r border-slate-100 mx-4 hidden lg:flex">
+            <div className="flex items-center gap-6 px-6 border-l border-r border-slate-100 mx-4 hidden lg:flex z-10 relative">
                 {isCreditCard ? (
                     <>
-                        {/* Section 1: Limit Progress Bar (Outstanding / Limit) */}
-                        <div className="flex flex-col gap-1 min-w-[240px]">
-                            {/* Line 1: Outstanding Amount with Limit */}
-                            <div className="flex items-center justify-between px-0.5 min-h-[17px]">
-                                <span className="text-[10px] font-bold text-rose-500/80 uppercase tracking-widest leading-none">
-                                    Outstanding
-                                </span>
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-[11px] font-black text-rose-600 leading-none">
-                                        {numberFormatter.format(outstandingBalance)}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400 leading-none">/</span>
-                                    <span className="text-[10px] font-bold text-slate-500 leading-none">
-                                        {numberFormatter.format(account.credit_limit || 0)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Line 2: Progress Bar */}
+                        {/* Section 1: Limit + Waiver Progress Bars (Compact) */}
+                        <div className="flex flex-col gap-2 min-w-[340px]">
+                            {/* Limit Bar */}
                             {(() => {
                                 const limit = account.credit_limit || 0
                                 const usage = limit > 0 ? Math.min((outstandingBalance / limit) * 100, 100) : 0
@@ -185,39 +179,114 @@ export function AccountDetailHeaderV2({
                                 const isWarning = usage > 70 && usage <= 90
 
                                 return (
-                                    <div className="relative h-6 w-full cursor-help group border border-slate-200 rounded-md bg-slate-50 hover:border-indigo-300 transition-all overflow-hidden">
-                                        {/* Progress Fill */}
-                                        <div
-                                            className={cn(
-                                                "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
-                                                isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-indigo-500"
-                                            )}
-                                            style={{ width: `${usage}%` }}
-                                        />
-                                        {/* Progress Line at bottom */}
-                                        <div
-                                            className={cn(
-                                                "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
-                                                isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-indigo-500"
-                                            )}
-                                            style={{ width: `${usage}%` }}
-                                        />
-
-                                        {/* Embedded Text */}
-                                        <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
-                                            <span className="text-[10px] font-bold text-slate-500 tabular-nums">
-                                                {limit > 0 ? numberFormatter.format(limit) : '—'}
-                                            </span>
-                                            <span className={cn(
-                                                "text-[10px] font-bold tabular-nums",
-                                                isDanger ? "text-rose-600" : isWarning ? "text-amber-600" : "text-indigo-600"
-                                            )}>
-                                                {usage.toFixed(0)}%
-                                            </span>
-                                        </div>
-                                    </div>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <div className="flex items-center gap-2 group cursor-help">
+                                                <span className="text-[9px] font-bold text-rose-500/80 uppercase tracking-widest leading-none flex-shrink-0 w-16 text-right">
+                                                    Limit
+                                                </span>
+                                                    <div className="relative h-5 flex-1 border border-slate-200 rounded-md bg-slate-50 hover:border-indigo-300 transition-all overflow-hidden flex items-center">
+                                                        {/* Progress Fill */}
+                                                        <div
+                                                            className={cn(
+                                                                "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
+                                                                isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-indigo-500"
+                                                            )}
+                                                            style={{ width: `${usage}%` }}
+                                                        />
+                                                        {/* Progress Line */}
+                                                        <div
+                                                            className={cn(
+                                                                "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
+                                                                isDanger ? "bg-rose-500" : isWarning ? "bg-amber-500" : "bg-indigo-500"
+                                                            )}
+                                                            style={{ width: `${usage}%` }}
+                                                        />
+                                                        {/* Embedded Text */}
+                                                        <div className="absolute inset-0 flex items-center justify-between px-2 pr-10 pointer-events-none w-full">
+                                                            <span className="text-[10px] font-semibold text-slate-700 tabular-nums whitespace-nowrap">
+                                                                {numberFormatter.format(outstandingBalance)}
+                                                            </span>
+                                                            <span className="text-[10px] font-semibold text-slate-600 tabular-nums whitespace-nowrap">
+                                                                {numberFormatter.format(limit)}
+                                                            </span>
+                                                        </div>
+                                                        {/* Percentage Chip */}
+                                                        <div className={cn(
+                                                            "absolute right-1.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-sm text-[9px] font-black tabular-nums",
+                                                            isDanger ? "bg-rose-100 text-rose-700" : isWarning ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"
+                                                        )}>
+                                                            {usage.toFixed(0)}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-max z-[9999]" align="start" sideOffset={8}>
+                                                <div className="text-xs space-y-1">
+                                                    <div className="font-bold">Credit Limit Usage</div>
+                                                    <div>Outstanding: {numberFormatter.format(outstandingBalance)}</div>
+                                                    <div>Limit: {numberFormatter.format(limit)}</div>
+                                                    <div>Usage: {usage.toFixed(0)}%</div>
+                                                    <div className="pt-1 border-t border-slate-200" />
+                                                    <div>Total nợ trong năm: {summary ? numberFormatter.format(summary.yearDebtTotal) : '—'}</div>
+                                                    <div>Tiền Debt: {summary ? numberFormatter.format(summary.debtTotal) : '—'}</div>
+                                                    <div>My expenses: {summary ? numberFormatter.format(summary.expensesTotal) : '—'}</div>
+                                                    <div>Cashback: {summary ? numberFormatter.format(summary.cashbackTotal) : '—'}</div>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                 )
                             })()}
+
+                            {/* Waiver Bar - Only show if applicable */}
+                            {account.annual_fee_waiver_target && account.stats?.annual_fee_waiver_target > 0 && (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <div className="flex items-center gap-2 group cursor-help">
+                                            <span className="text-[9px] font-bold text-amber-500/80 uppercase tracking-widest leading-none flex-shrink-0 w-16 text-right">
+                                                Waiver
+                                                </span>
+                                                <div className="relative h-5 flex-1 border border-slate-200 rounded-md bg-slate-50 hover:border-amber-300 transition-all overflow-hidden flex items-center">
+                                                    {/* Progress Fill */}
+                                                    <div
+                                                        className="absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30 bg-amber-500"
+                                                        style={{ width: `${account.stats.annual_fee_waiver_progress}%` }}
+                                                    />
+                                                    {/* Progress Line */}
+                                                    <div
+                                                        className="absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out bg-amber-500"
+                                                        style={{ width: `${account.stats.annual_fee_waiver_progress}%` }}
+                                                    />
+                                                    {/* Embedded Text */}
+                                                    <div className="absolute inset-0 flex items-center justify-between px-2 pr-10 pointer-events-none w-full">
+                                                        <span className="text-[10px] font-semibold text-slate-700 tabular-nums whitespace-nowrap">
+                                                            {numberFormatter.format(account.stats.spent_this_cycle)}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-slate-600 tabular-nums whitespace-nowrap">
+                                                            {numberFormatter.format(account.stats.annual_fee_waiver_target)}
+                                                        </span>
+                                                    </div>
+                                                    {/* Percentage Chip */}
+                                                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-sm text-[9px] font-black tabular-nums bg-amber-100 text-amber-700">
+                                                        {account.stats.annual_fee_waiver_met ? '100%' : `${account.stats.annual_fee_waiver_progress.toFixed(0)}%`}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-max z-[9999]" align="start" sideOffset={8}>
+                                            <div className="text-xs space-y-1">
+                                                <div className="font-bold">Annual Fee Waiver</div>
+                                                <div>Spent: {numberFormatter.format(account.stats.spent_this_cycle)}</div>
+                                                <div>Target: {numberFormatter.format(account.stats.annual_fee_waiver_target)}</div>
+                                                {!account.stats.annual_fee_waiver_met && (
+                                                    <div className="text-amber-600">
+                                                        Need: {numberFormatter.format(account.stats.annual_fee_waiver_target - account.stats.spent_this_cycle)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+                            )}
                         </div>
 
                         {/* Divider */}
