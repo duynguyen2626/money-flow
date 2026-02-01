@@ -17,6 +17,7 @@ interface SmartAmountInputProps {
     label?: string
     unit?: string
     hideCurrencyText?: boolean
+    hideLabel?: boolean
 }
 
 export function SmartAmountInput({
@@ -30,11 +31,12 @@ export function SmartAmountInput({
     unit,
     hideCurrencyText,
     hideLabel
-}: SmartAmountInputProps & { hideLabel?: boolean }) {
+}: SmartAmountInputProps) {
     const [inputValue, setInputValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
     const [mathError, setMathError] = React.useState<string | null>(null)
     const inputRef = React.useRef<HTMLInputElement>(null)
+    const isSelectingSuggestion = React.useRef(false)
 
     // Sync internal string state with external number value
     React.useEffect(() => {
@@ -48,7 +50,7 @@ export function SmartAmountInput({
             // Allow only numbers and basic math operators
             if (!/^[0-9+\-*/().\s]+$/.test(expression)) return null;
 
-             
+
             const result = new Function(`return ${expression}`)();
 
             if (!isFinite(result) || isNaN(result)) return null;
@@ -81,7 +83,7 @@ export function SmartAmountInput({
         // Check if it's a math expression
         if (/[+\-*/]/.test(rawInput)) {
             const result = evaluateMath(rawInput)
-            if (result !== null) {
+            if (result !== null && !isNaN(result)) {
                 onChange(result)
                 setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(result))
             } else {
@@ -110,7 +112,8 @@ export function SmartAmountInput({
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value
-        // Allow digits, commas, dots, and math operators
+
+        // Strict allow list: numbers, math operators
         if (!/^[0-9+\-*/().,\s]*$/.test(val)) return
 
         setMathError(null)
@@ -135,8 +138,12 @@ export function SmartAmountInput({
                 setInputValue(val)
             }
         } else {
-            setInputValue(val)
-            if (raw === '') onChange(undefined)
+            if (raw === '') {
+                setInputValue('')
+                onChange(undefined)
+            } else {
+                setInputValue(val)
+            }
         }
     }
 
@@ -158,7 +165,6 @@ export function SmartAmountInput({
         ].filter(n => n < 100_000_000_000) // Cap at reasonable amount
     }, [inputValue, isFocused])
 
-    const isSelectingSuggestion = React.useRef(false)
 
     const textParts = React.useMemo(() => {
         const currentVal = isFocused ? evaluateMath(inputValue.replace(/,/g, '')) : value
@@ -168,6 +174,15 @@ export function SmartAmountInput({
         }
         return formatVietnameseCurrencyText(currentVal ?? 0)
     }, [value, inputValue, isFocused, hideCurrencyText, unit])
+
+    // Clear Button Handler
+    const handleClear = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setInputValue('');
+        onChange(undefined);
+        inputRef.current?.focus();
+    };
 
     return (
         <div className="space-y-2">
@@ -181,6 +196,19 @@ export function SmartAmountInput({
             )}
 
             <div className="relative group">
+                {/* Clear Button - MOVED TO LEFT to avoid overlapping with right-aligned badges */}
+                {inputValue && !disabled && (
+                    <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()} // Prevent blur
+                        onClick={handleClear}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 z-20"
+                        tabIndex={-1}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                )}
+
                 <Input
                     ref={inputRef}
                     value={inputValue}
@@ -191,15 +219,16 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "text-sm pr-32 font-medium tracking-wide", // Removed h-11, will use parent className
+                        "text-sm font-medium tracking-wide h-full py-0 flex items-center pr-20 box-border",
+                        inputValue && !disabled ? "pl-8" : "pl-3", // Add padding-left if clear button is visible
                         mathError ? "border-red-300 focus-visible:ring-red-200" : "",
-                        className // Apply parent className last so it can override
+                        className
                     )}
                 />
 
-                {/* Result Badge inside Input - Hide when focused to prevent overlap */}
+                {/* Result Badge inside Input - Right Aligned */}
                 {textParts.length > 0 && !/[+\-*/]/.test(inputValue) && !isFocused && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center bg-white pl-2 shadow-[-10px_0_10px_-5px_rgba(255,255,255,1)]">
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center bg-white pl-2 shadow-[-10px_0_10px_-5px_rgba(255,255,255,1)] max-w-[60%] justify-end z-10">
                         {textParts.length > 2 ? (
                             <div className="pointer-events-auto">
                                 <CustomTooltip content={textParts.map(p => `${p.value} ${p.unit}`).join(' ')}>
@@ -255,25 +284,7 @@ export function SmartAmountInput({
                         ))}
                     </div>
                 )}
-                {/* Clear Button */}
-                {inputValue && !disabled && isFocused && (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setInputValue('');
-                            onChange(undefined);
-                            setIsFocused(true);
-                            inputRef.current?.focus();
-                        }}
-                        className="absolute right-10 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 z-10"
-                        tabIndex={-1}
-                    >
-                        <X className="h-3.5 w-3.5" />
-                    </button>
-                )}
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
     )
 }

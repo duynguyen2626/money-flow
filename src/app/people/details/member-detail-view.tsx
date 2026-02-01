@@ -72,7 +72,7 @@ export function MemberDetailView({
         const tag = searchParams.get('tag')
         const dateFrom = searchParams.get('dateFrom')
         const dateTo = searchParams.get('dateTo')
-        
+
         // Handle tag parameter
         if (tag) {
             if (tag === 'all') {
@@ -86,7 +86,7 @@ export function MemberDetailView({
                 setSelectedYear(year)
             }
         }
-        
+
         // Handle date range
         if (dateFrom && dateTo) {
             try {
@@ -98,7 +98,7 @@ export function MemberDetailView({
             }
         }
     }, [searchParams])
-    
+
     // Sync activeCycleTag to URL (for consistency)
     useEffect(() => {
         const currentTag = searchParams.get('tag')
@@ -131,14 +131,27 @@ export function MemberDetailView({
 
     // Initialize activeCycleTag based on available cycles (after debtCycles is computed)
     useEffect(() => {
-        if (debtCycles.length > 0 && !searchParams.get('tag')) {
-            const match = debtCycles.find(c => c.tag === currentMonthTag)
-            const initialTag = match ? match.tag : (debtCycles[0]?.tag || currentMonthTag)
-            if (initialTag !== activeCycleTag) {
-                setActiveCycleTag(initialTag)
+        if (debtCycles.length > 0) {
+            const urlTag = searchParams.get('tag')
+            if (!urlTag) {
+                // If no tag in URL, default to logic (match current or first)
+                const match = debtCycles.find(c => c.tag === currentMonthTag)
+                const initialTag = match ? match.tag : (debtCycles[0]?.tag || currentMonthTag)
+                if (initialTag !== activeCycleTag) {
+                    setActiveCycleTag(initialTag)
+                }
+            } else if (urlTag === currentMonthTag) {
+                // Check if current tag exists in debtCycles
+                const match = debtCycles.find(c => c.tag === currentMonthTag)
+                if (!match) {
+                    // Current tag requested but no data -> Redirect to All
+                    const url = new URL(window.location.href)
+                    url.searchParams.set('tag', 'all')
+                    router.replace(url.toString())
+                }
             }
         }
-    }, [debtCycles, currentMonthTag, activeCycleTag, searchParams])
+    }, [debtCycles, currentMonthTag, activeCycleTag, searchParams, router])
 
     const activeCycle = debtCycles.find(c => c.tag === activeCycleTag)
 
@@ -195,11 +208,11 @@ export function MemberDetailView({
         // If selectedYear is null, show all transactions (All History mode)
         // Otherwise, show active cycle transactions
         if (!activeCycle) return []
-        
+
         const baseTransactions = selectedYear === null
             ? transactions  // Show all transactions when "All history" selected
             : activeCycle.transactions
-            
+
         return applyFilters(baseTransactions)
     }, [activeCycle, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter, transactions])
 

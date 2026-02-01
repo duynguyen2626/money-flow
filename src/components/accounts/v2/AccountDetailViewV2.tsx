@@ -52,7 +52,7 @@ export function AccountDetailViewV2({
 
     // Year Filter State (for header)
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
-    
+
     // Selected Cycle State (for cashback badge in header)
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
 
@@ -223,6 +223,7 @@ export function AccountDetailViewV2({
             <AccountDetailHeaderV2
                 account={account}
                 allAccounts={allAccounts}
+                categories={categories}
                 cashbackStats={initialCashbackStats}
                 activeTab={activeTab}
                 onTabChange={handleTabChange}

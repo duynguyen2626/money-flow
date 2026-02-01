@@ -70,3 +70,9 @@ Installments: Installments are linked to transaction_lines. Do not double-count 
    - Schema File: `database/schema.sql`.
    - Migrations: `database/migrations/`.
    - DO NOT create migrations in other folders.
+
+8. File Cleanup (CRITICAL)
+   - **NO temporary files** in project root (build_*.txt, lint_*.txt, changes.txt, etc.)
+   - Use `.logs/` folder for temporary files (gitignored)
+   - Clean up `.logs/` before completing tasks
+   - See `.agent/rules/cleanup_rules.md` for detailed rules

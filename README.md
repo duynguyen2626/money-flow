@@ -18,13 +18,46 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 - **Cashback:** Advanced cashback calculation and tracking.
 - **Services:** Subscription management.
 
-## Current Status: UI Refactor (Jan 2026)
-We are currently refactoring the core UI components to ensure strict consistency.
-- **Transaction Table**: Moved to a fixed-width CSS Grid layout.
-- **Flow Column**: Unified icon-first type badges across /transactions and detail pages (no direction badges).
-- **Image Rendering**: Strict rules for Shapes (Person=Circle, Shop=Rounded Square, Account=Original).
-- **Badges**: Standardized size (24px) and positioning.
-See `.agent/context/ui_standards.md` for detailed specs.
+## Current Status: Phase 12 (Feb 2026)
+
+**Focus**: Critical bug fixes and UI refinements
+
+### Recent Updates (Phase 11)
+- **Account Details Flow UI**: Implemented "Single Flow" mode for simple Income/Expense transactions
+  - Removed redundant self-reference badges (e.g., "FROM Msb Online" for Cashback)
+  - Display Category/Shop instead of generic "Unknown"
+  - Cleaner UI with no duplicate directional badges
+- **Bug Fixes**: 
+  - Fixed People Details URL parameter issue
+  - Fixed Account Edit Form data loading (fresh fetch strategy)
+  - Fixed TypeScript errors in Single Flow mode
+
+### Current Phase 12 Priorities
+- **S1**: Fix Category badges not displaying on Account Name column
+- **S2**: Fix Auto-transaction creation on Services page
+
+See `.agent/HANDOVER_PHASE_12.md` for details.
+
+---
+
+## 📚 Documentation
+
+### For New Developers/Agents
+- **Start Here**: [GEMINI.md](./GEMINI.md) - Quick context for Gemini CLI
+- **Full Onboarding**: [.agent/prompts/onboarding.md](./.agent/prompts/onboarding.md) - Complete onboarding guide
+- **Start Prompts**: [.agent/prompts/start_prompts.md](./.agent/prompts/start_prompts.md) - Dynamic templates for new chat sessions
+
+### Rules & Standards
+- **Coding Standards**: [.agent/rules/rules.md](./.agent/rules/rules.md)
+- **UI Standards**: [.agent/rules/ui_rules.md](./.agent/rules/ui_rules.md) (STRICT)
+
+### Current Work
+- **Phase 12 Handover**: [.agent/HANDOVER_PHASE_12.md](./.agent/HANDOVER_PHASE_12.md)
+- **Phase 12 Plan**: [.agent/PHASE_12_PLAN.md](./.agent/PHASE_12_PLAN.md)
+- **Phase 13 Plan**: [.agent/PHASE_13_PLAN.md](./.agent/PHASE_13_PLAN.md) (Future)
+
+---
+
 
 ## Project Structure
 

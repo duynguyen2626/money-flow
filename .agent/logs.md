@@ -1,104 +1,35 @@
 ## Error Type
-Console Error
+Runtime ReferenceError
 
 ## Error Message
-In HTML, <a> cannot be a descendant of <a>.
-This will cause a hydration error.
-
-  ...
-    <div className="relative w..." style={{}}>
-      <div>
-      <div className="hidden md:..." style={{...}}>
-        <table className="w-full cap..." onMouseUp={function handleCellMouseUp} onMouseLeave={function handleCellMouseUp}>
-          <_c2>
-          <_c4>
-            <tbody ref={null} className={"[&_tr:la..."}>
-              <_c8 className="border-b b...">
-                <tr ref={null} className="border-b t...">
-                  <_c12>
-                  <_c12>
-                  <_c12 onMouseDown={function onMouseDown} onMouseEnter={function onMouseEnter} className="border-r b..." ...>
-                    <td ref={null} className={"p-2 alig..."} onMouseDown={function onMouseDown} ...>
-                      <div className="flex items...">
-                        <div className="flex-1 min...">
-                          <RenderEntity name="Techcomban..." icon="https://im..." link="/accounts/..." badges={[...]} ...>
-                            <LinkComponent href="/accounts/..." onClick={function onClick} target="_blank" ...>
->                             <a
->                               target="_blank"
->                               rel="noopener noreferrer"
->                               className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative ..."
->                               ref={function}
->                               onClick={function onClick}
->                               onMouseEnter={function onMouseEnter}
->                               onTouchStart={function onTouchStart}
->                               href="/accounts/8d5bb150-d62e-4473-a00d-a8aee6a12331"
->                             >
-                                <div className="flex items...">
-                                  <div className="shrink-0 f...">
-                                    <LinkComponent href="/accounts/..." onClick={function onClick} target="_blank" ...>
->                                     <a
->                                       target="_blank"
->                                       rel="noopener noreferrer"
->                                       ref={function}
->                                       onClick={function onClick}
->                                       onMouseEnter={function onMouseEnter}
->                                       onTouchStart={function onTouchStart}
->                                       href="/accounts/8d5bb150-d62e-4473-a00d-a8aee6a12331"
->                                     >
-                                  ...
-                        ...
-                  ...
-              ...
+Cannot access 'isAccountContext' before initialization
 
 
-
-    at a (<anonymous>:null:null)
-    at RenderEntity (src/components/moneyflow/unified-transaction-table.tsx:2267:35)
-    at renderCell (src/components/moneyflow/unified-transaction-table.tsx:2588:31)
-    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2879:30)
+    at renderCell (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_unified-transaction-table_tsx_05e87207._.js:3066:65)
+    at <unknown> (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_unified-transaction-table_tsx_05e87207._.js:5432:71)
     at Array.map (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2850:41)
+    at <unknown> (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_unified-transaction-table_tsx_05e87207._.js:5414:80)
     at Array.map (<anonymous>:null:null)
-    at UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx:1480:40)
-    at UnifiedTransactionsPage (src/components/transactions/UnifiedTransactionsPage.tsx:548:17)
-    at TransactionsPage (src\app\transactions\page.tsx:29:7)
-
-## Code Frame
-  2265 |                                 {leadingElement && <div className="shrink-0">{leadingElement}</div>}
-  2266 |                                 {link ? (
-> 2267 |                                   <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
-       |                                   ^
-  2268 |                                     {renderAvatar(icon, name, isSquare)}
-  2269 |                                   </Link>
-  2270 |                                 ) : renderAvatar(icon, name, isSquare)}
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-<a> cannot contain a nested <a>.
-See this log for the ancestor stack trace.
-
-
-    at a (<anonymous>:null:null)
-    at RenderEntity (src/components/moneyflow/unified-transaction-table.tsx:2315:31)
-    at renderCell (src/components/moneyflow/unified-transaction-table.tsx:2588:31)
-    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2879:30)
-    at Array.map (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2850:41)
-    at Array.map (<anonymous>:null:null)
-    at UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx:1480:40)
-    at UnifiedTransactionsPage (src/components/transactions/UnifiedTransactionsPage.tsx:548:17)
-    at TransactionsPage (src\app\transactions\page.tsx:29:7)
-
-## Code Frame
-  2313 |                           if (link) {
-  2314 |                             return (
-> 2315 |                               <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
-       |                               ^
-  2316 |                                 {Content}
-  2317 |                               </Link>
-  2318 |                             )
+    at UnifiedTransactionTable (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_unified-transaction-table_tsx_05e87207._.js:1996:67)
+    at Object.react_stack_bottom_frame (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:14816:24)
+    at renderWithHooks (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:4645:24)
+    at updateFunctionComponent (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:6106:21)
+    at beginWork (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:6702:24)
+    at runWithFiberInDEV (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:959:74)
+    at performUnitOfWork (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9556:97)
+    at workLoopSync (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9450:40)
+    at renderRootSync (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9434:13)
+    at performWorkOnRoot (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9062:186)
+    at performSyncWorkOnRoot (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:10232:9)
+    at flushSyncWorkAcrossRoots_impl (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:10148:316)
+    at flushSpawnedWork (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9908:13)
+    at commitRoot (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9714:432)
+    at commitRootWhenReady (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9188:9)
+    at performWorkOnRoot (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:9160:25)
+    at performWorkOnRootViaSchedulerTask (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_react-dom_8990ed71._.js:10224:9)
+    at MessagePort.performWorkUntilDeadline (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/d6ff3_next_dist_compiled_6182f83d._.js:2647:64)
+    at SimpleTransactionTable (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_components_people_e2fe7bc1._.js:3096:383)
+    at MemberDetailView (file:///Users/namnguyen/Library/Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/.next/dev/static/chunks/src_8e1a994e._.js:2131:399)
+    at MemberDetailsPage (about://React/Server/file:///Users/namnguyen/Library/Mobile%20Documents/com~apple~CloudDocs/Github%20Nov25/money-flow-3/.next/dev/server/chunks/ssr/%5Broot-of-the-server%5D__2a99d1b9._.js?177:182:432)
 
 Next.js version: 16.0.10 (Turbopack)

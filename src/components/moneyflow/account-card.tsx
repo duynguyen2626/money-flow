@@ -222,6 +222,27 @@ function AccountCardComponent({
     }
   }, [account.cashback_config]);
 
+  // Extract Cashback Category Badges
+  const cashbackBadges = useMemo(() => {
+    if (!cashbackConfig || !categories.length) return [];
+
+    // Collect all unique category IDs from all rules
+    const allCategoryIds = new Set<string>();
+    cashbackConfig.levels.forEach((level: any) => {
+      if (level.rules) {
+        level.rules.forEach((rule: any) => {
+          if (rule.categoryIds) {
+            rule.categoryIds.forEach((id: string) => allCategoryIds.add(id));
+          }
+        });
+      }
+    });
+
+    return Array.from(allCategoryIds)
+      .map(id => categories.find(c => c.id === id))
+      .filter(Boolean) as Category[];
+  }, [cashbackConfig, categories]);
+
 
   // IDs
   const creditPaymentCatId = "e0000000-0000-0000-0000-000000000091";
@@ -354,6 +375,36 @@ function AccountCardComponent({
                 <span className="text-xs font-bold text-slate-400">₫</span>
               </div>
             </div>
+
+            {/* Cashback Category Badges (MCC) */}
+            {cashbackBadges.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1.5 mb-1">
+                {cashbackBadges.slice(0, 4).map(cat => (
+                  <TooltipProvider key={cat.id}>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 bg-blue-50/50 text-blue-600 border-blue-100 font-bold cursor-help truncate max-w-[80px]">
+                          {cat.icon} {cat.name}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">
+                        <div className="font-bold">{cat.name}</div>
+                        {cat.mcc_codes && cat.mcc_codes.length > 0 ? (
+                          <div className="text-slate-400">MCC: {cat.mcc_codes.join(', ')}</div>
+                        ) : (
+                          <div className="text-slate-400">All MCCs supported</div>
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+                {cashbackBadges.length > 4 && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-slate-400 border-slate-100">
+                    +{cashbackBadges.length - 4}
+                  </Badge>
+                )}
+              </div>
+            )}
 
             {/* Mini Stats Grid */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 p-2 bg-slate-50/50 rounded-lg border border-slate-100/50">
