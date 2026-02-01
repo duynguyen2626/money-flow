@@ -2417,7 +2417,7 @@ export function UnifiedTransactionTable({
                         // We must prevent Income from entering this "TO" block.
                         if (isAccountContext && contextId && sourceId === contextId && txn.type !== 'income') {
                           const isRepaymentTxn = txn.type === 'repayment';
-                          let contextBadge = buildDirectionBadge('to');
+                          let contextBadge: React.ReactElement | null = buildDirectionBadge('to');
                           let isSingleFlow = false;
 
                           const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
@@ -2517,7 +2517,7 @@ export function UnifiedTransactionTable({
                         // Logic: We are the Target. Money came FROM Source.
                         if (isAccountContext && contextId && (targetId === contextId || txn.type === 'income')) {
                           // Context Badge: FROM
-                          let contextBadge = buildDirectionBadge('from');
+                          let contextBadge: React.ReactElement | null = buildDirectionBadge('from');
                           let isSingleFlow = false;
 
                           // Entity to display: Source
