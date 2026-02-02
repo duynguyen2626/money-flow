@@ -533,41 +533,42 @@ export function AddTransactionDialog({
                 />
               )}
             </div>
+          </div>,
+          document.body,
+        )}
 
-            {/* Unsaved Changes Warning Dialog */}
-            {/* Unsaved Changes Warning Dialog */}
-            {showCloseWarning && (
-              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-                <div
-                  className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100"
-                  onClick={stopPropagation}
-                >
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-lg font-semibold text-slate-900 leading-none tracking-tight">
-                      Unsaved Changes
-                    </h3>
-                    <p className="text-sm text-slate-500 mb-4">
-                      You have unsaved changes. Are you sure you want to close
-                      without saving?
-                    </p>
-                  </div>
-                  <div className="flex gap-2 justify-end pt-2">
-                    <button
-                      onClick={() => setShowCloseWarning(false)}
-                      className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
-                    >
-                      Continue Editing
-                    </button>
-                    <button
-                      onClick={confirmClose}
-                      className="inline-flex h-9 items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-950"
-                    >
-                      Discard Changes
-                    </button>
-                  </div>
-                </div>
+      {/* Unsaved Changes Warning Dialog - Separate Portal to ensure it's on top */}
+      {showCloseWarning &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+            <div
+              className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100"
+              onClick={stopPropagation}
+            >
+              <div className="flex flex-col gap-2">
+                <h3 className="text-lg font-semibold text-slate-900 leading-none tracking-tight">
+                  Unsaved Changes
+                </h3>
+                <p className="text-sm text-slate-500 mb-4">
+                  You have unsaved changes. Are you sure you want to close
+                  without saving?
+                </p>
               </div>
-            )}
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  onClick={() => setShowCloseWarning(false)}
+                  className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  onClick={confirmClose}
+                  className="inline-flex h-9 items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-950"
+                >
+                  Discard Changes
+                </button>
+              </div>
+            </div>
           </div>,
           document.body,
         )}
