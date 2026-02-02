@@ -72,9 +72,15 @@ export function UnifiedTransactionsPage({
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
     const [isGlobalLoading, setIsGlobalLoading] = useState(false)
+    const [loadingMessage, setLoadingMessage] = useState('Updating...')
 
     const handleSlideSubmissionStart = () => {
         setIsSlideOpen(false) // Close immediately
+        setLoadingMessage(
+            slideMode === 'edit' ? 'Updating transaction...' :
+            slideMode === 'duplicate' ? 'Duplicating transaction...' :
+            'Creating transaction...'
+        )
         setIsGlobalLoading(true) // Show loading
     }
 
@@ -474,6 +480,21 @@ export function UnifiedTransactionsPage({
         }
     }
 
+    const handleSlideOpenChange = (open: boolean) => {
+        // When closing from Sheet (backdrop/outside click), force close
+        if (!open) {
+            handleSlideClose(true);
+        }
+    }
+
+    const handleBackButtonClick = () => {
+        // Back button always forces close (no warning)
+        setIsSlideOpen(false)
+        setHasUnsavedChanges(false)
+        setSelectedTxn(null)
+        setSlideOverrideType(undefined)
+    }
+
     const confirmCloseSlide = () => {
         setShowUnsavedWarning(false)
         setIsSlideOpen(false)
@@ -516,6 +537,8 @@ export function UnifiedTransactionsPage({
 
     const confirmVoid = async () => {
         if (!voidTxn) return
+        setLoadingMessage('Voiding transaction...')
+        setIsGlobalLoading(true)
         try {
             const success = await voidTransactionAction(voidTxn.id)
             if (success) {
@@ -529,26 +552,39 @@ export function UnifiedTransactionsPage({
         } finally {
             setIsVoidAlertOpen(false)
             setVoidTxn(null)
+            setIsGlobalLoading(false)
         }
     }
 
     const initialSlideData = useMemo(() => {
+        console.log("🔄 initialSlideData useMemo triggered");
+        console.log("   slideMode:", slideMode);
+        console.log("   selectedTxn:", selectedTxn ? { id: selectedTxn.id, type: selectedTxn.type, amount: selectedTxn.amount } : null);
+        console.log("   slideOverrideType:", slideOverrideType);
+        
         if (slideOverrideType) {
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
                 amount: 0,
                 cashback_mode: "none_back" as const,
-                // Pass source_account_id preference? No, let V2 default to first account.
+                source_account_id: accounts[0]?.id || '',
             };
         }
-        if (!selectedTxn) return undefined;
-        return {
+        if (!selectedTxn) {
+            console.log("   ⚠️ selectedTxn is null/undefined - returning undefined");
+            return undefined;
+        }
+        
+        // Ensure source_account_id is never empty string for validation
+        const sourceAccountId = selectedTxn.account_id || accounts[0]?.id || '';
+        
+        const result = {
             type: selectedTxn.type as any,
             occurred_at: slideMode === 'duplicate' ? new Date() : new Date(selectedTxn.occurred_at),
             amount: Math.abs(Number(selectedTxn.amount)),
             note: selectedTxn.note || '',
-            source_account_id: selectedTxn.account_id || '',
+            source_account_id: sourceAccountId,
             target_account_id: selectedTxn.to_account_id || undefined,
             category_id: selectedTxn.category_id || undefined,
             shop_id: selectedTxn.shop_id || undefined,
@@ -558,7 +594,9 @@ export function UnifiedTransactionsPage({
             cashback_share_percent: selectedTxn.cashback_share_percent,
             cashback_share_fixed: selectedTxn.cashback_share_fixed,
         };
-    }, [selectedTxn, slideMode, slideOverrideType]);
+        console.log("   ✅ Computed initialSlideData:", result);
+        return result;
+    }, [selectedTxn, slideMode, slideOverrideType, accounts]);
 
     return (
         <div className="flex flex-col h-full bg-background/50">
@@ -608,10 +646,10 @@ export function UnifiedTransactionsPage({
             {/* Content Section */}
             <div className="flex-1 overflow-hidden p-0 sm:p-4 relative">
                 {isGlobalLoading && (
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                        <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-in slide-in-from-top-4 duration-200 border border-slate-200 pointer-events-auto">
-                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm font-medium text-slate-700">Updating...</span>
+                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-semibold text-white">{loadingMessage}</span>
                         </div>
                     </div>
                 )}
@@ -625,6 +663,8 @@ export function UnifiedTransactionsPage({
                     onSelectTxn={handleSelect}
                     onEdit={handleEdit}
                     onDuplicate={handleDuplicate}
+                    setIsGlobalLoading={setIsGlobalLoading}
+                    setLoadingMessage={setLoadingMessage}
                     context="general"
                     loadingIds={loadingIds}
                 />
@@ -633,10 +673,12 @@ export function UnifiedTransactionsPage({
             {/* Transaction Slide V2 - Primary Interface */}
             <TransactionSlideV2
                 open={isSlideOpen}
-                onOpenChange={handleSlideClose}
+                onOpenChange={handleSlideOpenChange}
+                onBackButtonClick={handleBackButtonClick}
                 onSubmissionStart={handleSlideSubmissionStart}
                 onSubmissionEnd={handleSlideSubmissionEnd}
                 mode="single"
+                operationMode={slideMode}
                 editingId={(slideMode === 'edit' && selectedTxn) ? selectedTxn.id : undefined}
                 initialData={initialSlideData}
                 accounts={accounts}

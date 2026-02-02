@@ -13,7 +13,7 @@ import {
   Copy,
   CheckCheck,
   Sigma,
-  CopyPlus,
+  Files,
   Link2,
   Info,
   ShoppingBasket,
@@ -42,7 +42,6 @@ import {
   MoveRight,
   Wrench,
   Pencil,
-  ClipboardPaste,
   Settings2,
 } from "lucide-react"
 import { ColumnCustomizer } from "./column-customizer"
@@ -168,6 +167,8 @@ interface UnifiedTransactionTableProps {
   onEdit?: (txn: TransactionWithDetails) => void
   onDuplicate?: (txn: TransactionWithDetails) => void
   loadingIds?: Set<string>
+  setIsGlobalLoading?: (loading: boolean) => void
+  setLoadingMessage?: (message: string) => void
 }
 
 
@@ -206,6 +207,8 @@ export function UnifiedTransactionTable({
   onEdit: externalOnEdit,
   onDuplicate: externalOnDuplicate,
   loadingIds,
+  setIsGlobalLoading,
+  setLoadingMessage,
 }: UnifiedTransactionTableProps) {
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
@@ -563,7 +566,6 @@ export function UnifiedTransactionTable({
   const [isDeleting, setIsDeleting] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
-  const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmDeletingTarget, setConfirmDeletingTarget] = useState<TransactionWithDetails | null>(null)
 
   useEffect(() => {
@@ -812,14 +814,7 @@ export function UnifiedTransactionTable({
     selection.size,
   ])
 
-  const handleDuplicate = (txn: TransactionWithDetails) => {
-    if (externalOnDuplicate) {
-      externalOnDuplicate(txn);
-      return;
-    }
-    setCloningTxn(txn);
-    setActionMenuOpen(null);
-  };
+  // Duplicate feature temporarily removed - will rewrite from scratch later
 
   const handleEdit = (txn: TransactionWithDetails) => {
     if (externalOnEdit) {
@@ -833,6 +828,8 @@ export function UnifiedTransactionTable({
   const handleSingleDeleteConfirm = async () => {
     if (!confirmDeletingTarget) return
     setIsDeleting(true)
+    setLoadingMessage?.('Deleting transaction...')
+    setIsGlobalLoading?.(true)
     try {
       const ok = await deleteTransaction(confirmDeletingTarget.id)
       if (ok) {
@@ -845,6 +842,7 @@ export function UnifiedTransactionTable({
       setVoidError(err.message || 'Failed to delete transaction.')
     } finally {
       setIsDeleting(false)
+      setIsGlobalLoading?.(false)
     }
   }
 
@@ -1140,17 +1138,6 @@ export function UnifiedTransactionTable({
           <span>Edit</span>
         </button>
         <button
-          className={baseItemClass}
-          onClick={event => {
-            event.stopPropagation();
-            handleDuplicate(txn);
-            setActionMenuOpen(null);
-          }}
-        >
-          <ClipboardPaste className="h-4 w-4" />
-          <span>Duplicate</span>
-        </button>
-        <button
           className={dangerItemClass}
           onClick={event => {
             event.stopPropagation();
@@ -1295,10 +1282,10 @@ export function UnifiedTransactionTable({
 
         <CustomTooltip content="Duplicate">
           <button
-            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-            onClick={(e) => { e.stopPropagation(); handleDuplicate(txn); }}
+            className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+            onClick={(e) => { e.stopPropagation(); externalOnDuplicate?.(txn); }}
           >
-            <CopyPlus className="h-3.5 w-3.5" />
+            <Files className="h-3.5 w-3.5" />
           </button>
         </CustomTooltip>
 
@@ -2077,915 +2064,183 @@ export function UnifiedTransactionTable({
                         )
                       }
                       case "account": {
-                        // --- 1. Resolve Entities (Source & Target) ---
+                        // FLOW COLUMN WITH CYCLE BADGES
+                        // ==============================
+                        // Extract data
                         const sourceName = txn.source_name || txn.account_name || 'Unknown'
                         const sourceIcon = txn.source_image
                         const sourceId = txnSourceId
-                        // In single-table mode, account_id is the source.
 
-                        // Target Parsing
-                        const targetName = destNameRaw
-                        const targetIcon = txn.destination_image
-                        let targetId = txnDestId
-                        let targetType: 'account' | 'person' | 'none' = 'account'
-                        let targetLink = targetId ? `/accounts/${targetId}` : null
-
-                        // Check for Person First (Person takes precedence in "Accounts -> People" flow logic usually, or depends on data)
                         const personId = (txn as any).person_id
-                        const personNameLink = (txn as any).person_name
-                        const personAvatar = (txn as any).person_image_url
-                        if (personId) targetType = 'person'
+                        const personName = (txn as any).person_name
+                        const personImage = (txn as any).person_image_url
 
-                        // --- 2. Resolve Context & View Mode (Smart Context) ---
-                        const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
-                        const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
+                        const destName = destNameRaw
+                        const destIcon = txn.destination_image
+                        const destId = txnDestId
 
-                        // --- 3. Helpers & Variables (Moved Up) ---
-                        const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
+                        // Determine what to display
+                        const hasPerson = !!personId
+                        const hasTarget = !!destId
+
+                        // Get cycle tags
+                        const cycleTag = normalizeMonthTag((txn as any).persisted_cycle_tag) ?? (txn as any).persisted_cycle_tag
                         const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
 
-                        // Helper: Build Direction Badge
-                        const buildDirectionBadge = (direction: 'from' | 'to') => {
-                          const isFrom = direction === 'from';
-                          // Account Context: From=Green, To=Red
-                          // People Context: From=Red, To=Blue
-                          if (isAccountContext) {
-                            return (
-                              <span className={cn(
-                                "inline-flex items-center justify-center gap-0.5 rounded-[4px] px-1 h-5 text-[9px] font-extrabold uppercase tracking-wide border min-w-[36px]",
-                                isFrom
-                                  ? "bg-emerald-50 text-emerald-600 border-emerald-200" // Account: FROM = Green
-                                  : "bg-rose-50 text-rose-700 border-rose-200" // Account: TO = Red
-                              )}>
-                                {isFrom ? "FROM" : "TO"}
-                              </span>
-                            )
-                          }
-                          // Default / People Context
-                          return (
-                            <span className={cn(
-                              "inline-flex items-center justify-center gap-0.5 rounded-[4px] px-1 h-5 text-[9px] font-extrabold uppercase tracking-wide border min-w-[36px]",
-                              isFrom
-                                ? "bg-rose-50 text-rose-700 border-rose-200" // People: FROM = Red
-                                : "bg-blue-50 text-blue-700 border-blue-200" // People: TO = Blue
-                            )}>
-                              {isFrom ? "FROM" : "TO"}
-                            </span>
-                          )
+                        // Get source account for cycle badge
+                        const sourceAccount = accounts.find(a => a.id === sourceId)
+                        const destAccount = accounts.find(a => a.id === destId)
+
+                        // Type icon
+                        let typeIcon: React.ReactNode = null
+                        if (txn.type === 'expense') {
+                          typeIcon = <CustomTooltip content="Expense"><ArrowUpRight className="h-4 w-4 text-red-600" /></CustomTooltip>
+                        } else if (txn.type === 'income') {
+                          typeIcon = <CustomTooltip content="Income"><ArrowDownLeft className="h-4 w-4 text-emerald-600" /></CustomTooltip>
+                        } else if (txn.type === 'transfer') {
+                          typeIcon = <CustomTooltip content="Transfer"><ArrowRightLeft className="h-4 w-4 text-blue-600" /></CustomTooltip>
+                        } else if (txn.type === 'debt' || txn.type === 'loan') {
+                          typeIcon = <CustomTooltip content="Debt"><UserMinus className="h-4 w-4 text-amber-600" /></CustomTooltip>
+                        } else if (txn.type === 'repayment') {
+                          typeIcon = <CustomTooltip content="Repayment"><UserPlus className="h-4 w-4 text-purple-600" /></CustomTooltip>
                         }
 
-                        // Helper: Build Type Badge
-                        const buildTypeBadge = (txnType: string, compact = false) => {
-                          const badgeBaseClass = compact
-                            ? "inline-flex items-center justify-center rounded-md px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold border shrink-0 h-7 w-7" // Increased size to h-7 w-7 to match entity icons
-                            : "inline-flex items-center justify-center gap-1 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[60px] shrink-0 h-7" // Standard h-7 for consistency
-
-                          let typeBadge = null
-                          if (txnType === 'expense') {
-                            typeBadge = (
-                              <span key="type" className={cn(badgeBaseClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100")} title="Expense">
-                                {compact ? <ArrowUpRight className="h-3 w-3" /> : <><ArrowUpRight className="h-3 w-3" />OUT</>}
-                              </span>
-                            )
-                          } else if (txnType === 'income') {
-                            typeBadge = (
-                              <span key="type" className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100")} title="Income">
-                                {compact ? <ArrowDownLeft className="h-3 w-3" /> : <><ArrowDownLeft className="h-3 w-3" />IN</>}
-                              </span>
-                            )
-                          } else if (txnType === 'transfer') {
-                            typeBadge = (
-                              <span key="type" className={cn(badgeBaseClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")} title="Transfer">
-                                {compact ? <ArrowRightLeft className="h-3 w-3" /> : <><ArrowRightLeft className="h-3 w-3" />TF</>}
-                              </span>
-                            )
-                          } else if (txnType === 'debt' || txnType === 'loan') {
-                            typeBadge = (
-                              <span key="type" className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100")} title="Debt">
-                                {compact ? <UserMinus className="h-3 w-3" /> : <><UserMinus className="h-3 w-3" />DEBT</>}
-                              </span>
-                            )
-                          } else if (txnType === 'repayment') {
-                            typeBadge = (
-                              <span key="type" className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100")} title="Repayment">
-                                {compact ? <UserPlus className="h-3 w-3" /> : <><UserPlus className="h-3 w-3" />REPAY</>}
-                              </span>
-                            )
-                          }
-                          return typeBadge
-                        }
-
-                        const typeBadge = buildTypeBadge(txn.type, isAccountContext);
-
-                        // Helper: RenderEntity
-                        const RenderEntity = ({
-                          name,
-                          icon,
-                          link,
-                          isSquare = true,
-                          badges = [],
-                          contextBadge = null,
-                          contextBadgeBeforeIcon = false,
-                          isTarget = false,
-                          badgeClassName,
-                          inlineBadges = false,
-                          leadingElement = null,
-                          trailingElement = null,
-                          linkTooltip = null
-                        }: {
-                          name: string,
-                          icon?: string | null,
-                          link: string | null,
-                          isSquare?: boolean,
-                          badges?: React.ReactNode[],
-                          contextBadge?: React.ReactNode,
-                          contextBadgeBeforeIcon?: boolean,
-                          isTarget?: boolean,
-                          badgeClassName?: string,
-                          inlineBadges?: boolean,
-                          leadingElement?: React.ReactNode,
-                          trailingElement?: React.ReactNode,
-                          linkTooltip?: string | null
-                        }) => {
-                          const baseBadgeClasses = "rounded-lg py-1 px-2 h-10 w-full hover:bg-slate-100 transition-colors"
-                          const defaultColors = "bg-slate-50 border border-slate-200"
-                          const badgeClasses = cn(baseBadgeClasses, badgeClassName || defaultColors)
-
-                          const renderAvatar = (imgSrc: string | null | undefined, altText: string, isSquare: boolean) => {
-                            if (imgSrc) {
-                              return (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-cover shrink-0 border-none ring-0 outline-none bg-white", isSquare ? "rounded-sm" : "rounded-full")} />
-                              )
-                            }
-                            return (
-                              <div className={cn("flex h-7 w-7 items-center justify-center bg-white shrink-0 text-slate-400 border border-slate-100 ring-0 outline-none", isSquare ? "rounded-sm" : "rounded-full")}>
-                                {link?.includes('people') ? <User className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
-                              </div>
-                            )
-                          }
-
-                          const Content = isTarget ? (
-                            // Target Entity: Right-aligned with Image After Text
-                            <div className={cn("flex items-center gap-2 min-w-0 w-full justify-end", badgeClasses)}>
-                              {inlineBadges ? (
-                                // For inlineBadges targets (people): [badges] [name] [avatar]
-                                <>
-                                  {badges.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                      {badges}
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
-                                    {!contextBadgeBeforeIcon && contextBadge}
-                                    <CustomTooltip content={name}>
-                                      <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
-                                        {name}
-                                      </span>
-                                    </CustomTooltip>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="flex flex-col min-w-0 flex-1 justify-center items-end h-full">
-                                  <div className="flex items-center gap-1.5 min-w-0 w-full justify-end">
-                                    {contextBadge}
-                                    <CustomTooltip content={name}>
-                                      <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight">
-                                        {name}
-                                      </span>
-                                    </CustomTooltip>
-                                  </div>
-                                  {badges.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 justify-end w-full">
-                                      {badges}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              <div className="shrink-0 flex items-center gap-1">
-                                {contextBadgeBeforeIcon && contextBadge}
-                                {renderAvatar(icon, name, isSquare)}
-                                {trailingElement && <div className="shrink-0">{trailingElement}</div>}
-                              </div>
-                            </div>
-                          ) : (
-                            // Source Entity: Default layout with Icon Before Text
-                            <div className={cn("flex items-center gap-2 min-w-0 w-full", badgeClasses)}>
-                              <div className="shrink-0 flex items-center gap-1">
-                                {contextBadgeBeforeIcon && contextBadge}
-                                {leadingElement && <div className="shrink-0">{leadingElement}</div>}
-                                {renderAvatar(icon, name, isSquare)}
-                              </div>
-
-                              {inlineBadges ? (
-                                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden h-full">
-                                  {!contextBadgeBeforeIcon && contextBadge}
-                                  <CustomTooltip content={name}>
-                                    <span className="text-[0.85em] font-bold text-slate-700 truncate block cursor-help leading-tight">
-                                      {name}
-                                    </span>
-                                  </CustomTooltip>
-                                  {badges.length > 0 && (
-                                    <div className="flex items-center gap-1 flex-shrink-0 ml-auto min-w-[96px] w-[96px] justify-end">
-                                      {badges}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex flex-col min-w-0 flex-1 justify-center h-full">
-                                  <div className="flex items-center gap-1.5 min-w-0 w-full">
-                                    {contextBadge}
-                                    <CustomTooltip content={name}>
-                                      <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 cursor-help">
-                                        {name}
-                                      </span>
-                                    </CustomTooltip>
-                                  </div>
-                                  {badges.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 justify-start w-full">
-                                      {badges}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-
-                          if (link) {
-                            const linkedContent = (
-                              <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
-                                {Content}
-                              </Link>
-                            )
-
-                            return linkTooltip ? (
-                              <CustomTooltip content={linkTooltip}>
-                                <div className="block w-full">{linkedContent}</div>
-                              </CustomTooltip>
-                            ) : linkedContent
-                          }
-
-                          return (
-                            <div className="block w-full p-0.5 relative z-20">
-                              {Content}
-                            </div>
-                          )
-                        }
-
-
-                        // Common Variables
-                        const sourceAccountForBadge = txnSourceId ? accounts.find(a => a.id === txnSourceId) : undefined;
-
-                        const buildAccountFilterLink = (baseLink: string | null, dateRange?: { start: Date; end: Date } | null, monthTag?: string | null) => {
-                          if (!baseLink) return null
-                          if (dateRange) {
-                            const separator = baseLink.includes('?') ? '&' : '?'
-                            const startStr = format(dateRange.start, 'yyyy-MM-dd')
-                            const endStr = format(dateRange.end, 'yyyy-MM-dd')
-                            return `${baseLink}${separator}dateFrom=${startStr}&dateTo=${endStr}`
-                          }
-                          if (monthTag && /^\d{4}-\d{2}$/.test(monthTag)) {
-                            try {
-                              const [year, month] = monthTag.split('-').map(Number)
-                              const monthStart = startOfMonth(new Date(year, month - 1, 1))
-                              const monthEnd = endOfMonth(monthStart)
-                              const separator = baseLink.includes('?') ? '&' : '?'
-                              const startStr = format(monthStart, 'yyyy-MM-dd')
-                              const endStr = format(monthEnd, 'yyyy-MM-dd')
-                              return `${baseLink}${separator}dateFrom=${startStr}&dateTo=${endStr}`
-                            } catch { return null }
-                          }
-                          return null
-                        }
-
-                        const buildPersonFilterLink = (baseLink: string | null, tag: string | null) => {
-                          if (!baseLink || !tag) return null
-                          const separator = baseLink.includes('?') ? '&' : '?'
-                          return `${baseLink}${separator}tag=${encodeURIComponent(tag)}`
-                        }
-
-                        const wrapBadgeWithFilter = (badge: React.ReactNode, href: string | null, tooltip: string) => {
-                          if (!href) return badge
-                          const badgeKey = isValidElement(badge) ? badge.key : null
-                          return (
-                            <CustomTooltip key={badgeKey ?? undefined} content={tooltip} side="left">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.preventDefault()
-                                  event.stopPropagation()
-                                  window.open(href, '_blank', 'noopener,noreferrer')
-                                }}
-                                onMouseDown={(event) => event.stopPropagation()}
-                                className="cursor-pointer"
-                              >
-                                {badge}
-                              </button>
-                            </CustomTooltip>
-                          )
-                        }
-
-                        const peopleDebtTag = debtTag ? wrapBadgeWithFilter((
+                        // People debt tag badge
+                        const peopleDebtTag = personId && debtTag ? (
                           <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
                             <User className="h-3 w-3" />
-                            {txn.tag}
+                            {debtTag}
                           </span>
-                        ), debtTag ? buildPersonFilterLink(`/people/details?id=${personId}`, debtTag) : null, `Filter by ${debtTag}`) : null;
-
-                        const personEntity = personId ? {
-                          name: personNameLink || 'Unknown Person',
-                          icon: personAvatar,
-                          link: `/people/details?id=${personId}`,
-                        } : null
-                        const accountEntity = {
-                          name: sourceName,
-                          icon: sourceIcon,
-                          link: sourceId ? `/accounts/${sourceId}` : null,
-                        }
-
-                        // SCENARIO 2: VIEWING ACCOUNT PAGE - OUTBOUND (Source = This Account)
-                        // Logic: We are the Source. We sent money TO the Target.
-                        // Display: Target Entity.
-                        // Badge: "TO [Target Type]" (or just "TO").
-                        // User Request: "To B".
-                        // Scenario 2 condition: Source is Context.
-                        // EXCEPTION: If type is 'income', it's always Inbound (FROM), even if source_id is weirdly set.
-                        // We must prevent Income from entering this "TO" block.
-                        if (isAccountContext && contextId && sourceId === contextId && txn.type !== 'income') {
-                          const isRepaymentTxn = txn.type === 'repayment';
-                          let contextBadge: React.ReactElement | null = buildDirectionBadge('to');
-                          let isSingleFlow = false;
-
-                          const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
-                            <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                              Non-Cycle
-                            </span>
-                          ) : null
-                          const detailCycleBadge = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
-                            <CycleBadge
-                              key="cycle"
-                              account={sourceAccountForBadge}
-                              cycleTag={cycleTag}
-                              txnDate={txn.occurred_at || txn.created_at}
-                              compact={false}
-                              className="h-6 min-w-[96px] text-[10px] px-1"
-                            />
-                          ) : null
-                          const detailAccountBadge = detailCycleBadge || detailNonCycleBadge
-
-                          // Determine Target Entity to display
-                          let targetName = 'Unknown';
-                          let targetIcon = undefined;
-                          let targetLink = null;
-                          const targetBadges: React.ReactNode[] = [];
-
-                          if (targetId) {
-                            const tAccount = accounts.find(a => a.id === targetId);
-                            if (tAccount) {
-                              targetName = tAccount.name;
-                              targetIcon = tAccount.image_url;
-                              targetLink = `/accounts/${tAccount.id}`;
-                            }
-                          } else if (personId) {
-                            // Expense, Debt (Lend), Repayment
-                            targetName = personNameLink || 'Unknown Person';
-                            targetIcon = personAvatar;
-                            targetLink = `/people/details?id=${personId}`;
-                            if (peopleDebtTag) targetBadges.push(peopleDebtTag);
-                          } else if (txn.shop_id && txn.shop) {
-                            // Expense to Shop (Explicit)
-                            targetName = txn.shop.name;
-                            targetIcon = txn.shop.icon || undefined;
-                          }
-
-                          // Single Flow Detection: Keep Unknown as is (no shop/category fallback)
-                          if (targetName === 'Unknown') {
-                            isSingleFlow = true;
-                          }
-
-                          // Override Badge for Single Flow
-                          // MF-UI-FIX: User reported icon duplication.
-                          // Since Type Badge (Col 1) already shows the Arrow, we don't need a second badge here.
-                          // Just show [TypeIcon] [CategoryIcon] [Name].
-                          if (isSingleFlow) {
-                            contextBadge = null;
-                          }
-
-                          return (
-                            <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
-                              <div className="shrink-0">
-                                {typeBadge}
-                              </div>
-                              <div className="flex-1 min-w-0 w-full">
-                                <RenderEntity
-                                  name={targetName}
-                                  icon={targetIcon}
-                                  link={targetLink}
-                                  badges={targetBadges}
-                                  contextBadge={contextBadge}
-                                  contextBadgeBeforeIcon={true}
-                                  inlineBadges={true}
-                                  isTarget={false} // CHANGED: Force Left Alignment standard flow
-                                  badgeClassName="bg-slate-50 border-slate-200"
-                                  linkTooltip={targetLink ? `Open ${targetName}` : null}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-
-                        // SCENARIO 3: VIEWING ACCOUNT PAGE - INBOUND (Target = This Account)
-                        // Logic: We are the Target. Money came FROM Source.
-                        // Display: Source Entity.
-                        // Badge: "FROM [Source Type]" (or just "FROM").
-                        // User Request: "From C, D".
-                        // SCENARIO 3: VIEWING ACCOUNT PAGE - INBOUND (Target = This Account OR Income)
-                        // Logic: We are the Target. Money came FROM Source.
-                        if (isAccountContext && contextId && (targetId === contextId || txn.type === 'income')) {
-                          // Context Badge: FROM
-                          let contextBadge: React.ReactElement | null = buildDirectionBadge('from');
-                          let isSingleFlow = false;
-
-                          // Entity to display: Source
-                          let displayName = 'Unknown';
-                          let displayIcon = undefined;
-                          let displayLink = null;
-                          const displayBadges: React.ReactNode[] = [];
-
-                          if (sourceId) {
-                            const sAccount = accounts.find(a => a.id === sourceId);
-                            if (sAccount) {
-                              // MF-UI-FIX: If source is THIS account (Self-Income/Cashback), don't show "FROM Msb".
-                              if (sourceId === contextId && txn.type === 'income') {
-                                isSingleFlow = true;
-                                // Try to find a better label than the account itself
-                                if (txn.shop) {
-                                  displayName = txn.shop.name;
-                                  displayIcon = txn.shop.logo || undefined;
-                                } else if (txn.category_name) {
-                                  displayName = txn.category_name;
-                                  displayIcon = txn.category_image_url || txn.category_icon || undefined;
-                                } else {
-                                  displayName = "Income";
-                                }
-                                displayLink = null;
-                              } else {
-                                displayName = sAccount.name;
-                                displayIcon = sAccount.image_url;
-                                displayLink = `/accounts/${sAccount.id}`;
-                              }
-                            }
-                          }
-
-                          // If no source account, check for Person only (no shop/category fallback)
-                          if (displayName === 'Unknown') {
-                            isSingleFlow = true; // Implicit single flow if unknown source
-                            if (personId) {
-                              isSingleFlow = false; // Person is a specific entity
-                              displayName = personNameLink || 'Unknown Person';
-                              displayIcon = personAvatar;
-                              displayLink = `/people/details?id=${personId}`;
-                              if (peopleDebtTag) displayBadges.push(peopleDebtTag);
-                            } else if (txn.type === 'income') {
-                              displayName = "Income";
-                            }
-                          }
-
-                          // Override Badge for Single Flow Income
-                          // MF-UI-FIX: User reported icon duplication.
-                          if (isSingleFlow) {
-                            contextBadge = null;
-                          }
-
-                          return (
-                            <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
-                              <div className="shrink-0">
-                                {typeBadge}
-                              </div>
-                              <div className="flex-1 min-w-0 w-full">
-                                <RenderEntity
-                                  name={displayName}
-                                  icon={displayIcon}
-                                  link={displayLink}
-                                  badges={displayBadges}
-                                  contextBadge={contextBadge}
-                                  contextBadgeBeforeIcon={true}
-                                  inlineBadges={true}
-                                  isTarget={false} // FROM alignment (Left)
-                                  badgeClassName="bg-slate-50 border-slate-200"
-                                  linkTooltip={displayLink ? `Open ${displayName}` : null}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-                        if (sourceId && targetId && sourceId === targetId) {
-                          targetType = 'none'
-                          targetId = undefined
-                          targetLink = null
-                        }
-
-
-
-                        // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
-
-                        // --- 5. Main Render Switch ---
-
-                        // --- 5. Main Render Switch ---
-
-                        // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
-                        if (isPersonContext && contextId && personEntity && personId === contextId) {
-                          const isRepaymentTxn = txn.type === 'repayment';
-
-                          // Type Badge Logic (Icon Only with Tooltip) - UNIFIED with SCENARIO 3
-                          const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-                          let personTypeBadge = null;
-                          const tType = txn.type;
-                          if (tType === 'expense') {
-                            personTypeBadge = (
-                              <CustomTooltip content="OUT - Expense" side="top">
-                                <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'income') {
-                            personTypeBadge = (
-                              <CustomTooltip content="IN - Income" side="top">
-                                <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'transfer') {
-                            personTypeBadge = (
-                              <CustomTooltip content="TF - Transfer" side="top">
-                                <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'debt' || tType === 'loan') {
-                            personTypeBadge = (
-                              <CustomTooltip content="DEBT" side="top">
-                                <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'repayment') {
-                            personTypeBadge = (
-                              <CustomTooltip content="REPAY - Repayment" side="top">
-                                <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          }
-
-                          const detailNonCycleBadge = sourceAccountForBadge && !sourceAccountForBadge.cashback_config ? (
-                            <span key="non-cycle" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-slate-100 border border-slate-300 text-slate-600 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                              Non-Cycle
-                            </span>
-                          ) : null
-                          const detailCycleBadge = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
-                            <CycleBadge
-                              key="cycle"
-                              account={sourceAccountForBadge}
-                              cycleTag={cycleTag}
-                              txnDate={txn.occurred_at || txn.created_at}
-                              compact={false}
-                              className="h-6 min-w-[96px] text-[10px] px-1"
-                            />
-                          ) : null
-                          const detailAccountBadge = detailCycleBadge || detailNonCycleBadge
-
-                          // Context Badge Logic (Restored)
-                          let contextBadge = null;
-                          if (tType === 'debt' || tType === 'expense' || tType === 'loan') {
-                            contextBadge = buildDirectionBadge('from');
-                          } else if (tType === 'repayment' || tType === 'income') {
-                            contextBadge = buildDirectionBadge('to');
-                          }
-
-                          // Compute cycle date range for URL params
-                          let cycleDateRange: { start: Date; end: Date } | null = null
-                          if (sourceAccountForBadge && cycleTag && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) {
-                            const config = parseCashbackConfig(sourceAccountForBadge.cashback_config)
-                            const refDate = parseISO(txn.occurred_at || txn.created_at)
-                            cycleDateRange = getCashbackCycleRange(config, refDate) || null
-                          }
-
-                          const detailTagLink = buildAccountFilterLink(accountEntity.link, cycleDateRange, cycleTag)
-                          const detailAccountBadgeWithLink = detailAccountBadge
-                            ? wrapBadgeWithFilter(
-                              detailAccountBadge,
-                              detailTagLink,
-                              `Open ${accountEntity.name} with cycle ${cycleTag || ''}`.trim()
-                            )
-                            : null
-
-                          return (
-                            <div className="flex items-center justify-center gap-1.5 w-full min-w-0 h-7">
-                              <div className="shrink-0">
-                                {personTypeBadge}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <RenderEntity
-                                  name={accountEntity.name}
-                                  icon={accountEntity.icon}
-                                  link={accountEntity.link}
-                                  badges={[detailAccountBadgeWithLink].filter(Boolean)}
-                                  // Pass contextBadge here
-                                  contextBadge={contextBadge}
-                                  contextBadgeBeforeIcon={true}
-                                  inlineBadges={true}
-                                  isTarget={false}
-                                  badgeClassName={isRepaymentTxn ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}
-                                  linkTooltip={`Open ${accountEntity.name} in new tab`}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-
-
-
-                        // SCENARIO 3: STANDARD VIEW (No Context or context mismatch)
-                        // Refactor: Source -> [Type] -> Target
-                        // Entity aligns: Left (Source), Right (Target)
-                        // "Cycle acocunt là show theo dạng 01-01 to 30-01" -> Use CycleBadge on Source Account
-
-                        // CRITICAL FIX: If target is "Unknown" with no real targetId/personId, treat as single flow
-                        const isSingleFlowUnknown = !targetId && !personId && (targetName === 'Unknown' || targetName === '');
-                        
-                        if (targetType === 'none' || isSingleFlowUnknown) {
-                          // Only add cycle badge if source account is credit_card type and has cashback_config
-                          const cycleBadgeElement = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
-                            <CycleBadge
-                              key="cycle"
-                              account={sourceAccountForBadge}
-                              cycleTag={cycleTag}
-                              txnDate={txn.occurred_at || txn.created_at}
-                            />
-                          ) : null
-
-                          const sourceBadges = [cycleBadgeElement].filter(Boolean)
-
-                          // Type Badge Construction (Icon Only with Tooltip)
-                          const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-
-                          let extraTypeBadge = null;
-                          const tType = txn.type;
-                          if (tType === 'expense') {
-                            extraTypeBadge = (
-                              <CustomTooltip content="OUT - Expense" side="top">
-                                <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                  <ArrowUpRight className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'income') {
-                            extraTypeBadge = (
-                              <CustomTooltip content="IN - Income" side="top">
-                                <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'transfer') {
-                            extraTypeBadge = (
-                              <CustomTooltip content="TF - Transfer" side="top">
-                                <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                  <ArrowRightLeft className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'debt' || tType === 'loan') {
-                            extraTypeBadge = (
-                              <CustomTooltip content="DEBT" side="top">
-                                <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                  <UserMinus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          } else if (tType === 'repayment') {
-                            extraTypeBadge = (
-                              <CustomTooltip content="REPAY - Repayment" side="top">
-                                <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                  <UserPlus className="h-3.5 w-3.5" />
-                                </span>
-                              </CustomTooltip>
-                            )
-                          }
-
-                          // Single Entity -> Type Badge BEFORE entity, compact layout
-                          // Match pill color to transaction type: income=green, expense=red
-                          const singleFlowColor = tType === 'income'
-                            ? "bg-emerald-50 border-emerald-200"
-                            : "bg-rose-50 border-rose-200"
-
-                          return (
-                            <div className={cn("flex items-center gap-1.5 w-full min-w-0 h-7 rounded-lg border px-2", singleFlowColor)}>
-                              <div className="shrink-0">
-                                {extraTypeBadge}
-                              </div>
-                              <div className="flex-1 min-w-0 overflow-hidden">
-                                <RenderEntity
-                                  name={sourceName}
-                                  icon={sourceIcon}
-                                  link={sourceId ? `/accounts/${sourceId}` : null}
-                                  badges={sourceBadges}
-                                  inlineBadges={true}
-                                  badgeClassName="rounded-lg py-1 px-2 h-10 hover:bg-slate-100 transition-colors"
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-
-                        // 2 Entities -> Source [Type] Target
-                        // Only add cycle badge if source account is credit_card type and has cashback_config
-                        const cycleBadgeElement = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
-                          <CycleBadge
-                            key="cycle"
-                            account={sourceAccountForBadge}
-                            cycleTag={cycleTag}
-                            txnDate={txn.occurred_at || txn.created_at}
-                            compact={true}
-                          />
                         ) : null
 
-                        const sourceBadges = [cycleBadgeElement].filter(Boolean)
+                        // CASE 1: Single flow - show ONLY account (no person, no dest)
+                        // If hasPerson is true, it's a dual flow (Account → Person)
+                        if (!hasTarget && !hasPerson) {
+                          const displayName = sourceName
+                          const displayImage = sourceIcon
+                          const displayLink = sourceId ? `/accounts/${sourceId}` : null
 
-                        // Badges for Target - ONLY show cycle badges for credit card accounts
-                        let targetBadges: React.ReactNode[] = []
-                        if (targetType === 'person' && peopleDebtTag) {
-                          // CRITICAL: Wrap debt badge with click handler to filter people details
-                          const clickablePeopleDebtTag = (
-                            <div
-                              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
-                                e.stopPropagation()
-                                // Navigate to /people/{personId} with debt cycle filter
-                                if (personId) {
-                                  const url = `/people/${personId}?cycle=${cycleTag}`
-                                  window.open(url, '_blank')
-                                }
-                              }}
-                              className="cursor-pointer hover:opacity-80 transition-opacity"
-                            >
-                              {peopleDebtTag}
-                            </div>
-                          )
-                          targetBadges = [clickablePeopleDebtTag]
-                        } else if (targetType !== 'person' && targetId) {
-                          // Only add cycle badge if TARGET account is credit card with cashback config
-                          const targetAccount = accounts.find(a => a.id === targetId);
-                          if (targetAccount && targetAccount.type === 'credit_card' && targetAccount.cashback_config) {
-                            const targetCycleBadge = (
-                              <CycleBadge
-                                key="target-cycle"
-                                account={targetAccount}
-                                cycleTag={cycleTag}
-                                txnDate={txn.occurred_at || txn.created_at}
-                                compact={true}
-                              />
-                            );
-                            targetBadges = [targetCycleBadge];
-                          }
-                        }
+                          // Cycle badge for source account
+                          const singleFlowCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
+                            <CycleBadge
+                              key="cycle"
+                              account={sourceAccount}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                            />
+                          ) : null
 
-                        // Type Badge Logic (Icon Only with Tooltip)
-                        const iconOnlyClass = "inline-flex items-center justify-center rounded-md p-1.5 border w-7 h-7 shrink-0"
-
-                        let detailTypeBadge = null;
-                        const tType = txn.type;
-                        if (tType === 'expense') {
-                          detailTypeBadge = (
-                            <CustomTooltip content="OUT - Expense" side="top">
-                              <span className={cn(iconOnlyClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 cursor-help")}>
-                                <ArrowUpRight className="h-3.5 w-3.5" />
-                              </span>
-                            </CustomTooltip>
-                          )
-                        } else if (tType === 'income') {
-                          detailTypeBadge = (
-                            <CustomTooltip content="IN - Income" side="top">
-                              <span className={cn(iconOnlyClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100 cursor-help")}>
-                                <ArrowDownLeft className="h-3.5 w-3.5" />
-                              </span>
-                            </CustomTooltip>
-                          )
-                        } else if (tType === 'transfer') {
-                          detailTypeBadge = (
-                            <CustomTooltip content="TF - Transfer" side="top">
-                              <span className={cn(iconOnlyClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 cursor-help")}>
-                                <ArrowRightLeft className="h-3.5 w-3.5" />
-                              </span>
-                            </CustomTooltip>
-                          )
-                        } else if (tType === 'debt' || tType === 'loan') {
-                          detailTypeBadge = (
-                            <CustomTooltip content="DEBT" side="top">
-                              <span className={cn(iconOnlyClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100 cursor-help")}>
-                                <UserMinus className="h-3.5 w-3.5" />
-                              </span>
-                            </CustomTooltip>
-                          )
-                        } else if (tType === 'repayment') {
-                          detailTypeBadge = (
-                            <CustomTooltip content="REPAY - Repayment" side="top">
-                              <span className={cn(iconOnlyClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 cursor-help")}>
-                                <UserPlus className="h-3.5 w-3.5" />
-                              </span>
-                            </CustomTooltip>
-                          )
-                        }
-
-                        // REPAY SPECIAL LOGIC: Swap display order
-                        // In DB: source=account, target=person
-                        // In UI: Show person FIRST (left/blue), account SECOND (right/green)
-                        const isRepay = tType === 'repayment'
-
-                        if (isRepay && targetType === 'person') {
-                          // SWAP: Show Person (target in DB) as left/source in UI
                           return (
-                            <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
-                              <div className="shrink-0">
-                                {detailTypeBadge}
-                              </div>
+                            <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
+                              {typeIcon && <span className="shrink-0">{typeIcon}</span>}
+                              
+                              <div className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2">
+                                {/* Avatar */}
+                                <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                                  {displayImage ? (
+                                    <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
+                                  ) : (
+                                    <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm">
+                                      <Wallet className="h-4 w-4 text-slate-400" />
+                                    </div>
+                                  )}
+                                </div>
 
-                              {/* Left: Person (Target in DB, but source visually) */}
-                              <div className="flex-1 min-w-0 max-w-[44%]">
-                                <RenderEntity
-                                  name={targetName}
-                                  icon={targetIcon}
-                                  link={targetLink}
-                                  badges={targetBadges}
-                                  inlineBadges={true}
-                                  isSquare={false}
-                                  badgeClassName="bg-blue-50 border-blue-200"
-                                />
-                              </div>
+                                {/* Name */}
+                                <div className="flex-1 min-w-0">
+                                  {displayLink ? (
+                                    <Link href={displayLink} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-slate-700 truncate hover:underline">
+                                      {displayName}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-sm font-bold text-slate-700 truncate">{displayName}</span>
+                                  )}
+                                </div>
 
-                              <span className="text-slate-300 font-light shrink-0 mx-0.5">|</span>
-
-                              {/* Right: Account (Source in DB, but target visually) */}
-                              <div className="flex-1 min-w-0 max-w-[44%]">
-                                <RenderEntity
-                                  name={sourceName}
-                                  icon={sourceIcon}
-                                  link={sourceId ? `/accounts/${sourceId}` : null}
-                                  badges={sourceBadges}
-                                  isTarget={true}
-                                  inlineBadges={true}
-                                  badgeClassName="bg-emerald-50 border-emerald-200"
-                                />
+                                {/* Cycle Badge */}
+                                {singleFlowCycleBadge && (
+                                  <div className="shrink-0">
+                                    {singleFlowCycleBadge}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )
                         }
 
-                        // Normal flow: expense=red source, income/transfer=green target
-                        const sourceColor = "bg-rose-50 border-rose-200"
-                        const targetColor = "bg-emerald-50 border-emerald-200"
+                        // CASE 2: Dual flow - source LEFT, target RIGHT (includes Account → Person)
+                        // Cycle badge for source (only credit_card with cashback_config)
+                        const sourceCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
+                          <CycleBadge
+                            key="cycle-source"
+                            account={sourceAccount}
+                            cycleTag={cycleTag}
+                            txnDate={txn.occurred_at || txn.created_at}
+                          />
+                        ) : null
+                        const sourceBadges = [sourceCycleBadge].filter(Boolean)
+
+                        // Target badges - debt tag for people OR nothing for accounts
+                        const targetBadges: React.ReactNode[] = hasPerson ? [peopleDebtTag].filter(Boolean) : []
+
+                        // Repayment swap logic: if repayment + person, swap display
+                        const isRepayment = txn.type === 'repayment'
+                        const shouldSwap = isRepayment && hasPerson
+
+                        // Build entity objects
+                        const sourceEntity = { name: sourceName, icon: sourceIcon, link: sourceId ? `/accounts/${sourceId}` : null, isAccount: true }
+                        const targetEntity = { 
+                          name: hasPerson ? personName : destName, 
+                          icon: hasPerson ? personImage : destIcon, 
+                          link: hasPerson ? `/people/details?id=${personId}` : (destId ? `/accounts/${destId}` : null),
+                          isAccount: !hasPerson
+                        }
+
+                        // Swap if repayment with person
+                        const [displayLeft, displayRight] = shouldSwap 
+                          ? [targetEntity, sourceEntity] 
+                          : [sourceEntity, targetEntity]
+
+                        const [leftBadges, rightBadges] = shouldSwap
+                          ? [targetBadges, sourceBadges]
+                          : [sourceBadges, targetBadges]
+
+                        // Helper to render entity with badge
+                        const renderFlowEntity = (entity: typeof sourceEntity, badges: React.ReactNode[], isTarget: boolean) => (
+                          <div className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2">
+                            {/* Avatar */}
+                            <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                              {entity.icon ? (
+                                <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
+                              ) : (
+                                <div className={cn("h-full w-full flex items-center justify-center border border-slate-100", entity.isAccount ? "rounded-sm" : "rounded-full")}>
+                                  {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Name + Badges */}
+                            <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                              <div className="flex-1 min-w-0">
+                                {entity.link ? (
+                                  <Link href={entity.link} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-slate-700 truncate hover:underline">
+                                    {entity.name}
+                                  </Link>
+                                ) : (
+                                  <span className="text-sm font-bold text-slate-700 truncate">{entity.name}</span>
+                                )}
+                              </div>
+                              {badges.length > 0 && <div className="shrink-0 flex items-center gap-1">{badges}</div>}
+                            </div>
+                          </div>
+                        )
 
                         return (
-                          <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
-                            {/* Type Badge BEFORE flows */}
-                            <div className="shrink-0">
-                              {detailTypeBadge}
-                            </div>
-
-                            {/* Left: Source */}
-                            <div className="flex-1 min-w-0 max-w-[44%]">
-                              <RenderEntity
-                                name={sourceName}
-                                icon={sourceIcon}
-                                link={sourceId ? `/accounts/${sourceId}` : null}
-                                badges={sourceBadges}
-                                inlineBadges={true}
-                                badgeClassName={sourceColor}
-                              />
-                            </div>
-
-                            {/* Center: Separator */}
-                            <span className="text-slate-300 font-light shrink-0 mx-0.5">|</span>
-
-                            {/* Right: Target */}
-                            <div className="flex-1 min-w-0 max-w-[44%]">
-                              <RenderEntity
-                                name={targetName}
-                                icon={targetType === 'person' ? personAvatar : targetIcon}
-                                link={targetLink}
-                                badges={targetBadges}
-                                isTarget={true}
-                                inlineBadges={true}
-                                isSquare={targetType !== 'person'}
-                                badgeClassName={targetColor}
-                              />
-                            </div>
+                          <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
+                            {typeIcon && <span className="shrink-0">{typeIcon}</span>}
+                            {renderFlowEntity(displayLeft, leftBadges, false)}
+                            <span className="text-slate-300 font-light shrink-0">|</span>
+                            {renderFlowEntity(displayRight, rightBadges, true)}
                           </div>
                         )
                       }
@@ -3717,22 +2972,6 @@ export function UnifiedTransactionTable({
             }}
             transaction={confirmRefundTxn}
             accounts={accounts}
-          />
-        )
-      }
-      {
-        cloningTxn && (
-          <AddTransactionDialog
-            isOpen={!!cloningTxn}
-            onOpenChange={(open) => {
-              if (!open) setCloningTxn(null)
-            }}
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-            cloneInitialValues={buildEditInitialValues(cloningTxn)}
-            triggerContent={<span className="hidden"></span>}
           />
         )
       }

@@ -5,7 +5,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ArrowLeft } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -47,12 +47,14 @@ export function TransactionSlideV2({
     mode: initialMode = 'single',
     initialData,
     editingId,
+    operationMode = 'add',
     accounts,
     categories,
     people,
     shops,
     onSuccess,
     onHasChanges,
+    onBackButtonClick,
     onSubmissionStart,
     onSubmissionEnd
 }: TransactionSlideV2Props) {
@@ -68,8 +70,12 @@ export function TransactionSlideV2({
 
     // Get default values based on initialData - memoized to prevent infinite loops
     const defaultFormValues = useMemo((): SingleTransactionFormValues => {
+        console.log("🎨 defaultFormValues computed:");
+        console.log("   initialData:", initialData);
+        console.log("   operationMode:", operationMode);
+        
         if (initialData) {
-            return {
+            const values = {
                 type: initialData.type || "expense",
                 category_id: initialData.category_id || "",
                 occurred_at: initialData.occurred_at || new Date(),
@@ -85,7 +91,10 @@ export function TransactionSlideV2({
                 cashback_share_fixed: initialData.cashback_share_fixed,
                 ui_is_cashback_expanded: false,
             };
+            console.log("   ✅ Using initialData values:", values);
+            return values;
         }
+        console.log("   ℹ️ No initialData - using defaults");
         return {
             type: "expense",
             category_id: "",
@@ -191,6 +200,23 @@ export function TransactionSlideV2({
     }, [open, editingId, initialData, singleForm]);
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
+        console.log("✅ onSingleSubmit called - Form validation PASSED");
+        console.log("📋 Form data:", {
+            type: data.type,
+            amount: data.amount,
+            source_account_id: data.source_account_id,
+            target_account_id: data.target_account_id,
+            category_id: data.category_id,
+            shop_id: data.shop_id,
+            person_id: data.person_id,
+            occurred_at: data.occurred_at,
+            note: data.note,
+            tag: data.tag,
+            cashback_mode: data.cashback_mode,
+        });
+        console.log("🎯 Operation:", operationMode, "| editingId:", editingId);
+        console.log("🔀 Will call:", editingId ? "updateTransaction()" : "createTransaction()");
+        
         const payload = {
             occurred_at: data.occurred_at.toISOString(),
             amount: data.amount,
@@ -220,18 +246,25 @@ export function TransactionSlideV2({
         // Since we closed the sheet, we shouldn't touch local state after this point if onSubmissionStart was used.
         try {
             let success = false;
+            console.log("🚀 Starting transaction submit...");
+            
             if (editingId) {
+                console.log("📝 UPDATE mode - editingId:", editingId);
                 success = await updateTransaction(editingId, payload);
                 if (success) toast.success("Transaction updated successfully");
                 else toast.error("Failed to update transaction");
             } else {
+                console.log("➕ CREATE mode - creating new transaction");
                 const newId = await createTransaction(payload);
+                console.log("✨ Create result - newId:", newId);
                 if (newId) {
                     success = true;
                     toast.success("Transaction created successfully");
                 } else toast.error("Failed to create transaction");
             }
 
+            console.log("🎉 Submit success:", success);
+            
             if (success) {
                 if (!onSubmissionStart) {
                     setHasChanges(false);
@@ -240,7 +273,11 @@ export function TransactionSlideV2({
                 onSuccess?.(editingId ? { id: editingId, ...payload } : undefined);
             }
         } catch (error) {
-            console.error("Submission error:", error);
+            console.error("❌ Submission error caught:", error);
+            console.error("Error details:", {
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             toast.error("An error occurred. Please try again.");
         } finally {
             if (onSubmissionEnd) {
@@ -281,21 +318,39 @@ export function TransactionSlideV2({
             >
                 {/* Header */}
                 <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
-                    <SheetTitle className="flex items-center gap-2">
-                        {mode === 'single'
-                            ? (initialData || editingId ? 'Edit Transaction' : 'New Transaction')
-                            : 'Bulk Add'
-                        }
-                        {isLoadingEdit && (
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Loading...
-                            </span>
-                        )}
-                    </SheetTitle>
+                    <div className="flex items-center gap-3">
+                        {/* Back Button */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onBackButtonClick?.();
+                            }}
+                            className="p-1.5 bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                            title="Close"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+                        
+                        <SheetTitle className="flex items-center gap-2">
+                            {mode === 'single'
+                                ? (operationMode === 'duplicate' 
+                                    ? 'Duplicate Transaction'
+                                    : operationMode === 'edit' 
+                                    ? 'Edit Transaction'
+                                    : 'New Transaction')
+                                : 'Bulk Add'
+                            }
+                            {isLoadingEdit && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Loading...
+                                </span>
+                            )}
+                        </SheetTitle>
+                    </div>
 
                     {/* Quick Mode Toggle */}
                     <div className="flex bg-slate-100 rounded-lg p-1">
@@ -329,10 +384,22 @@ export function TransactionSlideV2({
                             <FormProvider {...singleForm}>
                                 <form
                                     id="single-txn-form"
-                                    onSubmit={singleForm.handleSubmit(onSingleSubmit, (errors) => {
-                                        console.error("Form validation errors:", errors);
-                                        toast.error("Please fill in all required fields correctly.");
-                                    })}
+                                    onSubmit={singleForm.handleSubmit(
+                                        onSingleSubmit,
+                                        (errors) => {
+                                            console.error("❌ Form validation FAILED");
+                                            console.error("Validation errors object:", errors);
+                                            console.error("Form state:", {
+                                                isValid: singleForm.formState.isValid,
+                                                isSubmitting: singleForm.formState.isSubmitting,
+                                                errors: singleForm.formState.errors,
+                                            });
+                                            console.error("Current form values:", singleForm.getValues());
+                                            console.error("Operation mode:", operationMode, "| editingId:", editingId);
+                                            console.error("Initial data passed:", initialData);
+                                            toast.error("Please fill in all required fields correctly.");
+                                        }
+                                    )}
                                     className="space-y-6"
                                 >
                                     <BasicInfoSection

@@ -85,6 +85,7 @@ export type TransactionSlideV2Props = {
     mode?: TransactionMode;
     initialData?: Partial<SingleTransactionFormValues>;
     editingId?: string;
+    operationMode?: 'add' | 'edit' | 'duplicate'; // Track user action for UI titles
 
     // Data dependencies
     accounts: Account[];
@@ -94,6 +95,7 @@ export type TransactionSlideV2Props = {
 
     onSuccess?: (data?: any) => void;
     onHasChanges?: (hasChanges: boolean) => void;
+    onBackButtonClick?: () => void; // Called when user clicks back button - for parent to handle close
     onSubmissionStart?: () => void;
     onSubmissionEnd?: () => void;
 };
