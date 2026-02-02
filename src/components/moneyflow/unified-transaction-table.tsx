@@ -2462,19 +2462,9 @@ export function UnifiedTransactionTable({
                             targetIcon = txn.shop.icon || undefined;
                           }
 
-                          // Single Flow Detection (Unknown Target -> Use Shop/Category)
+                          // Single Flow Detection: Keep Unknown as is (no shop/category fallback)
                           if (targetName === 'Unknown') {
                             isSingleFlow = true;
-                            if (txn.shop) {
-                              targetName = txn.shop.name;
-                              targetIcon = txn.shop.logo || undefined;
-                            } else if (txn.category_name) {
-                              targetName = txn.category_name;
-                              // Use Image URL if available (user request), else icon
-                              targetIcon = txn.category_image_url || txn.category_icon || undefined;
-                            } else {
-                              targetName = "Expense";
-                            }
                           }
 
                           // Override Badge for Single Flow
@@ -2551,7 +2541,7 @@ export function UnifiedTransactionTable({
                             }
                           }
 
-                          // If no source account, check other sources (Shop, Person) for Income
+                          // If no source account, check for Person only (no shop/category fallback)
                           if (displayName === 'Unknown') {
                             isSingleFlow = true; // Implicit single flow if unknown source
                             if (personId) {
@@ -2560,13 +2550,6 @@ export function UnifiedTransactionTable({
                               displayIcon = personAvatar;
                               displayLink = `/people/details?id=${personId}`;
                               if (peopleDebtTag) displayBadges.push(peopleDebtTag);
-                            } else if (txn.shop) {
-                              displayName = txn.shop.name;
-                              displayIcon = txn.shop.logo || undefined;
-                            } else if (txn.category_name) {
-                              // Fallback to Category if Source Unknown (common for manual Income)
-                              displayName = txn.category_name;
-                              displayIcon = txn.category_image_url || txn.category_icon || undefined;
                             } else if (txn.type === 'income') {
                               displayName = "Income";
                             }
