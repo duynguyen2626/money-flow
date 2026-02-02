@@ -2480,7 +2480,7 @@ export function UnifiedTransactionTable({
                               <div className="shrink-0">
                                 {typeBadge}
                               </div>
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 w-full">
                                 <RenderEntity
                                   name={targetName}
                                   icon={targetIcon}
@@ -2566,7 +2566,7 @@ export function UnifiedTransactionTable({
                               <div className="shrink-0">
                                 {typeBadge}
                               </div>
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 w-full">
                                 <RenderEntity
                                   name={displayName}
                                   icon={displayIcon}
