@@ -2084,8 +2084,8 @@ export function UnifiedTransactionTable({
                         // In single-table mode, account_id is the source.
 
                         // Target Parsing
-                        let targetName = destNameRaw
-                        let targetIcon = txn.destination_image
+                        const targetName = destNameRaw
+                        const targetIcon = txn.destination_image
                         let targetId = txnDestId
                         let targetType: 'account' | 'person' | 'none' = 'account'
                         let targetLink = targetId ? `/accounts/${targetId}` : null
@@ -2435,7 +2435,7 @@ export function UnifiedTransactionTable({
                           let targetName = 'Unknown';
                           let targetIcon = undefined;
                           let targetLink = null;
-                          let targetBadges: React.ReactNode[] = [];
+                          const targetBadges: React.ReactNode[] = [];
 
                           if (targetId) {
                             const tAccount = accounts.find(a => a.id === targetId);
@@ -2508,7 +2508,7 @@ export function UnifiedTransactionTable({
                           let displayName = 'Unknown';
                           let displayIcon = undefined;
                           let displayLink = null;
-                          let displayBadges: React.ReactNode[] = [];
+                          const displayBadges: React.ReactNode[] = [];
 
                           if (sourceId) {
                             const sAccount = accounts.find(a => a.id === sourceId);
@@ -2714,7 +2714,10 @@ export function UnifiedTransactionTable({
                         // Entity aligns: Left (Source), Right (Target)
                         // "Cycle acocunt là show theo dạng 01-01 to 30-01" -> Use CycleBadge on Source Account
 
-                        if (targetType === 'none') {
+                        // CRITICAL FIX: If target is "Unknown" with no real targetId/personId, treat as single flow
+                        const isSingleFlowUnknown = !targetId && !personId && (targetName === 'Unknown' || targetName === '');
+                        
+                        if (targetType === 'none' || isSingleFlowUnknown) {
                           // Only add cycle badge if source account is credit_card type and has cashback_config
                           const cycleBadgeElement = (sourceAccountForBadge && sourceAccountForBadge.type === 'credit_card' && sourceAccountForBadge.cashback_config) ? (
                             <CycleBadge
@@ -2781,18 +2784,18 @@ export function UnifiedTransactionTable({
                             : "bg-rose-50 border-rose-200"
 
                           return (
-                            <div className="flex items-center gap-1.5 w-full min-w-0 h-7">
+                            <div className={cn("flex items-center gap-1.5 w-full min-w-0 h-7 rounded-lg border px-2", singleFlowColor)}>
                               <div className="shrink-0">
                                 {extraTypeBadge}
                               </div>
-                              <div className="flex-1 min-w-0 max-w-[44%]">
+                              <div className="flex-1 min-w-0">
                                 <RenderEntity
                                   name={sourceName}
                                   icon={sourceIcon}
                                   link={sourceId ? `/accounts/${sourceId}` : null}
                                   badges={sourceBadges}
                                   inlineBadges={true}
-                                  badgeClassName={singleFlowColor}
+                                  badgeClassName=""
                                 />
                               </div>
                             </div>
@@ -2816,7 +2819,23 @@ export function UnifiedTransactionTable({
                         // Badges for Target - ONLY show cycle badges for credit card accounts
                         let targetBadges: React.ReactNode[] = []
                         if (targetType === 'person' && peopleDebtTag) {
-                          targetBadges = [peopleDebtTag]
+                          // CRITICAL: Wrap debt badge with click handler to filter people details
+                          const clickablePeopleDebtTag = (
+                            <div
+                              onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+                                e.stopPropagation()
+                                // Navigate to /people/{personId} with debt cycle filter
+                                if (personId) {
+                                  const url = `/people/${personId}?cycle=${cycleTag}`
+                                  window.open(url, '_blank')
+                                }
+                              }}
+                              className="cursor-pointer hover:opacity-80 transition-opacity"
+                            >
+                              {peopleDebtTag}
+                            </div>
+                          )
+                          targetBadges = [clickablePeopleDebtTag]
                         } else if (targetType !== 'person' && targetId) {
                           // Only add cycle badge if TARGET account is credit card with cashback config
                           const targetAccount = accounts.find(a => a.id === targetId);
@@ -2955,7 +2974,7 @@ export function UnifiedTransactionTable({
                             <div className="flex-1 min-w-0 max-w-[44%]">
                               <RenderEntity
                                 name={targetName}
-                                icon={targetIcon}
+                                icon={targetType === 'person' ? personAvatar : targetIcon}
                                 link={targetLink}
                                 badges={targetBadges}
                                 isTarget={true}
