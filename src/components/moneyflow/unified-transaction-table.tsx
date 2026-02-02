@@ -2390,13 +2390,6 @@ export function UnifiedTransactionTable({
                           </span>
                         ), debtTag ? buildPersonFilterLink(`/people/details?id=${personId}`, debtTag) : null, `Filter by ${debtTag}`) : null;
 
-                        // tagBadge should ONLY show cycle tags for accounts (NOT debt tags - S3.5 fix)
-                        const tagBadge = cycleTag ? (
-                          <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
-                            {cycleTag}
-                          </span>
-                        ) : null
-
                         const personEntity = personId ? {
                           name: personNameLink || 'Unknown Person',
                           icon: personAvatar,
@@ -2820,12 +2813,25 @@ export function UnifiedTransactionTable({
 
                         const sourceBadges = [cycleBadgeElement].filter(Boolean)
 
-                        // Badges for Target
+                        // Badges for Target - ONLY show cycle badges for credit card accounts
                         let targetBadges: React.ReactNode[] = []
                         if (targetType === 'person' && peopleDebtTag) {
                           targetBadges = [peopleDebtTag]
-                        } else if (targetType !== 'person') {
-                          targetBadges = [tagBadge].filter(Boolean)
+                        } else if (targetType !== 'person' && targetId) {
+                          // Only add cycle badge if TARGET account is credit card with cashback config
+                          const targetAccount = accounts.find(a => a.id === targetId);
+                          if (targetAccount && targetAccount.type === 'credit_card' && targetAccount.cashback_config) {
+                            const targetCycleBadge = (
+                              <CycleBadge
+                                key="target-cycle"
+                                account={targetAccount}
+                                cycleTag={cycleTag}
+                                txnDate={txn.occurred_at || txn.created_at}
+                                compact={true}
+                              />
+                            );
+                            targetBadges = [targetCycleBadge];
+                          }
                         }
 
                         // Type Badge Logic (Icon Only with Tooltip)
