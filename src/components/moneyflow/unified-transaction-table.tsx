@@ -2390,9 +2390,10 @@ export function UnifiedTransactionTable({
                           </span>
                         ), debtTag ? buildPersonFilterLink(`/people/details?id=${personId}`, debtTag) : null, `Filter by ${debtTag}`) : null;
 
-                        const tagBadge = (cycleTag || debtTag) ? (
+                        // tagBadge should ONLY show cycle tags for accounts (NOT debt tags - S3.5 fix)
+                        const tagBadge = cycleTag ? (
                           <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
-                            {cycleTag || debtTag}
+                            {cycleTag}
                           </span>
                         ) : null
 
