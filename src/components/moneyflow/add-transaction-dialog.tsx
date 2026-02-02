@@ -540,9 +540,9 @@ export function AddTransactionDialog({
       {/* Unsaved Changes Warning Dialog - Separate Portal to ensure it's on top */}
       {showCloseWarning &&
         createPortal(
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4 pointer-events-auto">
             <div
-              className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100"
+              className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100 pointer-events-auto"
               onClick={stopPropagation}
             >
               <div className="flex flex-col gap-2">

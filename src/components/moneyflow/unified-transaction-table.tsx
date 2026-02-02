@@ -2215,7 +2215,7 @@ export function UnifiedTransactionTable({
                             if (imgSrc) {
                               return (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-contain shrink-0 border-none ring-0 outline-none bg-white", isSquare ? "rounded-sm" : "rounded-full")} />
+                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-cover shrink-0 border-none ring-0 outline-none bg-white", isSquare ? "rounded-sm" : "rounded-full")} />
                               )
                             }
                             return (
@@ -2229,14 +2229,22 @@ export function UnifiedTransactionTable({
                             // Target Entity: Right-aligned with Image After Text
                             <div className={cn("flex items-center gap-2 min-w-0 w-full justify-end", badgeClasses)}>
                               {inlineBadges ? (
-                                <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
-                                  {!contextBadgeBeforeIcon && contextBadge}
-                                  <CustomTooltip content={name}>
-                                    <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
-                                      {name}
-                                    </span>
-                                  </CustomTooltip>
-                                </div>
+                                // For inlineBadges targets (people): [badges] [name] [avatar]
+                                <>
+                                  {badges.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {badges}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
+                                    {!contextBadgeBeforeIcon && contextBadge}
+                                    <CustomTooltip content={name}>
+                                      <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
+                                        {name}
+                                      </span>
+                                    </CustomTooltip>
+                                  </div>
+                                </>
                               ) : (
                                 <div className="flex flex-col min-w-0 flex-1 justify-center items-end h-full">
                                   <div className="flex items-center gap-1.5 min-w-0 w-full justify-end">
@@ -2258,11 +2266,6 @@ export function UnifiedTransactionTable({
                               <div className="shrink-0 flex items-center gap-1">
                                 {contextBadgeBeforeIcon && contextBadge}
                                 {renderAvatar(icon, name, isSquare)}
-                                {inlineBadges && badges.length > 0 && (
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    {badges}
-                                  </div>
-                                )}
                                 {trailingElement && <div className="shrink-0">{trailingElement}</div>}
                               </div>
                             </div>
@@ -2788,14 +2791,14 @@ export function UnifiedTransactionTable({
                               <div className="shrink-0">
                                 {extraTypeBadge}
                               </div>
-                              <div className="flex-1 min-w-0">
+                              <div className="flex-1 min-w-0 overflow-hidden">
                                 <RenderEntity
                                   name={sourceName}
                                   icon={sourceIcon}
                                   link={sourceId ? `/accounts/${sourceId}` : null}
                                   badges={sourceBadges}
                                   inlineBadges={true}
-                                  badgeClassName=""
+                                  badgeClassName="rounded-lg py-1 px-2 h-10 hover:bg-slate-100 transition-colors"
                                 />
                               </div>
                             </div>
