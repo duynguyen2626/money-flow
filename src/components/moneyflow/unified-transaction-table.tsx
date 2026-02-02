@@ -2215,11 +2215,11 @@ export function UnifiedTransactionTable({
                             if (imgSrc) {
                               return (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-contain shrink-0 rounded-md border-none ring-0 outline-none bg-white", isSquare ? "" : "")} />
+                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-contain shrink-0 border-none ring-0 outline-none bg-white", isSquare ? "rounded-sm" : "rounded-full")} />
                               )
                             }
                             return (
-                              <div className={cn("flex h-7 w-7 items-center justify-center bg-white shrink-0 text-slate-400 rounded-md border border-slate-100 ring-0 outline-none")}>
+                              <div className={cn("flex h-7 w-7 items-center justify-center bg-white shrink-0 text-slate-400 border border-slate-100 ring-0 outline-none", isSquare ? "rounded-sm" : "rounded-full")}>
                                 {link?.includes('people') ? <User className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
                               </div>
                             )
@@ -2895,6 +2895,7 @@ export function UnifiedTransactionTable({
                                   link={targetLink}
                                   badges={targetBadges}
                                   inlineBadges={true}
+                                  isSquare={false}
                                   badgeClassName="bg-blue-50 border-blue-200"
                                 />
                               </div>
@@ -2952,6 +2953,7 @@ export function UnifiedTransactionTable({
                                 badges={targetBadges}
                                 isTarget={true}
                                 inlineBadges={true}
+                                isSquare={targetType !== 'person'}
                                 badgeClassName={targetColor}
                               />
                             </div>
