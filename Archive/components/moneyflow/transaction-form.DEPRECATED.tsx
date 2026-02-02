@@ -14,18 +14,7 @@
  * Last updated: Feb 2026
  */
 
-import { zodResolver } from "@hookform/resolvers/zod";
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { format, subMonths, parseISO } from "date-fns";
-import { Controller, useForm, useWatch } from "react-hook-form";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-  useRef,
-} from "react";
+// @ts-nocheck - Deprecated file, import errors ignored
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";

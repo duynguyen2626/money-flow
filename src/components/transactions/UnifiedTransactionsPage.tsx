@@ -611,6 +611,7 @@ export function UnifiedTransactionsPage({
                     onDateChange={handleDateChange}
                     onRangeChange={handleRangeChange}
                     onModeChange={handleModeChange}
+                    onCategoryChange={() => {}}
 
                     accountId={selectedAccountId}
                     onAccountChange={setSelectedAccountId}

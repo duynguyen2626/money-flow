@@ -12,12 +12,7 @@
  * Last updated: Feb 2026
  */
 
-"use client";
-
-import { MouseEvent, ReactNode, useState, useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
-import { Slot } from "@radix-ui/react-slot";
-import { TransactionForm, TransactionFormValues } from "./transaction-form";
+// @ts-nocheck - Deprecated file, import errors ignored
 import { useRouter, useSearchParams } from "next/navigation";
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { Installment } from "@/services/installment.service";
