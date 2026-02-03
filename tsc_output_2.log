@@ -1,0 +1,5 @@
+﻿src/components/moneyflow/unified-transaction-table.tsx(1381,6): error TS17008: JSX element 'div' has no corresponding closing tag.
+src/components/moneyflow/unified-transaction-table.tsx(2663,11): error TS1005: ')' expected.
+src/components/moneyflow/unified-transaction-table.tsx(2780,9): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/components/moneyflow/unified-transaction-table.tsx(3161,1): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/components/moneyflow/unified-transaction-table.tsx(3162,1): error TS1005: '</' expected.

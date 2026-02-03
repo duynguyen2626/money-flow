@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { CalendarIcon, ChevronDown, ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { format, isSameMonth } from 'date-fns'
+import { format, isSameMonth, startOfYear, endOfYear } from 'date-fns'
 import { DateRange } from 'react-day-picker'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -17,11 +17,11 @@ import { toast } from 'sonner'
 interface MonthYearPickerV2Props {
   date: Date
   dateRange: DateRange | undefined
-  mode: 'month' | 'range' | 'date'
+  mode: 'month' | 'range' | 'date' | 'all' | 'year'
   // These onChange handlers will now ONLY be called when "OK" is clicked
   onDateChange: (date: Date) => void
   onRangeChange: (range: DateRange | undefined) => void
-  onModeChange: (mode: 'month' | 'range' | 'date') => void
+  onModeChange: (mode: 'month' | 'range' | 'date' | 'all' | 'year') => void
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
   availableDateRange?: DateRange | undefined // Smart date range from filtered transactions
@@ -47,19 +47,43 @@ export function MonthYearPickerV2({
   disabled = false,
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleMouseEnter = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setOpen(false)
+    }, 120)
+  }
 
   // Local state buffer
-  const [localMode, setLocalMode] = useState<'month' | 'range' | 'date'>(mode)
+  const [localMode, setLocalMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>(mode)
   const [localDate, setLocalDate] = useState<Date>(date)
   const [localRange, setLocalRange] = useState<DateRange | undefined>(dateRange)
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>()
+    years.add(new Date().getFullYear())
+    if (availableMonths) {
+      availableMonths.forEach(m => {
+        const y = parseInt(m.split('-')[0])
+        if (!isNaN(y)) years.add(y)
+      })
+    }
+    return Array.from(years).sort((a, b) => b - a)
+  }, [availableMonths])
 
   // Combine disabledRange and availableDateRange
   // Priority: disabledRange (cycle constraint) > availableDateRange (smart filter)
   const effectiveDisabledMatchers = disabledRange
     ? [{ before: disabledRange.start }, { after: disabledRange.end }]
     : availableDateRange?.from && availableDateRange?.to
-    ? [{ before: availableDateRange.from }, { after: availableDateRange.to }]
-    : undefined
+      ? [{ before: availableDateRange.from }, { after: availableDateRange.to }]
+      : undefined
 
   // Smart cycle detection: if account has cycles and filter not active, auto-set range
   useEffect(() => {
@@ -104,9 +128,11 @@ export function MonthYearPickerV2({
 
   const handleApply = () => {
     onModeChange(localMode)
-    if (localMode === 'month' || localMode === 'date') {
+    if (localMode === 'month' || localMode === 'date' || localMode === 'year') {
       onDateChange(localDate)
       // Ensure range is cleared if switching to single date modes
+      onRangeChange(undefined)
+    } else if (localMode === 'all') {
       onRangeChange(undefined)
     } else {
       onRangeChange(localRange)
@@ -115,6 +141,8 @@ export function MonthYearPickerV2({
   }
 
   const displayText = (() => {
+    if (mode === 'all') return 'All Time'
+    if (mode === 'year') return format(date, 'yyyy')
     if (mode === 'month') return format(date, 'MMM yyyy')
     if (mode === 'date') return format(date, 'dd MMM yyyy')
     if (mode === 'range') {
@@ -129,48 +157,110 @@ export function MonthYearPickerV2({
   })()
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           size="sm"
           disabled={disabled}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
           className={cn(
-            "gap-2 justify-between font-medium",
+            "gap-2 justify-between font-medium transition-all",
             fullWidth ? 'w-full h-10' : 'w-[200px] h-9',
-            (locked || disabled) && "opacity-50 cursor-not-allowed bg-muted/50"
+            (locked || disabled) && "opacity-50 cursor-not-allowed bg-muted/50",
+            mode !== 'all' && "border-primary/50 bg-primary/5 text-primary"
           )}
         >
-          <div className="flex items-center gap-1.5 truncate">
-            <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
+          <div className="flex items-center gap-1.5 truncate pointer-events-none">
+            <CalendarIcon className={cn("w-3.5 h-3.5 shrink-0", mode !== 'all' ? "text-primary" : "text-slate-500")} />
             <span className="truncate">{displayText}</span>
           </div>
-          <ChevronDown className="w-3 h-3 opacity-50" />
+          <ChevronDown className={cn("w-3 h-3 opacity-50 transition-transform pointer-events-none", open && "rotate-180")} />
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-auto p-0"
+        className="w-auto p-0 border-primary/20 shadow-xl"
         align="start"
+        sideOffset={2}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         onClick={(e) => e.stopPropagation()}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="flex flex-col">
           {/* Tabs */}
-          <div className="p-2 border-b flex gap-1 bg-muted/40">
-            {(['month', 'date', 'range'] as const).map((m) => (
-              <Button
-                key={m}
-                variant={localMode === m ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setLocalMode(m)}
-                className="flex-1 h-7 text-xs capitalize"
-              >
-                {m}
-              </Button>
-            ))}
+          <div className="p-2 border-b flex gap-1 bg-muted/40 text-[10px]">
+            {(['month', 'date', 'range', 'all'] as const).map((m) => {
+              const isActive = (m === 'all' && (localMode === 'all' || localMode === 'year')) || (m === localMode);
+              return (
+                <Button
+                  key={m}
+                  variant={isActive ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => {
+                    if (m === 'all' && localMode === 'range') setLocalMode('all')
+                    else setLocalMode(m)
+                  }}
+                  className="flex-1 h-7 text-xs capitalize"
+                >
+                  {m === 'all' ? 'Year' : m}
+                </Button>
+              )
+            })}
           </div>
 
           {/* Content */}
           <div className="p-0">
+            {(localMode === 'all' || localMode === 'year') && (
+              <div className="p-3 w-[320px]">
+                <Button
+                  variant={localMode === 'all' ? 'secondary' : 'outline'}
+                  className={cn("w-full mb-4 border-dashed", localMode === 'all' && "border-primary bg-primary/10")}
+                  onClick={() => {
+                    setLocalMode('all')
+                    setLocalRange(undefined)
+                    // Real-time apply for All Time
+                    onModeChange('all')
+                    onRangeChange(undefined)
+                    setOpen(false)
+                  }}
+                >
+                  {localMode === 'all' && "✓ "}Show All Time (Infinity)
+                </Button>
+
+                <div className="text-xs font-semibold text-muted-foreground mb-2 px-1">Select Active Year</div>
+                <div className="grid grid-cols-4 gap-2 max-h-[200px] overflow-y-auto">
+                  {availableYears.map(year => {
+                    const isCurrentYear = year === new Date().getFullYear()
+                    const isSelected = localMode === 'year' && localDate.getFullYear() === year
+                    return (
+                      <button
+                        key={year}
+                        className={cn(
+                          "px-2 py-2 rounded-md border text-sm transition-colors hover:bg-accent flex flex-col items-center justify-center gap-0.5",
+                          isSelected ? "bg-primary text-primary-foreground border-primary shadow-md" : (isCurrentYear ? "border-primary/50 bg-primary/5" : "bg-background")
+                        )}
+                        onClick={() => {
+                          const newDate = new Date(year, 0, 1)
+                          setLocalDate(newDate)
+                          setLocalMode('year')
+                          setLocalRange(undefined)
+                          // Real-time apply for Year selection
+                          onModeChange('year')
+                          onDateChange(newDate)
+                          onRangeChange(undefined)
+                          setOpen(false)
+                        }}
+                      >
+                        <span className="font-bold">{year}</span>
+                        {isCurrentYear && <span className={cn("text-[9px] uppercase tracking-tighter opacity-80", isSelected ? "text-primary-foreground" : "text-primary")}>Actual</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             {localMode === 'month' && (
               <MonthGrid
                 value={localDate}

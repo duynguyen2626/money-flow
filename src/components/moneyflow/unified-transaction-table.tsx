@@ -1,7 +1,7 @@
 "use client"
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, isSameMonth, format } from 'date-fns'
-import { useCallback, useEffect, useMemo, useState, useRef, isValidElement } from "react"
+import React, { useCallback, useEffect, useMemo, useState, useRef, isValidElement, useImperativeHandle } from "react"
 import { createPortal } from "react-dom"
 import {
   ArrowUpDown,
@@ -97,8 +97,8 @@ import { ConfirmRefundDialogV2 } from "./confirm-refund-dialog-v2"
 import { RequestRefundDialog } from "./request-refund-dialog"
 import { TransactionHistoryModal } from "./transaction-history-modal"
 
-import { AddTransactionDialog } from "./add-transaction-dialog"
 import { cancelOrder } from "@/actions/transaction-actions"
+import { AddTransactionDialog } from "./add-transaction-dialog"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 import { ColumnKey } from "@/components/app/table/transactionColumns"
 
@@ -165,16 +165,20 @@ interface UnifiedTransactionTableProps {
   fontSize?: number
   onFontSizeChange?: (size: number) => void
   onEdit?: (txn: TransactionWithDetails) => void
-  onDuplicate?: (txn: TransactionWithDetails) => void
+  onDuplicate?: (transactionId: string) => void
   loadingIds?: Set<string>
   setIsGlobalLoading?: (loading: boolean) => void
   setLoadingMessage?: (message: string) => void
 }
 
+export type UnifiedTransactionTableRef = {
+  handleOptimisticUpdate: (txn: TransactionWithDetails) => void
+}
 
 
 
-export function UnifiedTransactionTable({
+
+export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableRef, UnifiedTransactionTableProps>(({
   data,
   transactions,
   accountType,
@@ -209,7 +213,7 @@ export function UnifiedTransactionTable({
   loadingIds,
   setIsGlobalLoading,
   setLoadingMessage,
-}: UnifiedTransactionTableProps) {
+}, ref) => {
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
 
@@ -222,8 +226,25 @@ export function UnifiedTransactionTable({
   const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
   const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
 
+  // Store optimistic updates to persist across parent re-renders/stale server updates
+  const optimisticTxns = useRef<Map<string, TransactionWithDetails>>(new Map())
+
   useEffect(() => {
-    setTableData(data ?? transactions ?? [])
+    // Merge server data with pending optimistic updates
+    const baseData = data ?? transactions ?? []
+    const merged = [...baseData]
+
+    optimisticTxns.current.forEach((optTxn) => {
+      const idx = merged.findIndex(t => t.id === optTxn.id)
+      if (idx !== -1) {
+        merged[idx] = optTxn
+      } else {
+        // Prepend new transactions
+        merged.unshift(optTxn)
+      }
+    })
+
+    setTableData(merged)
   }, [data, transactions])
 
   const handleOptimisticUpdate = useCallback((optimisticTxn: TransactionWithDetails) => {
@@ -233,21 +254,25 @@ export function UnifiedTransactionTable({
       return;
     }
 
+    // 1. Store in ref for persistence
+    optimisticTxns.current.set(optimisticTxn.id, optimisticTxn)
+
+    // 2. Trigger Highlight Effect
     setUpdatingTxnIds(prev => {
       const next = new Set(prev)
       next.add(optimisticTxn.id)
       return next
     })
 
+    // 3. Force Update Table Data immediately
     setTableData(prev => {
       const index = prev.findIndex(t => t.id === optimisticTxn.id)
-      if (index >= 0) {
+      if (index !== -1) {
         const next = [...prev]
         next[index] = optimisticTxn
         return next
-      } else {
-        return [optimisticTxn, ...prev]
       }
+      return [optimisticTxn, ...prev]
     })
 
     setTimeout(() => {
@@ -258,6 +283,10 @@ export function UnifiedTransactionTable({
       })
     }, 2000)
   }, [])
+
+  useImperativeHandle(ref, () => ({
+    handleOptimisticUpdate
+  }), [handleOptimisticUpdate])
 
   const copyToClipboard = useCallback(async (value: string, successLabel?: string) => {
     try {
@@ -1283,7 +1312,7 @@ export function UnifiedTransactionTable({
         <CustomTooltip content="Duplicate">
           <button
             className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-            onClick={(e) => { e.stopPropagation(); externalOnDuplicate?.(txn); }}
+            onClick={(e) => { e.stopPropagation(); externalOnDuplicate?.(txn.id); }}
           >
             <Files className="h-3.5 w-3.5" />
           </button>
@@ -1686,38 +1715,41 @@ export function UnifiedTransactionTable({
                         const showOK = isRefundConfirmation;
 
                         let refundBadge = null;
+                        const badgeBaseClass = "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm";
+
                         if (showHourglass) {
                           refundBadge = (
                             <CustomTooltip content="Refund Requested - Waiting for Confirmation">
-                              <div className="flex items-center gap-0.5 justify-center rounded bg-amber-100 border border-amber-300 text-amber-700 px-1.5 py-0.5 shrink-0 ml-1">
+                              <div className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200")}>
                                 <Clock className="h-3 w-3" />
-                                <span className="text-[10px] font-bold">Pending</span>
+                                <span>WAIT</span>
                               </div>
                             </CustomTooltip>
                           );
                         } else if (showReversed) {
                           refundBadge = (
                             <CustomTooltip content="Refund Completed">
-                              <div className="flex items-center gap-0.5 justify-center rounded bg-slate-100 border border-slate-300 text-slate-700 px-1.5 py-0.5 shrink-0 ml-1">
+                              <div className={cn(badgeBaseClass, "bg-slate-50 text-slate-500 border-slate-200")}>
                                 <Undo2 className="h-3 w-3" />
-                                <span className="text-[10px] font-bold">Refunded</span>
+                                <span>REFUNDED</span>
                               </div>
                             </CustomTooltip>
                           );
                         } else if (showCheck) {
                           refundBadge = (
                             <CustomTooltip content="Refund Confirmed">
-                              <div className="flex items-center gap-0.5 justify-center rounded bg-emerald-100 border border-emerald-300 text-emerald-700 px-1.5 py-0.5 shrink-0 ml-1">
+                              <div className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200")}>
                                 <Check className="h-3 w-3" />
-                                <span className="text-[10px] font-bold">Confirmed</span>
+                                <span>DONE</span>
                               </div>
                             </CustomTooltip>
                           );
                         } else if (showOK) {
                           refundBadge = (
                             <CustomTooltip content="Refund Received (OK)">
-                              <div className="flex items-center justify-center rounded bg-indigo-100 border border-indigo-300 text-indigo-700 px-1 py-0.5 shrink-0 ml-1">
-                                <span className="text-[10px] font-bold">OK</span>
+                              <div className={cn(badgeBaseClass, "bg-indigo-50 text-indigo-600 border-indigo-200")}>
+                                <CheckCheck className="h-3 w-3" />
+                                <span>OK</span>
                               </div>
                             </CustomTooltip>
                           );
@@ -1731,10 +1763,10 @@ export function UnifiedTransactionTable({
                                 setConfirmRefundTxn(txn);
                                 setConfirmRefundOpen(true);
                               }}
-                              className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-400 text-emerald-700 px-1.5 py-0.5 shrink-0 transition-colors hover:bg-emerald-200 cursor-pointer ml-1"
+                              className="flex items-center justify-center rounded-full bg-emerald-500 text-white px-2.5 h-[22px] shrink-0 transition-all hover:bg-emerald-600 hover:shadow-md cursor-pointer ml-1 shadow-sm text-[10px] font-bold"
                             >
                               <CheckCheck className="h-3 w-3" />
-                              <span className="text-[10px] font-bold ml-1">Confirm</span>
+                              <span className="ml-1">Confirm</span>
                             </div>
                           </CustomTooltip>
                         ) : null;
@@ -1819,7 +1851,7 @@ export function UnifiedTransactionTable({
                                   splitBadge = (
                                     <CustomTooltip content={tooltipText}>
                                       <span className={cn(
-                                        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
+                                        "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm",
                                         badgeColor
                                       )}>
                                         {isSplitParent ? "⚡" : "🔗"} {badgeText}
@@ -1828,17 +1860,44 @@ export function UnifiedTransactionTable({
                                   );
                                 }
 
+                                const duplicatedFromId = metadata?.duplicated_from_id;
+                                let duplicationBadge = null;
+                                if (duplicatedFromId) {
+                                  duplicationBadge = (
+                                    <CustomTooltip content={`Duplicated from ID: ${duplicatedFromId}`}>
+                                      <span className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-slate-50 text-slate-400 border border-slate-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:text-slate-600 hover:border-slate-300">
+                                        <Files className="h-3 w-3" />
+                                        CLONE {String(duplicatedFromId).slice(0, 4)}
+                                      </span>
+                                    </CustomTooltip>
+                                  );
+                                }
+
                                 const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
-                                const showBadges = installmentBadge || refundBadge || confirmRefundBadge || splitBadge || hasBulkDebts;
+                                const currentInstallmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
+                                  <CustomTooltip content="Trả góp - Click để xem">
+                                    <Link
+                                      href={`/installments?tab=active&highlight=${txn.id}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:bg-amber-100"
+                                    >
+                                      <CreditCard className="h-3 w-3" />
+                                      PLAN
+                                    </Link>
+                                  </CustomTooltip>
+                                ) : null;
+
+                                const showBadges = currentInstallmentBadge || refundBadge || confirmRefundBadge || splitBadge || duplicationBadge || hasBulkDebts;
 
                                 if (!showBadges) return null;
 
                                 return (
                                   <div className="flex items-center gap-1 ml-auto">
-                                    {installmentBadge}
+                                    {currentInstallmentBadge}
                                     {refundBadge}
                                     {confirmRefundBadge}
                                     {splitBadge}
+                                    {duplicationBadge}
                                     {hasBulkDebts && (() => {
                                       const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
 
@@ -1999,6 +2058,13 @@ export function UnifiedTransactionTable({
                           typeIcon = <Minus className="h-3 w-3" />;
                         }
 
+                        // Wrapper for Type Icon with border as requested for alignment check
+                        const borderedTypeIcon = (
+                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
+                            {typeIcon}
+                          </div>
+                        )
+
                         // 2. Resolve Actual Category Data
                         const actualCategory = categories.find(c => c.id === txn.category_id) || null;
 
@@ -2105,62 +2171,158 @@ export function UnifiedTransactionTable({
                           typeIcon = <CustomTooltip content="Repayment"><UserPlus className="h-4 w-4 text-purple-600" /></CustomTooltip>
                         }
 
-                        // People debt tag badge
-                        const peopleDebtTag = personId && debtTag ? (
-                          <span key="people-debt" className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[96px]">
-                            <User className="h-3 w-3" />
-                            {debtTag}
-                          </span>
+                        // Wrapper for Type Icon with border as requested for alignment check
+                        const borderedTypeIconWide = (
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
+                            {typeIcon}
+                          </div>
+                        )
+
+                        // Cycle badge for source (only credit_card with cashback_config)
+                        const sourceCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
+                          <CycleBadge
+                            key={`cycle-source-${txn.id}`}
+                            account={sourceAccount}
+                            cycleTag={cycleTag}
+                            txnDate={txn.occurred_at || txn.created_at}
+                            entityName={sourceName}
+                          />
                         ) : null
 
-                        // CASE 1: Single flow - show ONLY account (no person, no dest)
-                        // If hasPerson is true, it's a dual flow (Account → Person)
-                        if (!hasTarget && !hasPerson) {
-                          const displayName = sourceName
-                          const displayImage = sourceIcon
-                          const displayLink = sourceId ? `/accounts/${sourceId}` : null
+                        // People debt tag badge with click/hover logic
+                        const peopleDebtTag = personId && debtTag ? (
+                          <div key={`debt-tag-${txn.id}`} className="shrink-0">
+                            <CustomTooltip content={`Open details for ${personName} in new tab filtered by cycle ${debtTag}`}>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                  window.open(`/people/details?id=${personId}&tag=${debtTag}`, '_blank', 'noopener,noreferrer')
+                                }}
+                                className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[110px] cursor-pointer hover:bg-blue-100 transition-colors shadow-sm"
+                              >
+                                <User className="h-3 w-3" />
+                                {debtTag}
+                              </span>
+                            </CustomTooltip>
+                          </div>
+                        ) : null
 
-                          // Cycle badge for source account
-                          const singleFlowCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
-                            <CycleBadge
-                              key="cycle"
-                              account={sourceAccount}
-                              cycleTag={cycleTag}
-                              txnDate={txn.occurred_at || txn.created_at}
-                            />
-                          ) : null
+                        // CONTEXT HIDING LOGIC
+                        // Determine transparency based on context to simplify view
+                        const isPersonContext = hasPerson && personId === contextId
+                        const isSourceContext = sourceId === contextId
+                        const isDestContext = destId === contextId
+
+                        // Should we use Single Flow Mode?
+                        // Yes if:
+                        // 1. Pure Single (No target/person)
+                        // 2. Or Context matches one side (so we hide that side and show the other in single mode)
+                        const showSingleFlow = (!hasTarget && !hasPerson) || isPersonContext || (hasPerson && isSourceContext) || (hasTarget && isDestContext) || (hasTarget && isSourceContext)
+
+                        if (showSingleFlow) {
+                          // Determine WHICH entity to show
+                          let entityToShow: 'source' | 'person' | 'dest' = 'source'
+                          let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
+
+                          if (isSourceContext) {
+                            // Viewing Source (Account). Show where money went.
+                            // Flow: Source -> Dest/Person.
+                            // So we show Dest/Person with "TO" badge.
+                            entityToShow = hasPerson ? 'person' : 'dest'
+                            flowBadgeType = 'TO'
+                          }
+                          else if (isDestContext || isPersonContext) {
+                            // Viewing Dest/Person. Show where money came from.
+                            // Flow: Source -> Dest/Person.
+                            // So we show Source with "FROM" badge.
+                            entityToShow = 'source'
+                            flowBadgeType = 'FROM'
+                          }
+                          // If (!hasTarget && !hasPerson), it's a simple expense/income, no flow badge needed.
+                          // Default entityToShow is 'source', flowBadgeType is null.
+
+
+                          let displayName = sourceName
+                          let displayImage = sourceIcon
+                          let displayLink = sourceId ? `/accounts/${sourceId}` : null
+                          let badgeToDisplay = sourceCycleBadge
+                          let isCycleBadge = true
+
+                          if (entityToShow === 'person') {
+                            displayName = personName
+                            displayImage = personImage
+                            displayLink = `/people/details?id=${personId}`
+                            badgeToDisplay = peopleDebtTag
+                            isCycleBadge = false
+                          } else if (entityToShow === 'dest') {
+                            displayName = destName
+                            displayImage = destIcon
+                            displayLink = destId ? `/accounts/${destId}` : null
+                            // Destination usually no badge unless debt, but for account transfer no badge currently
+                            badgeToDisplay = null
+                            isCycleBadge = false
+                          }
+
+                          // If showing Source, ensure badge is set (cycle badge)
+                          // If showing Source but simple expense, badge is sourceCycleBadge
 
                           return (
                             <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
-                              {typeIcon && <span className="shrink-0">{typeIcon}</span>}
-                              
-                              <div className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2">
-                                {/* Avatar */}
-                                <div className="shrink-0 h-7 w-7 flex items-center justify-center">
-                                  {displayImage ? (
-                                    <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
-                                  ) : (
-                                    <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm">
-                                      <Wallet className="h-4 w-4 text-slate-400" />
+                              {borderedTypeIconWide}
+
+                              <div
+                                className="flex-1 min-w-0 max-w-[calc(88%+15px)] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
+                              >
+                                {/* Flow Badge */}
+                                {flowBadgeType && (
+                                  <span className={cn(
+                                    "inline-flex items-center justify-center rounded-[4px] px-2 h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0",
+                                    flowBadgeType === 'FROM' ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-sky-50 border border-sky-200 text-sky-700"
+                                  )}>
+                                    {flowBadgeType}
+                                  </span>
+                                )}
+
+                                {/* Avatar + Name Area with its own tooltip */}
+                                <CustomTooltip content={`Open ${displayName} in new tab`}>
+                                  <div
+                                    className="flex-1 min-w-0 flex items-center gap-2 h-full"
+                                    onClick={(e) => {
+                                      if (displayLink) {
+                                        e.stopPropagation()
+                                        window.open(displayLink, '_blank', 'noopener,noreferrer')
+                                      }
+                                    }}
+                                  >
+                                    <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                                      {displayImage ? (
+                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
+                                      ) : (
+                                        <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm bg-white">
+                                          <Wallet className="h-4 w-4 text-slate-400" />
+                                        </div>
+                                      )}
                                     </div>
-                                  )}
-                                </div>
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
+                                        {displayName}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </CustomTooltip>
 
-                                {/* Name */}
-                                <div className="flex-1 min-w-0">
-                                  {displayLink ? (
-                                    <Link href={displayLink} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-slate-700 truncate hover:underline">
-                                      {displayName}
-                                    </Link>
-                                  ) : (
-                                    <span className="text-sm font-bold text-slate-700 truncate">{displayName}</span>
-                                  )}
-                                </div>
-
-                                {/* Cycle Badge */}
-                                {singleFlowCycleBadge && (
+                                {/* Badge area */}
+                                {badgeToDisplay && (
                                   <div className="shrink-0">
-                                    {singleFlowCycleBadge}
+                                    {isCycleBadge ? (
+                                      <CustomTooltip content={`Open details for ${displayName} in new tab filtered by cycle ${cycleTag || ''}`}>
+                                        {badgeToDisplay}
+                                      </CustomTooltip>
+                                    ) : (
+                                      // If debt tag (it manages its own tooltip inside the component)
+                                      badgeToDisplay
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -2169,15 +2331,7 @@ export function UnifiedTransactionTable({
                         }
 
                         // CASE 2: Dual flow - source LEFT, target RIGHT (includes Account → Person)
-                        // Cycle badge for source (only credit_card with cashback_config)
-                        const sourceCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
-                          <CycleBadge
-                            key="cycle-source"
-                            account={sourceAccount}
-                            cycleTag={cycleTag}
-                            txnDate={txn.occurred_at || txn.created_at}
-                          />
-                        ) : null
+
                         const sourceBadges = [sourceCycleBadge].filter(Boolean)
 
                         // Target badges - debt tag for people OR nothing for accounts
@@ -2189,16 +2343,16 @@ export function UnifiedTransactionTable({
 
                         // Build entity objects
                         const sourceEntity = { name: sourceName, icon: sourceIcon, link: sourceId ? `/accounts/${sourceId}` : null, isAccount: true }
-                        const targetEntity = { 
-                          name: hasPerson ? personName : destName, 
-                          icon: hasPerson ? personImage : destIcon, 
+                        const targetEntity = {
+                          name: hasPerson ? personName : destName,
+                          icon: hasPerson ? personImage : destIcon,
                           link: hasPerson ? `/people/details?id=${personId}` : (destId ? `/accounts/${destId}` : null),
                           isAccount: !hasPerson
                         }
 
                         // Swap if repayment with person
-                        const [displayLeft, displayRight] = shouldSwap 
-                          ? [targetEntity, sourceEntity] 
+                        const [displayLeft, displayRight] = shouldSwap
+                          ? [targetEntity, sourceEntity]
                           : [sourceEntity, targetEntity]
 
                         const [leftBadges, rightBadges] = shouldSwap
@@ -2207,37 +2361,53 @@ export function UnifiedTransactionTable({
 
                         // Helper to render entity with badge
                         const renderFlowEntity = (entity: typeof sourceEntity, badges: React.ReactNode[], isTarget: boolean) => (
-                          <div className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2">
-                            {/* Avatar */}
-                            <div className="shrink-0 h-7 w-7 flex items-center justify-center">
-                              {entity.icon ? (
-                                <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
-                              ) : (
-                                <div className={cn("h-full w-full flex items-center justify-center border border-slate-100", entity.isAccount ? "rounded-sm" : "rounded-full")}>
-                                  {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
+                          <div
+                            className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
+                          >
+                            {/* Avatar + Name area */}
+                            <CustomTooltip content={`Open ${entity.name} in new tab`}>
+                              <div
+                                className="flex-1 min-w-0 flex items-center gap-2 h-full"
+                                onClick={(e) => {
+                                  if (entity.link) {
+                                    e.stopPropagation()
+                                    window.open(entity.link, '_blank', 'noopener,noreferrer')
+                                  }
+                                }}
+                              >
+                                <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                                  {entity.icon ? (
+                                    <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
+                                  ) : (
+                                    <div className={cn("h-full w-full flex items-center justify-center border border-slate-100 bg-white", entity.isAccount ? "rounded-sm" : "rounded-full")}>
+                                      {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-
-                            {/* Name + Badges */}
-                            <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                              <div className="flex-1 min-w-0">
-                                {entity.link ? (
-                                  <Link href={entity.link} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-slate-700 truncate hover:underline">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
                                     {entity.name}
-                                  </Link>
-                                ) : (
-                                  <span className="text-sm font-bold text-slate-700 truncate">{entity.name}</span>
-                                )}
+                                  </span>
+                                </div>
                               </div>
-                              {badges.length > 0 && <div className="shrink-0 flex items-center gap-1">{badges}</div>}
-                            </div>
+                            </CustomTooltip>
+
+                            {/* Badges area */}
+                            {badges.length > 0 && (
+                              <div className="shrink-0 flex items-center gap-1">
+                                {badges.map((badge, idx) => (
+                                  <React.Fragment key={idx}>
+                                    {badge}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )
 
                         return (
                           <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
-                            {typeIcon && <span className="shrink-0">{typeIcon}</span>}
+                            {borderedTypeIconWide}
                             {renderFlowEntity(displayLeft, leftBadges, false)}
                             <span className="text-slate-300 font-light shrink-0">|</span>
                             {renderFlowEntity(displayRight, rightBadges, true)}
@@ -2360,9 +2530,6 @@ export function UnifiedTransactionTable({
                               : "text-slate-600"
 
                         if (!hasCashback) {
-                          // If no cashback, Net = Base. Show same value or dimmed?
-                          // To align with "Base ... Net", we show it again or maybe just "-" if identical?
-                          // Usually showing it confirms the final settlement.
                           return (
                             <div className="flex flex-col items-end gap-1 w-full">
                               <span className={cn("font-bold tabular-nums tracking-tight truncate opacity-80", amountClass)} style={{ fontSize: `0.9em` }}>
@@ -2375,7 +2542,6 @@ export function UnifiedTransactionTable({
                         return (
                           <div className="flex flex-col items-end gap-1 w-full">
                             <div className="flex items-center gap-1.5 justify-end">
-                              {/* Cashback Badges */}
                               {percentDisp > 0 && (
                                 <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
                                   -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
@@ -2394,14 +2560,12 @@ export function UnifiedTransactionTable({
                         )
                       }
                       case "back_info": {
-                        // Cashback Info Display (merged initial_back + people_back)
                         const cashbackAmount = Number(txn.bank_back ?? 0) + Number(txn.cashback_share_amount ?? 0)
                         const pRaw = Number(txn.cashback_share_percent ?? 0)
                         const fRaw = Number(txn.cashback_share_fixed ?? 0)
                         if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
                         return (
                           <div className="flex flex-col text-[1em]">
-                            {/* Formula on Top */}
                             {(pRaw || fRaw) && (
                               <span className="text-[0.7em] text-slate-500 mb-0.5">
                                 {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
@@ -2409,7 +2573,6 @@ export function UnifiedTransactionTable({
                                 {fRaw ? numberFormatter.format(fRaw) : ''}
                               </span>
                             )}
-                            {/* Sum and Profit on Bottom */}
                             <div className="flex items-center gap-2">
                               {cashbackAmount > 0 && (
                                 <span className="text-emerald-600 font-bold flex items-center gap-1">
@@ -2429,7 +2592,6 @@ export function UnifiedTransactionTable({
                           </div>
                         )
                       }
-                      // Note: 'initial_back' and 'people_back' columns removed - merged into 'back_info'
                       case "id":
                         const isCopied = copiedId === txn.id
                         return (
@@ -2455,10 +2617,6 @@ export function UnifiedTransactionTable({
                     }
                   }
 
-
-
-
-
                   return (
                     <TableRow
                       key={txn.id}
@@ -2470,9 +2628,6 @@ export function UnifiedTransactionTable({
                       )}
                     >
                       {displayedColumns.map(col => {
-                        // ... column rendering ...
-                        // Sticky Logic for Cells
-                        // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
                         const allowOverflow = col.key === "date"
                         const stickyStyle: React.CSSProperties = {
                           width: columnWidths[col.key],
@@ -2480,8 +2635,6 @@ export function UnifiedTransactionTable({
                           overflow: allowOverflow ? 'visible' : 'hidden',
                           whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
                         };
-                        const stickyClass = "";
-
                         return (
                           <TableCell
                             key={`${txn.id}-${col.key}`}
@@ -2490,11 +2643,10 @@ export function UnifiedTransactionTable({
                             className={cn(
                               `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
                               } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
-                              stickyClass,
                               col.key === "date" && "p-1",
                               col.key === "date" && "relative overflow-visible",
                               isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
-                              isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
+                              isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10"
                             )}
                             style={stickyStyle}
                           >
@@ -2505,67 +2657,54 @@ export function UnifiedTransactionTable({
                     </TableRow>
                   )
                 })}
-                {
-                  selection.size > 0 && (
-                    <>
-                      {summary.incomeSummary.sumAmount > 0 && (
-                        <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
-                          {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
-                            <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
-                          )}
-                          <TableCell className="font-bold text-emerald-700 text-right pr-4">
-                            Total Income:
-                          </TableCell>
-                          <TableCell className="font-bold text-emerald-700 text-right">
-                            {numberFormatter.format(summary.incomeSummary.sumAmount)}
-                          </TableCell>
-                          <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')} />
-                        </TableRow>
-                      )}
-                      {summary.expenseSummary.sumAmount > 0 && (
-                        <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
-                          {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
-                            <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
-                          )}
-                          <TableCell className="font-bold text-red-600 text-right pr-4">
-                            Total Expense:
-                          </TableCell>
-                          <TableCell className="font-bold text-red-600 text-right">
-                            {numberFormatter.format(summary.expenseSummary.sumAmount)}
-                          </TableCell>
-                          <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                        </TableRow>
-                      )}
-                    </>
-                  )
-                }
-              </TableBody >
-
+              </TableBody>
             </table>
-            {context === 'account' && (
-              <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-700">Flow hint:</span>{" "}
-                <span>
-                  <span className="font-semibold text-orange-900">FROM (orange)</span>: chi tiêu hoặc nhận vào từ account khác (transfer in).{' '}
-                  <span className="font-semibold text-sky-900">TO (blue)</span>: chuyển sang account khác hoặc cho People (lend).{' '}
-                  Các trường hợp khác hiển thị theo type của giao dịch.
-                </span>
-              </div>
-            )}
-          </div >
-        )
-        }
-      </div >
+          </div>
+        )}
 
-      {/* Footer - Outside scroll container */}
-      {/* Footer - Outside scroll container */}
+        {
+          !isExcelMode && showPagination && (
+            <>
+              {typeof document !== 'undefined' && createPortal(
+                <div className="fixed bottom-0 left-0 right-0 flex md:hidden bg-white border-t border-slate-200 px-3 py-2 items-center justify-between gap-2 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
+                    <select
+                      className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                    >
+                      {[10, 20, 50, 100, 200, 500].map(size => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  </div>
 
-      {/* Pagination moved OUTSIDE the scrollable container to ensure visibility */}
-      {
-        !isExcelMode && showPagination && (
-          <>
-            {typeof document !== 'undefined' && createPortal(
-              <div className="fixed bottom-0 left-0 right-0 flex md:hidden bg-white border-t border-slate-200 px-3 py-2 items-center justify-between gap-2 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="text-[11px] font-medium whitespace-nowrap">
+                      {currentPage} <span className="text-slate-400">/ {calculatedTotalPages}</span>
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(Math.min(calculatedTotalPages, currentPage + 1))}
+                      disabled={currentPage >= calculatedTotalPages}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>,
+                document.body
+              )}
+
+              <div className="hidden md:flex flex-none bg-white border-t border-slate-200 p-2 lg:p-3 items-center justify-between gap-2 z-40 sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                {/* Left: Items per Page */}
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
                   <select
@@ -2579,6 +2718,7 @@ export function UnifiedTransactionTable({
                   </select>
                 </div>
 
+                {/* Center: Pagination */}
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
@@ -2588,7 +2728,7 @@ export function UnifiedTransactionTable({
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
                   <div className="text-[11px] font-medium whitespace-nowrap">
-                    {currentPage} <span className="text-slate-400">/ {calculatedTotalPages}</span>
+                    <span className="hidden sm:inline">Page </span>{currentPage} <span className="text-slate-400">/ {calculatedTotalPages}</span>
                   </div>
                   <button
                     onClick={() => setCurrentPage(Math.min(calculatedTotalPages, currentPage + 1))}
@@ -2598,462 +2738,420 @@ export function UnifiedTransactionTable({
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
-              </div>,
-              document.body
-            )}
 
-            <div className="hidden md:flex flex-none bg-white border-t border-slate-200 p-2 lg:p-3 items-center justify-between gap-2 z-40 sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-              {/* Left: Items per Page */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
-                <select
-                  className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                >
-                  {[10, 20, 50, 100, 200, 500].map(size => (
-                    <option key={size} value={size}>{size}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Right: Font Size & Reset - Hidden on Mobile */}
+                <div className="hidden lg:flex items-center gap-3">
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
+                    <button
+                      onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                      className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                      disabled={fontSize <= 10}
+                    >
+                      <Minus className="h-3 w-3 text-slate-600" />
+                    </button>
+                    <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
+                    <button
+                      onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                      className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                      disabled={fontSize >= 20}
+                    >
+                      <Plus className="h-3 w-3 text-slate-600" />
+                    </button>
+                  </div>
 
-              {/* Center: Pagination */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <div className="text-[11px] font-medium whitespace-nowrap">
-                  <span className="hidden sm:inline">Page </span>{currentPage} <span className="text-slate-400">/ {calculatedTotalPages}</span>
-                </div>
-                <button
-                  onClick={() => setCurrentPage(Math.min(calculatedTotalPages, currentPage + 1))}
-                  disabled={currentPage >= calculatedTotalPages}
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              {/* Right: Font Size & Reset - Hidden on Mobile */}
-              <div className="hidden lg:flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
                   <button
-                    onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                    className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
-                    disabled={fontSize <= 10}
+                    onClick={() => {
+                      setSortState({ key: 'date', dir: 'desc' });
+                      updateSelection(new Set());
+                      resetColumns();
+                      setCurrentPage(1);
+                    }}
+                    className="flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                    title="Reset view"
                   >
-                    <Minus className="h-3 w-3 text-slate-600" />
-                  </button>
-                  <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
-                  <button
-                    onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                    className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
-                    disabled={fontSize >= 20}
-                  >
-                    <Plus className="h-3 w-3 text-slate-600" />
+                    <RotateCcw className="h-3 w-3" />
+                    <span className="hidden xl:inline">Reset</span>
                   </button>
                 </div>
-
-                <button
-                  onClick={() => {
-                    setSortState({ key: 'date', dir: 'desc' });
-                    updateSelection(new Set());
-                    resetColumns();
-                    setCurrentPage(1);
-                  }}
-                  className="flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                  title="Reset view"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  <span className="hidden xl:inline">Reset</span>
-                </button>
               </div>
-            </div>
-          </>
-        )
-      }
+            </>
+          )
+        }
 
 
-      {
-        editingTxn && editingInitialValues && (
-          <AddTransactionDialog
-            isOpen={!!editingTxn}
-            onOpenChange={(open) => {
-              if (!open) setEditingTxn(null)
-            }}
-            mode="edit"
-            transactionId={editingTxn.id}
-            initialValues={editingInitialValues}
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-            triggerContent={<span className="hidden"></span>}
-            onSuccess={(txn) => {
-              // CRITICAL: Always close modal first, then try optimistic update
-              setEditingTxn(null);
+        {
+          editingTxn && editingInitialValues && (
+            <AddTransactionDialog
+              isOpen={!!editingTxn}
+              onOpenChange={(open) => {
+                if (!open) setEditingTxn(null)
+              }}
+              mode="edit"
+              transactionId={editingTxn.id}
+              initialValues={editingInitialValues}
+              accounts={accounts}
+              categories={categories}
+              people={people}
+              shops={shops}
+              triggerContent={<span className="hidden"></span>}
+              onSuccess={(txn) => {
+                // CRITICAL: Always close modal first, then try optimistic update
+                setEditingTxn(null);
 
-              // Try optimistic update if txn is provided
-              if (txn) {
-                handleOptimisticUpdate(txn);
-              }
-            }}
-          />
-        )
-      }
+                // Try optimistic update if txn is provided
+                if (txn) {
+                  handleOptimisticUpdate(txn);
+                }
+              }}
+            />
+          )
+        }
 
-      {
-        confirmVoidTarget && createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-            onClick={closeVoidDialog}
-          >
-            <div
-              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-              onClick={event => event.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                This action will mark the transaction as void and adjust the balances accordingly.
-              </p>
-              {voidError && (
-                <p className="mt-2 text-sm text-red-600">{voidError}</p>
-              )}
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
-                  onClick={closeVoidDialog}
-                  disabled={isVoiding}
-                >
-                  Keep
-                </button>
-                <button
-                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
-                  onClick={handleVoidConfirm}
-                  disabled={isVoiding}
-                >
-                  {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Void Transaction
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
-
-      {
-        confirmCancelTarget && createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-            onClick={() => setConfirmCancelTarget(null)}
-          >
-            <div
-              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-              onClick={event => event.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-slate-900">Cancel Order (Full Refund)?</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
-              </p>
-              <p className="mt-2 text-xs text-amber-600">
-                Money will stay in &quot;Pending&quot; account until you confirm receipt.
-              </p>
-              {voidError && (
-                <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
-                  {voidError}
-                </div>
-              )}
-              <div className="mt-4 flex gap-2">
-                <button
-                  className="flex-1 rounded-md bg-slate-100 px-4 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                  onClick={() => setConfirmCancelTarget(null)}
-                  disabled={isVoiding}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="flex-1 rounded-md bg-amber-500 px-4 py-1 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
-                  onClick={() => handleCancelOrderConfirm(false)}
-                  disabled={isVoiding}
-                >
-                  {isVoiding ? 'Processing...' : 'Pending (Wait)'}
-                </button>
-                <button
-                  className="flex-1 rounded-md bg-emerald-600 px-4 py-1 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                  onClick={() => handleCancelOrderConfirm(true)}
-                  disabled={isVoiding}
-                >
-                  {isVoiding ? 'Processing...' : 'Received (Instant)'}
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
-
-      {
-        confirmDeletingTarget && createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-            onClick={() => setConfirmDeletingTarget(null)}
-          >
-            <div
-              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-              onClick={event => event.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold text-slate-900">Delete transaction forever?</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                This will PERMANENTLY remove this transaction from the database. This action cannot be undone.
-              </p>
-              {voidError && (
-                <p className="mt-2 text-sm text-red-600">{voidError}</p>
-              )}
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
-                  onClick={() => setConfirmDeletingTarget(null)}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
-                  onClick={handleSingleDeleteConfirm}
-                  disabled={isDeleting}
-                >
-                  {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Delete Permanently
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
-      {
-        refundFormTxn &&
-        (() => {
-          const baseAmount =
-            refundFormStage === 'confirm'
-              ? Math.abs(refundFormTxn.amount ?? 0)
-              : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
-
-          // Source account for refund (where money goes back to)
-          // If request, it's the original source (account_id).
-          // If confirm, we might default to the first available account or just null.
-          // Note: Logic above is approximation. 
-          // Better: If request, use refundFormTxn.account_id.
-          // If confirm, refundFormTxn is the request (on Pending Account). We need a target.
-          // The request doesn't explicitly store the "return to" account until confirmed.
-          // But usually we default to the first real account.
-          const defaultAccountId = (refundFormStage === 'confirm' ? null : refundFormTxn.account_id) ?? refundAccountOptions[0]?.id ?? null
-          const initialNote =
-            refundFormStage === 'confirm'
-              ? refundFormTxn.note ?? 'Confirm refund'
-              : `Refund: ${refundFormTxn.note ?? refundFormTxn.id}`
-
-          return createPortal(
+        {
+          confirmVoidTarget && createPortal(
             <div
               className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-              onClick={() => setRefundFormTxn(null)}
+              onClick={closeVoidDialog}
             >
               <div
-                className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+                className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
                 onClick={event => event.stopPropagation()}
               >
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {refundFormStage === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
-                  </h3>
+                <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  This action will mark the transaction as void and adjust the balances accordingly.
+                </p>
+                {voidError && (
+                  <p className="mt-2 text-sm text-red-600">{voidError}</p>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
                   <button
-                    className="text-slate-500 transition hover:text-slate-700"
-                    onClick={() => setRefundFormTxn(null)}
+                    className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
+                    onClick={closeVoidDialog}
+                    disabled={isVoiding}
                   >
-                    X
+                    Keep
+                  </button>
+                  <button
+                    className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={handleVoidConfirm}
+                    disabled={isVoiding}
+                  >
+                    {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Void Transaction
                   </button>
                 </div>
-                <TransactionForm
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  mode="refund"
-                  refundTransactionId={refundFormTxn.id}
-                  refundAction={refundFormStage}
-                  refundMaxAmount={baseAmount}
-                  defaultRefundStatus={refundFormStage === 'confirm' ? 'received' : 'pending'}
-                  defaultSourceAccountId={defaultAccountId ?? undefined}
-                  initialValues={{
-                    amount: baseAmount,
-                    note: initialNote,
-                    shop_id: refundFormTxn.shop_id ?? undefined,
-                    tag: refundFormTxn.tag ?? undefined,
-                    occurred_at: refundFormTxn.occurred_at ? new Date(refundFormTxn.occurred_at) : new Date(),
-                    source_account_id: defaultAccountId ?? undefined,
-                    category_id: refundFormTxn.category_id ?? undefined,
-                    person_id: refundFormTxn.person_id ?? undefined,
-                  }}
-                  onSuccess={handleRefundFormSuccess}
-                />
               </div>
             </div>,
             document.body
           )
-        })()
-      }
-      {
-        bulkDialog?.open &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
-            onClick={() => setBulkDialog(null)}
-          >
+        }
+
+        {
+          confirmCancelTarget && createPortal(
             <div
-              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-              onClick={event => event.stopPropagation()}
+              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              onClick={() => setConfirmCancelTarget(null)}
             >
-              <h3 className="text-lg font-semibold text-slate-900">
-                {bulkDialog.mode === 'void' ? 'Bulk Void' : bulkDialog.mode === 'restore' ? 'Bulk Restore' : 'Permanent Delete'}
-              </h3>
-              <p className="mt-2 text-sm text-slate-600">
-                {bulkDialog.mode === 'void'
-                  ? `Are you sure you want to void ${selection.size} transactions?`
-                  : bulkDialog.mode === 'restore'
-                    ? `Are you sure you want to restore ${selection.size} transactions?`
-                    : `Are you sure you want to PERMANENTLY DELETE ${selection.size} transactions? This cannot be undone.`}
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
-                  onClick={() => {
-                    if (isVoiding || isRestoring || isDeleting) {
-                      stopBulk.current = true
-                    } else {
-                      setBulkDialog(null)
-                    }
-                  }}
-                >
-                  {isVoiding || isRestoring || isDeleting ? 'Stop' : 'Cancel'}
-                </button>
-                <button
-                  className={`inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
-                    }`}
-                  onClick={() => executeBulk(bulkDialog.mode)}
-                  disabled={isVoiding || isRestoring || isDeleting}
-                >
-                  {(isVoiding || isRestoring || isDeleting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {bulkDialog.mode === 'void' ? 'Void' : bulkDialog.mode === 'restore' ? 'Restore' : 'Delete Forever'}
-                </button>
+              <div
+                className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+                onClick={event => event.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-slate-900">Cancel Order (Full Refund)?</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
+                </p>
+                <p className="mt-2 text-xs text-amber-600">
+                  Money will stay in &quot;Pending&quot; account until you confirm receipt.
+                </p>
+                {voidError && (
+                  <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+                    {voidError}
+                  </div>
+                )}
+                <div className="mt-4 flex gap-2">
+                  <button
+                    className="flex-1 rounded-md bg-slate-100 px-4 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                    onClick={() => setConfirmCancelTarget(null)}
+                    disabled={isVoiding}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="flex-1 rounded-md bg-amber-500 px-4 py-1 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
+                    onClick={() => handleCancelOrderConfirm(false)}
+                    disabled={isVoiding}
+                  >
+                    {isVoiding ? 'Processing...' : 'Pending (Wait)'}
+                  </button>
+                  <button
+                    className="flex-1 rounded-md bg-emerald-600 px-4 py-1 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                    onClick={() => handleCancelOrderConfirm(true)}
+                    disabled={isVoiding}
+                  >
+                    {isVoiding ? 'Processing...' : 'Received (Instant)'}
+                  </button>
+                </div>
               </div>
-            </div>
-          </div>,
-          document.body
-        )
-      }
+            </div>,
+            document.body
+          )
+        }
 
-      <TransactionHistoryModal
-        transactionId={historyTarget?.id ?? ''}
-        transactionNote={historyTarget?.note}
-        isOpen={!!historyTarget}
-        onClose={() => setHistoryTarget(null)}
-      />
-      {
-        confirmRefundTxn && (
-          <ConfirmRefundDialogV2
-            open={!!confirmRefundTxn}
-            onOpenChange={(open) => {
-              if (!open) setConfirmRefundTxn(null)
-            }}
-            transaction={confirmRefundTxn}
-            accounts={accounts}
-          />
-        )
-      }
-      <ExcelStatusBar
-        totalIn={selectedStats.totalIn}
-        totalOut={selectedStats.totalOut}
-        average={selectedStats.average}
-        count={selectedStats.count}
-        isVisible={!!isExcelMode && selectedCells.size > 0}
-      />
+        {
+          confirmDeletingTarget && createPortal(
+            <div
+              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              onClick={() => setConfirmDeletingTarget(null)}
+            >
+              <div
+                className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+                onClick={event => event.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-slate-900">Delete transaction forever?</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  This will PERMANENTLY remove this transaction from the database. This action cannot be undone.
+                </p>
+                {voidError && (
+                  <p className="mt-2 text-sm text-red-600">{voidError}</p>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
+                    onClick={() => setConfirmDeletingTarget(null)}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
+                    onClick={handleSingleDeleteConfirm}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Delete Permanently
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        }
+        {
+          refundFormTxn &&
+          (() => {
+            const baseAmount =
+              refundFormStage === 'confirm'
+                ? Math.abs(refundFormTxn.amount ?? 0)
+                : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
 
-      {/* Request Refund Dialog */}
-      {
-        refundTarget && (
-          <RequestRefundDialog
-            open={isRefundOpen}
-            onOpenChange={setIsRefundOpen}
-            transaction={refundTarget}
-            type={refundType}
-          />
-        )
-      }
-      {/* Column Customizer */}
-      <ColumnCustomizer
-        open={isColumnCustomizerOpen}
-        onOpenChange={setIsColumnCustomizerOpen}
-        columns={customColumnOrder.map(key => {
-          const def = defaultColumns.find(c => c.key === key)
-          if (!def) return null
-          return {
-            id: key,
-            label: def.label || (key === 'actions' ? 'Action' : key),
-            frozen: key === 'date' || key === 'actions'
-          }
-        }).filter(Boolean) as any[]}
-        visibleColumns={visibleColumns}
-        onVisibilityChange={(key, visible) => {
-          setVisibleColumns(prev => ({ ...prev, [key]: visible }))
-        }}
-        onOrderChange={(newOrder) => {
-          // Enforce Date always first and Actions always last
-          const content = newOrder.filter(k => k !== 'date' && k !== 'actions')
-          setCustomColumnOrder(['date', ...content, 'actions'] as ColumnKey[])
-        }}
-        onReset={() => {
-          // 1. Reset Order
-          setCustomColumnOrder(defaultColumns.map(c => c.key));
-          localStorage.removeItem('mf_v3_col_order');
+            // Source account for refund (where money goes back to)
+            // If request, it's the original source (account_id).
+            // If confirm, we might default to the first available account or just null.
+            // Note: Logic above is approximation. 
+            // Better: If request, use refundFormTxn.account_id.
+            // If confirm, refundFormTxn is the request (on Pending Account). We need a target.
+            // The request doesn't explicitly store the "return to" account until confirmed.
+            // But usually we default to the first real account.
+            const defaultAccountId = (refundFormStage === 'confirm' ? null : refundFormTxn.account_id) ?? refundAccountOptions[0]?.id ?? null
+            const initialNote =
+              refundFormStage === 'confirm'
+                ? refundFormTxn.note ?? 'Confirm refund'
+                : `Refund: ${refundFormTxn.note ?? refundFormTxn.id}`
 
-          // 2. Reset Visibility
-          const defaultVis: Record<ColumnKey, boolean> = {
-            date: true,
-            shop: true,
-            note: false,
-            category: false,
-            tag: false,
-            account: true,
-            amount: true,
-            final_price: true,
-            back_info: false,
-            id: false,
-            people: false,
-            actions: true,
-          };
-          setVisibleColumns(defaultVis);
-          localStorage.removeItem('mf_v3_col_vis');
+            return createPortal(
+              <div
+                className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+                onClick={() => setRefundFormTxn(null)}
+              >
+                <div
+                  className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+                  onClick={event => event.stopPropagation()}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-slate-900">
+                      {refundFormStage === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
+                    </h3>
+                    <button
+                      className="text-slate-500 transition hover:text-slate-700"
+                      onClick={() => setRefundFormTxn(null)}
+                    >
+                      X
+                    </button>
+                  </div>
+                  <TransactionForm
+                    accounts={accounts}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    mode="refund"
+                    defaultSourceAccountId={defaultAccountId ?? undefined}
+                    initialValues={{
+                      amount: baseAmount,
+                      note: initialNote,
+                      shop_id: refundFormTxn.shop_id ?? undefined,
+                      tag: refundFormTxn.tag ?? undefined,
+                      occurred_at: refundFormTxn.occurred_at ? new Date(refundFormTxn.occurred_at) : new Date(),
+                      source_account_id: defaultAccountId ?? undefined,
+                      category_id: refundFormTxn.category_id ?? undefined,
+                      person_id: refundFormTxn.person_id ?? undefined,
+                    }}
+                    onSuccess={handleRefundFormSuccess}
+                  />
+                </div>
+              </div>,
+              document.body
+            )
+          })()
+        }
+        {
+          bulkDialog?.open &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+              onClick={() => setBulkDialog(null)}
+            >
+              <div
+                className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+                onClick={event => event.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {bulkDialog.mode === 'void' ? 'Bulk Void' : bulkDialog.mode === 'restore' ? 'Bulk Restore' : 'Permanent Delete'}
+                </h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  {bulkDialog.mode === 'void'
+                    ? `Are you sure you want to void ${selection.size} transactions?`
+                    : bulkDialog.mode === 'restore'
+                      ? `Are you sure you want to restore ${selection.size} transactions?`
+                      : `Are you sure you want to PERMANENTLY DELETE ${selection.size} transactions? This cannot be undone.`}
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
+                    onClick={() => {
+                      if (isVoiding || isRestoring || isDeleting) {
+                        stopBulk.current = true
+                      } else {
+                        setBulkDialog(null)
+                      }
+                    }}
+                  >
+                    {isVoiding || isRestoring || isDeleting ? 'Stop' : 'Cancel'}
+                  </button>
+                  <button
+                    className={`inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
+                      }`}
+                    onClick={() => executeBulk(bulkDialog.mode)}
+                    disabled={isVoiding || isRestoring || isDeleting}
+                  >
+                    {(isVoiding || isRestoring || isDeleting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {bulkDialog.mode === 'void' ? 'Void' : bulkDialog.mode === 'restore' ? 'Restore' : 'Delete Forever'}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        }
 
-          // 3. Reset Widths
-          const map = {} as Record<ColumnKey, number>;
-          defaultColumns.forEach(col => {
-            map[col.key] = col.defaultWidth;
-          });
-          setColumnWidths(map);
-          localStorage.removeItem('mf_v3_col_width');
+        <TransactionHistoryModal
+          transactionId={historyTarget?.id ?? ''}
+          transactionNote={historyTarget?.note}
+          isOpen={!!historyTarget}
+          onClose={() => setHistoryTarget(null)}
+        />
+        {
+          confirmRefundTxn && (
+            <ConfirmRefundDialogV2
+              open={!!confirmRefundTxn}
+              onOpenChange={(open) => {
+                if (!open) setConfirmRefundTxn(null)
+              }}
+              transaction={confirmRefundTxn}
+              accounts={accounts}
+            />
+          )
+        }
+        <ExcelStatusBar
+          totalIn={selectedStats.totalIn}
+          totalOut={selectedStats.totalOut}
+          average={selectedStats.average}
+          count={selectedStats.count}
+          isVisible={!!isExcelMode && selectedCells.size > 0}
+        />
 
-          toast.success("Column settings reset to default");
-        }}
-        widths={columnWidths}
-        onWidthChange={(key, width) => {
-          setColumnWidths(prev => ({ ...prev, [key]: width }))
-        }}
-      />
-    </div >
-  )
-}
+        {/* Request Refund Dialog */}
+        {
+          refundTarget && (
+            <RequestRefundDialog
+              open={isRefundOpen}
+              onOpenChange={setIsRefundOpen}
+              transaction={refundTarget}
+              type={refundType}
+            />
+          )
+        }
+        {/* Column Customizer */}
+        <ColumnCustomizer
+          open={isColumnCustomizerOpen}
+          onOpenChange={setIsColumnCustomizerOpen}
+          columns={customColumnOrder.map(key => {
+            const def = defaultColumns.find(c => c.key === key)
+            if (!def) return null
+            return {
+              id: key,
+              label: def.label || (key === 'actions' ? 'Action' : key),
+              frozen: key === 'date' || key === 'actions'
+            }
+          }).filter(Boolean) as any[]}
+          visibleColumns={visibleColumns}
+          onVisibilityChange={(key, visible) => {
+            setVisibleColumns(prev => ({ ...prev, [key]: visible }))
+          }}
+          onOrderChange={(newOrder) => {
+            // Enforce Date always first and Actions always last
+            const content = newOrder.filter(k => k !== 'date' && k !== 'actions')
+            setCustomColumnOrder(['date', ...content, 'actions'] as ColumnKey[])
+          }}
+          onReset={() => {
+            // 1. Reset Order
+            setCustomColumnOrder(defaultColumns.map(c => c.key));
+            localStorage.removeItem('mf_v3_col_order');
+
+            // 2. Reset Visibility
+            const defaultVis: Record<ColumnKey, boolean> = {
+              date: true,
+              shop: true,
+              note: false,
+              category: false,
+              tag: false,
+              account: true,
+              amount: true,
+              final_price: true,
+              back_info: false,
+              id: false,
+              people: false,
+              actions: true,
+            };
+            setVisibleColumns(defaultVis);
+            localStorage.removeItem('mf_v3_col_vis');
+
+            // 3. Reset Widths
+            const map = {} as Record<ColumnKey, number>;
+            defaultColumns.forEach(col => {
+              map[col.key] = col.defaultWidth;
+            });
+            setColumnWidths(map);
+            localStorage.removeItem('mf_v3_col_width');
+
+            toast.success("Column settings reset to default");
+          }}
+          widths={columnWidths}
+          onWidthChange={(key, width) => {
+            setColumnWidths(prev => ({ ...prev, [key]: width }))
+          }}
+        />
+      </div >
+    </div>
+  );
+});

@@ -3,7 +3,6 @@ import { getCategories } from '@/services/category.service'
 import { getUnifiedTransactions } from '@/services/transaction.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { UnifiedTransactionsPage } from '@/components/transactions/UnifiedTransactionsPage'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 

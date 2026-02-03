@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { DashboardStats } from '@/services/dashboard.service'
-import { Users, Clock, Wallet, TrendingDown, TrendingUp, AlertCircle, FileText, Plus, Check } from 'lucide-react'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TrendingDown, TrendingUp, AlertCircle, FileText, Plus, Check, MoreHorizontal } from 'lucide-react'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { Select } from '@/components/ui/select'
@@ -111,6 +111,10 @@ export function DashboardContent({
   const [isPending, startTransition] = useTransition()
   const [isMounted, setIsMounted] = useState(false)
 
+  // Transaction Slide State
+  const [isSlideOpen, setIsSlideOpen] = useState(false)
+  const [slideInitialData, setSlideInitialData] = useState<any>(undefined)
+
   useEffect(() => {
     setIsMounted(true)
   }, [])
@@ -163,6 +167,18 @@ export function DashboardContent({
         setConfirmingRefund(null)
       }
     })
+  }
+
+  const handleRepayClick = (item: any, person: any) => {
+    setSlideInitialData({
+      type: 'repayment',
+      source_account_id: person.debt_account_id,
+      amount: Math.abs(item.amount),
+      tag: item.tag,
+      person_id: person.id,
+      occurred_at: new Date(),
+    })
+    setIsSlideOpen(true)
   }
 
   const chartData = stats.spendingByCategory.map((cat, index) => ({
@@ -353,18 +369,12 @@ export function DashboardContent({
                       <div className="flex items-center gap-2">
                         <p className="text-xs font-semibold text-slate-900">{numberFormatter.format(item.amount)}</p>
                         {person?.debt_account_id && (
-                          <AddTransactionDialog
-                            accounts={accounts}
-                            categories={categories}
-                            people={[person]}
-                            shops={shops}
-                            defaultType="repayment"
-                            defaultDebtAccountId={person.debt_account_id}
-                            defaultAmount={item.amount}
-                            defaultTag={item.tag}
-                            buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
-                            triggerContent={<Check className="h-4 w-4" />}
-                          />
+                          <button
+                            onClick={() => handleRepayClick(item, person)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -562,6 +572,22 @@ export function DashboardContent({
         people={people}
         shops={shops}
         variant="floating"
+      />
+
+      <TransactionSlideV2
+        open={isSlideOpen}
+        onOpenChange={setIsSlideOpen}
+        initialData={slideInitialData}
+        accounts={accounts}
+        categories={categories}
+        people={people}
+        shops={shops}
+        mode="single"
+        operationMode="add"
+        onSuccess={() => {
+          setIsSlideOpen(false)
+          router.refresh()
+        }}
       />
     </div>
   )

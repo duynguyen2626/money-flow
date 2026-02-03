@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 
 import { InstallmentDetailsDialog } from "./installment-details-dialog";
-import { AddTransactionDialog } from "@/components/moneyflow/add-transaction-dialog";
+import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
 import Link from "next/link";
 
 interface InstallmentTableProps {
@@ -225,8 +225,8 @@ export function InstallmentTable({
       </Table>
 
       {paymentDialogState.installment && (
-        <AddTransactionDialog
-          isOpen={paymentDialogState.isOpen}
+        <TransactionSlideV2
+          open={paymentDialogState.isOpen}
           onOpenChange={(open) =>
             setPaymentDialogState((prev) => ({ ...prev, isOpen: open }))
           }
@@ -234,13 +234,12 @@ export function InstallmentTable({
           categories={categories}
           people={people}
           shops={shops}
-          installments={installments}
-          defaultType={
-            paymentDialogState.mode === "person" ? "repayment" : "expense"
-          }
-          initialValues={{
+          mode="single"
+          operationMode="add"
+          initialData={{
             installment_plan_id: paymentDialogState.installment.id,
             amount: paymentDialogState.installment.monthly_amount,
+            type: paymentDialogState.mode === "person" ? "repayment" : "expense",
             note: (() => {
               const inst = paymentDialogState.installment;
               const start = new Date(inst.start_date);
@@ -260,6 +259,9 @@ export function InstallmentTable({
                 ? (paymentDialogState.installment as any).original_transaction
                   ?.person_id
                 : undefined,
+          }}
+          onSuccess={() => {
+            setPaymentDialogState((prev) => ({ ...prev, isOpen: false }))
           }}
         />
       )}
