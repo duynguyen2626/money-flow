@@ -78,6 +78,8 @@ export function ItemsTable({
     const [showTransferDialog, setShowTransferDialog] = useState(false)
     const [selectedItemForTransfer, setSelectedItemForTransfer] = useState<any>(null)
     const [cloningItemId, setCloningItemId] = useState<string | null>(null)
+    const [showCloneConfirm, setShowCloneConfirm] = useState(false)
+    const [selectedItemForClone, setSelectedItemForClone] = useState<any>(null)
     const [confirmConfig, setConfirmConfig] = useState<{
         title: string
         description: string
@@ -134,9 +136,18 @@ export function ItemsTable({
     }
 
     async function handleClone(id: string) {
-        setCloningItemId(id)
+        const item = items.find(i => i.id === id)
+        setSelectedItemForClone(item)
+        setShowCloneConfirm(true)
+    }
+
+    async function handleCloneConfirm() {
+        if (!selectedItemForClone) return
+        setCloningItemId(selectedItemForClone.id)
         try {
-            await cloneBatchItemAction(id, batchId)
+            await cloneBatchItemAction(selectedItemForClone.id, batchId)
+            setShowCloneConfirm(false)
+            setSelectedItemForClone(null)
         } finally {
             setCloningItemId(null)
         }
@@ -423,6 +434,16 @@ export function ItemsTable({
                 onOpenChange={setShowTransferDialog}
                 item={selectedItemForTransfer}
                 onConfirm={handleConfirmTransfer}
+            />
+
+            <ConfirmDialog
+                open={showCloneConfirm}
+                onOpenChange={setShowCloneConfirm}
+                title="Clone Item"
+                description={`Clone "${selectedItemForClone?.details || selectedItemForClone?.note || 'this item'}"?`}
+                onConfirm={handleCloneConfirm}
+                confirmText="Clone"
+                cancelText="Cancel"
             />
         </>
     )
