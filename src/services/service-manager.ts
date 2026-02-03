@@ -6,12 +6,12 @@ import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
 import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 import { autoSyncCycleSheetIfNeeded } from './sheet.service'
 
-// ServiceMember type with corrected relationship to 'people' table (not 'profiles')
-// Database uses 'profile_id' but points to 'people' table (formerly 'profiles')
+// ServiceMember type for service distribution
+// Uses person_id to match database schema after migration
 type ServiceMember = {
   id: string;
   service_id: string;
-  profile_id: string; // Foreign key from service_members table
+  person_id: string; // Foreign key to people.id
   slots: number;
   is_owner: boolean;
   people?: {
@@ -64,7 +64,7 @@ export async function upsertService(
     if (members.length > 0) {
       const memberInsertData = members.map(member => ({
         service_id: serviceId,
-        profile_id: member.profile_id, // Use profile_id to match database schema
+        person_id: member.person_id,
         slots: member.slots,
         is_owner: member.is_owner,
       }))
@@ -168,14 +168,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // [M2-SP1] Idempotency Check: Use metadata to find existing transaction
     const canonicalMetadata = {
       service_id: serviceId,
-      member_id: member.profile_id,
+      member_id: member.person_id,
       month_tag: monthTag
     };
 
     const legacyMetadata = legacyMonthTag
       ? {
         service_id: serviceId,
-        member_id: member.profile_id,
+        member_id: member.person_id,
         month_tag: legacyMonthTag,
       }
       : null
@@ -189,7 +189,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // Owner = person paying for themselves (no person_id, just expense)
     // Member = person whose share is being paid (person_id set, creates Debt)
 
-    const personId = member.is_owner ? null : member.profile_id;
+    const personId = member.is_owner ? null : member.person_id;
 
     const payload = {
       occurred_at: transactionDate,
@@ -237,7 +237,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
       isUpdate = true;
 
     } else {
-      console.log('Creating new transaction for member:', member.people?.name, 'ID:', member.profile_id);
+      console.log('Creating new transaction for member:', member.people?.name, 'person_id:', member.person_id);
       const { data: newTx, error: insertError } = await supabase
         .from('transactions')
         .insert([payload] as any)
@@ -272,7 +272,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
           const action = isUpdate ? 'update' : 'create';
           console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`);
 
-          await syncTransactionToSheet(member.profile_id, sheetPayload as any, action);
+          await syncTransactionToSheet(member.person_id, sheetPayload as any, action);
         }
       } catch (syncError) {
         console.error('Error syncing to sheet:', syncError);
@@ -303,7 +303,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
   }
 
   // Return created transactions with person IDs for auto-sync
-  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.profile_id).filter(Boolean))) };
+  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.person_id).filter(Boolean))) };
 }
 
 export async function getServices() {
