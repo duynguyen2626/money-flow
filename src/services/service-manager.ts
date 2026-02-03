@@ -103,7 +103,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
-    .select('*, people:profiles (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
+    .select('*, people (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
     .eq('service_id', serviceId)
 
   const members = membersResult as unknown as ServiceMember[];
@@ -371,7 +371,7 @@ export async function updateServiceMembers(
   if (members && members.length > 0) {
     const memberInsertData = members.map(member => ({
       service_id: serviceId,
-      profile_id: member.profile_id,
+      person_id: member.person_id,
       slots: Number(member.slots) || 0,
       is_owner: member.is_owner,
     }))

@@ -34,12 +34,12 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
     // Fallback to account owner
     const { data: accountRow } = await supabase
         .from('accounts')
-        .select('owner_id, profiles (id, sheet_link)')
+        .select('owner_id, people (id, sheet_link)')
         .eq('id', personId)
         .eq('type', 'debt')
         .maybeSingle()
 
-    const ownerProfile = (accountRow as any)?.profiles
+    const ownerProfile = (accountRow as any)?.people
     return ownerProfile?.sheet_link || null
 }
 
