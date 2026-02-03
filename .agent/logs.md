@@ -1,64 +1,5 @@
- ○ Compiling /services ...
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
-[getAccountSpendingStats] AID: 377f4331-1291-47d0-abd1-fee601f7feed, Tag: 2026-02, Found: true, Real: 0
- GET /services 200 in 17.2s (compile: 11.7s, proxy.ts: 800ms, render: 4.7s)
- GET /accounts/377f4331-1291-47d0-abd1-fee601f7feed 200 in 35.3s (compile: 14.1s, proxy.ts: 832ms, render: 20.4s)
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 36.5s (compile: 12.1s, proxy.ts: 809ms, render: 23.6s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
-[MemberDetailsPage] person: found
- GET /api/refunds/pending?accountId=377f4331-1291-47d0-abd1-fee601f7feed 200 in 2.4s (compile: 1735ms, proxy.ts: 200ms, render: 441ms)
- GET /api/batch/pending-items?accountId=377f4331-1291-47d0-abd1-fee601f7feed 200 in 2.5s (compile: 1837ms, proxy.ts: 211ms, render: 429ms)
- GET /api/batch/pending-items?accountId=377f4331-1291-47d0-abd1-fee601f7feed 200 in 602ms (compile: 51ms, proxy.ts: 344ms, render: 207ms)
- GET /api/refunds/pending?accountId=377f4331-1291-47d0-abd1-fee601f7feed 200 in 625ms (compile: 37ms, proxy.ts: 353ms, render: 235ms)
- POST /accounts/377f4331-1291-47d0-abd1-fee601f7feed 200 in 877ms (compile: 41ms, proxy.ts: 228ms, render: 609ms)
- POST /accounts/377f4331-1291-47d0-abd1-fee601f7feed 200 in 635ms (compile: 33ms, proxy.ts: 222ms, render: 381ms)
-[getAccountSpendingStats] AID: 377f4331-1291-47d0-abd1-fee601f7feed, Tag: 2026-02, Found: true, Real: 0
- GET /api/cashback/stats?accountId=377f4331-1291-47d0-abd1-fee601f7feed&date=2026-02-09T17:00:00.000Z 200 in 1102ms (compile: 478ms, proxy.ts: 212ms, render: 411ms)
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 21.4s (compile: 18ms, proxy.ts: 205ms, render: 21.1s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 22.4s (compile: 28ms, proxy.ts: 204ms, render: 22.2s)
-[MemberDetailsPage] person: found
-getBankMappings: data length 194 bankType: undefined
- GET /batch/mbb 200 in 22.2s (compile: 1393ms, proxy.ts: 189ms, render: 20.6s)
-getBankMappings: data length 46 bankType: MBB
- GET /api/banks?bank_type=MBB 200 in 768ms (compile: 377ms, proxy.ts: 199ms, render: 193ms)
-getBankMappings: data length 46 bankType: MBB
- GET /api/banks?bank_type=MBB 200 in 377ms (compile: 9ms, proxy.ts: 193ms, render: 175ms)
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 20.5s (compile: 12ms, proxy.ts: 320ms, render: 20.1s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 19.4s (compile: 11ms, proxy.ts: 193ms, render: 19.2s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 19.0s (compile: 17ms, proxy.ts: 204ms, render: 18.7s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 18.7s (compile: 11ms, proxy.ts: 198ms, render: 18.5s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 19.1s (compile: 9ms, proxy.ts: 212ms, render: 18.8s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 20.2s (compile: 10ms, proxy.ts: 228ms, render: 20.0s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 19.2s (compile: 12ms, proxy.ts: 191ms, render: 19.0s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 18.8s (compile: 9ms, proxy.ts: 199ms, render: 18.6s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 18.6s (compile: 9ms, proxy.ts: 203ms, render: 18.4s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
- GET /services 200 in 1620ms (compile: 14ms, proxy.ts: 170ms, render: 1435ms)
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=all 200 in 19.4s (compile: 9ms, proxy.ts: 188ms, render: 19.2s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
-Starting batch distribution for all active services... Tag: 2026-02, Today VN: 2026-02-03T15:22:50.000Z
+ GET /api/banks?bank_type=MBB 200 in 419ms (compile: 10ms, proxy.ts: 216ms, render: 194ms)
+Starting batch distribution for all active services... Tag: 2026-02, Today VN: 2026-02-03T15:36:03.000Z
 Found 2 active services.
 Distributing service: 95064279-8ce1-4217-88c8-d40aef2fbb94
 Service found: {
@@ -78,36 +19,13 @@ Service found: {
   next_distribution_date: '2026-02-01T07:09:58.066+00:00',
   distribution_status: 'completed'
 }
-Error fetching service members: {
-  code: 'PGRST201',
-  details: [
-    {
-      cardinality: 'one-to-many',
-      embedding: 'people with accounts',
-      relationship: 'accounts_owner_id_fkey using people(id) and accounts(owner_id)'
-    },
-    {
-      cardinality: 'many-to-one',
-      embedding: 'people with accounts',
-      relationship: 'people_sheet_linked_bank_id_fkey using people(sheet_linked_bank_id) and accounts(id)'
-    }
-  ],
-  hint: "Try changing 'accounts' to one of the following: 'accounts!accounts_owner_id_fkey', 'accounts!people_sheet_linked_bank_id_fkey'. Find the desired relationship in the 'details' key.",
-  message: "Could not embed because more than one relationship was found for 'people' and 'accounts'"
-}
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\node_modules_6a48f7ae._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\base-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\next-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\dev\next-dev-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\trace\trace.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\lib\router-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\lib\start-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-Failed to distribute service Youtube (95064279-8ce1-4217-88c8-d40aef2fbb94): Error: Service members not found
-    at distributeService (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:943:15)
-    at async distributeAllServices (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:1237:28)
-    at async runAllServiceDistributionsAction (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:2586:24)
+Unit cost: 27666.666666666668
+Creating new transaction for member: undefined
+Updating existing transaction: 65c30fa0-e03a-4c25-8cb7-9ac5c0f27477
+Updating existing transaction: 65c30fa0-e03a-4c25-8cb7-9ac5c0f27477
+Updating existing transaction: 65c30fa0-e03a-4c25-8cb7-9ac5c0f27477
+Updating existing transaction: 65c30fa0-e03a-4c25-8cb7-9ac5c0f27477
+[Bot Status] Updated service 95064279-8ce1-4217-88c8-d40aef2fbb94: completed, next run 2026-03-01T15:36:06.871Z
 Distributing service: f0fd840f-aac8-4865-875b-53373de3496d
 Service found: {
   id: 'f0fd840f-aac8-4865-875b-53373de3496d',
@@ -126,39 +44,32 @@ Service found: {
   next_distribution_date: '2026-02-01T07:10:16.858+00:00',
   distribution_status: 'completed'
 }
-Error fetching service members: {
-  code: 'PGRST201',
-  details: [
-    {
-      cardinality: 'one-to-many',
-      embedding: 'people with accounts',
-      relationship: 'accounts_owner_id_fkey using people(id) and accounts(owner_id)'
-    },
-    {
-      cardinality: 'many-to-one',
-      embedding: 'people with accounts',
-      relationship: 'people_sheet_linked_bank_id_fkey using people(sheet_linked_bank_id) and accounts(id)'
-    }
-  ],
-  hint: "Try changing 'accounts' to one of the following: 'accounts!accounts_owner_id_fkey', 'accounts!people_sheet_linked_bank_id_fkey'. Find the desired relationship in the 'details' key.",
-  message: "Could not embed because more than one relationship was found for 'people' and 'accounts'"
-}
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\node_modules_6a48f7ae._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\base-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\next-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\dev\next-dev-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\trace\trace.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\lib\router-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-C:\Users\nam.thanhnguyen\Github\money-flow-3\node_modules\next\dist\server\lib\start-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-Failed to distribute service iCloud (f0fd840f-aac8-4865-875b-53373de3496d): Error: Service members not found
-    at distributeService (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:943:15)
-    at async distributeAllServices (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:1237:28)
-    at async runAllServiceDistributionsAction (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__b69d9b0c._.js:2586:24)
-Batch distribution completed. Success: 0, Failed: 2, Skipped: 0
- POST /services 200 in 5.0s (compile: 9ms, proxy.ts: 214ms, render: 4.8s)
- GET /services 200 in 1653ms (compile: 12ms, proxy.ts: 187ms, render: 1454ms)
- GET /people/details?id=c8714b94-ff8d-4838-98d6-246d543ac552&tag=2026-02 200 in 20.2s (compile: 12ms, proxy.ts: 181ms, render: 20.0s)
-[MemberDetailsPage] personId: c8714b94-ff8d-4838-98d6-246d543ac552
-[MemberDetailsPage] person: found
+Unit cost: 41000
+Creating new transaction for member: undefined
+Updating existing transaction: 909a7175-9201-49e9-8489-891a030e40e1
+Updating existing transaction: 909a7175-9201-49e9-8489-891a030e40e1
+Updating existing transaction: 909a7175-9201-49e9-8489-891a030e40e1
+Updating existing transaction: 909a7175-9201-49e9-8489-891a030e40e1
+[Bot Status] Updated service f0fd840f-aac8-4865-875b-53373de3496d: completed, next run 2026-03-01T15:36:09.660Z
+Batch distribution completed. Success: 2, Failed: 0, Skipped: 0
+ POST /services 200 in 9.9s (compile: 10ms, proxy.ts: 320ms, render: 9.5s)
+ GET /services 200 in 2.3s (compile: 10ms, proxy.ts: 357ms, render: 1933ms)
+ GET /services 200 in 1817ms (compile: 11ms, proxy.ts: 209ms, render: 1597ms)
+ GET /services 200 in 1962ms (compile: 28ms, proxy.ts: 377ms, render: 1556ms)
+ GET /services 200 in 1823ms (compile: 6ms, proxy.ts: 288ms, render: 1530ms)
+ GET /services 200 in 2.1s (compile: 14ms, proxy.ts: 312ms, render: 1774ms)
+ GET /services 200 in 2.0s (compile: 16ms, proxy.ts: 251ms, render: 1752ms)
+ GET /services 200 in 1861ms (compile: 9ms, proxy.ts: 184ms, render: 1668ms)
+ GET /services 200 in 1689ms (compile: 10ms, proxy.ts: 191ms, render: 1489ms)
+Starting batch distribution for all active services... Tag: 2026-02, Today VN: 2026-02-03T15:36:16.000Z
+Found 2 active services.
+ GET /services 200 in 1747ms (compile: 15ms, proxy.ts: 218ms, render: 1514ms)
+Skipping Youtube: already distributed for 2026-02
+Skipping iCloud: already distributed for 2026-02
+Batch distribution completed. Success: 0, Failed: 0, Skipped: 2
+ GET /services 200 in 1633ms (compile: 10ms, proxy.ts: 205ms, render: 1418ms)
+ GET /services 200 in 1587ms (compile: 11ms, proxy.ts: 186ms, render: 1390ms)
+ POST /services 200 in 3.7s (compile: 23ms, proxy.ts: 205ms, render: 3.5s)
+ GET /services 200 in 1498ms (compile: 7ms, proxy.ts: 199ms, render: 1293ms)
+ GET /transactions 200 in 22.0s (compile: 2.7s, proxy.ts: 301ms, render: 18.9s)
+ GET /people 200 in 20.3s (compile: 2.1s, proxy.ts: 214ms, render: 18.0s)

@@ -7,11 +7,11 @@ import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 import { autoSyncCycleSheetIfNeeded } from './sheet.service'
 
 // ServiceMember type with corrected relationship to 'people' table (not 'profiles')
-// FIXED: Changed 'profile_id' to 'person_id' and 'profiles' to 'people' for correct foreign key
+// Database uses 'profile_id' but points to 'people' table (formerly 'profiles')
 type ServiceMember = {
   id: string;
   service_id: string;
-  person_id: string; // Foreign key to people.id
+  profile_id: string; // Foreign key from service_members table
   slots: number;
   is_owner: boolean;
   people?: {
@@ -64,7 +64,7 @@ export async function upsertService(
     if (members.length > 0) {
       const memberInsertData = members.map(member => ({
         service_id: serviceId,
-        person_id: member.person_id || member.profile_id, // Support both naming conventions for migration
+        profile_id: member.profile_id, // Use profile_id to match database schema
         slots: member.slots,
         is_owner: member.is_owner,
       }))
@@ -103,7 +103,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
-    .select('*, people (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
+    .select('*, people:profiles (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
     .eq('service_id', serviceId)
 
   const members = membersResult as unknown as ServiceMember[];
@@ -168,14 +168,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // [M2-SP1] Idempotency Check: Use metadata to find existing transaction
     const canonicalMetadata = {
       service_id: serviceId,
-      member_id: member.person_id,
+      member_id: member.profile_id,
       month_tag: monthTag
     };
 
     const legacyMetadata = legacyMonthTag
       ? {
         service_id: serviceId,
-        member_id: member.person_id,
+        member_id: member.profile_id,
         month_tag: legacyMonthTag,
       }
       : null
@@ -189,7 +189,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // Owner = person paying for themselves (no person_id, just expense)
     // Member = person whose share is being paid (person_id set, creates Debt)
 
-    const personId = member.is_owner ? null : member.person_id;
+    const personId = member.is_owner ? null : member.profile_id;
 
     const payload = {
       occurred_at: transactionDate,
@@ -237,7 +237,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
       isUpdate = true;
 
     } else {
-      console.log('Creating new transaction for member:', member.person_id);
+      console.log('Creating new transaction for member:', member.people?.name, 'ID:', member.profile_id);
       const { data: newTx, error: insertError } = await supabase
         .from('transactions')
         .insert([payload] as any)
@@ -272,7 +272,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
           const action = isUpdate ? 'update' : 'create';
           console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`);
 
-          await syncTransactionToSheet(member.person_id, sheetPayload as any, action);
+          await syncTransactionToSheet(member.profile_id, sheetPayload as any, action);
         }
       } catch (syncError) {
         console.error('Error syncing to sheet:', syncError);
@@ -303,7 +303,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
   }
 
   // Return created transactions with person IDs for auto-sync
-  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.person_id).filter(Boolean))) };
+  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.profile_id).filter(Boolean))) };
 }
 
 export async function getServices() {
@@ -371,7 +371,7 @@ export async function updateServiceMembers(
   if (members && members.length > 0) {
     const memberInsertData = members.map(member => ({
       service_id: serviceId,
-      person_id: member.person_id || member.profile_id, // Support both for migration
+      profile_id: member.profile_id,
       slots: Number(member.slots) || 0,
       is_owner: member.is_owner,
     }))
