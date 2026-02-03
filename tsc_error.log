@@ -1,5 +1,0 @@
-﻿src/components/moneyflow/transaction-form/sections/SplitBillSection.tsx(196,13): error TS2339: Property 'netAmount' does not exist on type '{ totalBefore: number; totalVoucher: number; totalAdvance: number; totalFinal: number; }'.
-src/components/moneyflow/transaction-form/sections/SplitBillSection.tsx(412,49): error TS2339: Property 'netAmount' does not exist on type '{ totalBefore: number; totalVoucher: number; totalAdvance: number; totalFinal: number; }'.
-src/components/moneyflow/transaction-form/types.ts(2,48): error TS2305: Module '"@/types/moneyflow.types"' has no exported member 'Installment'.
-src/components/transactions/UnifiedTransactionsPage.tsx(287,17): error TS2322: Type '{ accounts: Account[]; categories: Category[]; people: Person[]; shops: Shop[]; open: boolean; onOpenChange: Dispatch<SetStateAction<boolean>>; buttonClassName: string; }' is not assignable to type 'IntrinsicAttributes & AddTransactionDialogProps'.
-  Property 'open' does not exist on type 'IntrinsicAttributes & AddTransactionDialogProps'.
