@@ -78,8 +78,6 @@ export function ItemsTable({
     const [showTransferDialog, setShowTransferDialog] = useState(false)
     const [selectedItemForTransfer, setSelectedItemForTransfer] = useState<any>(null)
     const [cloningItemId, setCloningItemId] = useState<string | null>(null)
-    const [showCloneConfirm, setShowCloneConfirm] = useState(false)
-    const [selectedItemForClone, setSelectedItemForClone] = useState<any>(null)
     const [confirmConfig, setConfirmConfig] = useState<{
         title: string
         description: string
@@ -136,22 +134,18 @@ export function ItemsTable({
     }
 
     async function handleClone(id: string) {
-        const item = items.find(i => i.id === id)
-        setSelectedItemForClone(item)
-        setShowCloneConfirm(true)
-    }
-
-    async function handleCloneConfirm() {
-        if (!selectedItemForClone) return
-        setCloningItemId(selectedItemForClone.id)
+        setCloningItemId(id)
         try {
-            await cloneBatchItemAction(selectedItemForClone.id, batchId)
-            setShowCloneConfirm(false)
-            setSelectedItemForClone(null)
+            const result = await cloneBatchItemAction(id, batchId)
+            // Trigger edit dialog by simulating click on the newly cloned item's edit button
+            // The cloned item will be the first in the list after refresh
+            window.location.reload()
         } finally {
             setCloningItemId(null)
         }
     }
+
+
 
     const handleSelectAll = (checked: boolean) => {
         const newSelectedIds = checked ? items.map(i => i.id) : []
@@ -434,16 +428,6 @@ export function ItemsTable({
                 onOpenChange={setShowTransferDialog}
                 item={selectedItemForTransfer}
                 onConfirm={handleConfirmTransfer}
-            />
-
-            <ConfirmDialog
-                open={showCloneConfirm}
-                onOpenChange={setShowCloneConfirm}
-                title="Clone Item"
-                description={`Clone "${selectedItemForClone?.details || selectedItemForClone?.note || 'this item'}"?`}
-                onConfirm={handleCloneConfirm}
-                confirmText="Clone"
-                cancelText="Cancel"
             />
         </>
     )

@@ -155,8 +155,11 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                 if (bankName) searchTerms.add(bankName.toLowerCase())
                 if (bankCode) searchTerms.add(bankCode.toLowerCase())
 
-                // Add short name if available
-                const mapping = bankMappings.find(b => b.bank_code === bankCode || b.short_name === bankName)
+                // Add short name if available - ONLY from banks matching current bankType
+                const mapping = bankMappings.find(b => 
+                    b.bank_type === bankType && 
+                    (b.bank_code === bankCode || b.short_name === bankName)
+                )
                 if (mapping?.short_name) searchTerms.add(mapping.short_name.toLowerCase())
                 if (mapping?.bank_code) searchTerms.add(mapping.bank_code.toLowerCase())
 

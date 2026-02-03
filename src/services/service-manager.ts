@@ -103,7 +103,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
-    .select('*, people (id, name, is_owner, accounts(*))')
+    .select('*, people (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
     .eq('service_id', serviceId)
 
   const members = membersResult as unknown as ServiceMember[];
