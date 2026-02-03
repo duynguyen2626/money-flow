@@ -211,7 +211,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
   if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
     // Get waiver target from account config, or use minSpendTarget as fallback
-    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpendTarget ?? null
+    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpend ?? null
 
     if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
       // Calculate annual spend (not just current cycle)

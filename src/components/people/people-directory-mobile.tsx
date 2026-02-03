@@ -8,7 +8,7 @@ import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import type { PeopleDirectoryItem } from '@/components/people/people-directory-data'
 import { isYYYYMM } from '@/lib/month-tag'
 import { EditPersonDialog } from '@/components/people/edit-person-dialog'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import type { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -53,6 +53,22 @@ export function PeopleDirectoryMobile({
   onSelect,
 }: PeopleDirectoryMobileProps) {
   const [debtModalItem, setDebtModalItem] = useState<PeopleDirectoryItem | null>(null)
+
+  // Transaction Slide States
+  const [isSlideOpen, setIsSlideOpen] = useState(false)
+  const [slideInitialData, setSlideInitialData] = useState<any>(undefined)
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
+
+  const handleAddClick = (item: PeopleDirectoryItem, type: 'debt' | 'repayment') => {
+    setSlideInitialData({
+      type,
+      person_id: item.person.id,
+      tag: isYYYYMM(item.cycleTag) ? item.cycleTag : undefined,
+      occurred_at: new Date()
+    })
+    setSelectedPerson(item.person)
+    setIsSlideOpen(true)
+  }
 
   const modalDebts = (debtModalItem?.person.monthly_debts ?? []).filter(
     (debt) => Number(debt.amount ?? 0) > 0
@@ -203,40 +219,20 @@ export function PeopleDirectoryMobile({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <AddTransactionDialog
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  defaultType="debt"
-                  defaultPersonId={item.person.id}
-                  defaultTag={isYYYYMM(item.cycleTag) ? item.cycleTag : undefined}
-                  buttonText="Lend"
-                  buttonClassName="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-semibold uppercase text-rose-600 shadow-sm transition hover:bg-rose-50"
-                  triggerContent={
-                    <>
-                      <MinusCircle className="h-4 w-4" />
-                      Lend
-                    </>
-                  }
-                />
-                <AddTransactionDialog
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  defaultType="repayment"
-                  defaultPersonId={item.person.id}
-                  defaultTag={isYYYYMM(item.cycleTag) ? item.cycleTag : undefined}
-                  buttonText="Repay"
-                  buttonClassName="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold uppercase text-emerald-600 shadow-sm transition hover:bg-emerald-50"
-                  triggerContent={
-                    <>
-                      <PlusCircle className="h-4 w-4" />
-                      Repay
-                    </>
-                  }
-                />
+                <Button
+                  onClick={() => handleAddClick(item, 'debt')}
+                  className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-rose-300 bg-white px-3 py-2 text-xs font-semibold uppercase text-rose-600 shadow-sm transition hover:bg-rose-50"
+                >
+                  <MinusCircle className="h-4 w-4" />
+                  Lend
+                </Button>
+                <Button
+                  onClick={() => handleAddClick(item, 'repayment')}
+                  className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold uppercase text-emerald-600 shadow-sm transition hover:bg-emerald-50"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Repay
+                </Button>
               </div>
 
               <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-1.5 text-xs font-semibold text-slate-600">
@@ -315,6 +311,21 @@ export function PeopleDirectoryMobile({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TransactionSlideV2
+        open={isSlideOpen}
+        onOpenChange={setIsSlideOpen}
+        initialData={slideInitialData}
+        accounts={accounts}
+        categories={categories}
+        people={selectedPerson ? [selectedPerson] : people}
+        shops={shops}
+        mode="single"
+        operationMode="add"
+        onSuccess={() => {
+          setIsSlideOpen(false)
+        }}
+      />
     </>
   )
 }

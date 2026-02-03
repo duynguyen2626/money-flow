@@ -349,15 +349,41 @@ function renderCell(
                                             ? JSON.parse(account.cashback_config)
                                             : account.cashback_config;
 
-                                        // Get categories from Level 1 (index 0)
-                                        const rules = (config.levels?.[0]?.rules) || [];
+                                        // Debug: Log config structure for troubleshooting
+                                        if (process.env.NODE_ENV === 'development') {
+                                            console.log(`Account ${account.name} cashback_config:`, config);
+                                        }
+
+                                        // Try multiple paths to get category rules
+                                        // Path 1: levels[0].rules (original)
+                                        let rules = (config.levels?.[0]?.rules) || [];
+                                        
+                                        // Path 2: Check if rules exist at top level
+                                        if (!Array.isArray(rules) || rules.length === 0) {
+                                            rules = config.rules || [];
+                                        }
+                                        
+                                        // Path 3: Check program.levels
+                                        if (!Array.isArray(rules) || rules.length === 0) {
+                                            rules = (config.program?.levels?.[0]?.rules) || [];
+                                        }
+
                                         if (!Array.isArray(rules) || rules.length === 0) return null;
 
-                                        // Extract unique category IDs
+                                        // Extract unique category IDs - try multiple field names
                                         const catIds = new Set<string>();
                                         rules.forEach((r: any) => {
+                                            // Try categoryIds (array)
                                             if (Array.isArray(r.categoryIds)) {
                                                 r.categoryIds.forEach((id: string) => catIds.add(id));
+                                            }
+                                            // Try categoryId (single)
+                                            if (r.categoryId) {
+                                                catIds.add(r.categoryId);
+                                            }
+                                            // Try category_ids (snake_case)
+                                            if (Array.isArray(r.category_ids)) {
+                                                r.category_ids.forEach((id: string) => catIds.add(id));
                                             }
                                         });
 
@@ -380,7 +406,12 @@ function renderCell(
                                                 )}
                                             </div>
                                         )
-                                    } catch (e) { return null; }
+                                    } catch (e) { 
+                                        if (process.env.NODE_ENV === 'development') {
+                                            console.error(`Error parsing cashback_config for ${account.name}:`, e);
+                                        }
+                                        return null; 
+                                    }
                                 })()}
 
                                 {(() => {

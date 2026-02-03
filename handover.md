@@ -1,7 +1,72 @@
-# Handover: Transaction Table Layout Refactor
+# 🎯 HANDOVER: Phase 12.1 - Transaction Table Flow Column Critical Issues
 
-**Date:** Jan 12, 2026
-**Status:** Emergency Fix Complete
+**Date:** Feb 2, 2026  
+**Status:** ⚠️ STOPPED - 4 Failed Attempts  
+**Issues:** 3 Critical UI bugs remain unfixed  
+
+---
+
+## 📌 For Next Agent
+
+👉 **[READ START_HERE.md](START_HERE.md) FIRST** - It has the onboarding prompt and checklist
+
+Then read:
+- [.github/copilot-instructions.md](.github/copilot-instructions.md) - Design rules & architecture
+- [HANDOVER_CRITICAL.md](HANDOVER_CRITICAL.md) - Detailed issue analysis + debug checklist
+
+---
+
+## Quick Problem Summary
+
+**File:** `src/components/moneyflow/unified-transaction-table.tsx` (lines 2079-2250)
+
+| Issue | Symptom | Root Cause |
+|-------|---------|-----------|
+| **#1: Too Long** | Single flow pills wider than dual flow | `flex-1` vs `max-w-[44%]` |
+| **#2: Uneven Height** | Some pills cut off or misaligned | h-7, h-9, h-10 mixed in different paths |
+| **#3: Edit Dialog** | Warning can be dismissed without confirmation | `hasUnsavedChanges` state not working |
+
+---
+
+## Previous Attempts (Why They Failed)
+
+1. **Height alignment** → Partial changes (multiple matches)
+2. **Complex refactor** → Only showed people, not accounts
+3. **Badge removal** → Pills still uneven, accounts missing  
+4. **Clean rewrite** → Logic `!hasTarget` wrong, filtered accounts
+
+---
+
+## What to Do
+
+❌ **DO NOT CODE YET**
+
+✅ **DO THIS FIRST:**
+1. Read START_HERE.md
+2. Add console.log to understand transaction data
+3. Trace which rendering path executes
+4. Identify condition logic bug
+5. Then fix (focused, not mega-rewrite)
+
+---
+
+## Success Criteria
+
+- [ ] Pills same width (single = dual)
+- [ ] Consistent height (h-9 everywhere)
+- [ ] Accounts AND people display
+- [ ] Edit warning blocks interaction
+- [ ] Avatar rounding: person=circle, account=square
+
+
+---
+
+# Handover: Transaction Table Flow Column Fix
+
+**Date:** Feb 2, 2026  
+**Status:** ⚠️ CRITICAL - Multiple Failed Attempts, Root Cause Unclear  
+**Attempted By:** GitHub Copilot (Messages 1-19)  
+**Next Agent:** Please focus on ROOT CAUSE analysis before coding
 
 ## Summary
 We have successfully refactored the Transaction Table (`TransactionRow.tsx`) to use a **Fixed-Width CSS Grid Layout**. This resolves critical issues with column alignment, overlapping badges, and layout shifts.

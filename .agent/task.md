@@ -139,11 +139,13 @@
    Viết lại Date Picker với UI/UX mới (Tabs, OK button, no auto-close).
    Thêm logic Confirm khi Clear filters.
   Tasks:
-   [ ] Refactor TransactionHeader: Implement local state buffer.
-   [ ] Refactor TransactionHeader: Add Filter/Clear button with 2 states.
-   [ ] Refactor TransactionHeader: Manual Search behavior.
-   [ ] Implement MonthYearPickerV3 (Tabs: Month, Date, Range; OK button).
-   [x] Add Confirmation Dialog for Clear action.
+  - [x] Refine Transaction Badges & duplication Logic
+- [x] Replace `AddTransactionDialog` with `TransactionSlideV2`
+- [/] Fix Runtime Errors & Verify Build
+    - [x] Fix `handleOptimisticUpdate` initialization order in `unified-transaction-table.tsx`
+    - [ ] Run dev server and verify with browser tool
+    - [ ] Run build to ensure no other regressions
+- [ ] Final Walkthrough updater Clear action.
 
  Phase 7 - Filter UX Enhancements
   Mục tiêu:
@@ -173,3 +175,13 @@
    [ ] Table: Redesign "Action" layout.
 
 
+
+ Phase 11 - Visual Refinement & Logic Fixes
+  Mục tiêu:
+   Fix visual discrepancies in Flow column and restore context-aware hiding logic.
+  Tasks:
+   [x] Adjust Single Flow width to match Double Flow alignment.
+   [x] Standardize Cycle & Debt badges to h-6 (compact).
+   [x] Restore Context Hiding logic (UnifiedTransactionsTable) for Details pages.
+   [x] Fix table build error (missing closing tags).
+   [x] Update Flow Legend (FROM = Orange, TO = Sky).
