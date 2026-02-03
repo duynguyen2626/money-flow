@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 
 import { Account, Category, Person, Shop, Subscription, MonthlyDebtSummary } from '@/types/moneyflow.types'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { EditPersonDialog } from '@/components/people/edit-person-dialog'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
@@ -72,6 +72,22 @@ function PersonCardComponent({
     const [showDebtsModal, setShowDebtsModal] = useState(false)
     const [showEditDialog, setShowEditDialog] = useState(false)
     const [selectedRepaymentDebt, setSelectedRepaymentDebt] = useState<MonthlyDebtSummary | null>(null)
+
+    // Transaction Slide States
+    const [isSlideOpen, setIsSlideOpen] = useState(false)
+    const [slideInitialData, setSlideInitialData] = useState<any>(undefined)
+
+    const handleAddClick = (type: 'debt' | 'repayment', amount?: number, tag?: string) => {
+        setSlideInitialData({
+            type,
+            person_id: person.id,
+            source_account_id: person.debt_account_id ?? undefined,
+            amount,
+            tag,
+            occurred_at: new Date()
+        })
+        setIsSlideOpen(true)
+    }
 
     const balance = person.balance ?? 0
     const cycleLabel = person.current_cycle_label ?? 'Current'
@@ -261,37 +277,24 @@ function PersonCardComponent({
                 <div className="grid grid-cols-4 gap-1.5 mt-auto">
                     {/* Lend Button - Reduced size */}
                     <div onClick={stopPropagation}>
-                        <AddTransactionDialog
-                            {...dialogBaseProps}
-                            defaultType="debt"
-                            defaultPersonId={person.id}
-                            defaultDebtAccountId={person.debt_account_id ?? undefined}
-                            buttonClassName="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
-                            triggerContent={
-                                <>
-                                    <HandCoins className="w-3 h-3" />
-                                    LEND
-                                </>
-                            }
-                        />
+                        <Button
+                            onClick={() => handleAddClick('debt')}
+                            className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
+                        >
+                            <HandCoins className="w-3 h-3" />
+                            LEND
+                        </Button>
                     </div>
 
                     {/* Repay Button - Reduced size */}
                     <div onClick={stopPropagation}>
-                        <AddTransactionDialog
-                            {...dialogBaseProps}
-                            defaultType="repayment"
-                            defaultPersonId={person.id}
-                            defaultDebtAccountId={person.debt_account_id ?? undefined}
-                            defaultAmount={displayCycleBalance > 0 ? displayCycleBalance : undefined}
-                            buttonClassName="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
-                            triggerContent={
-                                <>
-                                    <Banknote className="w-3 h-3" />
-                                    REPAY
-                                </>
-                            }
-                        />
+                        <Button
+                            onClick={() => handleAddClick('repayment', displayCycleBalance > 0 ? displayCycleBalance : undefined)}
+                            className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
+                        >
+                            <Banknote className="w-3 h-3" />
+                            REPAY
+                        </Button>
                     </div>
 
                     {/* Sheet Icon Button - Opens Manage Sheet Dialog */}
@@ -393,7 +396,7 @@ function PersonCardComponent({
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation()
-                                                                setSelectedRepaymentDebt(debt)
+                                                                handleAddClick('repayment', Math.abs(debt.amount), debt.tagLabel)
                                                                 setShowDebtsModal(false)
                                                             }}
                                                             className="p-1.5 rounded-md bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors flex items-center justify-center border border-emerald-200"
@@ -415,21 +418,31 @@ function PersonCardComponent({
                     </DialogContent>
                 </Dialog>
 
-                {selectedRepaymentDebt && (
-                    <AddTransactionDialog
-                        {...dialogBaseProps}
-                        defaultType="repayment"
-                        defaultPersonId={person.id}
-                        defaultTag={selectedRepaymentDebt.tagLabel}
-                        defaultAmount={Math.abs(selectedRepaymentDebt.amount)}
-                        isOpen={true}
-                        onOpenChange={(open) => {
-                            if (!open) setSelectedRepaymentDebt(null)
-                        }}
-                        buttonClassName="hidden"
-                        triggerContent={<span className="hidden">Repay</span>}
+                {/* Hidden Modals/Dialogs kept for functionality */}
+                {showEditDialog && (
+                    <EditPersonDialog
+                        person={person}
+                        subscriptions={subscriptions}
+                        initiallyOpen={true}
+                        showTrigger={false}
+                        onClose={() => setShowEditDialog(false)}
                     />
                 )}
+                <TransactionSlideV2
+                    open={isSlideOpen}
+                    onOpenChange={setIsSlideOpen}
+                    initialData={slideInitialData}
+                    accounts={accounts}
+                    categories={categories}
+                    people={[person]}
+                    shops={shops}
+                    mode="single"
+                    operationMode="add"
+                    onSuccess={() => {
+                        setIsSlideOpen(false)
+                        router.refresh()
+                    }}
+                />
                 <ConfirmDialog
                     open={showArchiveConfirm}
                     onOpenChange={setShowArchiveConfirm}

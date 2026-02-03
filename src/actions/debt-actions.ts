@@ -109,12 +109,12 @@ export async function repayBatchDebt(
 
         // 3. Recalculate Bank Balance
         // We need to trigger recalculation for the bank account
-        const { recalculateBalance, getAccountById } = await import('@/services/account.service')
+        const { recalculateBalance, getAccountDetails } = await import('@/services/account.service')
 
         // Fetch Bank Name for Sync
         let bankName = "Bank Transfer"
         try {
-            const bankAccount = await getAccountById(bankAccountId)
+            const bankAccount = await getAccountDetails(bankAccountId)
             if (bankAccount) bankName = bankAccount.name
         } catch (e) {
             console.warn("Could not fetch bank name for repayment tag", e)

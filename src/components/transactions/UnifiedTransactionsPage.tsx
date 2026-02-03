@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
-import { UnifiedTransactionTable } from '../moneyflow/unified-transaction-table'
+import { UnifiedTransactionTable, UnifiedTransactionTableRef } from '../moneyflow/unified-transaction-table'
 import { FilterType, StatusFilter } from './TransactionToolbar'
 import { DateRange } from 'react-day-picker'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, isSameMonth } from 'date-fns'
@@ -44,6 +44,7 @@ export function UnifiedTransactionsPage({
     shops
 }: UnifiedTransactionsPageProps) {
     const router = useRouter()
+    const tableRef = useRef<UnifiedTransactionTableRef>(null)
 
     // Toolbar State
     const [search, setSearch] = useState('')
@@ -52,7 +53,7 @@ export function UnifiedTransactionsPage({
 
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date'>('range')
+    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>('year')
 
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
@@ -72,9 +73,15 @@ export function UnifiedTransactionsPage({
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
     const [isGlobalLoading, setIsGlobalLoading] = useState(false)
+    const [loadingMessage, setLoadingMessage] = useState('Updating...')
 
     const handleSlideSubmissionStart = () => {
         setIsSlideOpen(false) // Close immediately
+        setLoadingMessage(
+            slideMode === 'edit' ? 'Updating transaction...' :
+                slideMode === 'duplicate' ? 'Duplicating transaction...' :
+                    'Creating transaction...'
+        )
         setIsGlobalLoading(true) // Show loading
     }
 
@@ -184,7 +191,7 @@ export function UnifiedTransactionsPage({
         setSelectedPersonId(undefined)
         setSelectedCycle(undefined)
         setDate(new Date())
-        setDateMode('month')
+        setDateMode('all') // Reset to All Time
         setDateRange(undefined)
         setDisabledRange(undefined)
         selectionOrderRef.current = undefined
@@ -209,14 +216,31 @@ export function UnifiedTransactionsPage({
         }
     }
 
-    const handleModeChange = (mode: 'month' | 'range' | 'date') => {
+    const handleModeChange = (mode: 'month' | 'range' | 'date' | 'all' | 'year') => {
         setDateMode(mode)
-        if (mode !== 'range') {
+        if (mode === 'all') {
+            setDateRange(undefined)
+            setSelectedCycle(undefined)
+        } else if (mode === 'year') {
+            setDateRange(undefined)
+            setSelectedCycle(undefined)
+        } else if (mode !== 'range') {
             setDateRange(undefined)
         } else {
             setSelectedCycle(undefined)
         }
     }
+
+    const prevSearchRef = useRef(search)
+    // Auto-switch to All Time when searching starts
+    useEffect(() => {
+        if (search && !prevSearchRef.current) {
+            setDateMode('all')
+            setDateRange(undefined)
+            setSelectedCycle(undefined)
+        }
+        prevSearchRef.current = search
+    }, [search])
 
     const handleCycleChange = (cycle?: string) => {
         setSelectedCycle(cycle)
@@ -230,57 +254,22 @@ export function UnifiedTransactionsPage({
         !!selectedPersonId ||
         !!selectedCycle ||
         (dateMode === 'month' ? !isSameMonth(date, new Date()) : false) ||
+        (dateMode === 'year' ? date.getFullYear() !== new Date().getFullYear() : false) ||
         (dateMode === 'date') ||
         (dateMode === 'range' && !!dateRange)
 
-    // Calculate available date range from filtered transactions (excluding date filter)
+    // Calculate available date range from filtered transactions (Context only: Account/Person)
+    // We ignore Search, Type, and Status filters to avoid locking the calendar too tightly
     const availableDateRange = useMemo(() => {
-        const lowerSearch = search.toLowerCase()
-        const matchedAccountIds = search ? accounts.filter(a => a.name.toLowerCase().includes(lowerSearch)).map(a => a.id) : []
-        const matchedPersonIds = search ? people.filter(p => p.name.toLowerCase().includes(lowerSearch)).map(p => p.id) : []
-
         const preFiltered = transactions.filter(t => {
-            // Status Filter
-            if (statusFilter === 'active' && t.status === 'void') return false
-            if (statusFilter === 'void' && t.status !== 'void') return false
-            if (statusFilter === 'pending') {
-                const isPendingRefund = t.account_id === REFUND_PENDING_ACCOUNT_ID
-                const isSystemPending = t.status === 'pending'
-                if (!isPendingRefund && !isSystemPending) return false
-            }
-
-            // Account Filter
+            // Account Context
             if (selectedAccountId) {
                 if (t.account_id !== selectedAccountId && t.to_account_id !== selectedAccountId) return false
             }
 
-            // Person Filter
+            // Person Context
             if (selectedPersonId) {
                 if (t.person_id !== selectedPersonId) return false
-            }
-
-            // Search
-            if (search) {
-                const match =
-                    t.note?.toLowerCase().includes(lowerSearch) ||
-                    t.shop_name?.toLowerCase().includes(lowerSearch) ||
-                    t.category_name?.toLowerCase().includes(lowerSearch) ||
-                    String(t.amount).includes(lowerSearch) ||
-                    t.id.toLowerCase().includes(lowerSearch) ||
-                    (t.account_id && matchedAccountIds.includes(t.account_id)) ||
-                    (t.to_account_id && matchedAccountIds.includes(t.to_account_id)) ||
-                    (t.person_id && matchedPersonIds.includes(t.person_id))
-                if (!match) return false
-            }
-
-            // Type Filter
-            if (filterType !== 'all') {
-                if (filterType === 'income') return t.type === 'income'
-                if (filterType === 'expense') return t.type === 'expense'
-                if (filterType === 'transfer') return t.type === 'transfer'
-                if (filterType === 'lend') return t.type === 'debt' && (t.amount ?? 0) < 0
-                if (filterType === 'repay') return t.type === 'repayment' || (t.type === 'debt' && (t.amount ?? 0) > 0)
-                return false
             }
 
             return true
@@ -293,7 +282,20 @@ export function UnifiedTransactionsPage({
         const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
 
         return { from: minDate, to: maxDate }
-    }, [transactions, selectedAccountId, selectedPersonId, search, filterType, statusFilter, accounts, people])
+    }, [transactions, selectedAccountId, selectedPersonId])
+
+    const handleClearFilters = () => {
+        setFilterType('all')
+        setStatusFilter('active')
+        setSelectedAccountId(undefined)
+        setSelectedPersonId(undefined)
+        setSelectedCycle(undefined)
+        setDate(new Date())
+        setDateMode('all')
+        setDateRange(undefined)
+        setDisabledRange(undefined)
+        selectionOrderRef.current = undefined
+    }
 
     // Auto-set date range when Filter button clicked
     useEffect(() => {
@@ -324,6 +326,8 @@ export function UnifiedTransactionsPage({
                 const start = startOfMonth(date)
                 const end = endOfMonth(date)
                 if (!isWithinInterval(tDate, { start, end })) return false
+            } else if (dateMode === 'year') {
+                if (tDate.getFullYear() !== date.getFullYear()) return false
             } else if (dateMode === 'date') {
                 if (!isSameDay(tDate, date)) return false
             } else if (dateMode === 'range' && dateRange?.from) {
@@ -350,6 +354,14 @@ export function UnifiedTransactionsPage({
                     t.category_name?.toLowerCase().includes(lowerSearch) ||
                     String(t.amount).includes(lowerSearch) ||
                     t.id.toLowerCase().includes(lowerSearch) ||
+                    (() => {
+                        try {
+                            const m = (typeof t.metadata === 'string' ? JSON.parse(t.metadata) : t.metadata) as any;
+                            return m?.duplicated_from_id && String(m.duplicated_from_id).toLowerCase().includes(lowerSearch);
+                        } catch {
+                            return false;
+                        }
+                    })() ||
                     (t.account_id && matchedAccountIds.includes(t.account_id)) ||
                     (t.to_account_id && matchedAccountIds.includes(t.to_account_id)) ||
                     (t.person_id && matchedPersonIds.includes(t.person_id))
@@ -451,17 +463,48 @@ export function UnifiedTransactionsPage({
     }
 
     const handleEdit = (t: TransactionWithDetails) => {
+        setSlideOverrideType(undefined)
         setSlideMode('edit')
         setSelectedTxn(t)
         setIsSlideOpen(true)
     }
 
-    const handleDuplicate = (t: TransactionWithDetails) => {
+    const handleDuplicate = (transactionId: string) => {
+        console.log("🛠 handleDuplicate called with ID:", transactionId);
+        const t = transactions.find((txn) => txn.id === transactionId)
+        if (!t) {
+            console.error("❌ Transaction not found in list for ID:", transactionId);
+            return;
+        }
+        console.log("✅ Transaction found:", t);
+
+        // Pre-compute duplication data
+        const sourceAccountId = t.account_id || accounts[0]?.id || '';
+        const newData = {
+            type: t.type as any,
+            occurred_at: new Date(), // Always today for duplication
+            amount: Math.abs(Number(t.amount)),
+            note: t.note || '',
+            source_account_id: sourceAccountId,
+            target_account_id: t.to_account_id || undefined,
+            category_id: t.category_id || undefined,
+            shop_id: t.shop_id || undefined,
+            person_id: t.person_id || undefined,
+            tag: t.tag || undefined,
+            cashback_mode: t.cashback_mode || "none_back",
+            cashback_share_percent: t.cashback_share_percent,
+            cashback_share_fixed: t.cashback_share_fixed,
+            metadata: { duplicated_from_id: t.id },
+            ui_is_cashback_expanded: false
+        };
+
         setSlideOverrideType(undefined)
+        setDuplicateData(newData); // Set computed data directly
         setSlideMode('duplicate')
-        setSelectedTxn(t)
+        setSelectedTxn(t) // Still set this for reference
         setIsSlideOpen(true)
     }
+
 
     const handleSlideClose = (force = false) => {
         if (hasUnsavedChanges && !force) {
@@ -472,6 +515,21 @@ export function UnifiedTransactionsPage({
             setSelectedTxn(null)
             setSlideOverrideType(undefined)
         }
+    }
+
+    const handleSlideOpenChange = (open: boolean) => {
+        // When closing from Sheet (backdrop/outside click), force close
+        if (!open) {
+            handleSlideClose(true);
+        }
+    }
+
+    const handleBackButtonClick = () => {
+        // Back button always forces close (no warning)
+        setIsSlideOpen(false)
+        setHasUnsavedChanges(false)
+        setSelectedTxn(null)
+        setSlideOverrideType(undefined)
     }
 
     const confirmCloseSlide = () => {
@@ -501,6 +559,10 @@ export function UnifiedTransactionsPage({
                 localStorage.setItem("mf_last_submitted_account_id", data.account_id);
             } catch (e) { console.error(e) }
         }
+        if (data) {
+            console.log("🚀 Calling optimistic update for:", data)
+            tableRef.current?.handleOptimisticUpdate(data as TransactionWithDetails)
+        }
         router.refresh()
     }
 
@@ -516,6 +578,8 @@ export function UnifiedTransactionsPage({
 
     const confirmVoid = async () => {
         if (!voidTxn) return
+        setLoadingMessage('Voiding transaction...')
+        setIsGlobalLoading(true)
         try {
             const success = await voidTransactionAction(voidTxn.id)
             if (success) {
@@ -529,36 +593,62 @@ export function UnifiedTransactionsPage({
         } finally {
             setIsVoidAlertOpen(false)
             setVoidTxn(null)
+            setIsGlobalLoading(false)
         }
     }
 
+    // Safe duplication state to avoid race conditions
+    const [duplicateData, setDuplicateData] = useState<any | null>(null);
+
     const initialSlideData = useMemo(() => {
+        console.log("🔄 initialSlideData useMemo triggered");
+        console.log("   slideMode:", slideMode);
+
         if (slideOverrideType) {
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
                 amount: 0,
                 cashback_mode: "none_back" as const,
-                // Pass source_account_id preference? No, let V2 default to first account.
+                source_account_id: accounts[0]?.id || '',
             };
         }
-        if (!selectedTxn) return undefined;
-        return {
-            type: selectedTxn.type as any,
-            occurred_at: slideMode === 'duplicate' ? new Date() : new Date(selectedTxn.occurred_at),
-            amount: Math.abs(Number(selectedTxn.amount)),
-            note: selectedTxn.note || '',
-            source_account_id: selectedTxn.account_id || '',
-            target_account_id: selectedTxn.to_account_id || undefined,
-            category_id: selectedTxn.category_id || undefined,
-            shop_id: selectedTxn.shop_id || undefined,
-            person_id: selectedTxn.person_id || undefined,
-            tag: selectedTxn.tag || undefined,
-            cashback_mode: selectedTxn.cashback_mode || "none_back",
-            cashback_share_percent: selectedTxn.cashback_share_percent,
-            cashback_share_fixed: selectedTxn.cashback_share_fixed,
+
+        // Priority 1: Duplicate Data (Computed immediately on click)
+        if (slideMode === 'duplicate' && duplicateData) {
+            console.log("   ✅ Using pre-computed duplicateData");
+            return duplicateData;
+        }
+
+        if (!selectedTxn) {
+            console.log("   ⚠️ selectedTxn/duplicateData is null - returning undefined");
+            return undefined;
+        }
+
+        // Use local variable for stability
+        const txn = selectedTxn;
+        const sourceAccountId = txn.account_id || accounts[0]?.id || '';
+
+        const result = {
+            type: txn.type as any,
+            occurred_at: slideMode === 'duplicate' ? new Date() : new Date(txn.occurred_at),
+            amount: Math.abs(Number(txn.amount)),
+            note: txn.note || '',
+            source_account_id: sourceAccountId,
+            target_account_id: txn.to_account_id || undefined,
+            category_id: txn.category_id || undefined,
+            shop_id: txn.shop_id || undefined,
+            person_id: txn.person_id || undefined,
+            tag: txn.tag || undefined,
+            cashback_mode: txn.cashback_mode || "none_back",
+            cashback_share_percent: txn.cashback_share_percent,
+            cashback_share_fixed: txn.cashback_share_fixed,
+            metadata: slideMode === 'duplicate' ? { duplicated_from_id: txn.id } : txn.metadata,
         };
-    }, [selectedTxn, slideMode, slideOverrideType]);
+        console.log("   ✅ Computed initialSlideData from selectedTxn:", JSON.stringify(result, null, 2));
+        return result;
+
+    }, [selectedTxn?.id, selectedTxn?.occurred_at, selectedTxn?.amount, slideMode, slideOverrideType, accounts, duplicateData]);
 
     return (
         <div className="flex flex-col h-full bg-background/50">
@@ -573,6 +663,7 @@ export function UnifiedTransactionsPage({
                     onDateChange={handleDateChange}
                     onRangeChange={handleRangeChange}
                     onModeChange={handleModeChange}
+                    onCategoryChange={() => { }}
 
                     accountId={selectedAccountId}
                     onAccountChange={setSelectedAccountId}
@@ -591,6 +682,14 @@ export function UnifiedTransactionsPage({
 
                     hasActiveFilters={hasActiveFilters}
                     onReset={handleReset}
+                    onClearFilters={handleClearFilters}
+                    onRefresh={() => {
+                        setLoadingMessage("Syncing latest data...")
+                        setIsGlobalLoading(true)
+                        router.refresh()
+                        // Keep loading for at least 500ms to show feedback
+                        setTimeout(() => setIsGlobalLoading(false), 500)
+                    }}
 
                     onAdd={handleAddFromHeader}
 
@@ -608,14 +707,15 @@ export function UnifiedTransactionsPage({
             {/* Content Section */}
             <div className="flex-1 overflow-hidden p-0 sm:p-4 relative">
                 {isGlobalLoading && (
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
-                        <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-in slide-in-from-top-4 duration-200 border border-slate-200 pointer-events-auto">
-                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm font-medium text-slate-700">Updating...</span>
+                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-semibold text-white">{loadingMessage}</span>
                         </div>
                     </div>
                 )}
                 <UnifiedTransactionTable
+                    ref={tableRef}
                     transactions={filteredTransactions}
                     accounts={accounts}
                     categories={categories}
@@ -625,6 +725,8 @@ export function UnifiedTransactionsPage({
                     onSelectTxn={handleSelect}
                     onEdit={handleEdit}
                     onDuplicate={handleDuplicate}
+                    setIsGlobalLoading={setIsGlobalLoading}
+                    setLoadingMessage={setLoadingMessage}
                     context="general"
                     loadingIds={loadingIds}
                 />
@@ -633,10 +735,12 @@ export function UnifiedTransactionsPage({
             {/* Transaction Slide V2 - Primary Interface */}
             <TransactionSlideV2
                 open={isSlideOpen}
-                onOpenChange={handleSlideClose}
+                onOpenChange={handleSlideOpenChange}
+                onBackButtonClick={handleBackButtonClick}
                 onSubmissionStart={handleSlideSubmissionStart}
                 onSubmissionEnd={handleSlideSubmissionEnd}
                 mode="single"
+                operationMode={slideMode}
                 editingId={(slideMode === 'edit' && selectedTxn) ? selectedTxn.id : undefined}
                 initialData={initialSlideData}
                 accounts={accounts}

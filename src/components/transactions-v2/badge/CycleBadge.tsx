@@ -16,11 +16,12 @@ interface CycleBadgeProps {
     mini?: boolean
     compact?: boolean
     clickable?: boolean // New prop to enable navigation
+    entityName?: string // Entity name for tooltip
 }
 
-export function CycleBadge({ account, cycleTag, txnDate, className, mini = false, compact = false, clickable = true }: CycleBadgeProps) {
+export function CycleBadge({ account, cycleTag, txnDate, className, mini = false, compact = false, clickable = true, entityName }: CycleBadgeProps) {
     const router = useRouter()
-    
+
     if (!account || !account.cashback_config) return null
 
     // Try to use persisted cycle tag if available
@@ -67,7 +68,7 @@ export function CycleBadge({ account, cycleTag, txnDate, className, mini = false
         if (!clickable) return
         e.stopPropagation() // Prevent row click
         e.preventDefault() // Prevent default navigation
-        
+
         if (cycleTag && account?.id) {
             const url = `/accounts/${account.id}?tag=${cycleTag}`
             // Open in new tab
@@ -77,12 +78,12 @@ export function CycleBadge({ account, cycleTag, txnDate, className, mini = false
 
     if (compact) {
         return (
-            <CustomTooltip content={formattedText}>
-                <span 
+            <CustomTooltip content={entityName ? `Open details for ${entityName} in new tab filtered by cycle ${cycleTag || ''}` : formattedText}>
+                <span
                     onClick={handleClick}
                     className={cn(
                         "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
-                        "px-1 h-6 text-[10px] min-w-[96px]",
+                        "px-1 h-6 text-[10px] min-w-[110px]",
                         clickable && "cursor-pointer hover:bg-amber-200 hover:border-amber-400 transition-colors",
                         !clickable && "cursor-help",
                         className
@@ -96,17 +97,19 @@ export function CycleBadge({ account, cycleTag, txnDate, className, mini = false
     }
 
     return (
-        <span 
-            onClick={handleClick}
-            className={cn(
-                "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
-                mini ? "px-1 h-4 text-[10px] min-w-[80px]" : "px-1.5 h-7 text-[11px] min-w-[96px]",
-                clickable && "cursor-pointer hover:bg-amber-200 hover:border-amber-400 transition-colors",
-                className
-            )}
-        >
-            <Calendar className={cn(mini ? "h-2 w-2" : "h-3 w-3", "mb-[1px]")} />
-            {formattedText}
-        </span>
+        <CustomTooltip content={entityName ? `Open details for ${entityName} in new tab filtered by cycle ${cycleTag || ''}` : formattedText}>
+            <span
+                onClick={handleClick}
+                className={cn(
+                    "inline-flex items-center justify-center gap-1 rounded-[4px] bg-amber-100 border border-amber-300 text-amber-800 whitespace-nowrap font-bold",
+                    mini ? "px-1 h-4 text-[10px] min-w-[85px]" : "px-1.5 h-6 text-[11px] min-w-[110px]",
+                    clickable && "cursor-pointer hover:bg-amber-200 hover:border-amber-400 transition-colors",
+                    className
+                )}
+            >
+                <Calendar className={cn(mini ? "h-2 w-2" : "h-3 w-3", "mb-[1px]")} />
+                {formattedText}
+            </span>
+        </CustomTooltip>
     )
 }

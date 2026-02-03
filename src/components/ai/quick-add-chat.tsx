@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import type { ComboboxGroup } from "@/components/ui/combobox";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { AddTransactionDialog } from "@/components/moneyflow/add-transaction-dialog";
+import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
 import { generateTag } from "@/lib/tag";
 import { cn } from "@/lib/utils";
 import type { Account, Category, Person, Shop } from "@/types/moneyflow.types";
@@ -2833,25 +2833,30 @@ export function QuickAddChat({
         </>
       )}
 
-      <AddTransactionDialog
-        accounts={accounts}
-        categories={categories}
-        people={people}
-        shops={shops}
-        isOpen={transactionDialogOpen}
+      <TransactionSlideV2
+        open={transactionDialogOpen}
         onOpenChange={(nextOpen) => {
           setTransactionDialogOpen(nextOpen);
           if (!nextOpen) {
             setReviewValues(null);
           }
         }}
-        onBackToChat={() => {
+        onBackButtonClick={() => {
+          setTransactionDialogOpen(false);
           setOpen(true);
           setIsMinimized(false);
         }}
-        buttonClassName="hidden"
-        buttonText="Quick Add"
-        initialValues={reviewValues ?? undefined}
+        mode="single"
+        operationMode="add"
+        initialData={reviewValues ?? undefined}
+        accounts={accounts}
+        categories={categories}
+        people={people}
+        shops={shops}
+        onSuccess={() => {
+          setTransactionDialogOpen(false);
+          router.refresh();
+        }}
       />
     </>
   );

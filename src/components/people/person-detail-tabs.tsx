@@ -14,7 +14,7 @@ import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { PaidTransactionsModal } from '@/components/people/paid-transactions-modal'
 
 interface PersonDetailTabsProps {
@@ -69,6 +69,20 @@ export function PersonDetailTabs({
     const [selectedYear, setSelectedYear] = useState<string | null>(new Date().getFullYear().toString())
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const [showPaidModal, setShowPaidModal] = useState(false)
+
+    // Transaction Slide States
+    const [isSlideOpen, setIsSlideOpen] = useState(false)
+    const [slideInitialData, setSlideInitialData] = useState<any>(undefined)
+
+    const handleAddClick = (type: 'debt' | 'repayment') => {
+        setSlideInitialData({
+            type,
+            person_id: personId,
+            target_account_id: type === 'repayment' ? (sheetLinkedBankId || undefined) : undefined,
+            occurred_at: new Date()
+        })
+        setIsSlideOpen(true)
+    }
 
     // Sync tab with URL
     useEffect(() => {
@@ -255,35 +269,16 @@ export function PersonDetailTabs({
 
                                 {/* Debt Actions */}
                                 <div className="flex items-center gap-2">
-                                    <AddTransactionDialog
-                                        accounts={accounts}
-                                        categories={categories}
-                                        people={people}
-                                        shops={shops}
-                                        defaultType="debt"
-                                        defaultPersonId={personId}
-                                        asChild
-                                        triggerContent={
-                                            <Button variant="outline" size="sm" className="h-9 text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300">
-                                                <UserMinus className="h-3 w-3 mr-1" />Debt
-                                            </Button>
-                                        }
-                                    />
-                                    <AddTransactionDialog
-                                        accounts={accounts}
-                                        categories={categories}
-                                        people={people}
-                                        shops={shops}
-                                        defaultType="repayment"
-                                        defaultPersonId={personId}
-                                        defaultTargetAccountId={sheetLinkedBankId || undefined}
-                                        asChild
-                                        triggerContent={
-                                            <Button variant="outline" size="sm" className="h-9 text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300">
-                                                <Plus className="h-3 w-3 mr-1" />Repay
-                                            </Button>
-                                        }
-                                    />
+                                    <Button
+                                        onClick={() => handleAddClick('debt')}
+                                        variant="outline" size="sm" className="h-9 text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100 hover:text-rose-700 hover:border-rose-300">
+                                        <UserMinus className="h-3 w-3 mr-1" />Debt
+                                    </Button>
+                                    <Button
+                                        onClick={() => handleAddClick('repayment')}
+                                        variant="outline" size="sm" className="h-9 text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300">
+                                        <Plus className="h-3 w-3 mr-1" />Repay
+                                    </Button>
                                 </div>
 
                                 <div className="h-6 w-px bg-slate-200 hidden xl:block" />
@@ -376,13 +371,13 @@ export function PersonDetailTabs({
                         <span className="font-semibold text-slate-600">Flow Legend:</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-orange-50 text-orange-700 border border-orange-200 rounded text-[10px] font-bold">
                             FROM
                         </div>
                         <span className="text-slate-500">= Money received (incoming)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-bold">
                             TO
                         </div>
                         <span className="text-slate-500">= Money sent (outgoing)</span>
@@ -400,6 +395,21 @@ export function PersonDetailTabs({
                 categories={categories}
                 people={people}
                 shops={shops}
+            />
+
+            <TransactionSlideV2
+                open={isSlideOpen}
+                onOpenChange={setIsSlideOpen}
+                initialData={slideInitialData}
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                mode="single"
+                operationMode="add"
+                onSuccess={() => {
+                    setIsSlideOpen(false)
+                }}
             />
         </div>
     )

@@ -1,0 +1,83 @@
+﻿src/app/accounts/[id]/page.tsx(84,9): error TS2740: Type '{ spent_this_cycle: any; annual_fee_waiver_target: number; annual_fee_waiver_progress: number; annual_fee_waiver_met: boolean; }' is missing the following properties from type 'AccountStats': usage_percent, remaining_limit, min_spend, missing_for_min, and 6 more.
+src/components/accounts/v2/AccountDetailFilterBar.tsx(189,17): error TS2322: Type '(mode: "date" | "month" | "range") => void' is not assignable to type '(mode: "date" | "year" | "month" | "range" | "all") => void'.
+  Types of parameters 'mode' and 'mode' are incompatible.
+    Type '"date" | "year" | "month" | "range" | "all"' is not assignable to type '"date" | "month" | "range"'.
+      Type '"year"' is not assignable to type '"date" | "month" | "range"'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(245,66): error TS18049: 'account.stats.annual_fee_waiver_target' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(256,72): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(261,72): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(266,81): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(269,81): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(269,81): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(value: number | bigint | StringNumericLiteral): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number | bigint | StringNumericLiteral'.
+      Type 'undefined' is not assignable to type 'number | bigint | StringNumericLiteral'.
+  Overload 2 of 3, '(value: number | bigint): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number | bigint'.
+      Type 'undefined' is not assignable to type 'number | bigint'.
+  Overload 3 of 3, '(value: number): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(274,54): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(274,104): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(274,104): error TS18048: 'account.stats.annual_fee_waiver_progress' is possibly 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(282,81): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(283,82): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(283,82): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(value: number | bigint | StringNumericLiteral): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number | bigint | StringNumericLiteral'.
+      Type 'undefined' is not assignable to type 'number | bigint | StringNumericLiteral'.
+  Overload 2 of 3, '(value: number | bigint): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number | bigint'.
+      Type 'undefined' is not assignable to type 'number | bigint'.
+  Overload 3 of 3, '(value: number): string', gave the following error.
+    Argument of type 'number | null | undefined' is not assignable to parameter of type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(284,47): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(286,83): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(286,83): error TS18049: 'account.stats.annual_fee_waiver_target' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(286,124): error TS18049: 'account.stats' is possibly 'null' or 'undefined'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(352,108): error TS2339: Property 'tag' does not exist on type '{ start: string; end: string; label: string; }'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(354,77): error TS2339: Property 'tag' does not exist on type '{ start: string; end: string; label: string; }'.
+src/components/accounts/v2/AccountDetailHeaderV2.tsx(361,105): error TS2339: Property 'tag' does not exist on type '{ start: string; end: string; label: string; }'.
+src/components/accounts/v2/AccountDetailTransactions.tsx(566,33): error TS2322: Type 'Dispatch<SetStateAction<"date" | "month" | "range">>' is not assignable to type '(mode: "date" | "year" | "month" | "range" | "all") => void'.
+  Types of parameters 'value' and 'mode' are incompatible.
+    Type '"date" | "year" | "month" | "range" | "all"' is not assignable to type 'SetStateAction<"date" | "month" | "range">'.
+      Type '"year"' is not assignable to type 'SetStateAction<"date" | "month" | "range">'.
+src/components/accounts/v2/CategorySlideV2.tsx(97,29): error TS18047: 'newCat' is possibly 'null'.
+src/components/ai/quick-add-chat.tsx(2851,9): error TS2322: Type 'QuickAddInitialValues | undefined' is not assignable to type 'Partial<{ occurred_at: Date; amount: number; type: "expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; cashback_mode: "none_back" | ... 4 more ... | "voluntary"; ... 10 more ...; metadata?: Record<...> | ... 1 more ... | undefined; }> | undefined'.
+  Type 'QuickAddInitialValues' is not assignable to type 'Partial<{ occurred_at: Date; amount: number; type: "expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; cashback_mode: "none_back" | ... 4 more ... | "voluntary"; ... 10 more ...; metadata?: Record<...> | ... 1 more ... | undefined; }> | undefined'.
+    Type 'QuickAddInitialValues' is not assignable to type 'Partial<{ occurred_at: Date; amount: number; type: "expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; cashback_mode: "none_back" | ... 4 more ... | "voluntary"; ... 10 more ...; metadata?: Record<...> | ... 1 more ... | undefined; }>'.
+      Types of property 'type' are incompatible.
+        Type '"expense" | "income" | "debt" | "transfer" | "repayment" | "quick-people" | undefined' is not assignable to type '"expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay" | undefined'.
+          Type '"quick-people"' is not assignable to type '"expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay" | undefined'.
+src/components/dashboard/dashboard-content.tsx(215,13): error TS2304: Cannot find name 'Wallet'.
+src/components/dashboard/dashboard-content.tsx(236,13): error TS2304: Cannot find name 'Users'.
+src/components/installments/installment-table.tsx(240,13): error TS2353: Object literal may only specify known properties, and 'installment_plan_id' does not exist in type 'Partial<{ occurred_at: Date; amount: number; type: "expense" | "income" | "debt" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; cashback_mode: "none_back" | ... 4 more ... | "voluntary"; ... 10 more ...; metadata?: Record<...> | ... 1 more ... | undefined; }>'.
+src/components/moneyflow/unified-transaction-table.tsx(2783,14): error TS2304: Cannot find name 'AddTransactionDialog'.
+src/components/moneyflow/unified-transaction-table.tsx(2785,30): error TS7006: Parameter 'open' implicitly has an 'any' type.
+src/components/moneyflow/unified-transaction-table.tsx(2796,27): error TS7006: Parameter 'txn' implicitly has an 'any' type.
+src/components/moneyflow/unified-transaction-table.tsx(2987,21): error TS2322: Type '{ accounts: Account[]; categories: Category[]; people: Person[]; shops: Shop[]; mode: "refund"; refundTransactionId: any; refundAction: "request" | "confirm"; ... 4 more ...; onSuccess: () => void; }' is not assignable to type 'IntrinsicAttributes & TransactionFormProps'.
+  Property 'refundTransactionId' does not exist on type 'IntrinsicAttributes & TransactionFormProps'. Did you mean 'transactionId'?
+src/components/people/people-directory-mobile.tsx(222,18): error TS2304: Cannot find name 'Button'.
+src/components/people/people-directory-mobile.tsx(228,19): error TS2304: Cannot find name 'Button'.
+src/components/people/people-directory-mobile.tsx(229,18): error TS2304: Cannot find name 'Button'.
+src/components/people/people-directory-mobile.tsx(235,19): error TS2304: Cannot find name 'Button'.
+src/components/transaction/slide-v2/schema.ts(6,9): error TS2353: Object literal may only specify known properties, and 'required_error' does not exist in type '{ error?: string | $ZodErrorMap<$ZodIssueInvalidType<unknown>> | undefined; message?: string | undefined; }'.
+src/components/transaction/slide-v2/schema.ts(42,17): error TS2554: Expected 2-3 arguments, but got 1.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(316,45): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(345,45): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/components/transaction/slide-v2/single-mode/basic-info-section.tsx(269,37): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/components/transaction/slide-v2/single-mode/basic-info-section.tsx(293,41): error TS2322: Type 'string | null | undefined' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/components/transaction/slide-v2/transaction-slide-v2.tsx(324,62): error TS2345: Argument of type '{ occurred_at: string; amount: number; note: string | null | undefined; type: "debt" | "expense" | "income" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; target_account_id: string | ... 1 more ... | undefined; ... 7 more ...; metadata: Record<...> | ... 1 more ... | undefined; }' is not assignable to parameter of type 'CreateTransactionInput'.
+  Types of property 'metadata' are incompatible.
+    Type 'Record<any, unknown> | null | undefined' is not assignable to type 'Json | undefined'.
+      Type 'Record<any, unknown>' is not assignable to type 'Json | undefined'.
+src/components/transaction/slide-v2/transaction-slide-v2.tsx(329,55): error TS2345: Argument of type '{ occurred_at: string; amount: number; note: string | null | undefined; type: "debt" | "expense" | "income" | "transfer" | "repayment" | "credit_pay"; source_account_id: string; target_account_id: string | ... 1 more ... | undefined; ... 7 more ...; metadata: Record<...> | ... 1 more ... | undefined; }' is not assignable to parameter of type 'CreateTransactionInput'.
+  Types of property 'metadata' are incompatible.
+    Type 'Record<any, unknown> | null | undefined' is not assignable to type 'Json | undefined'.
+      Type 'Record<any, unknown>' is not assignable to type 'Json | undefined'.

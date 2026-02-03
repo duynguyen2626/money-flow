@@ -670,19 +670,19 @@ export function AccountDetailTransactions({
                         <span className="font-semibold text-slate-600">Flow Legend:</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-orange-50 text-orange-700 border border-orange-200 rounded text-[10px] font-bold">
                             FROM
                         </div>
                         <span className="text-slate-500">= Money received (incoming)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">
+                        <div className="h-5 px-2 flex items-center justify-center bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-bold">
                             TO
                         </div>
                         <span className="text-slate-500">= Money sent (outgoing)</span>
                     </div>
                     <div className="text-[10px] text-slate-400 italic">
-                        * Green indicates money flowing INTO this account. Red indicates money flowing OUT.
+                        * Orange indicates money flowing IN. Blue indicates money flowing OUT.
                     </div>
                 </div>
             </div>

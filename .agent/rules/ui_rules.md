@@ -18,7 +18,10 @@
 ## 4. Flow Column (Unified Transaction Table)
 - **Single source of truth**: always use `UnifiedTransactionTable` (no custom Flow UI in detail pages).
 - **Type icon badge**: icon-only with tooltip appears **before** entities.
-- **No direction badges**: never render FROM/TO badges in Flow column.
+- **No direction badges**: never render FROM/TO badges in Flow column. (DEPRECATED: Now used in Single Flow context-aware views).
+- **Flow Badges (Single Flow)**:
+  - **FROM (Orange)**: Indicates money incoming from a source.
+  - **TO (Sky)**: Indicates money outgoing to a target.
 - **Alignment**:
   - Main /transactions: single-flow rows left-aligned.
   - Detail pages (account/people): single-flow rows centered.

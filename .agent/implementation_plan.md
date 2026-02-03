@@ -42,3 +42,9 @@ As of Jan 2026, the following features are **production-ready**:
 - **State Management**: The `UnifiedTransactionsPage` manages the `isSlideOpen`, `slideMode`, and `slideOverrideType` states.
 - **Recent Logic**: Implemented using `localStorage` keys `mf_last_submitted_person_id` and `mf_last_submitted_account_id`.
 - **UI Rules**: Check `.agent/rules/ui_rules.md` before making UI changes. **NEVER** round avatars in dropdowns.
+
+## Zod Crash Debugging Plan
+- [ ] **Robust Resolver**: Wrap `zodResolver` execution in a `try-catch` block to return a safe fallback (empty values/errors) instead of crashing the UI.
+- [ ] **Schema Validation**: Add explicit checks for `schema.safeParse` in `safeResolver`.
+- [ ] **Zod Import Fix**: Investigate `zod` import. Verify `z.version` availability.
+- [ ] **Duplicate State Decoupling**: Maintain `duplicateData` state in `UnifiedTransactionsPage` to avoid race conditions.

@@ -8,7 +8,7 @@ import { TypeFilterDropdown } from '@/components/transactions-v2/header/TypeFilt
 import { StatusDropdown } from '@/components/transactions-v2/header/StatusDropdown'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
 import { CycleFilterDropdown } from '@/components/transactions-v2/header/CycleFilterDropdown'
-import { FilterX, ListFilter, X, Search, Filter, Trash2, ChevronDown, Clipboard } from 'lucide-react'
+import { FilterX, ListFilter, X, Search, Filter, Trash2, ChevronDown, Clipboard, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DateRange } from 'react-day-picker'
@@ -46,10 +46,10 @@ interface TransactionHeaderProps {
   // Date State (Parent)
   date: Date
   dateRange: DateRange | undefined
-  dateMode: 'month' | 'range' | 'date'
+  dateMode: 'month' | 'range' | 'date' | 'all' | 'year'
   onDateChange: (date: Date) => void
   onRangeChange: (range: DateRange | undefined) => void
-  onModeChange: (mode: 'month' | 'range' | 'date') => void
+  onModeChange: (mode: 'month' | 'range' | 'date' | 'all' | 'year') => void
 
   // Filter State (Parent)
   accountId?: string
@@ -72,6 +72,8 @@ interface TransactionHeaderProps {
 
   hasActiveFilters?: boolean
   onReset?: () => void
+  onClearFilters?: () => void
+  onRefresh?: () => void
 
   // Actions
   onAdd: (type?: string) => void
@@ -99,11 +101,12 @@ interface TransactionHeaderProps {
 
 interface ClearDropdownButtonProps {
   onReset?: () => void
+  onClearFilters?: () => void
   setConfirmClearOpen: (open: boolean) => void
   handleApplyFilters: () => void
 }
 
-function ClearDropdownButton({ onReset, setConfirmClearOpen, handleApplyFilters }: ClearDropdownButtonProps) {
+function ClearDropdownButton({ onReset, onClearFilters, setConfirmClearOpen, handleApplyFilters }: ClearDropdownButtonProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -131,8 +134,8 @@ function ClearDropdownButton({ onReset, setConfirmClearOpen, handleApplyFilters 
           <ChevronDown className="w-3 h-3 opacity-70" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="w-[260px] p-1" 
+      <PopoverContent
+        className="w-[260px] p-1"
         align="start"
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -142,7 +145,7 @@ function ClearDropdownButton({ onReset, setConfirmClearOpen, handleApplyFilters 
           {/* Clear Filter */}
           <button
             onClick={() => {
-              setConfirmClearOpen(true)
+              onClearFilters?.()
               setOpen(false)
             }}
             className="w-full flex items-start gap-2 px-2 py-2 text-sm rounded-sm hover:bg-accent transition-colors text-left"
@@ -197,6 +200,8 @@ export function TransactionHeader({
   onStatusChange,
   hasActiveFilters,
   onReset,
+  onClearFilters,
+  onRefresh,
   onAdd,
   cycles,
   selectedCycle,
@@ -221,7 +226,7 @@ export function TransactionHeader({
   // Date State Buffer
   const [localDate, setLocalDate] = useState(date)
   const [localDateRange, setLocalDateRange] = useState(dateRange)
-  const [localDateMode, setLocalDateMode] = useState(dateMode)
+  const [localDateMode, setLocalDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>(dateMode)
 
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
@@ -289,7 +294,7 @@ export function TransactionHeader({
     updates: Partial<{
       date: Date
       range: DateRange | undefined
-      mode: 'month' | 'range' | 'date'
+      mode: 'month' | 'range' | 'date' | 'all' | 'year'
     }>
   ) => {
     if (updates.date !== undefined) setLocalDate(updates.date)
@@ -331,6 +336,18 @@ export function TransactionHeader({
 
   const DesktopFilters = () => (
     <div className="hidden md:flex items-center gap-2 shrink-0">
+      {onRefresh && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          className="h-9 w-9 p-0 shrink-0 hover:bg-muted"
+          title="Refresh Data"
+        >
+          <RefreshCw className="w-4 h-4 text-muted-foreground" />
+        </Button>
+      )}
+
       <TypeFilterDropdown
         value={localFilterType}
         onChange={handleFilterChange(setLocalFilterType, onFilterChange)}
@@ -401,6 +418,7 @@ export function TransactionHeader({
       ) : (
         <ClearDropdownButton
           onReset={onReset}
+          onClearFilters={onClearFilters}
           setConfirmClearOpen={setConfirmClearOpen}
           handleApplyFilters={handleApplyFilters}
         />
@@ -458,8 +476,8 @@ export function TransactionHeader({
 
         <div className="flex items-center gap-2 flex-1 ml-2 relative">
           <div className="relative flex-1 max-w-sm">
-            <Clipboard 
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" 
+            <Clipboard
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
               onClick={async () => {
                 try {
                   const text = await navigator.clipboard.readText()

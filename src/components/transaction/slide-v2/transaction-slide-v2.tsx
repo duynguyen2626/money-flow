@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ArrowLeft } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -15,14 +16,16 @@ import {
 import { Button } from "@/components/ui/button";
 import {
     TransactionSlideV2Props,
-    singleTransactionSchema,
+    TransactionMode,
     SingleTransactionFormValues,
-    bulkTransactionSchema,
     BulkTransactionFormValues,
-    TransactionMode
 } from "./types";
+import { singleTransactionSchema, bulkTransactionSchema } from "./schema";
+
+
 import { cn } from "@/lib/utils";
 import { bulkCreateTransactions } from "@/actions/bulk-transaction-actions";
+import { logToServer, logErrorToServer } from "@/actions/log-actions";
 import { createTransaction, updateTransaction } from "@/services/transaction.service";
 import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
@@ -47,12 +50,14 @@ export function TransactionSlideV2({
     mode: initialMode = 'single',
     initialData,
     editingId,
+    operationMode = 'add',
     accounts,
     categories,
     people,
     shops,
     onSuccess,
     onHasChanges,
+    onBackButtonClick,
     onSubmissionStart,
     onSubmissionEnd
 }: TransactionSlideV2Props) {
@@ -66,47 +71,121 @@ export function TransactionSlideV2({
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [isPeopleDialogOpen, setIsPeopleDialogOpen] = useState(false);
 
+    // DEBUG: Verify schemas are defined
+    useEffect(() => {
+        if (open) {
+            console.log("🔍 TransactionSlideV2 Schema Check:", {
+                single: !!singleTransactionSchema,
+                bulk: !!bulkTransactionSchema,
+            });
+        }
+    }, [open]);
+
     // Get default values based on initialData - memoized to prevent infinite loops
     const defaultFormValues = useMemo((): SingleTransactionFormValues => {
+
+        console.log("🎨 defaultFormValues computed:");
+        console.log("   initialData:", initialData);
+        console.log("   operationMode:", operationMode);
+
         if (initialData) {
-            return {
+            const values: SingleTransactionFormValues = {
                 type: initialData.type || "expense",
-                category_id: initialData.category_id || "",
+                category_id: initialData.category_id ?? null,
                 occurred_at: initialData.occurred_at || new Date(),
-                amount: initialData.amount || 0,
-                note: initialData.note || "",
+                amount: initialData.amount ?? 0,
+                note: initialData.note ?? "",
                 source_account_id: initialData.source_account_id || accounts[0]?.id || "",
-                target_account_id: initialData.target_account_id,
-                shop_id: initialData.shop_id,
-                person_id: initialData.person_id,
-                tag: initialData.tag,
+                target_account_id: initialData.target_account_id ?? null,
+                shop_id: initialData.shop_id ?? null,
+                person_id: initialData.person_id ?? null,
+                tag: initialData.tag ?? null,
                 cashback_mode: initialData.cashback_mode || "none_back",
-                cashback_share_percent: initialData.cashback_share_percent,
-                cashback_share_fixed: initialData.cashback_share_fixed,
-                ui_is_cashback_expanded: false,
+                cashback_share_percent: initialData.cashback_share_percent ?? null,
+                cashback_share_fixed: initialData.cashback_share_fixed ?? null,
+                ui_is_cashback_expanded: initialData.ui_is_cashback_expanded ?? false,
+                metadata: initialData.metadata ?? null,
             };
+            console.log("   ✅ Using initialData values:", values);
+            return values;
         }
+        console.log("   ℹ️ No initialData - using defaults");
         return {
             type: "expense",
-            category_id: "",
+            category_id: null,
             occurred_at: new Date(),
             amount: 0,
             note: "",
             source_account_id: accounts[0]?.id || "",
             cashback_mode: "percent",
             ui_is_cashback_expanded: false,
+            target_account_id: null,
+            shop_id: null,
+            person_id: null,
+            tag: null,
+            cashback_share_percent: null,
+            cashback_share_fixed: null,
+            metadata: null,
         };
     }, [initialData, accounts]);
 
+    // --- Helper for safe schema resolution ---
+    // Wraps zodResolver in a try-catch to prevent "Cannot read properties of undefined" crashes
+    const safeResolver = useCallback((schema: any, name: string) => {
+        return async (values: any, context: any, options: any) => {
+            try {
+                // 1. Basic Schema Validation
+                if (!schema || typeof schema.safeParse !== 'function') {
+                    const msg = `🚨 CRITICAL ERROR: ${name} schema is invalid or undefined! Type: ${typeof schema}`;
+                    console.error(msg);
+                    logErrorToServer(msg, { type: typeof schema });
+                    return { values: {}, errors: {} };
+                }
+
+                // 2. Safe Execution
+                // Move zodResolver creation inside try-catch to catch "reading '_zod'" errors
+                const resolver = zodResolver(schema);
+                return await resolver(values, context, options);
+
+            } catch (error) {
+                // 3. Crash Prevention
+                const msg = `🚨 CRASH CAUGHT: Resolver failed for ${name}`;
+                console.error(msg, error);
+
+                // If it's the specific "_zod" error, log it clearly
+                if (error instanceof TypeError && error.message.includes("_zod")) {
+                    console.error("⚠️ This looks like a Zod/HookForm version mismatch or malformed schema issue.");
+                }
+
+                logErrorToServer(msg, { error: String(error) });
+                // Return valid empty result to keep form alive
+                return { values: values, errors: {} };
+            }
+        };
+    }, []);
+
+    // DEBUG: Verify schemas are defined
+    useEffect(() => {
+        if (open) {
+            const status = {
+                single: !!singleTransactionSchema,
+                bulk: !!bulkTransactionSchema,
+                initialData: !!initialData
+            };
+            console.log("🔍 TransactionSlideV2 Schema Check:", status);
+            logToServer("TransactionSlideV2 Open - Schema Check", status);
+        }
+    }, [open, initialData]);
+
     // --- Single Transaction Form ---
     const singleForm = useForm<SingleTransactionFormValues>({
-        resolver: zodResolver(singleTransactionSchema) as any,
+        resolver: safeResolver(singleTransactionSchema, 'singleTransactionSchema'),
         defaultValues: defaultFormValues,
     });
 
     // --- Bulk Transaction Form ---
     const bulkForm = useForm<BulkTransactionFormValues>({
-        resolver: zodResolver(bulkTransactionSchema) as any,
+        resolver: safeResolver(bulkTransactionSchema, 'bulkTransactionSchema') as any,
         defaultValues: {
             rows: [],
             occurred_at: new Date(),
@@ -114,14 +193,21 @@ export function TransactionSlideV2({
         }
     });
 
-    // Reset form when slide opens or initialData changes
+
+
+
+
+    // Reset form when slide opens or initialData changes - optimized to prevent unnecessary resets
     useEffect(() => {
         if (open) {
+            console.log("🔄 Resetting form with values:", defaultFormValues);
             singleForm.reset(defaultFormValues);
             setHasChanges(false);
             onHasChanges?.(false);
         }
-    }, [open, defaultFormValues, singleForm, onHasChanges]);
+    }, [open, defaultFormValues]);
+    // Removed singleForm and onHasChanges from deps to avoid extra resets if they are stable
+    // Note: react-hook-form provides stable identities for reset and the form object usually.
 
     // Track form changes by comparing with initial values
     useEffect(() => {
@@ -146,8 +232,7 @@ export function TransactionSlideV2({
 
             setHasChanges(hasActualChanges);
             onHasChanges?.(hasActualChanges);
-            setHasChanges(hasActualChanges);
-            onHasChanges?.(hasActualChanges);
+
         });
 
         return () => subscription.unsubscribe();
@@ -191,6 +276,17 @@ export function TransactionSlideV2({
     }, [open, editingId, initialData, singleForm]);
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
+        if (!data || (Object.keys(data).length === 0 && operationMode !== 'add')) {
+            console.error("❌ CRITICAL: Form data is EMPTY during submit!");
+            toast.error("Form data is empty. Please try again.");
+            return;
+        }
+
+        console.log("✅ onSingleSubmit called - Form validation PASSED");
+        console.log("📋 Form data raw:", data);
+        console.log("🎯 Operation:", operationMode, "| editingId:", editingId);
+        console.log("🔀 Will call:", editingId ? "updateTransaction()" : "createTransaction()");
+
         const payload = {
             occurred_at: data.occurred_at.toISOString(),
             amount: data.amount,
@@ -206,6 +302,7 @@ export function TransactionSlideV2({
             // Convert UI percentage (20) to DB decimal (0.2)
             cashback_share_percent: data.cashback_share_percent ? data.cashback_share_percent / 100 : null,
             cashback_share_fixed: data.cashback_share_fixed,
+            metadata: data.metadata,
         };
 
         // UX: Close immediately if handler provided
@@ -220,17 +317,24 @@ export function TransactionSlideV2({
         // Since we closed the sheet, we shouldn't touch local state after this point if onSubmissionStart was used.
         try {
             let success = false;
+            console.log("🚀 Starting transaction submit...");
+
             if (editingId) {
+                console.log("📝 UPDATE mode - editingId:", editingId);
                 success = await updateTransaction(editingId, payload);
                 if (success) toast.success("Transaction updated successfully");
                 else toast.error("Failed to update transaction");
             } else {
+                console.log("➕ CREATE mode - creating new transaction");
                 const newId = await createTransaction(payload);
+                console.log("✨ Create result - newId:", newId);
                 if (newId) {
                     success = true;
                     toast.success("Transaction created successfully");
                 } else toast.error("Failed to create transaction");
             }
+
+            console.log("🎉 Submit success:", success);
 
             if (success) {
                 if (!onSubmissionStart) {
@@ -240,7 +344,11 @@ export function TransactionSlideV2({
                 onSuccess?.(editingId ? { id: editingId, ...payload } : undefined);
             }
         } catch (error) {
-            console.error("Submission error:", error);
+            console.error("❌ Submission error caught:", error);
+            console.error("Error details:", {
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
             toast.error("An error occurred. Please try again.");
         } finally {
             if (onSubmissionEnd) {
@@ -281,21 +389,39 @@ export function TransactionSlideV2({
             >
                 {/* Header */}
                 <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
-                    <SheetTitle className="flex items-center gap-2">
-                        {mode === 'single'
-                            ? (initialData || editingId ? 'Edit Transaction' : 'New Transaction')
-                            : 'Bulk Add'
-                        }
-                        {isLoadingEdit && (
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Loading...
-                            </span>
-                        )}
-                    </SheetTitle>
+                    <div className="flex items-center gap-3">
+                        {/* Back Button */}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onBackButtonClick?.();
+                            }}
+                            className="p-1.5 bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+                            title="Close"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
+
+                        <SheetTitle className="flex items-center gap-2">
+                            {mode === 'single'
+                                ? (operationMode === 'duplicate'
+                                    ? 'Duplicate Transaction'
+                                    : operationMode === 'edit'
+                                        ? 'Edit Transaction'
+                                        : 'New Transaction')
+                                : 'Bulk Add'
+                            }
+                            {isLoadingEdit && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Loading...
+                                </span>
+                            )}
+                        </SheetTitle>
+                    </div>
 
                     {/* Quick Mode Toggle */}
                     <div className="flex bg-slate-100 rounded-lg p-1">
@@ -329,10 +455,22 @@ export function TransactionSlideV2({
                             <FormProvider {...singleForm}>
                                 <form
                                     id="single-txn-form"
-                                    onSubmit={singleForm.handleSubmit(onSingleSubmit, (errors) => {
-                                        console.error("Form validation errors:", errors);
-                                        toast.error("Please fill in all required fields correctly.");
-                                    })}
+                                    onSubmit={singleForm.handleSubmit(
+                                        onSingleSubmit,
+                                        (errors) => {
+                                            console.error("❌ Form validation FAILED");
+                                            console.error("Validation errors object:", errors);
+                                            console.error("Form state:", {
+                                                isValid: singleForm.formState.isValid,
+                                                isSubmitting: singleForm.formState.isSubmitting,
+                                                errors: singleForm.formState.errors,
+                                            });
+                                            console.error("Current form values:", singleForm.getValues());
+                                            console.error("Operation mode:", operationMode, "| editingId:", editingId);
+                                            console.error("Initial data passed:", initialData);
+                                            toast.error("Please fill in all required fields correctly.");
+                                        }
+                                    )}
                                     className="space-y-6"
                                 >
                                     <BasicInfoSection

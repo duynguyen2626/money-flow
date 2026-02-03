@@ -4,7 +4,7 @@ import { useState, useRef } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { FileSpreadsheet, UserMinus, Plus, Link as LinkIcon, Pencil, Copy, ExternalLink, ClipboardPaste, Eye, ChevronDown } from 'lucide-react'
 import { UnifiedTransactionTable } from './unified-transaction-table'
-import { AddTransactionDialog } from './add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
@@ -255,18 +255,19 @@ export function DebtCycleGroup({
 
             {/* Edit Transaction Modal */}
             {editingRepaymentId && (
-                <AddTransactionDialog
+                <TransactionSlideV2
                     accounts={accounts}
                     categories={categories}
                     people={people}
                     shops={shops}
-                    buttonText=""
-                    defaultType="repayment"
-                    defaultPersonId={personId}
-                    transactionId={editingRepaymentId}
-                    isOpen={true}
+                    editingId={editingRepaymentId}
+                    open={true}
                     onOpenChange={(open) => !open && setEditingRepaymentId(null)}
-                    buttonClassName="hidden"
+                    mode="single"
+                    operationMode="edit"
+                    onSuccess={() => {
+                        setEditingRepaymentId(null)
+                    }}
                 />
             )}
         </div>

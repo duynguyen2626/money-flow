@@ -7,7 +7,7 @@ import { DebtCycleGroup } from './debt-cycle-group'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Link as LinkIcon } from 'lucide-react'
-import { AddTransactionDialog } from './add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 
 interface DebtCycleListProps {
     transactions: TransactionWithDetails[]
@@ -580,14 +580,19 @@ export function DebtCycleList({
 
             {/* Edit Transaction Modal */}
             {editingTransactionId && (
-                <AddTransactionDialog
+                <TransactionSlideV2
                     accounts={accounts}
                     categories={categories}
                     people={people}
                     shops={shops}
-                    transactionId={editingTransactionId}
-                    isOpen={true}
+                    editingId={editingTransactionId}
+                    open={true}
                     onOpenChange={(open) => !open && setEditingTransactionId(null)}
+                    mode="single"
+                    operationMode="edit"
+                    onSuccess={() => {
+                        setEditingTransactionId(null)
+                    }}
                 />
             )}
         </div>
