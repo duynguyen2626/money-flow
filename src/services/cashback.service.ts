@@ -393,16 +393,37 @@ export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: S
 export async function removeTransactionCashback(transactionId: string) {
   const supabase = createClient();
 
-  const { data: entry } = await supabase
+  // Get all cashback entries for this transaction (not just one)
+  const { data: entries, error: selectError } = await supabase
     .from('cashback_entries')
     .select('cycle_id')
-    .eq('transaction_id', transactionId)
-    .maybeSingle() as any;
+    .eq('transaction_id', transactionId);
 
-  if (entry) {
-    await supabase.from('cashback_entries').delete().eq('transaction_id', transactionId);
-    if ((entry as any).cycle_id) {
-      await recomputeCashbackCycle((entry as any).cycle_id);
+  if (selectError) {
+    console.error('Error fetching cashback entries for deletion:', selectError);
+    throw selectError;
+  }
+
+  if (entries && entries.length > 0) {
+    // Delete all cashback entries for this transaction
+    const { error: deleteError } = await supabase
+      .from('cashback_entries')
+      .delete()
+      .eq('transaction_id', transactionId);
+
+    if (deleteError) {
+      console.error('Error deleting cashback entries:', deleteError);
+      throw deleteError;
+    }
+
+    // Recompute affected cycles
+    const uniqueCycleIds = new Set(entries.map(e => (e as any).cycle_id).filter(Boolean));
+    for (const cycleId of uniqueCycleIds) {
+      try {
+        await recomputeCashbackCycle(cycleId as string);
+      } catch (err) {
+        console.error(`Failed to recompute cashback cycle ${cycleId}:`, err);
+      }
     }
   }
 }

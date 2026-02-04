@@ -8,8 +8,9 @@ import { confirmBatchSourceAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
-export function ConfirmSourceDialog({ batchId, accounts }: { batchId: string, accounts: any[] }) {
+export function ConfirmSourceDialog({ batchId, accounts, disabled = false }: { batchId: string, accounts: any[], disabled?: boolean }) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [accountId, setAccountId] = useState('')
@@ -35,14 +36,21 @@ export function ConfirmSourceDialog({ batchId, accounts }: { batchId: string, ac
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="default" className="bg-green-600 hover:bg-green-700">
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Match Real Source
+                <Button 
+                    variant="secondary"
+                    className={cn(
+                        "gap-2 border-green-200 text-green-700 hover:bg-green-50",
+                        disabled ? 'opacity-50 cursor-not-allowed' : ''
+                    )}
+                    disabled={disabled}
+                >
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    <span className="font-semibold">Step 2: Match Source</span>
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Select Real Money Source</DialogTitle>
+                    <DialogTitle>Step 2: Match Real Money Source</DialogTitle>
                 </DialogHeader>
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
                     <p className="text-xs text-blue-700 leading-relaxed">

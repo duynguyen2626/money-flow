@@ -24,29 +24,59 @@ import {
 import { revalidatePath } from 'next/cache'
 
 export async function cloneBatchItemAction(itemId: string, batchId: string) {
-    await cloneBatchItem(itemId)
-    revalidatePath(`/batch/detail/${batchId}`)
+    try {
+        const clonedItem = await cloneBatchItem(itemId)
+        revalidatePath(`/batch/detail/${batchId}`)
+        return { success: true, data: clonedItem }
+    } catch (error: any) {
+        console.error('Clone batch item failed:', error)
+        return { success: false, error: error.message }
+    }
 }
 
 export async function confirmBatchItemAction(itemId: string, batchId: string, targetAccountId?: string) {
-    await confirmBatchItem(itemId, targetAccountId)
-    revalidatePath(`/batch/detail/${batchId}`)
+    try {
+        await confirmBatchItem(itemId, targetAccountId)
+        revalidatePath(`/batch/detail/${batchId}`)
+        return { success: true }
+    } catch (error: any) {
+        console.error('Confirm batch item failed:', error)
+        return { success: false, error: error.message }
+    }
 }
 
 export async function voidBatchItemAction(itemId: string, batchId: string) {
-    await revertBatchItem(itemId)
-    revalidatePath(`/batch/detail/${batchId}`)
-    revalidatePath('/accounts')
+    try {
+        await revertBatchItem(itemId)
+        revalidatePath(`/batch/detail/${batchId}`)
+        revalidatePath('/accounts')
+        return { success: true }
+    } catch (error: any) {
+        console.error('Void batch item failed:', error)
+        return { success: false, error: error.message }
+    }
 }
 
 export async function deleteBatchItemAction(itemId: string, batchId: string) {
-    await deleteBatchItem(itemId)
-    revalidatePath(`/batch/detail/${batchId}`)
+    try {
+        await deleteBatchItem(itemId)
+        revalidatePath(`/batch/detail/${batchId}`)
+        return { success: true }
+    } catch (error: any) {
+        console.error('Delete batch item failed:', error)
+        return { success: false, error: error.message }
+    }
 }
 
 export async function deleteBatchItemsBulkAction(itemIds: string[], batchId: string) {
-    await deleteBatchItemsBulk(itemIds)
-    revalidatePath(`/batch/detail/${batchId}`)
+    try {
+        await deleteBatchItemsBulk(itemIds)
+        revalidatePath(`/batch/detail/${batchId}`)
+        return { success: true }
+    } catch (error: any) {
+        console.error('Delete batch items failed:', error)
+        return { success: false, error: error.message }
+    }
 }
 
 export async function getBatchesAction() {
@@ -68,17 +98,18 @@ export async function fundBatchAction(batchId: string) {
     return result
 }
 
-export async function updateBatchItemAction(id: string, data: any) {
-    const result = await updateBatchItem(id, data)
-    // We don't know the batchId here easily without fetching, but we can revalidate the batch page if we knew it.
-    // Ideally we should pass batchId to this action or fetch it.
-    // For now, let's assume the UI will handle optimistic updates or we revalidate the specific batch path if possible.
-    // Actually, let's fetch the item to get the batch_id to revalidate.
-    // But wait, updateBatchItem returns the item.
-    revalidatePath('/batch/detail/[id]') // This might not work as expected for dynamic routes without specific ID
-    // Let's just return the result and let the client refresh if needed, or better:
-    // We can accept batchId as a second argument for revalidation.
-    return result
+export async function updateBatchItemAction(id: string, data: any, batchId?: string) {
+    try {
+        const result = await updateBatchItem(id, data)
+        if (batchId) {
+            revalidatePath(`/batch/detail/${batchId}`)
+            revalidatePath('/batch')
+        }
+        return { success: true, data: result }
+    } catch (error: any) {
+        console.error('Failed to update batch item:', error)
+        return { success: false, error: error.message || 'Failed to update item' }
+    }
 }
 
 export async function importBatchItemsAction(

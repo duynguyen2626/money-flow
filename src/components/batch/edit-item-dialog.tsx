@@ -44,10 +44,14 @@ interface EditItemDialogProps {
     accounts?: any[]
     bankMappings?: any[]
     bankType?: 'VIB' | 'MBB'
+    isOpen?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
-export function EditItemDialog({ item, accounts = [], bankMappings = [], bankType = 'VIB' }: EditItemDialogProps) {
-    const [open, setOpen] = useState(false)
+export function EditItemDialog({ item, accounts = [], bankMappings = [], bankType = 'VIB', isOpen, onOpenChange }: EditItemDialogProps) {
+    const [internalOpen, setInternalOpen] = useState(false)
+    const open = isOpen !== undefined ? isOpen : internalOpen
+    const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen
     const [accountTab, setAccountTab] = useState<'filtered' | 'all'>('filtered')
 
     const form = useForm<FormValues>({

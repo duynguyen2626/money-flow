@@ -44,10 +44,16 @@ function doPost(e) {
             var action = payload.action;
 
             Logger.log("doPost Action: " + action);
+            Logger.log("doPost Payload Keys: " + Object.keys(payload).join(", "));
+            
+            if (action === 'create' || action === 'edit' || action === 'delete') {
+                Logger.log("doPost Single Transaction Sync - ID: " + payload.id + ", Shop: " + (payload.shop || '(empty)') + ", Person: " + (payload.person_id || payload.personId || '(empty)'));
+            }
 
             if (action === 'ensureSheet' || action === 'create_cycle_sheet') {
                 return handleEnsureSheet(payload);
             } else if (action === 'syncTransactions') {
+                Logger.log("doPost Batch Sync - Rows count: " + (payload.rows ? payload.rows.length : 0));
                 return handleSyncTransactions(payload);
             } else if (action === 'create' || action === 'edit' || action === 'update' || action === 'delete') {
                 return handleSingleTransaction(payload, action);
@@ -407,6 +413,7 @@ function handleSingleTransaction(payload, action) {
     sheet.getRange(targetRow, 1).setValue(payload.id);
     sheet.getRange(targetRow, 2).setValue(normalizeType(payload.type, payload.amount)); // B: Type
     sheet.getRange(targetRow, 3).setValue(new Date(payload.date)); // C: Date
+    sheet.getRange(targetRow, 4).setValue(payload.shop || ""); // D: Shop (Direct set + Formula will override if needed)
     sheet.getRange(targetRow, 5).setValue(payload.notes || ""); // E: Note
 
     var amt = Math.abs(payload.amount);
@@ -415,6 +422,17 @@ function handleSingleTransaction(payload, action) {
     sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0); // G
     sheet.getRange(targetRow, 8).setValue(payload.fixed_back || 0);   // H
     sheet.getRange(targetRow, 11).setValue(payload.shop || ""); // K: ShopSource
+
+    Logger.log('[handleSingleTransaction] Row ' + targetRow + ' populated with:', {
+        id: payload.id,
+        type: normalizeType(payload.type, payload.amount),
+        date: payload.date,
+        shop: payload.shop,
+        notes: payload.notes,
+        amount: amt,
+        percent_back: payload.percent_back,
+        fixed_back: payload.fixed_back
+    });
 
     // formulas handled by ensureArrayFormulas called in applyBordersAndSort
 

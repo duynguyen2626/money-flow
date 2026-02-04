@@ -100,7 +100,13 @@ export function CloneBatchDialog({ batch, accounts, webhookLinks }: CloneBatchDi
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="icon" title="Clone Batch" onClick={(e) => e.stopPropagation()}>
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    title="Clone Batch" 
+                    onClick={(e) => e.stopPropagation()}
+                    data-clone-batch-trigger
+                >
                     <Copy className="h-4 w-4" />
                 </Button>
             </DialogTrigger>

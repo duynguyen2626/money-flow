@@ -26,7 +26,7 @@ import { addBatchItemAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Info, Edit, Plus, Loader2 } from 'lucide-react'
-import { EditAccountDialog } from '@/components/moneyflow/edit-account-dialog'
+import { AccountSlideV2 } from '@/components/accounts/v2/AccountSlideV2'
 import { CreateAccountDialog } from '@/components/moneyflow/create-account-dialog'
 
 
@@ -54,6 +54,8 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
     const [managedAccounts, setManagedAccounts] = useState<{ name: string; receiverName: string; bankNumber: string }[]>([])
     const [accountTab, setAccountTab] = useState<'filtered' | 'all'>('filtered')
     const [loading, setLoading] = useState(false)
+    const [isAccountSlideOpen, setIsAccountSlideOpen] = useState(false)
+    const [selectedAccountForEdit, setSelectedAccountForEdit] = useState<any>(null)
 
     useEffect(() => {
         const stored = localStorage.getItem('recent_bank_codes')
@@ -155,8 +157,11 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                 if (bankName) searchTerms.add(bankName.toLowerCase())
                 if (bankCode) searchTerms.add(bankCode.toLowerCase())
 
-                // Add short name if available
-                const mapping = bankMappings.find(b => b.bank_code === bankCode || b.short_name === bankName)
+                // Add short name if available - ONLY from banks matching current bankType
+                const mapping = bankMappings.find(b => 
+                    b.bank_type === bankType && 
+                    (b.bank_code === bankCode || b.short_name === bankName)
+                )
                 if (mapping?.short_name) searchTerms.add(mapping.short_name.toLowerCase())
                 if (mapping?.bank_code) searchTerms.add(mapping.bank_code.toLowerCase())
 
@@ -489,14 +494,17 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                                 </FormLabel>
                                                 <div className="flex items-center gap-2">
                                                     {field.value && field.value !== 'none' && (
-                                                        <EditAccountDialog
-                                                            account={accounts.find(a => a.id === field.value)}
-                                                            triggerContent={
-                                                                <span className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer">
-                                                                    <Edit className="h-3 w-3" /> Edit Info
-                                                                </span>
-                                                            }
-                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const account = accounts.find(a => a.id === field.value)
+                                                                setSelectedAccountForEdit(account)
+                                                                setIsAccountSlideOpen(true)
+                                                            }}
+                                                            className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                        >
+                                                            <Edit className="h-3 w-3" /> Edit Info
+                                                        </button>
                                                     )}
                                                     <CreateAccountDialog
                                                         trigger={
@@ -677,6 +685,12 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                 confirmText="Tạo mới"
                 cancelText="Hủy"
                 variant="default"
+            />
+            <AccountSlideV2
+                open={isAccountSlideOpen}
+                onOpenChange={setIsAccountSlideOpen}
+                account={selectedAccountForEdit}
+                allAccounts={accounts}
             />
         </>
     )

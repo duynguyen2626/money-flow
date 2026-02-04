@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { updateBatchSettingsAction, getBatchSettingsAction } from '@/actions/batch-settings.actions'
 import { toast } from 'sonner'
 
-export function BatchSettingsPage() {
+export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean } = {}) {
     const [mbbSheetUrl, setMbbSheetUrl] = useState('')
     const [vibSheetUrl, setVibSheetUrl] = useState('')
     const [mbbImageUrl, setMbbImageUrl] = useState('')
@@ -132,20 +132,22 @@ export function BatchSettingsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className={hideHeader ? 'bg-white' : 'min-h-screen bg-slate-50'}>
+            <div className={hideHeader ? 'px-6 py-6' : 'container mx-auto px-4 py-8 max-w-4xl'}>
                 {/* Header */}
-                <div className="flex items-center gap-4 mb-8">
-                    <Link href="/batch">
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                    <div>
-                        <h1 className="text-3xl font-bold text-slate-900">Batch Settings</h1>
-                        <p className="text-slate-600">Configure sheet URLs and webhooks</p>
+                {!hideHeader && (
+                    <div className="flex items-center gap-4 mb-8">
+                        <Link href="/batch">
+                            <Button variant="ghost" size="icon">
+                                <ArrowLeft className="h-5 w-5" />
+                            </Button>
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-bold text-slate-900">Batch Settings</h1>
+                            <p className="text-slate-600">Configure sheet URLs and webhooks</p>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <Tabs defaultValue="mbb" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">

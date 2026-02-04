@@ -2368,7 +2368,8 @@ export function UnifiedTransactionTableV2({
                       key={txn.id}
                       className={cn(
                         "border-b border-slate-200 transition-colors text-base",
-                        isMenuOpen ? "bg-blue-50" : rowBgColor,
+                        isSelected && "bg-blue-100",
+                        isMenuOpen && !isSelected ? "bg-blue-50" : !isSelected && rowBgColor,
                         !isExcelMode && "hover:bg-slate-50/50",
                         (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
                       )}

@@ -6,19 +6,19 @@ import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
 import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 import { autoSyncCycleSheetIfNeeded } from './sheet.service'
 
-// TODO: The 'service_members' table is not in database.types.ts. 
-// This is a temporary type definition.
-// The database schema needs to be updated.
+// ServiceMember type for service distribution
+// Uses person_id to match database schema after migration
 type ServiceMember = {
   id: string;
   service_id: string;
-  profile_id: string;
+  person_id: string; // Foreign key to people.id
   slots: number;
   is_owner: boolean;
-  profiles: {
+  people?: {
+    id: string;
     name: string;
-    is_owner: boolean;
-    accounts: any[];
+    is_owner?: boolean;
+    accounts?: any[];
   }
 };
 type Subscription = Database['public']['Tables']['subscriptions']['Row'];
@@ -27,7 +27,7 @@ type SubscriptionUpdate = Database['public']['Tables']['subscriptions']['Update'
 
 export async function upsertService(
   serviceData: SubscriptionInsert | SubscriptionUpdate,
-  members?: Omit<ServiceMember, 'id' | 'service_id' | 'profiles'>[]
+  members?: Omit<ServiceMember, 'id' | 'service_id' | 'people'>[]
 ) {
   const supabase = createClient()
 
@@ -64,7 +64,7 @@ export async function upsertService(
     if (members.length > 0) {
       const memberInsertData = members.map(member => ({
         service_id: serviceId,
-        profile_id: member.profile_id,
+        person_id: member.person_id,
         slots: member.slots,
         is_owner: member.is_owner,
       }))
@@ -103,7 +103,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
-    .select('*, profiles (name, is_owner, accounts(*))')
+    .select('*, people (id, name, is_owner, accounts:accounts!accounts_owner_id_fkey(*))')
     .eq('service_id', serviceId)
 
   const members = membersResult as unknown as ServiceMember[];
@@ -153,7 +153,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     if (templateToUse) {
       note = templateToUse
         .replace('{service}', (service as any).name)
-        .replace('{member}', member.profiles.name)
+        .replace('{member}', member.people?.name || 'Unknown')
         .replace('{name}', (service as any).name)
         .replace('{slots}', member.slots.toString())
         .replace('{date}', monthTag)
@@ -162,20 +162,20 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .replace('{total_slots}', totalSlots.toString());
     } else {
       // Default: MemberName 2025-12 Slot: 1 (35,571)/7
-      note = `${member.profiles.name} ${monthTag} Slot: ${member.slots} (${pricePerSlot.toLocaleString()})/${totalSlots}`
+      note = `${member.people?.name || 'Unknown'} ${monthTag} Slot: ${member.slots} (${pricePerSlot.toLocaleString()})/${totalSlots}`
     }
 
     // [M2-SP1] Idempotency Check: Use metadata to find existing transaction
     const canonicalMetadata = {
       service_id: serviceId,
-      member_id: member.profile_id,
+      member_id: member.person_id,
       month_tag: monthTag
     };
 
     const legacyMetadata = legacyMonthTag
       ? {
         service_id: serviceId,
-        member_id: member.profile_id,
+        member_id: member.person_id,
         month_tag: legacyMonthTag,
       }
       : null
@@ -183,15 +183,13 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // Construct Payload for Single Table
     // Rule:
     // account_id = DRAFT_FUND (Wait for allocation)
-    // type = expense
+    // type = expense or debt
     // amount = -cost (Expense is negative)
-    // person_id = member.profile_id (if not owner, so it is Debt), or NULL (if owner, so it is just Expense)
-    // Wait... if it is Owner, person_id = NULL means it's my expense.
-    // If it is Member, person_id = MemberID means it's "Expense on behalf of Member" -> System treats as Debt if I paid?
-    // User instruction: "Phần của Lâm: person_id = 'ID_Của_Lâm' (Hệ thống tự hiểu đây là Nợ)." -> Yes.
-    // "Phần của Me: person_id = NULL." -> Yes.
+    // person_id = member.person_id (if not owner, so it is Debt), or NULL (if owner, so it is just Expense)
+    // Owner = person paying for themselves (no person_id, just expense)
+    // Member = person whose share is being paid (person_id set, creates Debt)
 
-    const personId = member.profiles.is_owner ? null : member.profile_id;
+    const personId = member.is_owner ? null : member.person_id;
 
     const payload = {
       occurred_at: transactionDate,
@@ -239,7 +237,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
       isUpdate = true;
 
     } else {
-      console.log('Creating new transaction for member:', member.profile_id);
+      console.log('Creating new transaction for member:', member.people?.name, 'person_id:', member.person_id);
       const { data: newTx, error: insertError } = await supabase
         .from('transactions')
         .insert([payload] as any)
@@ -272,9 +270,16 @@ export async function distributeService(serviceId: string, customDate?: string, 
           };
 
           const action = isUpdate ? 'update' : 'create';
-          console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`);
+          console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`, {
+            transactionId,
+            memberId: member.person_id,
+            memberName: member.people?.name,
+            shopName: (service as any).name,
+            amount: cost,
+            type: 'Debt'
+          });
 
-          await syncTransactionToSheet(member.profile_id, sheetPayload as any, action);
+          await syncTransactionToSheet(member.person_id, sheetPayload as any, action);
         }
       } catch (syncError) {
         console.error('Error syncing to sheet:', syncError);
@@ -304,8 +309,31 @@ export async function distributeService(serviceId: string, customDate?: string, 
     // Don't fail the distribution if status update fails
   }
 
+  // [M2-SP4] Trigger full sheet sync for all affected members to ensure consistency
+  try {
+    const memberIds = Array.from(new Set(members.map(m => m.person_id).filter(Boolean)))
+    console.log(`[Sheet Sync] Triggering full sync for ${memberIds.length} members after distribution`)
+    
+    const { syncAllTransactions } = await import('./sheet.service')
+    for (const memberId of memberIds) {
+      try {
+        const syncResult = await syncAllTransactions(memberId)
+        if (syncResult.success) {
+          console.log(`[Sheet Sync] Full sync completed for member ${memberId}`)
+        } else {
+          console.error(`[Sheet Sync] Full sync failed for member ${memberId}: ${syncResult.message}`)
+        }
+      } catch (memberSyncErr) {
+        console.error(`[Sheet Sync] Error during full sync for member ${memberId}:`, memberSyncErr)
+      }
+    }
+  } catch (fullSyncErr) {
+    console.error('[Sheet Sync] Error triggering full sync after distribution:', fullSyncErr)
+    // Don't fail the distribution if sync fails
+  }
+
   // Return created transactions with person IDs for auto-sync
-  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.profile_id).filter(Boolean))) };
+  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.person_id).filter(Boolean))) };
 }
 
 export async function getServices() {
@@ -354,7 +382,7 @@ export async function deleteService(serviceId: string) {
 
 export async function updateServiceMembers(
   serviceId: string,
-  members: Omit<ServiceMember, 'id' | 'service_id' | 'profiles'>[]
+  members: Omit<ServiceMember, 'id' | 'service_id' | 'people'>[]
 ) {
   const supabase = createClient()
 
@@ -373,7 +401,7 @@ export async function updateServiceMembers(
   if (members && members.length > 0) {
     const memberInsertData = members.map(member => ({
       service_id: serviceId,
-      profile_id: member.profile_id,
+      person_id: member.person_id,
       slots: Number(member.slots) || 0,
       is_owner: member.is_owner,
     }))

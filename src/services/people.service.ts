@@ -14,12 +14,9 @@ type PersonUpdate = Database['public']['Tables']['people']['Update']
 type AccountRow = Database['public']['Tables']['accounts']['Row']
 // TODO: The 'service_members' table is not in database.types.ts.
 // This is a temporary type definition.
-// The database schema needs to be updated.
 type ServiceMemberRow = {
   service_id: string;
-  profile_id: string; // Keep as profile_id if column not renamed? Or assumes 'person_id' if we want to be clean? Code uses profile_id.
-  // The migration did NOT rename 'profile_id' in 'service_members'. So specific column name references must safely stay 'profile_id'.
-  // However, variable usage can be cleaned.
+  person_id: string; // Foreign key to people.id (after 2026-02-03 migration)
   slots: number;
   subscriptions?: { name: string };
 };
@@ -217,7 +214,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       supabase
         .from('service_members')
         .select(`
-          profile_id, 
+          person_id, 
           service_id, 
           slots,
           subscriptions ( name, shop_id, shops ( image_url ) )
@@ -623,14 +620,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number; image_url?: string | null }>>()
   if (Array.isArray(subscriptionMembers)) {
     (subscriptionMembers as any[]).forEach(row => {
-      if (!row.profile_id) return
-      if (!subscriptionMap.has(row.profile_id)) {
-        subscriptionMap.set(row.profile_id, [])
+      if (!row.person_id) return
+      if (!subscriptionMap.has(row.person_id)) {
+        subscriptionMap.set(row.person_id, [])
       }
       if (row.service_id) {
         // Extract image_url from nested shops relation
         const imageUrl = row.subscriptions?.shops?.image_url ?? null
-        subscriptionMap.get(row.profile_id)?.push({
+        subscriptionMap.get(row.person_id)?.push({
           id: row.service_id,
           name: row.subscriptions?.name ?? 'Unknown',
           slots: row.slots ?? 1,
@@ -769,7 +766,7 @@ async function syncSubscriptionMemberships(
   await supabase
     .from('service_members')
     .delete()
-    .eq('profile_id', personId)
+    .eq('person_id', personId)
 
   if (!subscriptionIds.length) {
     return
@@ -777,7 +774,7 @@ async function syncSubscriptionMemberships(
 
   const rows = subscriptionIds.map<Partial<ServiceMemberRow>>(id => ({
     service_id: id,
-    profile_id: personId,
+    person_id: personId,
   }))
 
   const { error } = await (supabase
@@ -894,7 +891,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
       supabase
         .from('service_members')
         .select('service_id')
-        .eq('profile_id', id),
+        .eq('person_id', id),
       supabase
         .from('accounts')
         .select('id, current_balance')

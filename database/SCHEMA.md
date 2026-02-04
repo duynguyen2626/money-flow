@@ -1,16 +1,22 @@
 # Money Flow 3 - Database Schema Documentation
 
-> **Generated:** 2026-01-14  
+> **Generated:** 2026-02-03 (Updated after people table refactor)  
 > **Purpose:** Complete database schema reference for future agents
+> **Migration:** Renamed `profiles` → `people`, `profile_id` → `person_id`
 
 ## Overview
 
 Money Flow 3 uses PostgreSQL via Supabase with Row Level Security (RLS) enabled.
 
+**Key Changes (2026-02-03):**
+- ✅ Table `profiles` renamed to `people`
+- ✅ All FK columns `profile_id` renamed to `person_id`
+- ✅ Foreign key constraints updated accordingly
+
 ## Core Tables
 
-### `people`
-Manages individuals and groups (creditors, debtors, family members).
+### `people` (formerly `profiles`)
+Manages individuals and groups (creditors, debtors, family members, owners).
 
 ```sql
 CREATE TABLE people (
@@ -228,16 +234,66 @@ CREATE TABLE sheet_webhook_links (
 );
 ```
 
+### `subscriptions` (Services)
+Recurring subscription services (Netflix, Spotify, etc.).
+
+```sql
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  price DECIMAL(15,2) NOT NULL,
+  currency TEXT DEFAULT 'VND',
+  cycle_interval INTEGER DEFAULT 1, -- Billing cycle in months
+  next_billing_date DATE,
+  shop_id UUID REFERENCES shops(id),
+  default_category_id UUID REFERENCES categories(id),
+  note_template TEXT,
+  is_active BOOLEAN DEFAULT true,
+  max_slots INTEGER, -- Maximum number of members
+  last_distribution_date TIMESTAMPTZ,
+  next_distribution_date TIMESTAMPTZ,
+  distribution_status TEXT, -- 'pending', 'completed', 'failed'
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### `service_members`
+Members participating in shared subscriptions.
+
+```sql
+CREATE TABLE service_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_id UUID REFERENCES subscriptions(id) ON DELETE CASCADE,
+  person_id UUID REFERENCES people(id), -- FK to people table
+  slots INTEGER DEFAULT 1, -- Number of slots occupied
+  is_owner BOOLEAN DEFAULT false, -- Whether this person is the payer
+  CONSTRAINT service_members_person_id_fkey FOREIGN KEY (person_id) REFERENCES people(id)
+);
+```
+
+**Note:** After migration (2026-02-03), `profile_id` was renamed to `person_id` for consistency.
+
 ## Key Relationships
 
 1. **People ↔ Accounts**: `accounts.owner_id → people.id`
 2. **Transactions ↔ Accounts**: `transactions.account_id → accounts.id`
 3. **Transactions ↔ People**: `transactions.person_id → people.id` (for debt/repayment)
 4. **Transactions ↔ Shops**: `transactions.shop_id → shops.id`
-5. **Installments**: `transactions.parent_transaction_id → transactions.id`
-6. **Refunds/Repayments**: `transactions.linked_transaction_id → transactions.id`
+5. **Service Members ↔ People**: `service_members.person_id → people.id` ✨ **(Updated 2026-02-03)**
+6. **Service Members ↔ Subscriptions**: `service_members.service_id → subscriptions.id`
+7. **Installments**: `transactions.parent_transaction_id → transactions.id`
+8. **Refunds/Repayments**: `transactions.linked_transaction_id → transactions.id`
 
 ## Business Logic Notes
+
+### Service Distribution (Subscriptions)
+- Each service has members with allocated slots
+- Owner pays the full amount upfront
+- System creates transactions:
+  - **1 expense** for owner (from Draft Fund)
+  - **N debt** transactions for non-owner members
+- Uses FIFO idempotency check via `metadata.service_id + member_id + month_tag`
+- Auto-syncs to Google Sheets if configured
 
 ### Debt Repayment (FIFO)
 - When a person repays debt, the system automatically links to the oldest unpaid debt transaction.

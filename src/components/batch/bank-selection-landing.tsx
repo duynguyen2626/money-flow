@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Settings, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getBatchSettingsAction } from '@/actions/batch-settings.actions'
+import { BankLinkWithLoading } from './bank-link-with-loading'
+import { BankSettingsSlideTrigger } from './bank-settings-slide'
 
 export async function BankSelectionLanding() {
     // Load settings from DB
@@ -47,18 +49,13 @@ export async function BankSelectionLanding() {
                             Select your bank to manage batch transfers
                         </p>
                     </div>
-                    <Link href="/batch/settings">
-                        <Button variant="outline" size="lg">
-                            <Settings className="mr-2 h-5 w-5" />
-                            Settings
-                        </Button>
-                    </Link>
+                    <BankSettingsSlideTrigger />
                 </div>
 
                 {/* Bank Cards */}
                 <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
                     {banks.map((bank) => (
-                        <Link key={bank.id} href={bank.href}>
+                        <BankLinkWithLoading key={bank.id} href={bank.href}>
                             <Card className="group hover:shadow-2xl transition-all duration-300 cursor-pointer border-2 hover:border-blue-500 overflow-hidden">
                                 <CardContent className="p-0">
                                     {/* Gradient Header */}
@@ -112,7 +109,7 @@ export async function BankSelectionLanding() {
                                     </div>
                                 </CardContent>
                             </Card>
-                        </Link>
+                        </BankLinkWithLoading>
                     ))}
                 </div>
 

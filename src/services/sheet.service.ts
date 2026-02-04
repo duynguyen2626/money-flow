@@ -104,7 +104,7 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
 
   const { data: accountRow, error: accountError } = await supabase
     .from('accounts')
-    .select('owner_id, people (id, sheet_link)')
+    .select('owner_id, people!accounts_owner_id_fkey (id, sheet_link)')
     .eq('id', personId)
     .eq('type', 'debt')
     .maybeSingle()
@@ -153,7 +153,7 @@ async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string
 
   const { data: accountRow } = await supabase
     .from('accounts')
-    .select('owner_id, people (id, google_sheet_url)')
+    .select('owner_id, people!accounts_owner_id_fkey (id, google_sheet_url)')
     .eq('id', personId)
     .eq('type', 'debt')
     .maybeSingle()

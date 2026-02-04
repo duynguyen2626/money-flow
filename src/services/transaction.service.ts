@@ -1055,10 +1055,13 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   }
 
   // CASHBACK INTEGRATION: Remove BEFORE deleting transaction to avoid FK constraint violations
+  // If removal fails, this will throw and prevent the transaction deletion
   try {
     await removeTransactionCashback(id);
-  } catch (cbError) {
-    console.error("Failed to remove cashback entry:", cbError);
+  } catch (cbError: any) {
+    console.error("Failed to remove cashback entries - blocking delete to prevent FK violation:", cbError);
+    // Return false instead of throwing - UI expects boolean return
+    return false;
   }
 
   const { error } = await supabase.from("transactions").delete().eq("id", id);

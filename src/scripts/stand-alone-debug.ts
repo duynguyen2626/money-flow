@@ -32,12 +32,12 @@ async function run() {
     // 2. Check Members
     const { data: members } = await supabase
         .from('service_members')
-        .select('id, profile_id, slots, profiles(name)')
+        .select('id, person_id, slots, people(name)')
         .eq('service_id', targetService.id)
 
     console.log(`\nMembers for ${targetService.name} (${targetService.id}): ${members?.length}`)
     members?.forEach(m => {
-        console.log(`- ${(m.profiles as any)?.name} (${m.profile_id}) Slots: ${m.slots}`)
+        console.log(`- ${(m.people as any)?.name} (${m.person_id}) Slots: ${m.slots}`)
     })
 
     // 3. Transactions

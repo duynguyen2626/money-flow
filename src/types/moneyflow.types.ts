@@ -162,7 +162,7 @@ export type Person = {
 }
 
 export type SubscriptionMember = {
-  profile_id: string
+  person_id: string
   fixed_amount?: number | null
   slots?: number | null
   profile_name?: string | null
