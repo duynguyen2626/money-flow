@@ -272,6 +272,12 @@ export function TransactionHeader({
     return accounts.filter(a => availableAccountIds.has(a.id) || a.id === localAccountId)
   }, [accounts, availableAccountIds, localAccountId])
 
+  const filteredCategories = useMemo(() => {
+    if (!availableCategoryIds) return categories
+    // Always include the currently selected one
+    return categories.filter(c => availableCategoryIds.has(c.id) || c.id === localCategoryId)
+  }, [categories, availableCategoryIds, localCategoryId])
+
 
   // --- Hybrid Real-time Handlers ---
   const handleFilterChange = <T,>(setter: (val: T) => void, propHandler: (val: T) => void) => (val: T) => {
@@ -312,6 +318,7 @@ export function TransactionHeader({
   const handleApplyFilters = () => {
     onAccountChange(localAccountId)
     onPersonChange(localPersonId)
+    onCategoryChange(localCategoryId)
     onSearchChange(localSearchTerm)
     onFilterChange(localFilterType)
     onStatusChange(localStatusFilter)
@@ -382,6 +389,18 @@ export function TransactionHeader({
         onValueChange={handleFilterChange(setLocalAccountId, onAccountChange)}
         placeholder="Account"
         emptyText="No accounts found"
+      />
+
+      <QuickFilterDropdown
+        items={filteredCategories.map(c => ({
+          id: c.id,
+          name: c.name,
+          image: c.image_url || c.icon,
+        }))}
+        value={localCategoryId}
+        onValueChange={handleFilterChange(setLocalCategoryId, onCategoryChange)}
+        placeholder="Category"
+        emptyText="No categories found"
       />
 
       <CycleFilterDropdown
@@ -581,6 +600,18 @@ export function TransactionHeader({
                 placeholder="Account"
                 fullWidth
                 emptyText="No accounts found"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Category</label>
+              <QuickFilterDropdown
+                items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image_url || c.icon }))}
+                value={localCategoryId}
+                onValueChange={setLocalCategoryId}
+                placeholder="Category"
+                fullWidth
+                emptyText="No categories found"
               />
             </div>
 

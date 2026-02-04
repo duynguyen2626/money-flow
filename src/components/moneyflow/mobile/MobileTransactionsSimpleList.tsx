@@ -3,6 +3,7 @@ import { Category, TransactionWithDetails } from "@/types/moneyflow.types"
 import { ArrowRight, Copy, Wrench, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, History, RefreshCcw } from "lucide-react"
 import { CycleBadge } from "@/components/transactions-v2/badge/CycleBadge"
 import { cn } from "@/lib/utils"
+import { EmptyState } from "@/components/ui/empty-state"
 
 interface MobileTransactionsSimpleListProps {
     transactions: TransactionWithDetails[]
@@ -32,8 +33,11 @@ export function MobileTransactionsSimpleList({
 }: MobileTransactionsSimpleListProps) {
     if (!transactions.length) {
         return (
-            <div className="p-4 text-center text-slate-500 text-sm">
-                No transactions found
+            <div className="block md:hidden">
+                <EmptyState
+                    title="No transactions found"
+                    description="Try adjusting your filters or search criteria"
+                />
             </div>
         )
     }

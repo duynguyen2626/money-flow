@@ -57,6 +57,7 @@ export function UnifiedTransactionsPage({
 
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>()
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
     const [disabledRange, setDisabledRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
 
@@ -189,6 +190,7 @@ export function UnifiedTransactionsPage({
         setStatusFilter('active')
         setSelectedAccountId(undefined)
         setSelectedPersonId(undefined)
+        setSelectedCategoryId(undefined)
         setSelectedCycle(undefined)
         setDate(new Date())
         setDateMode('all') // Reset to All Time
@@ -252,6 +254,7 @@ export function UnifiedTransactionsPage({
         statusFilter !== 'active' ||
         !!selectedAccountId ||
         !!selectedPersonId ||
+        !!selectedCategoryId ||
         !!selectedCycle ||
         (dateMode === 'month' ? !isSameMonth(date, new Date()) : false) ||
         (dateMode === 'year' ? date.getFullYear() !== new Date().getFullYear() : false) ||
@@ -272,6 +275,11 @@ export function UnifiedTransactionsPage({
                 if (t.person_id !== selectedPersonId) return false
             }
 
+            // Category Context
+            if (selectedCategoryId) {
+                if (t.category_id !== selectedCategoryId) return false
+            }
+
             return true
         })
 
@@ -289,6 +297,7 @@ export function UnifiedTransactionsPage({
         setStatusFilter('active')
         setSelectedAccountId(undefined)
         setSelectedPersonId(undefined)
+        setSelectedCategoryId(undefined)
         setSelectedCycle(undefined)
         setDate(new Date())
         setDateMode('all')
@@ -346,7 +355,12 @@ export function UnifiedTransactionsPage({
                 if (t.person_id !== selectedPersonId) return false
             }
 
-            // 4. Search
+            // 4. Category Filter
+            if (selectedCategoryId) {
+                if (t.category_id !== selectedCategoryId) return false
+            }
+
+            // 5. Search
             if (search) {
                 const match =
                     t.note?.toLowerCase().includes(lowerSearch) ||
@@ -399,26 +413,29 @@ export function UnifiedTransactionsPage({
     }, [
         transactions, search, filterType, statusFilter,
         date, dateRange, dateMode,
-        selectedAccountId, selectedPersonId
+        selectedAccountId, selectedPersonId, selectedCategoryId
     ])
 
     // Calculate available filter options based on current filtered view
-    const { availableAccountIds, availablePersonIds } = useMemo(() => {
+    const { availableAccountIds, availablePersonIds, availableCategoryIds } = useMemo(() => {
         // If no active filters, we don't need to restrict options (optimization)
-        if (!hasActiveFilters) return { availableAccountIds: undefined, availablePersonIds: undefined }
+        if (!hasActiveFilters) return { availableAccountIds: undefined, availablePersonIds: undefined, availableCategoryIds: undefined }
 
         const accIds = new Set<string>()
         const personIds = new Set<string>()
+        const catIds = new Set<string>()
 
         filteredTransactions.forEach(t => {
             if (t.account_id) accIds.add(t.account_id)
             if (t.to_account_id) accIds.add(t.to_account_id)
             if (t.person_id) personIds.add(t.person_id)
+            if (t.category_id) catIds.add(t.category_id)
         })
 
         return {
             availableAccountIds: accIds,
-            availablePersonIds: personIds
+            availablePersonIds: personIds,
+            availableCategoryIds: catIds
         }
     }, [filteredTransactions, hasActiveFilters])
 
@@ -663,13 +680,15 @@ export function UnifiedTransactionsPage({
                     onDateChange={handleDateChange}
                     onRangeChange={handleRangeChange}
                     onModeChange={handleModeChange}
-                    onCategoryChange={() => { }}
 
                     accountId={selectedAccountId}
                     onAccountChange={setSelectedAccountId}
 
                     personId={selectedPersonId}
                     onPersonChange={setSelectedPersonId}
+
+                    categoryId={selectedCategoryId}
+                    onCategoryChange={setSelectedCategoryId}
 
                     searchTerm={search}
                     onSearchChange={setSearch}
@@ -700,7 +719,9 @@ export function UnifiedTransactionsPage({
                     availableMonths={availableMonths}
                     availableAccountIds={availableAccountIds}
                     availablePersonIds={availablePersonIds}
+                    availableCategoryIds={availableCategoryIds}
                     availableDateRange={availableDateRange}
+                    categories={categories}
                 />
             </div>
 
