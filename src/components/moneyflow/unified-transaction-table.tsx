@@ -101,6 +101,7 @@ import { cancelOrder } from "@/actions/transaction-actions"
 import { AddTransactionDialog } from "./add-transaction-dialog"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 import { ColumnKey } from "@/components/app/table/transactionColumns"
+import { EmptyState } from "@/components/ui/empty-state"
 
 
 
@@ -1369,10 +1370,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
   if (tableData.length === 0 && activeTab === 'active') {
     return (
-      <div className="text-center py-10 text-gray-400">
-        <p>No transactions yet.</p>
-        <p className="text-sm mt-2">Add your first transaction to get started.</p>
-      </div>
+      <EmptyState
+        title="No transactions yet"
+        description="Add your first transaction to get started"
+      />
     );
   }
 
@@ -1533,458 +1534,1079 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedTransactions.map(txn => {
-                  const isRepayment = txn.type === 'repayment';
-                  const visualType = (txn as any).displayType ?? txn.type;
-                  const amountClass =
-                    visualType === "income" || isRepayment
-                      ? "text-emerald-700"
-                      : visualType === "expense"
-                        ? "text-red-500"
-                        : "text-slate-600"
+                {paginatedTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={displayedColumns.length} className="h-[400px] text-center">
+                      <EmptyState
+                        title="No transactions found"
+                        description="Try adjusting your filters or search criteria"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedTransactions.map(txn => {
+                    const isRepayment = txn.type === 'repayment';
+                    const visualType = (txn as any).displayType ?? txn.type;
+                    const amountClass =
+                      visualType === "income" || isRepayment
+                        ? "text-emerald-700"
+                        : visualType === "expense"
+                          ? "text-red-500"
+                          : "text-slate-600"
 
-                  // Shared ID Resolution for Smart Context (Type Badge + Account Column)
-                  const txnSourceId = txn.source_account_id || txn.account_id
-                  const destNameRaw = txn.destination_name || 'Unknown'
-                  const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
-                  const isSelected = selection.has(txn.id)
-                  const effectiveStatus = statusOverrides[txn.id] ?? txn.status
-                  const isVoided = effectiveStatus === 'void'
-                  const isMenuOpen = actionMenuOpen === txn.id
-                  const txnMetadata = parseMetadata(txn.metadata)
-                  // Refund SEQ Logic (Global for row)
-                  let refundSeq = 0;
-                  if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
-                  else if (txnMetadata?.original_transaction_id && !txnMetadata.is_refund_confirmation) refundSeq = 2;
-                  else if (txnMetadata?.is_refund_confirmation) refundSeq = 3;
+                    // Shared ID Resolution for Smart Context (Type Badge + Account Column)
+                    const txnSourceId = txn.source_account_id || txn.account_id
+                    const destNameRaw = txn.destination_name || 'Unknown'
+                    const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
+                    const isSelected = selection.has(txn.id)
+                    const effectiveStatus = statusOverrides[txn.id] ?? txn.status
+                    const isVoided = effectiveStatus === 'void'
+                    const isMenuOpen = actionMenuOpen === txn.id
+                    const txnMetadata = parseMetadata(txn.metadata)
+                    // Refund SEQ Logic (Global for row)
+                    let refundSeq = 0;
+                    if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
+                    else if (txnMetadata?.original_transaction_id && !txnMetadata.is_refund_confirmation) refundSeq = 2;
+                    else if (txnMetadata?.is_refund_confirmation) refundSeq = 3;
 
-                  let displayIdForBadge = txn.id;
-                  if (refundSeq === 2 || refundSeq === 3) {
-                    displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
-                  }
-
-
+                    let displayIdForBadge = txn.id;
+                    if (refundSeq === 2 || refundSeq === 3) {
+                      displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
+                    }
 
 
-                  const voidedTextClass = ""
 
-                  // Row Background Logic (Restored)
-                  let rowBgColor = "bg-white"
-                  if (isVoided) {
-                    rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
-                  } else {
-                    const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
-                    if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
-                    else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
-                    else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
-                    else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
-                  }
 
-                  const renderCell = (key: ColumnKey) => {
-                    const refundAccount = accounts.find(a => a.id === txn.account_id); // Lifted up for Category case availability
-                    switch (key) {
-                      case "category": {
-                        const actualCategory = categories.find(c => c.id === txn.category_id);
-                        const displayCategory = actualCategory?.name || txn.category_name;
-                        const catImg = actualCategory?.image_url;
+                    const voidedTextClass = ""
 
-                        // Full size image without crop/rounded if available
-                        return (
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 flex items-center justify-center shrink-0">
-                              {catImg ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={catImg} alt="" className="h-full w-full object-contain" />
-                              ) : (
-                                <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
-                                  <span className="text-[10px]">🏷️</span>
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-slate-700">{displayCategory || 'Uncategorized'}</span>
-                            </div>
-                          </div>
-                        )
-                      }
-                      case "date": {
-                        const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
-                        const day = String(d.getDate()).padStart(2, '0')
-                        const month = String(d.getMonth() + 1).padStart(2, '0')
-                        const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                        const fullDateStr = d.toLocaleDateString('vi-VN', {
-                          weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
-                        })
+                    // Row Background Logic (Restored)
+                    let rowBgColor = "bg-white"
+                    if (isVoided) {
+                      rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
+                    } else {
+                      const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
+                      if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
+                      else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
+                      else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
+                      else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
+                    }
 
-                        return (
-                          <div className="flex items-center gap-3 overflow-visible w-full">
-                            <input
-                              type="checkbox"
-                              className="rounded border-slate-300 pointer-events-auto"
-                              checked={isSelected}
-                              onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
-                              onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
-                              disabled={isExcelMode}
-                            />
+                    const renderCell = (key: ColumnKey) => {
+                      const refundAccount = accounts.find(a => a.id === txn.account_id); // Lifted up for Category case availability
+                      switch (key) {
+                        case "category": {
+                          const actualCategory = categories.find(c => c.id === txn.category_id);
+                          const displayCategory = actualCategory?.name || txn.category_name;
+                          const catImg = actualCategory?.image_url;
 
-                            <CustomTooltip content={fullDateStr}>
-                              <div className="flex flex-col items-start justify-center cursor-help rounded px-0.5 group min-w-[34px]">
-                                <span className="text-sm font-bold text-slate-700 leading-none group-hover:text-blue-600 transition-colors">
-                                  {day}.{month}
-                                </span>
-                                <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5 group-hover:text-blue-500 transition-colors">
-                                  {timeStr}
-                                </span>
-                              </div>
-                            </CustomTooltip>
-
-                          </div>
-                        )
-                      }
-                      case "actions": {
-                        return (
-                          <div className="flex items-center justify-end w-full pr-1">
-                            {renderRowActions(txn, isVoided)}
-                          </div>
-                        )
-                      }
-                      // Note: 'type' column was removed - it's now merged into the 'date' column
-
-                      case "shop": {
-                        let shopLogo = txn.shop_image_url;
-
-                        const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
-                        const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
-
-                        // Fallback logic for repayment/service
-                        if (txn.type === 'repayment') {
-                          shopLogo = repaymentLogo ?? shopLogo ?? null;
-                        }
-
-                        const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
-                        if (isServicePayment && !shopLogo) {
-                          shopLogo = txn.source_image;
-                        }
-
-                        const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
-                          <CustomTooltip content="Trả góp - Click để xem">
-                            <Link
-                              href={`/installments?tab=active&highlight=${txn.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
-                            >
-                              <Link2 className="h-4 w-4" />
-                            </Link>
-                          </CustomTooltip>
-                        ) : null;
-
-                        const refundAccount = accounts.find(a => a.id === txn.account_id);
-                        // Check joined account name (txn.accounts) OR looked up account name
-                        const accountName = (txn.accounts as any)?.name || refundAccount?.name;
-                        const isPendingRefund = txn.account_id === REFUND_PENDING_ACCOUNT_ID || accountName === 'Pending Refunds (System)';
-                        // BADGE LOGIC & CONFIRM BUTTON VISIBILITY
-                        const originalMetadata = (txn.metadata as any) ?? {};
-
-                        // 1. isPendingRefund (For Confirm Button)
-                        // This logic determines if the "Confirm" button should show.
-                        // It serves Tx 2 (Request) which is NOT yet completed.
-                        const isOriginalTxn = Boolean(originalMetadata.original_transaction_id);
-                        const isRefundConfirmation = Boolean(originalMetadata.is_refund_confirmation);
-                        const isRefundRequest = isOriginalTxn && !isRefundConfirmation;
-
-                        const canConfirm = isRefundRequest && txn.status !== 'completed';
-
-                        // 2. VISUAL BADGES
-                        // Hourglass (Tx 1): Shows on Original if refund is requested but not fully refunded
-                        const refundStatus = originalMetadata.refund_status;
-                        // Show hourglass only if requested AND NOT completed
-                        const showHourglass = Boolean(originalMetadata.has_refund_request)
-                          && txn.status !== 'refunded'
-                          && refundStatus !== 'completed'
-                          && refundStatus !== 'refunded';
-
-                        // Reversed/Refunded Icon (Tx 1): Shows if refund is COMPLETED
-                        // This replaces the hourglass when the cycle is done (GD3 exists)
-                        const showReversed = Boolean(originalMetadata.has_refund_request)
-                          && (refundStatus === 'completed' || refundStatus === 'refunded' || txn.status === 'refunded');
-
-                        // Check (Tx 2): Shows on Request if it is Completed (Confirmed)
-                        const showCheck = isRefundRequest && txn.status === 'completed';
-
-                        // OK (Tx 3): Shows on Confirmation
-                        const showOK = isRefundConfirmation;
-
-                        let refundBadge = null;
-                        const badgeBaseClass = "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm";
-
-                        if (showHourglass) {
-                          refundBadge = (
-                            <CustomTooltip content="Refund Requested - Waiting for Confirmation">
-                              <div className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200")}>
-                                <Clock className="h-3 w-3" />
-                                <span>WAIT</span>
-                              </div>
-                            </CustomTooltip>
-                          );
-                        } else if (showReversed) {
-                          refundBadge = (
-                            <CustomTooltip content="Refund Completed">
-                              <div className={cn(badgeBaseClass, "bg-slate-50 text-slate-500 border-slate-200")}>
-                                <Undo2 className="h-3 w-3" />
-                                <span>REFUNDED</span>
-                              </div>
-                            </CustomTooltip>
-                          );
-                        } else if (showCheck) {
-                          refundBadge = (
-                            <CustomTooltip content="Refund Confirmed">
-                              <div className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200")}>
-                                <Check className="h-3 w-3" />
-                                <span>DONE</span>
-                              </div>
-                            </CustomTooltip>
-                          );
-                        } else if (showOK) {
-                          refundBadge = (
-                            <CustomTooltip content="Refund Received (OK)">
-                              <div className={cn(badgeBaseClass, "bg-indigo-50 text-indigo-600 border-indigo-200")}>
-                                <CheckCheck className="h-3 w-3" />
-                                <span>OK</span>
-                              </div>
-                            </CustomTooltip>
-                          );
-                        }
-
-                        const confirmRefundBadge = canConfirm ? (
-                          <CustomTooltip content="Click to Confirm Refund">
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setConfirmRefundTxn(txn);
-                                setConfirmRefundOpen(true);
-                              }}
-                              className="flex items-center justify-center rounded-full bg-emerald-500 text-white px-2.5 h-[22px] shrink-0 transition-all hover:bg-emerald-600 hover:shadow-md cursor-pointer ml-1 shadow-sm text-[10px] font-bold"
-                            >
-                              <CheckCheck className="h-3 w-3" />
-                              <span className="ml-1">Confirm</span>
-                            </div>
-                          </CustomTooltip>
-                        ) : null;
-
-                        // Transaction ID display - No prefix, just truncated ID
-                        const txnIdShort = txn.id.slice(0, 4) + '...';
-                        const txnIdFull = txn.id;
-
-                        return (
-                          <div className="flex items-center gap-2 w-full overflow-hidden group">
-                            {/* Logo */}
-                            {shopLogo ? (
-                              <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none" />
-                              </>
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm shrink-0">
-                                {txn.type === 'repayment' ? (
-                                  <Wallet className="h-4 w-4 text-orange-600" />
+                          // Full size image without crop/rounded if available
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 flex items-center justify-center shrink-0">
+                                {catImg ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={catImg} alt="" className="h-full w-full object-contain" />
                                 ) : (
-                                  <ShoppingBasket className="h-4 w-4 text-slate-500" />
+                                  <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                    <span className="text-[10px]">🏷️</span>
+                                  </div>
                                 )}
                               </div>
-                            )}
+                              <div className="flex flex-col">
+                                <span className="text-sm font-medium text-slate-700">{displayCategory || 'Uncategorized'}</span>
+                              </div>
+                            </div>
+                          )
+                        }
+                        case "date": {
+                          const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
+                          const day = String(d.getDate()).padStart(2, '0')
+                          const month = String(d.getMonth() + 1).padStart(2, '0')
+                          const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                          const fullDateStr = d.toLocaleDateString('vi-VN', {
+                            weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+                          })
 
-                            <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
-                              {/* Left: ID Badge + Note */}
+                          return (
+                            <div className="flex items-center gap-3 overflow-visible w-full">
+                              <input
+                                type="checkbox"
+                                className="rounded border-slate-300 pointer-events-auto"
+                                checked={isSelected}
+                                onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
+                                onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
+                                disabled={isExcelMode}
+                              />
+
+                              <CustomTooltip content={fullDateStr}>
+                                <div className="flex flex-col items-start justify-center cursor-help rounded px-0.5 group min-w-[34px]">
+                                  <span className="text-sm font-bold text-slate-700 leading-none group-hover:text-blue-600 transition-colors">
+                                    {day}.{month}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5 group-hover:text-blue-500 transition-colors">
+                                    {timeStr}
+                                  </span>
+                                </div>
+                              </CustomTooltip>
+
+                            </div>
+                          )
+                        }
+                        case "actions": {
+                          return (
+                            <div className="flex items-center justify-end w-full pr-1">
+                              {renderRowActions(txn, isVoided)}
+                            </div>
+                          )
+                        }
+                        // Note: 'type' column was removed - it's now merged into the 'date' column
+
+                        case "shop": {
+                          let shopLogo = txn.shop_image_url;
+
+                          const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
+                          const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
+
+                          // Fallback logic for repayment/service
+                          if (txn.type === 'repayment') {
+                            shopLogo = repaymentLogo ?? shopLogo ?? null;
+                          }
+
+                          const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
+                          if (isServicePayment && !shopLogo) {
+                            shopLogo = txn.source_image;
+                          }
+
+                          const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
+                            <CustomTooltip content="Trả góp - Click để xem">
+                              <Link
+                                href={`/installments?tab=active&highlight=${txn.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
+                              >
+                                <Link2 className="h-4 w-4" />
+                              </Link>
+                            </CustomTooltip>
+                          ) : null;
+
+                          const refundAccount = accounts.find(a => a.id === txn.account_id);
+                          // Check joined account name (txn.accounts) OR looked up account name
+                          const accountName = (txn.accounts as any)?.name || refundAccount?.name;
+                          const isPendingRefund = txn.account_id === REFUND_PENDING_ACCOUNT_ID || accountName === 'Pending Refunds (System)';
+                          // BADGE LOGIC & CONFIRM BUTTON VISIBILITY
+                          const originalMetadata = (txn.metadata as any) ?? {};
+
+                          // 1. isPendingRefund (For Confirm Button)
+                          // This logic determines if the "Confirm" button should show.
+                          // It serves Tx 2 (Request) which is NOT yet completed.
+                          const isOriginalTxn = Boolean(originalMetadata.original_transaction_id);
+                          const isRefundConfirmation = Boolean(originalMetadata.is_refund_confirmation);
+                          const isRefundRequest = isOriginalTxn && !isRefundConfirmation;
+
+                          const canConfirm = isRefundRequest && txn.status !== 'completed';
+
+                          // 2. VISUAL BADGES
+                          // Hourglass (Tx 1): Shows on Original if refund is requested but not fully refunded
+                          const refundStatus = originalMetadata.refund_status;
+                          // Show hourglass only if requested AND NOT completed
+                          const showHourglass = Boolean(originalMetadata.has_refund_request)
+                            && txn.status !== 'refunded'
+                            && refundStatus !== 'completed'
+                            && refundStatus !== 'refunded';
+
+                          // Reversed/Refunded Icon (Tx 1): Shows if refund is COMPLETED
+                          // This replaces the hourglass when the cycle is done (GD3 exists)
+                          const showReversed = Boolean(originalMetadata.has_refund_request)
+                            && (refundStatus === 'completed' || refundStatus === 'refunded' || txn.status === 'refunded');
+
+                          // Check (Tx 2): Shows on Request if it is Completed (Confirmed)
+                          const showCheck = isRefundRequest && txn.status === 'completed';
+
+                          // OK (Tx 3): Shows on Confirmation
+                          const showOK = isRefundConfirmation;
+
+                          let refundBadge = null;
+                          const badgeBaseClass = "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm";
+
+                          if (showHourglass) {
+                            refundBadge = (
+                              <CustomTooltip content="Refund Requested - Waiting for Confirmation">
+                                <div className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200")}>
+                                  <Clock className="h-3 w-3" />
+                                  <span>WAIT</span>
+                                </div>
+                              </CustomTooltip>
+                            );
+                          } else if (showReversed) {
+                            refundBadge = (
+                              <CustomTooltip content="Refund Completed">
+                                <div className={cn(badgeBaseClass, "bg-slate-50 text-slate-500 border-slate-200")}>
+                                  <Undo2 className="h-3 w-3" />
+                                  <span>REFUNDED</span>
+                                </div>
+                              </CustomTooltip>
+                            );
+                          } else if (showCheck) {
+                            refundBadge = (
+                              <CustomTooltip content="Refund Confirmed">
+                                <div className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200")}>
+                                  <Check className="h-3 w-3" />
+                                  <span>DONE</span>
+                                </div>
+                              </CustomTooltip>
+                            );
+                          } else if (showOK) {
+                            refundBadge = (
+                              <CustomTooltip content="Refund Received (OK)">
+                                <div className={cn(badgeBaseClass, "bg-indigo-50 text-indigo-600 border-indigo-200")}>
+                                  <CheckCheck className="h-3 w-3" />
+                                  <span>OK</span>
+                                </div>
+                              </CustomTooltip>
+                            );
+                          }
+
+                          const confirmRefundBadge = canConfirm ? (
+                            <CustomTooltip content="Click to Confirm Refund">
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmRefundTxn(txn);
+                                  setConfirmRefundOpen(true);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-emerald-500 text-white px-2.5 h-[22px] shrink-0 transition-all hover:bg-emerald-600 hover:shadow-md cursor-pointer ml-1 shadow-sm text-[10px] font-bold"
+                              >
+                                <CheckCheck className="h-3 w-3" />
+                                <span className="ml-1">Confirm</span>
+                              </div>
+                            </CustomTooltip>
+                          ) : null;
+
+                          // Transaction ID display - No prefix, just truncated ID
+                          const txnIdShort = txn.id.slice(0, 4) + '...';
+                          const txnIdFull = txn.id;
+
+                          return (
+                            <div className="flex items-center gap-2 w-full overflow-hidden group">
+                              {/* Logo */}
+                              {shopLogo ? (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none" />
+                                </>
+                              ) : (
+                                <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm shrink-0">
+                                  {txn.type === 'repayment' ? (
+                                    <Wallet className="h-4 w-4 text-orange-600" />
+                                  ) : (
+                                    <ShoppingBasket className="h-4 w-4 text-slate-500" />
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                                {/* Left: ID Badge + Note */}
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                  <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        copyToClipboard(txn.id).then((ok) => {
+                                          if (!ok) return
+                                          setCopiedId(txn.id);
+                                          setTimeout(() => setCopiedId(null), 2000);
+                                        })
+                                      }}
+                                      className={cn(
+                                        "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
+                                        copiedId === txn.id && "text-emerald-500"
+                                      )}
+                                      title={`Copy Transaction ID: ${txn.id}`}
+                                    >
+                                      {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                    </button>
+                                  </CustomTooltip>
+
+                                  {txn.note ? (
+                                    <CustomTooltip content={txn.note}>
+                                      <span
+                                        className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                        style={{ fontSize: `0.9em` }}
+                                      >
+                                        {txn.note}
+                                      </span>
+                                    </CustomTooltip>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-[0.9em]">No note</span>
+                                  )}
+                                </div>
+
+                                {/* Right: All Badges in Single Row */}
+                                {(() => {
+                                  const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
+                                  const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
+                                  const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
+                                  const splitGroupName = metadata?.split_group_name;
+
+                                  let splitBadge = null;
+                                  if (isSplitParent || isSplitChild) {
+                                    const badgeText = isSplitParent ? "SPLIT" : "SHARE";
+                                    const badgeColor = isSplitParent
+                                      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                      : "bg-slate-50 text-slate-600 border-slate-200";
+
+                                    const tooltipText = isSplitParent
+                                      ? (splitGroupName ? `Split Bill Parent - Group: ${splitGroupName}` : "Split Bill Parent (Total)")
+                                      : "Split Bill Share (Linked)";
+
+                                    splitBadge = (
+                                      <CustomTooltip content={tooltipText}>
+                                        <span className={cn(
+                                          "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm",
+                                          badgeColor
+                                        )}>
+                                          {isSplitParent ? "⚡" : "🔗"} {badgeText}
+                                        </span>
+                                      </CustomTooltip>
+                                    );
+                                  }
+
+                                  const duplicatedFromId = metadata?.duplicated_from_id;
+                                  let duplicationBadge = null;
+                                  if (duplicatedFromId) {
+                                    duplicationBadge = (
+                                      <CustomTooltip content={`Duplicated from ID: ${duplicatedFromId}`}>
+                                        <span className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-slate-50 text-slate-400 border border-slate-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:text-slate-600 hover:border-slate-300">
+                                          <Files className="h-3 w-3" />
+                                          CLONE {String(duplicatedFromId).slice(0, 4)}
+                                        </span>
+                                      </CustomTooltip>
+                                    );
+                                  }
+
+                                  const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
+                                  const currentInstallmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
+                                    <CustomTooltip content="Trả góp - Click để xem">
+                                      <Link
+                                        href={`/installments?tab=active&highlight=${txn.id}`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:bg-amber-100"
+                                      >
+                                        <CreditCard className="h-3 w-3" />
+                                        PLAN
+                                      </Link>
+                                    </CustomTooltip>
+                                  ) : null;
+
+                                  const showBadges = currentInstallmentBadge || refundBadge || confirmRefundBadge || splitBadge || duplicationBadge || hasBulkDebts;
+
+                                  if (!showBadges) return null;
+
+                                  return (
+                                    <div className="flex items-center gap-1 ml-auto">
+                                      {currentInstallmentBadge}
+                                      {refundBadge}
+                                      {confirmRefundBadge}
+                                      {splitBadge}
+                                      {duplicationBadge}
+                                      {hasBulkDebts && (() => {
+                                        const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
+
+                                        if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
+                                          const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
+                                          const count = debts.length;
+                                          if (count <= 1) return null;
+
+                                          return (
+                                            <CustomTooltip
+                                              content={
+                                                <div className="flex flex-col gap-1">
+                                                  <span className="font-semibold border-b border-slate-600 pb-1 mb-1">Repayment for {count} items:</span>
+                                                  {debts.map((d, i) => (
+                                                    <div key={i} className="flex justify-between gap-4 text-xs">
+                                                      <span>{d.tag || 'Unknown Period'}:</span>
+                                                      <span className="font-mono">{numberFormatter.format(d.amount)}</span>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              }
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleEdit(txn);
+                                                }}
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 w-fit cursor-pointer hover:bg-indigo-300 transition-colors"
+                                              >
+                                                <span className="text-[10px] font-bold">+{count} Paid</span>
+                                              </button>
+                                            </CustomTooltip>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          );
+                        }
+                        case "note": {
+                          const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
+                          return (
+                            <div className="flex items-center gap-2 max-w-[250px] group/note justify-between w-full">
+                              {/* Left: Note + Linked ID */}
                               <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
+                                {linkedIdForCopy && linkedIdForCopy !== txn.id && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      copyToClipboard(txn.id).then((ok) => {
+                                      copyToClipboard(linkedIdForCopy).then((ok) => {
                                         if (!ok) return
-                                        setCopiedId(txn.id);
+                                        setCopiedId(`linked-${txn.id}`);
                                         setTimeout(() => setCopiedId(null), 2000);
                                       })
                                     }}
                                     className={cn(
-                                      "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
-                                      copiedId === txn.id && "text-emerald-500"
+                                      "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600 shrink-0",
+                                      copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
                                     )}
-                                    title={`Copy Transaction ID: ${txn.id}`}
+                                    title={`Copy Linked ID: ${linkedIdForCopy}`}
                                   >
-                                    {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                    {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
                                   </button>
-                                </CustomTooltip>
+                                )}
 
-                                {txn.note ? (
-                                  <CustomTooltip content={txn.note}>
-                                    <span
-                                      className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                      style={{ fontSize: `0.9em` }}
-                                    >
-                                      {txn.note}
-                                    </span>
+                                <span
+                                  className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                  style={{ fontSize: `0.9em` }}
+                                >
+                                  {txn.note}
+                                </span>
+
+                                {txn.note && (
+                                  <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                                    <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
                                   </CustomTooltip>
-                                ) : (
-                                  <span className="text-slate-400 italic text-[0.9em]">No note</span>
                                 )}
                               </div>
 
-                              {/* Right: All Badges in Single Row */}
-                              {(() => {
-                                const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
-                                const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
-                                const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
-                                const splitGroupName = metadata?.split_group_name;
-
-                                let splitBadge = null;
-                                if (isSplitParent || isSplitChild) {
-                                  const badgeText = isSplitParent ? "SPLIT" : "SHARE";
-                                  const badgeColor = isSplitParent
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                    : "bg-slate-50 text-slate-600 border-slate-200";
-
-                                  const tooltipText = isSplitParent
-                                    ? (splitGroupName ? `Split Bill Parent - Group: ${splitGroupName}` : "Split Bill Parent (Total)")
-                                    : "Split Bill Share (Linked)";
-
-                                  splitBadge = (
-                                    <CustomTooltip content={tooltipText}>
-                                      <span className={cn(
-                                        "inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full border text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm",
-                                        badgeColor
-                                      )}>
-                                        {isSplitParent ? "⚡" : "🔗"} {badgeText}
-                                      </span>
-                                    </CustomTooltip>
-                                  );
-                                }
-
-                                const duplicatedFromId = metadata?.duplicated_from_id;
-                                let duplicationBadge = null;
-                                if (duplicatedFromId) {
-                                  duplicationBadge = (
-                                    <CustomTooltip content={`Duplicated from ID: ${duplicatedFromId}`}>
-                                      <span className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-slate-50 text-slate-400 border border-slate-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:text-slate-600 hover:border-slate-300">
-                                        <Files className="h-3 w-3" />
-                                        CLONE {String(duplicatedFromId).slice(0, 4)}
-                                      </span>
-                                    </CustomTooltip>
-                                  );
-                                }
-
-                                const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
-                                const currentInstallmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
-                                  <CustomTooltip content="Trả góp - Click để xem">
-                                    <Link
-                                      href={`/installments?tab=active&highlight=${txn.id}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:bg-amber-100"
-                                    >
-                                      <CreditCard className="h-3 w-3" />
-                                      PLAN
-                                    </Link>
-                                  </CustomTooltip>
-                                ) : null;
-
-                                const showBadges = currentInstallmentBadge || refundBadge || confirmRefundBadge || splitBadge || duplicationBadge || hasBulkDebts;
-
-                                if (!showBadges) return null;
-
-                                return (
-                                  <div className="flex items-center gap-1 ml-auto">
-                                    {currentInstallmentBadge}
-                                    {refundBadge}
-                                    {confirmRefundBadge}
-                                    {splitBadge}
-                                    {duplicationBadge}
-                                    {hasBulkDebts && (() => {
-                                      const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
-
-                                      if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
-                                        const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
-                                        const count = debts.length;
-                                        if (count <= 1) return null;
-
-                                        return (
-                                          <CustomTooltip
-                                            content={
-                                              <div className="flex flex-col gap-1">
-                                                <span className="font-semibold border-b border-slate-600 pb-1 mb-1">Repayment for {count} items:</span>
-                                                {debts.map((d, i) => (
-                                                  <div key={i} className="flex justify-between gap-4 text-xs">
-                                                    <span>{d.tag || 'Unknown Period'}:</span>
-                                                    <span className="font-mono">{numberFormatter.format(d.amount)}</span>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            }
-                                          >
-                                            <button
-                                              type="button"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleEdit(txn);
-                                              }}
-                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 w-fit cursor-pointer hover:bg-indigo-300 transition-colors"
-                                            >
-                                              <span className="text-[10px] font-bold">+{count} Paid</span>
-                                            </button>
-                                          </CustomTooltip>
-                                        );
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        );
-                      }
-                      case "note": {
-                        const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
-                        return (
-                          <div className="flex items-center gap-2 max-w-[250px] group/note justify-between w-full">
-                            {/* Left: Note + Linked ID */}
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              {linkedIdForCopy && linkedIdForCopy !== txn.id && (
+                              {/* Right: Copy Icon Only */}
+                              <div className="flex items-center gap-1 ml-auto shrink-0">
+                                {/* Transaction ID Copy */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    copyToClipboard(linkedIdForCopy).then((ok) => {
+                                    copyToClipboard(txn.id).then((ok) => {
                                       if (!ok) return
-                                      setCopiedId(`linked-${txn.id}`);
+                                      setCopiedId(txn.id);
                                       setTimeout(() => setCopiedId(null), 2000);
                                     })
                                   }}
                                   className={cn(
-                                    "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600 shrink-0",
-                                    copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
+                                    "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
+                                    copiedId === txn.id && "text-emerald-500"
                                   )}
-                                  title={`Copy Linked ID: ${linkedIdForCopy}`}
+                                  title={`Copy Transaction ID: ${txn.id}`}
                                 >
-                                  {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                                  {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                                 </button>
-                              )}
+                              </div>
+                            </div>
+                          );
+                        }
+                        case "people": {
+                          const personName = (txn as any).person_name ?? people.find(p => p.id === txn.person_id)?.name
+                          if (!personName) return <span className="text-slate-400 italic text-xs">-</span>
 
-                              <span
-                                className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                style={{ fontSize: `0.9em` }}
-                              >
-                                {txn.note}
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <div className="flex items-center justify-center h-8 w-8 rounded-sm bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
+                                {personName.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
+                                {personName}
                               </span>
+                            </div>
+                          )
+                        }
+                        case "category": {
+                          // 1. Determine Type Badge
+                          let typeLabel = "EXPENSE"; // Default
+                          let typeColor = "bg-red-100 text-red-700 border-red-200";
+                          let typeTextColor = "text-red-700"; // For Name Sync
+                          let typeIcon = <Minus className="h-3 w-3" />;
 
-                              {txn.note && (
-                                <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                                  <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                          if (txn.type === 'repayment') {
+                            typeLabel = "PAID";
+                            typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                            typeTextColor = "text-emerald-700";
+                            typeIcon = <Check className="h-3 w-3" />;
+                          } else if (txn.type === 'debt') {
+                            typeLabel = "LEND";
+                            typeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                            typeTextColor = "text-orange-700";
+                            typeIcon = <ArrowUpRight className="h-3 w-3 shrink-0" />;
+                          } else if (txn.type === 'transfer') {
+                            typeLabel = "TF";
+                            typeColor = "bg-sky-100 text-sky-700 border-sky-200";
+                            typeTextColor = "text-sky-700";
+                            typeIcon = <ArrowRightLeft className="h-3 w-3" />;
+                            // Smart Context for Transfer
+                            if (contextId) {
+                              if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
+                              else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
+                            }
+                          } else if (txn.type === 'income') {
+                            typeLabel = "IN";
+                            typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                            typeTextColor = "text-emerald-700";
+                            typeIcon = <Plus className="h-3 w-3" />;
+                          } else if (txn.type === 'expense') {
+                            typeLabel = "OUT";
+                            typeIcon = <Minus className="h-3 w-3" />;
+                          }
+
+                          // Wrapper for Type Icon with border as requested for alignment check
+                          const borderedTypeIcon = (
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
+                              {typeIcon}
+                            </div>
+                          )
+
+                          // 2. Resolve Actual Category Data
+                          const actualCategory = categories.find(c => c.id === txn.category_id) || null;
+
+                          const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
+                          const metadataImage = (txn.metadata as any)?.image_url ?? null;
+                          const shopImage = txn.shop_image_url ?? null;
+                          const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
+                          const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
+                          const displayImage = metadataImage || shopImage || categoryImage;
+                          const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
+                          const mobileDateLabel = isMobile && occurredDate
+                            ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                            : null;
+
+                          const shopName = txn.shop_name || "Unknown";
+
+                          return (
+                            <div className="flex w-full flex-col gap-1">
+                              <div className="flex w-full items-center gap-2 min-w-0">
+                                {/* 1. Category Icon (Visual) - Keep visual but remove text badge */}
+                                <CustomTooltip content={displayCategory}>
+                                  <div className="shrink-0 cursor-help">
+                                    {displayImage ? (
+                                      <div className="flex h-8 w-8 items-center justify-center">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm ring-0 outline-none" />
+                                      </div>
+                                    ) : (
+                                      <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm text-sm border border-slate-200">
+                                        {categoryIcon}
+                                      </div>
+                                    )}
+                                  </div>
                                 </CustomTooltip>
+
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  {/* Details Row: Note or Shop Name */}
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-semibold text-slate-900 truncate" title={shopName}>{shopName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                    {isMobile && mobileDateLabel && (
+                                      <span className="text-[10px] text-slate-400 font-mono mr-1">{mobileDateLabel}</span>
+                                    )}
+                                    {/* Only show Note text if exists */}
+                                    {txn.note && <span className="truncate max-w-[200px] italic">{txn.note}</span>}
+                                  </div>
+                                </div>
+
+
+                              </div>
+
+
+
+                              {
+                                isMobile && mobileDateLabel && (
+                                  <div className="flex w-full justify-start">
+                                    <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
+                                  </div>
+                                )
+                              }
+                            </div>
+                          )
+                        }
+                        case "account": {
+                          // FLOW COLUMN WITH CYCLE BADGES
+                          // ==============================
+                          // Extract data
+                          const sourceName = txn.source_name || txn.account_name || 'Unknown'
+                          const sourceIcon = txn.source_image
+                          const sourceId = txnSourceId
+
+                          const personId = (txn as any).person_id
+                          const personName = (txn as any).person_name
+                          const personImage = (txn as any).person_image_url
+
+                          const destName = destNameRaw
+                          const destIcon = txn.destination_image
+                          const destId = txnDestId
+
+                          // Determine what to display
+                          const hasPerson = !!personId
+                          const hasTarget = !!destId
+
+                          // Get cycle tags
+                          const cycleTag = normalizeMonthTag((txn as any).persisted_cycle_tag) ?? (txn as any).persisted_cycle_tag
+                          const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
+
+                          // Get source account for cycle badge
+                          const sourceAccount = accounts.find(a => a.id === sourceId)
+                          const destAccount = accounts.find(a => a.id === destId)
+
+                          // Type icon
+                          let typeIcon: React.ReactNode = null
+                          if (txn.type === 'expense') {
+                            typeIcon = <CustomTooltip content="Expense"><ArrowUpRight className="h-4 w-4 text-red-600" /></CustomTooltip>
+                          } else if (txn.type === 'income') {
+                            typeIcon = <CustomTooltip content="Income"><ArrowDownLeft className="h-4 w-4 text-emerald-600" /></CustomTooltip>
+                          } else if (txn.type === 'transfer') {
+                            typeIcon = <CustomTooltip content="Transfer"><ArrowRightLeft className="h-4 w-4 text-blue-600" /></CustomTooltip>
+                          } else if (txn.type === 'debt' || txn.type === 'loan') {
+                            typeIcon = <CustomTooltip content="Debt"><UserMinus className="h-4 w-4 text-amber-600" /></CustomTooltip>
+                          } else if (txn.type === 'repayment') {
+                            typeIcon = <CustomTooltip content="Repayment"><UserPlus className="h-4 w-4 text-purple-600" /></CustomTooltip>
+                          }
+
+                          // Wrapper for Type Icon with border as requested for alignment check
+                          const borderedTypeIconWide = (
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
+                              {typeIcon}
+                            </div>
+                          )
+
+                          // Cycle badge for source (only credit_card with cashback_config)
+                          const sourceCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
+                            <CycleBadge
+                              key={`cycle-source-${txn.id}`}
+                              account={sourceAccount}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                              entityName={sourceName}
+                            />
+                          ) : null
+
+                          // People debt tag badge with click/hover logic
+                          const peopleDebtTag = personId && debtTag ? (
+                            <div key={`debt-tag-${txn.id}`} className="shrink-0">
+                              <CustomTooltip content={`Open details for ${personName} in new tab filtered by cycle ${debtTag}`}>
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    window.open(`/people/details?id=${personId}&tag=${debtTag}`, '_blank', 'noopener,noreferrer')
+                                  }}
+                                  className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[110px] cursor-pointer hover:bg-blue-100 transition-colors shadow-sm"
+                                >
+                                  <User className="h-3 w-3" />
+                                  {debtTag}
+                                </span>
+                              </CustomTooltip>
+                            </div>
+                          ) : null
+
+                          // CONTEXT HIDING LOGIC
+                          // Determine transparency based on context to simplify view
+                          const isPersonContext = hasPerson && personId === contextId
+                          const isSourceContext = sourceId === contextId
+                          const isDestContext = destId === contextId
+
+                          // Should we use Single Flow Mode?
+                          // Yes if:
+                          // 1. Pure Single (No target/person)
+                          // 2. Or Context matches one side (so we hide that side and show the other in single mode)
+                          const showSingleFlow = (!hasTarget && !hasPerson) || isPersonContext || (hasPerson && isSourceContext) || (hasTarget && isDestContext) || (hasTarget && isSourceContext)
+
+                          if (showSingleFlow) {
+                            // Determine WHICH entity to show
+                            let entityToShow: 'source' | 'person' | 'dest' = 'source'
+                            let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
+
+                            if (isSourceContext) {
+                              // Viewing Source (Account). Show where money went.
+                              // Flow: Source -> Dest/Person.
+                              // So we show Dest/Person with "TO" badge.
+                              entityToShow = hasPerson ? 'person' : 'dest'
+                              flowBadgeType = 'TO'
+                            }
+                            else if (isDestContext || isPersonContext) {
+                              // Viewing Dest/Person. Show where money came from.
+                              // Flow: Source -> Dest/Person.
+                              // So we show Source with "FROM" badge.
+                              entityToShow = 'source'
+                              flowBadgeType = 'FROM'
+                            }
+                            // If (!hasTarget && !hasPerson), it's a simple expense/income, no flow badge needed.
+                            // Default entityToShow is 'source', flowBadgeType is null.
+
+
+                            let displayName = sourceName
+                            let displayImage = sourceIcon
+                            let displayLink = sourceId ? `/accounts/${sourceId}` : null
+                            let badgeToDisplay = sourceCycleBadge
+                            let isCycleBadge = true
+
+                            if (entityToShow === 'person') {
+                              displayName = personName
+                              displayImage = personImage
+                              displayLink = `/people/details?id=${personId}`
+                              badgeToDisplay = peopleDebtTag
+                              isCycleBadge = false
+                            } else if (entityToShow === 'dest') {
+                              displayName = destName
+                              displayImage = destIcon
+                              displayLink = destId ? `/accounts/${destId}` : null
+                              // Destination usually no badge unless debt, but for account transfer no badge currently
+                              badgeToDisplay = null
+                              isCycleBadge = false
+                            }
+
+                            // If showing Source, ensure badge is set (cycle badge)
+                            // If showing Source but simple expense, badge is sourceCycleBadge
+
+                            return (
+                              <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
+                                {borderedTypeIconWide}
+
+                                <div
+                                  className="flex-1 min-w-0 max-w-[calc(88%+15px)] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
+                                >
+                                  {/* Flow Badge */}
+                                  {flowBadgeType && (
+                                    <span className={cn(
+                                      "inline-flex items-center justify-center rounded-[4px] px-2 h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0",
+                                      flowBadgeType === 'FROM' ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-sky-50 border border-sky-200 text-sky-700"
+                                    )}>
+                                      {flowBadgeType}
+                                    </span>
+                                  )}
+
+                                  {/* Avatar + Name Area with its own tooltip */}
+                                  <CustomTooltip content={`Open ${displayName} in new tab`}>
+                                    <div
+                                      className="flex-1 min-w-0 flex items-center gap-2 h-full"
+                                      onClick={(e) => {
+                                        if (displayLink) {
+                                          e.stopPropagation()
+                                          window.open(displayLink, '_blank', 'noopener,noreferrer')
+                                        }
+                                      }}
+                                    >
+                                      <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                                        {displayImage ? (
+                                          <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
+                                        ) : (
+                                          <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm bg-white">
+                                            <Wallet className="h-4 w-4 text-slate-400" />
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
+                                          {displayName}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </CustomTooltip>
+
+                                  {/* Badge area */}
+                                  {badgeToDisplay && (
+                                    <div className="shrink-0">
+                                      {isCycleBadge ? (
+                                        <CustomTooltip content={`Open details for ${displayName} in new tab filtered by cycle ${cycleTag || ''}`}>
+                                          {badgeToDisplay}
+                                        </CustomTooltip>
+                                      ) : (
+                                        // If debt tag (it manages its own tooltip inside the component)
+                                        badgeToDisplay
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          // CASE 2: Dual flow - source LEFT, target RIGHT (includes Account → Person)
+
+                          const sourceBadges = [sourceCycleBadge].filter(Boolean)
+
+                          // Target badges - debt tag for people OR nothing for accounts
+                          const targetBadges: React.ReactNode[] = hasPerson ? [peopleDebtTag].filter(Boolean) : []
+
+                          // Repayment swap logic: if repayment + person, swap display
+                          const isRepayment = txn.type === 'repayment'
+                          const shouldSwap = isRepayment && hasPerson
+
+                          // Build entity objects
+                          const sourceEntity = { name: sourceName, icon: sourceIcon, link: sourceId ? `/accounts/${sourceId}` : null, isAccount: true }
+                          const targetEntity = {
+                            name: hasPerson ? personName : destName,
+                            icon: hasPerson ? personImage : destIcon,
+                            link: hasPerson ? `/people/details?id=${personId}` : (destId ? `/accounts/${destId}` : null),
+                            isAccount: !hasPerson
+                          }
+
+                          // Swap if repayment with person
+                          const [displayLeft, displayRight] = shouldSwap
+                            ? [targetEntity, sourceEntity]
+                            : [sourceEntity, targetEntity]
+
+                          const [leftBadges, rightBadges] = shouldSwap
+                            ? [targetBadges, sourceBadges]
+                            : [sourceBadges, targetBadges]
+
+                          // Helper to render entity with badge
+                          const renderFlowEntity = (entity: typeof sourceEntity, badges: React.ReactNode[], isTarget: boolean) => (
+                            <div
+                              className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
+                            >
+                              {/* Avatar + Name area */}
+                              <CustomTooltip content={`Open ${entity.name} in new tab`}>
+                                <div
+                                  className="flex-1 min-w-0 flex items-center gap-2 h-full"
+                                  onClick={(e) => {
+                                    if (entity.link) {
+                                      e.stopPropagation()
+                                      window.open(entity.link, '_blank', 'noopener,noreferrer')
+                                    }
+                                  }}
+                                >
+                                  <div className="shrink-0 h-7 w-7 flex items-center justify-center">
+                                    {entity.icon ? (
+                                      <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
+                                    ) : (
+                                      <div className={cn("h-full w-full flex items-center justify-center border border-slate-100 bg-white", entity.isAccount ? "rounded-sm" : "rounded-full")}>
+                                        {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
+                                      {entity.name}
+                                    </span>
+                                  </div>
+                                </div>
+                              </CustomTooltip>
+
+                              {/* Badges area */}
+                              {badges.length > 0 && (
+                                <div className="shrink-0 flex items-center gap-1">
+                                  {badges.map((badge, idx) => (
+                                    <React.Fragment key={idx}>
+                                      {badge}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
                               )}
                             </div>
+                          )
 
-                            {/* Right: Copy Icon Only */}
-                            <div className="flex items-center gap-1 ml-auto shrink-0">
-                              {/* Transaction ID Copy */}
+                          return (
+                            <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
+                              {borderedTypeIconWide}
+                              {renderFlowEntity(displayLeft, leftBadges, false)}
+                              <span className="text-slate-300 font-light shrink-0">|</span>
+                              {renderFlowEntity(displayRight, rightBadges, true)}
+                            </div>
+                          )
+                        }
+
+                        case "tag": {
+                          const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
+
+                          // Tooltip: Date Range (if recognized) or full tag
+                          const dateRangeTooltip = displayTag ? formatCycleTag(displayTag) : ''
+
+                          return (
+                            <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
+                              {displayTag && (
+                                <CustomTooltip content={dateRangeTooltip || displayTag}>
+                                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
+                                    {displayTag}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                              {/* Installment Icon moved here */}
+                              {(txn.is_installment || txn.installment_plan_id) && (
+                                <Link
+                                  href="/installments"
+                                  className="text-blue-600 hover:text-blue-800 transition-colors"
+                                  title="View Installment Plan"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <CreditCard className="h-4 w-4" />
+                                </Link>
+                              )}
+                              {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400 opacity-50 text-xs">-</span>}
+                            </div>
+                          )
+                        }
+                        case "amount": {
+                          const amount = typeof txn.amount === "number" ? txn.amount : 0
+                          const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+                          // Amount logic: if >= 0 income/in, < 0 expense/out
+                          const isIncome = amount >= 0
+
+                          // Calculate Cashback/Fee for display
+                          const cashbackVal = txn.cashback_share_amount ?? 0
+                          const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                          const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+
+                          // Calculate final price
+                          const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                          const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+                          const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+                          const baseAmount = Math.abs(Number(originalAmount ?? 0));
+                          const finalDisp = (typeof txn.final_price === 'number')
+                            ? Math.abs(txn.final_price)
+                            : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
+
+                          const hasCashback = cashbackVal > 0 || percentDisp > 0 || fixedDisp > 0
+
+                          // Price breakdown tooltip content
+                          const priceBreakdown = hasCashback ? (
+                            <div className="text-xs space-y-1">
+                              <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
+                              <div className="flex justify-between gap-4">
+                                <span>Original Amount:</span>
+                                <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
+                              </div>
+                              {percentDisp > 0 && (
+                                <div className="flex justify-between gap-4 text-emerald-600">
+                                  <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
+                                  <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
+                                </div>
+                              )}
+                              {fixedDisp > 0 && (
+                                <div className="flex justify-between gap-4 text-emerald-600">
+                                  <span>Fixed Discount:</span>
+                                  <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
+                                <span>Final Price:</span>
+                                <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
+                              </div>
+                            </div>
+                          ) : null;
+
+                          return (
+                            <div className="flex flex-col items-end gap-1 w-full">
+                              <span
+                                className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
+                                style={{ fontSize: `0.9em` }}
+                              >
+                                {numberFormatter.format(Math.abs(amount))}
+                              </span>
+                            </div>
+                          )
+                        }
+                        case "final_price": {
+                          const amount = typeof txn.amount === "number" ? txn.amount : 0
+                          const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+
+                          const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                          const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+                          const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                          const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+                          const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+                          const baseAmount = Math.abs(Number(originalAmount ?? 0));
+                          const finalDisp = (typeof txn.final_price === 'number')
+                            ? Math.abs(txn.final_price)
+                            : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
+
+                          const hasCashback = percentDisp > 0 || fixedDisp > 0 || cashbackAmount > 0;
+                          const isRepayment = txn.type === 'repayment';
+                          const visualType = (txn as any).displayType ?? txn.type;
+                          const amountClass =
+                            visualType === "income" || isRepayment
+                              ? "text-emerald-700"
+                              : visualType === "expense"
+                                ? "text-red-500"
+                                : "text-slate-600"
+
+                          if (!hasCashback) {
+                            return (
+                              <div className="flex flex-col items-end gap-1 w-full">
+                                <span className={cn("font-bold tabular-nums tracking-tight truncate opacity-80", amountClass)} style={{ fontSize: `0.9em` }}>
+                                  {numberFormatter.format(Math.abs(amount))}
+                                </span>
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <div className="flex flex-col items-end gap-1 w-full">
+                              <div className="flex items-center gap-1.5 justify-end">
+                                {percentDisp > 0 && (
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                    -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
+                                  </span>
+                                )}
+                                {fixedDisp > 0 && (
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                    -{numberFormatter.format(fixedDisp)}
+                                  </span>
+                                )}
+                                <span className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)} style={{ fontSize: `0.9em` }}>
+                                  {numberFormatter.format(finalDisp)}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        }
+                        case "back_info": {
+                          const cashbackAmount = Number(txn.bank_back ?? 0) + Number(txn.cashback_share_amount ?? 0)
+                          const pRaw = Number(txn.cashback_share_percent ?? 0)
+                          const fRaw = Number(txn.cashback_share_fixed ?? 0)
+                          if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
+                          return (
+                            <div className="flex flex-col text-[1em]">
+                              {(pRaw || fRaw) && (
+                                <span className="text-[0.7em] text-slate-500 mb-0.5">
+                                  {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
+                                  {pRaw && fRaw ? ' + ' : ''}
+                                  {fRaw ? numberFormatter.format(fRaw) : ''}
+                                </span>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {cashbackAmount > 0 && (
+                                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                    <Sigma className="h-3 w-3" />
+                                    {numberFormatter.format(cashbackAmount)}
+                                  </span>
+                                )}
+                                {typeof txn.profit === 'number' && txn.profit !== 0 && (
+                                  <>
+                                    {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
+                                    <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                      🤑 {numberFormatter.format(txn.profit)}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+                        case "id":
+                          const isCopied = copiedId === txn.id
+                          return (
+                            <CustomTooltip content={isCopied ? 'Copied!' : txn.id}>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1994,669 +2616,59 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                     setTimeout(() => setCopiedId(null), 2000);
                                   })
                                 }}
-                                className={cn(
-                                  "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
-                                  copiedId === txn.id && "text-emerald-500"
-                                )}
-                                title={`Copy Transaction ID: ${txn.id}`}
+                                className="p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0"
+                                title="Copy ID"
                               >
-                                {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                {isCopied ? <CheckCheck className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
                               </button>
-                            </div>
-                          </div>
-                        );
-                      }
-                      case "people": {
-                        const personName = (txn as any).person_name ?? people.find(p => p.id === txn.person_id)?.name
-                        if (!personName) return <span className="text-slate-400 italic text-xs">-</span>
-
-                        return (
-                          <div className="flex items-center gap-1.5">
-                            <div className="flex items-center justify-center h-8 w-8 rounded-sm bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
-                              {personName.charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
-                              {personName}
-                            </span>
-                          </div>
-                        )
-                      }
-                      case "category": {
-                        // 1. Determine Type Badge
-                        let typeLabel = "EXPENSE"; // Default
-                        let typeColor = "bg-red-100 text-red-700 border-red-200";
-                        let typeTextColor = "text-red-700"; // For Name Sync
-                        let typeIcon = <Minus className="h-3 w-3" />;
-
-                        if (txn.type === 'repayment') {
-                          typeLabel = "PAID";
-                          typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                          typeTextColor = "text-emerald-700";
-                          typeIcon = <Check className="h-3 w-3" />;
-                        } else if (txn.type === 'debt') {
-                          typeLabel = "LEND";
-                          typeColor = "bg-orange-100 text-orange-700 border-orange-200";
-                          typeTextColor = "text-orange-700";
-                          typeIcon = <ArrowUpRight className="h-3 w-3 shrink-0" />;
-                        } else if (txn.type === 'transfer') {
-                          typeLabel = "TF";
-                          typeColor = "bg-sky-100 text-sky-700 border-sky-200";
-                          typeTextColor = "text-sky-700";
-                          typeIcon = <ArrowRightLeft className="h-3 w-3" />;
-                          // Smart Context for Transfer
-                          if (contextId) {
-                            if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
-                            else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
-                          }
-                        } else if (txn.type === 'income') {
-                          typeLabel = "IN";
-                          typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                          typeTextColor = "text-emerald-700";
-                          typeIcon = <Plus className="h-3 w-3" />;
-                        } else if (txn.type === 'expense') {
-                          typeLabel = "OUT";
-                          typeIcon = <Minus className="h-3 w-3" />;
-                        }
-
-                        // Wrapper for Type Icon with border as requested for alignment check
-                        const borderedTypeIcon = (
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
-                            {typeIcon}
-                          </div>
-                        )
-
-                        // 2. Resolve Actual Category Data
-                        const actualCategory = categories.find(c => c.id === txn.category_id) || null;
-
-                        const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
-                        const metadataImage = (txn.metadata as any)?.image_url ?? null;
-                        const shopImage = txn.shop_image_url ?? null;
-                        const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
-                        const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
-                        const displayImage = metadataImage || shopImage || categoryImage;
-                        const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
-                        const mobileDateLabel = isMobile && occurredDate
-                          ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                          : null;
-
-                        const shopName = txn.shop_name || "Unknown";
-
-                        return (
-                          <div className="flex w-full flex-col gap-1">
-                            <div className="flex w-full items-center gap-2 min-w-0">
-                              {/* 1. Category Icon (Visual) - Keep visual but remove text badge */}
-                              <CustomTooltip content={displayCategory}>
-                                <div className="shrink-0 cursor-help">
-                                  {displayImage ? (
-                                    <div className="flex h-8 w-8 items-center justify-center">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm ring-0 outline-none" />
-                                    </div>
-                                  ) : (
-                                    <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm text-sm border border-slate-200">
-                                      {categoryIcon}
-                                    </div>
-                                  )}
-                                </div>
-                              </CustomTooltip>
-
-                              <div className="flex flex-col min-w-0 flex-1">
-                                {/* Details Row: Note or Shop Name */}
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-slate-900 truncate" title={shopName}>{shopName}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                  {isMobile && mobileDateLabel && (
-                                    <span className="text-[10px] text-slate-400 font-mono mr-1">{mobileDateLabel}</span>
-                                  )}
-                                  {/* Only show Note text if exists */}
-                                  {txn.note && <span className="truncate max-w-[200px] italic">{txn.note}</span>}
-                                </div>
-                              </div>
-
-
-                            </div>
-
-
-
-                            {
-                              isMobile && mobileDateLabel && (
-                                <div className="flex w-full justify-start">
-                                  <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
-                                </div>
-                              )
-                            }
-                          </div>
-                        )
-                      }
-                      case "account": {
-                        // FLOW COLUMN WITH CYCLE BADGES
-                        // ==============================
-                        // Extract data
-                        const sourceName = txn.source_name || txn.account_name || 'Unknown'
-                        const sourceIcon = txn.source_image
-                        const sourceId = txnSourceId
-
-                        const personId = (txn as any).person_id
-                        const personName = (txn as any).person_name
-                        const personImage = (txn as any).person_image_url
-
-                        const destName = destNameRaw
-                        const destIcon = txn.destination_image
-                        const destId = txnDestId
-
-                        // Determine what to display
-                        const hasPerson = !!personId
-                        const hasTarget = !!destId
-
-                        // Get cycle tags
-                        const cycleTag = normalizeMonthTag((txn as any).persisted_cycle_tag) ?? (txn as any).persisted_cycle_tag
-                        const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
-
-                        // Get source account for cycle badge
-                        const sourceAccount = accounts.find(a => a.id === sourceId)
-                        const destAccount = accounts.find(a => a.id === destId)
-
-                        // Type icon
-                        let typeIcon: React.ReactNode = null
-                        if (txn.type === 'expense') {
-                          typeIcon = <CustomTooltip content="Expense"><ArrowUpRight className="h-4 w-4 text-red-600" /></CustomTooltip>
-                        } else if (txn.type === 'income') {
-                          typeIcon = <CustomTooltip content="Income"><ArrowDownLeft className="h-4 w-4 text-emerald-600" /></CustomTooltip>
-                        } else if (txn.type === 'transfer') {
-                          typeIcon = <CustomTooltip content="Transfer"><ArrowRightLeft className="h-4 w-4 text-blue-600" /></CustomTooltip>
-                        } else if (txn.type === 'debt' || txn.type === 'loan') {
-                          typeIcon = <CustomTooltip content="Debt"><UserMinus className="h-4 w-4 text-amber-600" /></CustomTooltip>
-                        } else if (txn.type === 'repayment') {
-                          typeIcon = <CustomTooltip content="Repayment"><UserPlus className="h-4 w-4 text-purple-600" /></CustomTooltip>
-                        }
-
-                        // Wrapper for Type Icon with border as requested for alignment check
-                        const borderedTypeIconWide = (
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
-                            {typeIcon}
-                          </div>
-                        )
-
-                        // Cycle badge for source (only credit_card with cashback_config)
-                        const sourceCycleBadge = sourceAccount && sourceAccount.type === 'credit_card' && sourceAccount.cashback_config ? (
-                          <CycleBadge
-                            key={`cycle-source-${txn.id}`}
-                            account={sourceAccount}
-                            cycleTag={cycleTag}
-                            txnDate={txn.occurred_at || txn.created_at}
-                            entityName={sourceName}
-                          />
-                        ) : null
-
-                        // People debt tag badge with click/hover logic
-                        const peopleDebtTag = personId && debtTag ? (
-                          <div key={`debt-tag-${txn.id}`} className="shrink-0">
-                            <CustomTooltip content={`Open details for ${personName} in new tab filtered by cycle ${debtTag}`}>
-                              <span
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  e.preventDefault()
-                                  window.open(`/people/details?id=${personId}&tag=${debtTag}`, '_blank', 'noopener,noreferrer')
-                                }}
-                                className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[110px] cursor-pointer hover:bg-blue-100 transition-colors shadow-sm"
-                              >
-                                <User className="h-3 w-3" />
-                                {debtTag}
-                              </span>
                             </CustomTooltip>
-                          </div>
-                        ) : null
-
-                        // CONTEXT HIDING LOGIC
-                        // Determine transparency based on context to simplify view
-                        const isPersonContext = hasPerson && personId === contextId
-                        const isSourceContext = sourceId === contextId
-                        const isDestContext = destId === contextId
-
-                        // Should we use Single Flow Mode?
-                        // Yes if:
-                        // 1. Pure Single (No target/person)
-                        // 2. Or Context matches one side (so we hide that side and show the other in single mode)
-                        const showSingleFlow = (!hasTarget && !hasPerson) || isPersonContext || (hasPerson && isSourceContext) || (hasTarget && isDestContext) || (hasTarget && isSourceContext)
-
-                        if (showSingleFlow) {
-                          // Determine WHICH entity to show
-                          let entityToShow: 'source' | 'person' | 'dest' = 'source'
-                          let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
-
-                          if (isSourceContext) {
-                            // Viewing Source (Account). Show where money went.
-                            // Flow: Source -> Dest/Person.
-                            // So we show Dest/Person with "TO" badge.
-                            entityToShow = hasPerson ? 'person' : 'dest'
-                            flowBadgeType = 'TO'
-                          }
-                          else if (isDestContext || isPersonContext) {
-                            // Viewing Dest/Person. Show where money came from.
-                            // Flow: Source -> Dest/Person.
-                            // So we show Source with "FROM" badge.
-                            entityToShow = 'source'
-                            flowBadgeType = 'FROM'
-                          }
-                          // If (!hasTarget && !hasPerson), it's a simple expense/income, no flow badge needed.
-                          // Default entityToShow is 'source', flowBadgeType is null.
-
-
-                          let displayName = sourceName
-                          let displayImage = sourceIcon
-                          let displayLink = sourceId ? `/accounts/${sourceId}` : null
-                          let badgeToDisplay = sourceCycleBadge
-                          let isCycleBadge = true
-
-                          if (entityToShow === 'person') {
-                            displayName = personName
-                            displayImage = personImage
-                            displayLink = `/people/details?id=${personId}`
-                            badgeToDisplay = peopleDebtTag
-                            isCycleBadge = false
-                          } else if (entityToShow === 'dest') {
-                            displayName = destName
-                            displayImage = destIcon
-                            displayLink = destId ? `/accounts/${destId}` : null
-                            // Destination usually no badge unless debt, but for account transfer no badge currently
-                            badgeToDisplay = null
-                            isCycleBadge = false
-                          }
-
-                          // If showing Source, ensure badge is set (cycle badge)
-                          // If showing Source but simple expense, badge is sourceCycleBadge
-
-                          return (
-                            <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
-                              {borderedTypeIconWide}
-
-                              <div
-                                className="flex-1 min-w-0 max-w-[calc(88%+15px)] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
-                              >
-                                {/* Flow Badge */}
-                                {flowBadgeType && (
-                                  <span className={cn(
-                                    "inline-flex items-center justify-center rounded-[4px] px-2 h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0",
-                                    flowBadgeType === 'FROM' ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-sky-50 border border-sky-200 text-sky-700"
-                                  )}>
-                                    {flowBadgeType}
-                                  </span>
-                                )}
-
-                                {/* Avatar + Name Area with its own tooltip */}
-                                <CustomTooltip content={`Open ${displayName} in new tab`}>
-                                  <div
-                                    className="flex-1 min-w-0 flex items-center gap-2 h-full"
-                                    onClick={(e) => {
-                                      if (displayLink) {
-                                        e.stopPropagation()
-                                        window.open(displayLink, '_blank', 'noopener,noreferrer')
-                                      }
-                                    }}
-                                  >
-                                    <div className="shrink-0 h-7 w-7 flex items-center justify-center">
-                                      {displayImage ? (
-                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
-                                      ) : (
-                                        <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm bg-white">
-                                          <Wallet className="h-4 w-4 text-slate-400" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
-                                        {displayName}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </CustomTooltip>
-
-                                {/* Badge area */}
-                                {badgeToDisplay && (
-                                  <div className="shrink-0">
-                                    {isCycleBadge ? (
-                                      <CustomTooltip content={`Open details for ${displayName} in new tab filtered by cycle ${cycleTag || ''}`}>
-                                        {badgeToDisplay}
-                                      </CustomTooltip>
-                                    ) : (
-                                      // If debt tag (it manages its own tooltip inside the component)
-                                      badgeToDisplay
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
                           )
-                        }
-
-                        // CASE 2: Dual flow - source LEFT, target RIGHT (includes Account → Person)
-
-                        const sourceBadges = [sourceCycleBadge].filter(Boolean)
-
-                        // Target badges - debt tag for people OR nothing for accounts
-                        const targetBadges: React.ReactNode[] = hasPerson ? [peopleDebtTag].filter(Boolean) : []
-
-                        // Repayment swap logic: if repayment + person, swap display
-                        const isRepayment = txn.type === 'repayment'
-                        const shouldSwap = isRepayment && hasPerson
-
-                        // Build entity objects
-                        const sourceEntity = { name: sourceName, icon: sourceIcon, link: sourceId ? `/accounts/${sourceId}` : null, isAccount: true }
-                        const targetEntity = {
-                          name: hasPerson ? personName : destName,
-                          icon: hasPerson ? personImage : destIcon,
-                          link: hasPerson ? `/people/details?id=${personId}` : (destId ? `/accounts/${destId}` : null),
-                          isAccount: !hasPerson
-                        }
-
-                        // Swap if repayment with person
-                        const [displayLeft, displayRight] = shouldSwap
-                          ? [targetEntity, sourceEntity]
-                          : [sourceEntity, targetEntity]
-
-                        const [leftBadges, rightBadges] = shouldSwap
-                          ? [targetBadges, sourceBadges]
-                          : [sourceBadges, targetBadges]
-
-                        // Helper to render entity with badge
-                        const renderFlowEntity = (entity: typeof sourceEntity, badges: React.ReactNode[], isTarget: boolean) => (
-                          <div
-                            className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
-                          >
-                            {/* Avatar + Name area */}
-                            <CustomTooltip content={`Open ${entity.name} in new tab`}>
-                              <div
-                                className="flex-1 min-w-0 flex items-center gap-2 h-full"
-                                onClick={(e) => {
-                                  if (entity.link) {
-                                    e.stopPropagation()
-                                    window.open(entity.link, '_blank', 'noopener,noreferrer')
-                                  }
-                                }}
-                              >
-                                <div className="shrink-0 h-7 w-7 flex items-center justify-center">
-                                  {entity.icon ? (
-                                    <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
-                                  ) : (
-                                    <div className={cn("h-full w-full flex items-center justify-center border border-slate-100 bg-white", entity.isAccount ? "rounded-sm" : "rounded-full")}>
-                                      {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
-                                    {entity.name}
-                                  </span>
-                                </div>
-                              </div>
-                            </CustomTooltip>
-
-                            {/* Badges area */}
-                            {badges.length > 0 && (
-                              <div className="shrink-0 flex items-center gap-1">
-                                {badges.map((badge, idx) => (
-                                  <React.Fragment key={idx}>
-                                    {badge}
-                                  </React.Fragment>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )
-
-                        return (
-                          <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
-                            {borderedTypeIconWide}
-                            {renderFlowEntity(displayLeft, leftBadges, false)}
-                            <span className="text-slate-300 font-light shrink-0">|</span>
-                            {renderFlowEntity(displayRight, rightBadges, true)}
-                          </div>
-                        )
+                        default:
+                          return ""
                       }
-
-                      case "tag": {
-                        const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
-
-                        // Tooltip: Date Range (if recognized) or full tag
-                        const dateRangeTooltip = displayTag ? formatCycleTag(displayTag) : ''
-
-                        return (
-                          <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
-                            {displayTag && (
-                              <CustomTooltip content={dateRangeTooltip || displayTag}>
-                                <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
-                                  {displayTag}
-                                </span>
-                              </CustomTooltip>
-                            )}
-                            {/* Installment Icon moved here */}
-                            {(txn.is_installment || txn.installment_plan_id) && (
-                              <Link
-                                href="/installments"
-                                className="text-blue-600 hover:text-blue-800 transition-colors"
-                                title="View Installment Plan"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <CreditCard className="h-4 w-4" />
-                              </Link>
-                            )}
-                            {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400 opacity-50 text-xs">-</span>}
-                          </div>
-                        )
-                      }
-                      case "amount": {
-                        const amount = typeof txn.amount === "number" ? txn.amount : 0
-                        const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
-                        // Amount logic: if >= 0 income/in, < 0 expense/out
-                        const isIncome = amount >= 0
-
-                        // Calculate Cashback/Fee for display
-                        const cashbackVal = txn.cashback_share_amount ?? 0
-                        const percentDisp = Number(txn.cashback_share_percent ?? 0)
-                        const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-
-                        // Calculate final price
-                        const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
-                        const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
-                        const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
-                        const baseAmount = Math.abs(Number(originalAmount ?? 0));
-                        const finalDisp = (typeof txn.final_price === 'number')
-                          ? Math.abs(txn.final_price)
-                          : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
-
-                        const hasCashback = cashbackVal > 0 || percentDisp > 0 || fixedDisp > 0
-
-                        // Price breakdown tooltip content
-                        const priceBreakdown = hasCashback ? (
-                          <div className="text-xs space-y-1">
-                            <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
-                            <div className="flex justify-between gap-4">
-                              <span>Original Amount:</span>
-                              <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
-                            </div>
-                            {percentDisp > 0 && (
-                              <div className="flex justify-between gap-4 text-emerald-600">
-                                <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
-                                <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
-                              </div>
-                            )}
-                            {fixedDisp > 0 && (
-                              <div className="flex justify-between gap-4 text-emerald-600">
-                                <span>Fixed Discount:</span>
-                                <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
-                              <span>Final Price:</span>
-                              <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
-                            </div>
-                          </div>
-                        ) : null;
-
-                        return (
-                          <div className="flex flex-col items-end gap-1 w-full">
-                            <span
-                              className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
-                              style={{ fontSize: `0.9em` }}
-                            >
-                              {numberFormatter.format(Math.abs(amount))}
-                            </span>
-                          </div>
-                        )
-                      }
-                      case "final_price": {
-                        const amount = typeof txn.amount === "number" ? txn.amount : 0
-                        const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
-
-                        const percentDisp = Number(txn.cashback_share_percent ?? 0)
-                        const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-                        const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
-                        const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
-                        const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
-                        const baseAmount = Math.abs(Number(originalAmount ?? 0));
-                        const finalDisp = (typeof txn.final_price === 'number')
-                          ? Math.abs(txn.final_price)
-                          : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
-
-                        const hasCashback = percentDisp > 0 || fixedDisp > 0 || cashbackAmount > 0;
-                        const isRepayment = txn.type === 'repayment';
-                        const visualType = (txn as any).displayType ?? txn.type;
-                        const amountClass =
-                          visualType === "income" || isRepayment
-                            ? "text-emerald-700"
-                            : visualType === "expense"
-                              ? "text-red-500"
-                              : "text-slate-600"
-
-                        if (!hasCashback) {
-                          return (
-                            <div className="flex flex-col items-end gap-1 w-full">
-                              <span className={cn("font-bold tabular-nums tracking-tight truncate opacity-80", amountClass)} style={{ fontSize: `0.9em` }}>
-                                {numberFormatter.format(Math.abs(amount))}
-                              </span>
-                            </div>
-                          )
-                        }
-
-                        return (
-                          <div className="flex flex-col items-end gap-1 w-full">
-                            <div className="flex items-center gap-1.5 justify-end">
-                              {percentDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
-                                  -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
-                                </span>
-                              )}
-                              {fixedDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
-                                  -{numberFormatter.format(fixedDisp)}
-                                </span>
-                              )}
-                              <span className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)} style={{ fontSize: `0.9em` }}>
-                                {numberFormatter.format(finalDisp)}
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      }
-                      case "back_info": {
-                        const cashbackAmount = Number(txn.bank_back ?? 0) + Number(txn.cashback_share_amount ?? 0)
-                        const pRaw = Number(txn.cashback_share_percent ?? 0)
-                        const fRaw = Number(txn.cashback_share_fixed ?? 0)
-                        if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
-                        return (
-                          <div className="flex flex-col text-[1em]">
-                            {(pRaw || fRaw) && (
-                              <span className="text-[0.7em] text-slate-500 mb-0.5">
-                                {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
-                                {pRaw && fRaw ? ' + ' : ''}
-                                {fRaw ? numberFormatter.format(fRaw) : ''}
-                              </span>
-                            )}
-                            <div className="flex items-center gap-2">
-                              {cashbackAmount > 0 && (
-                                <span className="text-emerald-600 font-bold flex items-center gap-1">
-                                  <Sigma className="h-3 w-3" />
-                                  {numberFormatter.format(cashbackAmount)}
-                                </span>
-                              )}
-                              {typeof txn.profit === 'number' && txn.profit !== 0 && (
-                                <>
-                                  {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
-                                  <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    🤑 {numberFormatter.format(txn.profit)}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      }
-                      case "id":
-                        const isCopied = copiedId === txn.id
-                        return (
-                          <CustomTooltip content={isCopied ? 'Copied!' : txn.id}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyToClipboard(txn.id).then((ok) => {
-                                  if (!ok) return
-                                  setCopiedId(txn.id);
-                                  setTimeout(() => setCopiedId(null), 2000);
-                                })
-                              }}
-                              className="p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0"
-                              title="Copy ID"
-                            >
-                              {isCopied ? <CheckCheck className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                            </button>
-                          </CustomTooltip>
-                        )
-                      default:
-                        return ""
                     }
-                  }
 
-                  return (
-                    <TableRow
-                      key={txn.id}
-                      className={cn(
-                        "border-b border-slate-200 transition-colors text-base",
-                        isMenuOpen ? "bg-blue-50" : rowBgColor,
-                        !isExcelMode && "hover:bg-slate-50/50",
-                        (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
-                      )}
-                    >
-                      {displayedColumns.map(col => {
-                        const allowOverflow = col.key === "date"
-                        const stickyStyle: React.CSSProperties = {
-                          width: columnWidths[col.key],
-                          maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
-                          overflow: allowOverflow ? 'visible' : 'hidden',
-                          whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
-                        };
-                        return (
-                          <TableCell
-                            key={`${txn.id}-${col.key}`}
-                            onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
-                            onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
-                            className={cn(
-                              `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                              } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
-                              col.key === "date" && "p-1",
-                              col.key === "date" && "relative overflow-visible",
-                              isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
-                              isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10"
-                            )}
-                            style={stickyStyle}
-                          >
-                            {renderCell(col.key)}
-                          </TableCell>
-                        )
-                      })}
-                    </TableRow>
-                  )
-                })}
+                    return (
+                      <TableRow
+                        key={txn.id}
+                        className={cn(
+                          "border-b border-slate-200 transition-colors text-base",
+                          isMenuOpen ? "bg-blue-50" : rowBgColor,
+                          !isExcelMode && "hover:bg-slate-50/50",
+                          (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
+                        )}
+                      >
+                        {displayedColumns.map(col => {
+                          const allowOverflow = col.key === "date"
+                          const stickyStyle: React.CSSProperties = {
+                            width: columnWidths[col.key],
+                            maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
+                            overflow: allowOverflow ? 'visible' : 'hidden',
+                            whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
+                          };
+                          return (
+                            <TableCell
+                              key={`${txn.id}-${col.key}`}
+                              onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
+                              onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
+                              className={cn(
+                                `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                                } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
+                                col.key === "date" && "p-1",
+                                col.key === "date" && "relative overflow-visible",
+                                isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
+                                isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10"
+                              )}
+                              style={stickyStyle}
+                            >
+                              {renderCell(col.key)}
+                            </TableCell>
+                          )
+                        })}
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </table>
           </div>
