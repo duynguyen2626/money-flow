@@ -5,9 +5,10 @@ import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AddItemDialog } from './add-item-dialog'
+import { BatchItemSlide } from './batch-item-slide'
 import { ItemsTable } from './items-table'
-import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles, Archive, ArchiveRestore, HandCoins, WalletCards } from 'lucide-react'
+import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles, Archive, ArchiveRestore, HandCoins, WalletCards, Plus, Copy, MoreVertical } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction, updateBatchCycleAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
@@ -48,10 +49,16 @@ export function BatchDetail({
     const [linkDialogOpen, setLinkDialogOpen] = useState(false)
     const [aiImportOpen, setAiImportOpen] = useState(false)
     const [bulkAction, setBulkAction] = useState<'confirm' | 'delete' | null>(null)
+    const [itemSlideOpen, setItemSlideOpen] = useState(false)
+    const [editingItem, setEditingItem] = useState<any>(null)
 
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
+    const filteredBankMappings = useMemo(
+        () => (bankMappings || []).filter((b: any) => !b.bank_type || b.bank_type === (batch.bank_type || 'VIB')),
+        [bankMappings, batch.bank_type]
+    )
 
     // Memoize items to prevent unstable prop changes to ItemsTable
     const pendingItems = useMemo(() =>
@@ -190,58 +197,55 @@ export function BatchDetail({
             {/* Context Navigation - Tabs removed (moved to parent) */}
 
             <div className="flex justify-between items-center">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('prev')} disabled={updatingCycle} className="h-8 w-8">
-                                <ChevronLeft className="h-4 w-4" />
-                            </Button>
-                            <h1 className="text-3xl font-bold">{batch.name}</h1>
-                            <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('next')} disabled={updatingCycle} className="h-8 w-8">
-                                <ChevronRight className="h-4 w-4" />
-                            </Button>
-                        </div>
-                        <span className="inline-flex items-center rounded-md bg-rose-100 px-3 py-1 text-xl font-bold text-rose-700 border border-rose-200">
-                            Total: {new Intl.NumberFormat('en-US').format(batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0))}
-                        </span>
-                        {batch.display_link && (
-                            <div className="flex items-center gap-2">
-                                <a
-                                    href={batch.display_link}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
-                                    title={batch.display_link}
-                                >
-                                    <ExternalLink className="h-4 w-4" />
-                                    {batch.display_name || "Sheet Link"}
-                                </a>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-muted-foreground hover:text-blue-600"
-                                    onClick={() => setLinkDialogOpen(true)}
-                                >
-                                    <Settings className="h-3 w-3" />
-                                </Button>
-                            </div>
-                        )}
-                        {!batch.display_link && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs text-muted-foreground hover:text-blue-600 h-6"
-                                onClick={() => setLinkDialogOpen(true)}
-                            >
-                                <ExternalLink className="h-3 w-3 mr-1" />
-                                Link Sheet
-                            </Button>
-                        )}
+                <div className="flex items-center gap-3">
+                    {/* Compact Title with Cycle Navigation */}
+                    <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('prev')} disabled={updatingCycle} className="h-8 w-8">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <h1 className="text-xl font-bold text-slate-900">{batch.name}</h1>
+                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('next')} disabled={updatingCycle} className="h-8 w-8">
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-2">
-                        Source:
+
+                    {/* Compact Total Badge */}
+                    <span className="inline-flex items-center rounded-md bg-rose-100 px-3 py-1 text-base font-bold text-rose-700 border border-rose-200">
+                        Total: {new Intl.NumberFormat('en-US').format(batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0))}
+                    </span>
+
+                    {/* Sheet Link Icon */}
+                    {batch.display_link && (
+                        <a
+                            href={batch.display_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-blue-600"
+                            title={batch.display_name || "Open Sheet"}
+                        >
+                            <ExternalLink className="h-4 w-4" />
+                        </a>
+                    )}
+                    {!batch.display_link && (
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
+                            onClick={() => setLinkDialogOpen(true)}
+                            title="Link Sheet"
+                        >
+                            <ExternalLink className="h-4 w-4" />
+                        </Button>
+                    )}
+
+                    {/* Batch Settings Icon */}
+                    <BatchSettingsDialog batch={batch} />
+
+                    {/* Source Account Info */}
+                    <div className="text-sm text-muted-foreground flex items-center gap-2 px-3 py-1 rounded-md bg-slate-50 border border-slate-200">
+                        <span className="font-medium">Source:</span>
                         {sourceAccount ? (
-                            <Link href={`/accounts/${sourceAccount.id}`} className="text-blue-600 hover:underline">
+                            <Link href={`/accounts/${sourceAccount.id}`} className="text-blue-600 hover:underline font-medium">
                                 {sourceAccount.name}
                             </Link>
                         ) : 'N/A'}
@@ -252,140 +256,190 @@ export function BatchDetail({
                         )}
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <BatchSettingsDialog batch={batch} />
-                    <CloneBatchDialog batch={batch} accounts={accounts} webhookLinks={webhookLinks} />
+                <div className="flex gap-1.5 items-center">
+                    {/* Step 1: Fund Button with Icon + Text */}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={() => {
+                                        if (batch.status === 'funded') {
+                                            if (confirm('Fund more money for this batch? This will create a new transaction from the source account to the clearing pool.')) {
+                                                handleFund()
+                                            }
+                                        } else {
+                                            handleFund()
+                                        }
+                                    }}
+                                    disabled={funding || batch.batch_items.length === 0}
+                                    variant="secondary"
+                                    className={cn(
+                                        "gap-2 border-amber-200 text-amber-700 hover:bg-amber-50",
+                                        batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                                    )}
+                                >
+                                    {funding ? <Loader2 className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
+                                    <span className="font-semibold">Step 1: Fund</span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-[280px]">
+                                <div>
+                                    <p className="text-xs">Moves money from source to "Batch Clearing". If already funded 10M but items total 12M, adds remaining 2M.</p>
+                                </div>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
 
-
-                    <Button onClick={handleDelete} disabled={deleting} variant="outline" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" title="Delete Batch">
-                        {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-
-                    <div className="w-px h-8 bg-slate-200 mx-2" />
-
-                    {/* Archive/Restore Button */}
-                    {batch.is_archived ? (
-                        <Button
-                            variant="outline"
-                            onClick={async () => {
-                                if (confirm('Restore this batch?')) {
-                                    const { restoreBatchAction } = await import('@/actions/batch.actions')
-                                    await restoreBatchAction(batch.id)
-                                    toast.success('Batch restored')
-                                    router.push('/batch')
-                                }
-                            }}
-                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                        >
-                            <ArchiveRestore className="mr-2 h-4 w-4" />
-                            Restore
-                        </Button>
-                    ) : (
-                        <Button
-                            variant="outline"
-                            onClick={async () => {
-                                if (confirm('Archive this batch? It will be hidden from the main list.')) {
-                                    const { archiveBatchAction } = await import('@/actions/batch.actions')
-                                    await archiveBatchAction(batch.id)
-                                    toast.success('Batch archived')
-                                    router.push('/batch')
-                                }
-                            }}
-                            className="text-slate-600 hover:text-slate-700 hover:bg-slate-50"
-                            title="Archive"
-                        >
-                            <Archive className="h-4 w-4" />
-                        </Button>
-                    )}
-
-                    <div className="w-px h-8 bg-slate-200 mx-2" />
-
-                    {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && batch.status === 'funded' && (
-                        <div className="flex items-center gap-1 group">
-                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 rounded border border-green-200">
-                                <span className="text-[10px] font-bold text-green-700">2</span>
-                            </div>
-                            <ConfirmSourceDialog batchId={batch.id} accounts={accounts} />
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Info className="h-4 w-4 text-slate-400 cursor-help hover:text-green-500 transition-colors" />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-[250px]">
-                                        <p><strong>Step 2 - Match Real Source:</strong> After funding all items, reconcile which real account you used to reimburse the Draft Fund.</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </div>
-                    )}
-
-                    <div className="flex items-center gap-1 group">
-                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 rounded border border-amber-200">
-                            <span className="text-[10px] font-bold text-amber-700">1</span>
-                        </div>
-                        <Button
-                            onClick={() => {
-                                if (batch.status === 'funded') {
-                                    if (confirm('Fund more money for this batch? This will create a new transaction from the source account to the clearing pool.')) {
-                                        handleFund()
-                                    }
-                                } else {
-                                    handleFund()
-                                }
-                            }}
-                            disabled={funding || batch.batch_items.length === 0}
-                            variant="secondary"
-                            className={cn(
-                                "border-amber-200 text-amber-700 hover:bg-amber-50",
-                                batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                            )}
-                        >
-                            {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            <WalletCards className="mr-2 h-4 w-4" />
-                            {batch.status === 'funded' ? 'Fund More' : 'Fund'}
-                        </Button>
+                    {/* Step 2: Match Real Source Button with Icon + Text */}
+                    {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Info className="h-4 w-4 text-slate-400 cursor-help hover:text-amber-500 transition-colors" />
+                                    <div className={cn(
+                                        "flex items-center",
+                                        batch.status === 'funded' ? '' : 'opacity-50'
+                                    )}>
+                                        <ConfirmSourceDialog 
+                                            batchId={batch.id} 
+                                            accounts={accounts} 
+                                            disabled={batch.status !== 'funded'}
+                                        />
+                                    </div>
                                 </TooltipTrigger>
-                                <TooltipContent className="max-w-[250px]">
-                                    <p><strong>Step 1 - Funding:</strong> Moves money from source to "Batch Clearing".</p>
-                                    <p className="mt-1 text-[10px] opacity-80 italic">Example: If you already funded 10M but items now total 12M, "Fund More" adds the remaining 2M. Complete this before matching the real source.</p>
+                                <TooltipContent className="max-w-[280px]">
+                                    <div>
+                                        <p className="font-bold">Step 2: Match Real Source</p>
+                                        <p className="text-xs mt-1">After funding all items, reconcile which real account you used to reimburse the Draft Fund.</p>
+                                    </div>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
+                    )}
+
+                    <div className="w-px h-6 bg-slate-300 mx-1" />
+
+                    {/* Action Icons: Send to Sheet, AI Import, Add Item */}
+                    {batch.sheet_link && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={handleSend}
+                                        disabled={sending || batch.batch_items?.length === 0}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 text-slate-600 hover:bg-slate-100"
+                                    >
+                                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Send to Sheet</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+
+                    {batch.sheet_link && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={() => setAiImportOpen(true)}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-9 w-9 text-slate-600 hover:bg-slate-100"
+                                    >
+                                        <Sparkles className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>AI Import</TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+
+                    {/* Add Item Button - always visible */}
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={() => {
+                                        setEditingItem(null)
+                                        setItemSlideOpen(true)
+                                    }}
+                                    variant="default"
+                                    size="icon"
+                                    className="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Add Item</TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    {/* Batch Actions Dropdown - moved after Add Item */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-9 w-9">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                                onClick={() => {
+                                    const cloneBtn = document.querySelector('[data-clone-batch-trigger]') as HTMLButtonElement
+                                    cloneBtn?.click()
+                                }}
+                                className="cursor-pointer"
+                            >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Clone
+                            </DropdownMenuItem>
+                            {batch.is_archived ? (
+                                <DropdownMenuItem
+                                    onClick={async () => {
+                                        if (confirm('Restore this batch?')) {
+                                            const { restoreBatchAction } = await import('@/actions/batch.actions')
+                                            await restoreBatchAction(batch.id)
+                                            toast.success('Batch restored')
+                                            router.push('/batch')
+                                        }
+                                    }}
+                                    className="cursor-pointer text-orange-600"
+                                >
+                                    <ArchiveRestore className="mr-2 h-4 w-4" />
+                                    Restore
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem
+                                    onClick={async () => {
+                                        if (confirm('Archive this batch? It will be hidden from the main list.')) {
+                                            const { archiveBatchAction } = await import('@/actions/batch.actions')
+                                            await archiveBatchAction(batch.id)
+                                            toast.success('Batch archived')
+                                            router.push('/batch')
+                                        }
+                                    }}
+                                    className="cursor-pointer text-slate-600"
+                                >
+                                    <Archive className="mr-2 h-4 w-4" />
+                                    Archive
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                                onClick={handleDelete}
+                                disabled={deleting}
+                                className="cursor-pointer text-red-600"
+                            >
+                                {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Hidden CloneBatchDialog trigger */}
+                    <div className="hidden">
+                        <CloneBatchDialog batch={batch} accounts={accounts} webhookLinks={webhookLinks} />
                     </div>
-
-                    <Button
-                        onClick={handleSend}
-                        disabled={sending || batch.batch_items.length === 0}
-                        variant="outline"
-                        className={cn(
-                            "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
-                            batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                        )}
-                    >
-                        {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <Send className="mr-2 h-4 w-4" />
-                        Send to Sheet
-                    </Button>
-
-                    <Button
-                        onClick={() => setAiImportOpen(true)}
-                        variant="ghost"
-                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                        title="AI Import"
-                    >
-                        <Sparkles className="h-4 w-4" />
-                    </Button>
-
-                    <AddItemDialog
-                        batchId={batch.id}
-                        batchName={batch.name}
-                        accounts={accounts}
-                        bankType={batch.bank_type || 'VIB'}
-                    />
                 </div>
             </div>
 
@@ -394,6 +448,20 @@ export function BatchDetail({
                 onOpenChange={setAiImportOpen}
                 batchId={batch.id}
                 onSuccess={() => router.refresh()}
+            />
+
+            <BatchItemSlide
+                isOpen={itemSlideOpen}
+                onOpenChange={setItemSlideOpen}
+                batchId={batch.id}
+                item={editingItem}
+                bankType={batch.bank_type || 'VIB'}
+                accounts={accounts}
+                bankMappings={filteredBankMappings}
+                onSuccess={() => {
+                    router.refresh()
+                    setEditingItem(null)
+                }}
             />
 
             <Card>
@@ -455,7 +523,11 @@ export function BatchDetail({
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
                                 accounts={accounts}
-                                bankMappings={bankMappings}
+                                bankMappings={filteredBankMappings}
+                                onEditItem={(item) => {
+                                    setEditingItem(item)
+                                    setItemSlideOpen(true)
+                                }}
                             />
                         </TabsContent>
                         <TabsContent value="confirmed" className="mt-4">
@@ -467,7 +539,11 @@ export function BatchDetail({
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
                                 accounts={accounts}
-                                bankMappings={bankMappings}
+                                bankMappings={filteredBankMappings}
+                                onEditItem={(item) => {
+                                    setEditingItem(item)
+                                    setItemSlideOpen(true)
+                                }}
                             />
                         </TabsContent>
                     </Tabs>

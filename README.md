@@ -18,11 +18,33 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 - **Cashback:** Advanced cashback calculation and tracking.
 - **Services:** Subscription management.
 
-## Current Status: Phase 12 (Feb 2026)
+## Current Status: Phase 13 (Feb 2026)
 
-**Focus**: Critical bug fixes and UI refinements
+**Focus**: Batch UI Refinements & Error Handling
 
-### Recent Updates (Phase 11)
+### Phase 13 Updates (Current)
+- **Batch Detail UI Redesign**:
+  - ✅ Icon-based toolbar with individual tooltips (Send to Sheet, AI Import, Add Item, More Actions)
+  - ✅ Step 1 (Fund) & Step 2 (Match Source) now show full text labels with icons
+  - ✅ Hamburger menu moved after Add Item button for better UX
+  - ✅ Compact header: removed brackets, bold badges, source account grouped
+  
+- **Batch Item Editing**:
+  - ✅ Fixed `bank_code` schema error (excluded from batch_items update)
+  - ✅ "Edit Info" button now properly shows AccountSlideV2 for target account editing
+  - ✅ Auto-fill logic preserved for receiver, card name, and note
+  
+- **Error Handling**:
+  - ✅ Added proper try-catch to all batch actions
+  - ✅ Consistent response format: `{ success, error, data }`
+  - ✅ User-friendly error messages via toast notifications
+  
+- **Network & Type Safety**:
+  - ✅ Fixed ReferenceError (missing Wallet import in dashboard)
+  - ✅ Fixed network errors from unhandled promise rejections
+  - ✅ Updated action signatures to accept batchId for correct revalidation
+
+### Previous Phase 12 Updates
 - **Account Details Flow UI**: Implemented "Single Flow" mode for simple Income/Expense transactions
   - Removed redundant self-reference badges (e.g., "FROM Msb Online" for Cashback)
   - Display Category/Shop instead of generic "Unknown"
@@ -31,12 +53,6 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
   - Fixed People Details URL parameter issue
   - Fixed Account Edit Form data loading (fresh fetch strategy)
   - Fixed TypeScript errors in Single Flow mode
-
-### Current Phase 12 Priorities
-- **S1**: Fix Category badges not displaying on Account Name column
-- **S2**: Fix Auto-transaction creation on Services page
-
-See `.agent/HANDOVER_PHASE_12.md` for details.
 
 ---
 

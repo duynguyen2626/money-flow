@@ -270,7 +270,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
           };
 
           const action = isUpdate ? 'update' : 'create';
-          console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`);
+          console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`, {
+            transactionId,
+            memberId: member.person_id,
+            memberName: member.people?.name,
+            shopName: (service as any).name,
+            amount: cost,
+            type: 'Debt'
+          });
 
           await syncTransactionToSheet(member.person_id, sheetPayload as any, action);
         }
@@ -300,6 +307,29 @@ export async function distributeService(serviceId: string, customDate?: string, 
   } catch (statusError) {
     console.error('[Bot Status] Failed to update service status:', statusError)
     // Don't fail the distribution if status update fails
+  }
+
+  // [M2-SP4] Trigger full sheet sync for all affected members to ensure consistency
+  try {
+    const memberIds = Array.from(new Set(members.map(m => m.person_id).filter(Boolean)))
+    console.log(`[Sheet Sync] Triggering full sync for ${memberIds.length} members after distribution`)
+    
+    const { syncAllTransactions } = await import('./sheet.service')
+    for (const memberId of memberIds) {
+      try {
+        const syncResult = await syncAllTransactions(memberId)
+        if (syncResult.success) {
+          console.log(`[Sheet Sync] Full sync completed for member ${memberId}`)
+        } else {
+          console.error(`[Sheet Sync] Full sync failed for member ${memberId}: ${syncResult.message}`)
+        }
+      } catch (memberSyncErr) {
+        console.error(`[Sheet Sync] Error during full sync for member ${memberId}:`, memberSyncErr)
+      }
+    }
+  } catch (fullSyncErr) {
+    console.error('[Sheet Sync] Error triggering full sync after distribution:', fullSyncErr)
+    // Don't fail the distribution if sync fails
   }
 
   // Return created transactions with person IDs for auto-sync

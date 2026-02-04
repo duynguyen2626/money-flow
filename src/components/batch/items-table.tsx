@@ -32,6 +32,7 @@ interface ItemsTableProps {
     bankType?: 'VIB' | 'MBB',
     accounts: any[],
     bankMappings?: any[]
+    onEditItem?: (item: any) => void
 }
 
 export function ItemsTable({
@@ -42,7 +43,8 @@ export function ItemsTable({
     activeInstallmentAccounts = [],
     bankType = 'VIB',
     accounts,
-    bankMappings = []
+    bankMappings = [],
+    onEditItem
 }: ItemsTableProps) {
     // Sort items: Nearest Due Date -> Created At (desc)
     const items = useMemo(() => {
@@ -78,6 +80,7 @@ export function ItemsTable({
     const [showTransferDialog, setShowTransferDialog] = useState(false)
     const [selectedItemForTransfer, setSelectedItemForTransfer] = useState<any>(null)
     const [cloningItemId, setCloningItemId] = useState<string | null>(null)
+    const [editingItemId, setEditingItemId] = useState<string | null>(null)
     const [confirmConfig, setConfirmConfig] = useState<{
         title: string
         description: string
@@ -137,9 +140,18 @@ export function ItemsTable({
         setCloningItemId(id)
         try {
             const result = await cloneBatchItemAction(id, batchId)
-            // Trigger edit dialog by simulating click on the newly cloned item's edit button
-            // The cloned item will be the first in the list after refresh
-            window.location.reload()
+            if (result && result.success && result.data?.id) {
+                // Open edit slide/dialog for the newly cloned item
+                if (onEditItem) {
+                    onEditItem(result.data)
+                } else {
+                    setEditingItemId(result.data.id)
+                }
+            } else if (result && !result.success) {
+                console.error('Clone failed:', result.error)
+            }
+        } catch (error) {
+            console.error('Clone error:', error)
         } finally {
             setCloningItemId(null)
         }
@@ -349,12 +361,28 @@ export function ItemsTable({
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-1">
-                                    <EditItemDialog
-                                        item={item}
-                                        accounts={accounts}
-                                        bankMappings={bankMappings}
-                                        bankType={bankType}
-                                    />
+                                    {onEditItem ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => onEditItem(item)}
+                                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                            title="Edit Item"
+                                        >
+                                            <CreditCard className="h-4 w-4" />
+                                        </Button>
+                                    ) : (
+                                        <EditItemDialog
+                                            item={item}
+                                            accounts={accounts}
+                                            bankMappings={bankMappings}
+                                            bankType={bankType}
+                                            isOpen={editingItemId === item.id}
+                                            onOpenChange={(open) => {
+                                                if (!open) setEditingItemId(null)
+                                            }}
+                                        />
+                                    )}
                                     {item.status !== 'confirmed' && (
                                         <>
                                             <Button
