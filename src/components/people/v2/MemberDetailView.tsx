@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Person, TransactionWithDetails, PersonCycleSheet, Account, Category, Shop } from '@/types/moneyflow.types'
 import { usePersonDetails } from '@/hooks/use-person-details'
@@ -10,6 +10,8 @@ import { PaidTransactionsModal } from '@/components/people/paid-transactions-mod
 import { PeopleHeader } from '@/components/people/v2/PeopleHeader'
 import { TransactionControlBar } from '@/components/people/v2/TransactionControlBar'
 import { toYYYYMMFromDate } from '@/lib/month-tag'
+import { useRecentItems } from '@/hooks/use-recent-items'
+import { useBreadcrumbs } from '@/context/breadcrumb-context'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
@@ -53,6 +55,8 @@ export function MemberDetailView({
     const currentMonthTag = toYYYYMMFromDate(new Date())
     const [activeCycleTag, setActiveCycleTag] = useState<string>(currentMonthTag)
 
+    const [isPending, startTransition] = useTransition()
+
     // Slide State
     const [isSlideOpen, setIsSlideOpen] = useState(false)
     const [slideMode, setSlideMode] = useState<'add' | 'edit' | 'duplicate'>('add')
@@ -61,11 +65,29 @@ export function MemberDetailView({
 
     const router = useRouter()
     const searchParams = useSearchParams()
+    const { setCustomName } = useBreadcrumbs()
 
     useEffect(() => {
         const tabLabel = activeTab === 'history' ? 'History' : activeTab === 'split-bill' ? 'Split Bill' : 'Transactions'
         document.title = `${person.name} ${tabLabel}`
-    }, [person.name, activeTab])
+
+        // Set custom breadcrumb name: "Lâm detail history"
+        const path = `/people/${person.id}`
+        setCustomName(path, `${person.name} detail history`)
+    }, [person.id, person.name, activeTab, setCustomName])
+
+    const { addRecentItem } = useRecentItems()
+
+    useEffect(() => {
+        if (person.id && person.name) {
+            addRecentItem({
+                id: person.id,
+                type: 'person',
+                name: person.name,
+                image_url: person.image_url
+            })
+        }
+    }, [person.id, person.name, addRecentItem])
 
     // Handle URL parameters for tag and date range filter
     useEffect(() => {
@@ -105,7 +127,9 @@ export function MemberDetailView({
         if (activeCycleTag && currentTag !== activeCycleTag) {
             const url = new URL(window.location.href)
             url.searchParams.set('tag', activeCycleTag)
-            router.replace(url.toString())
+            startTransition(() => {
+                router.replace(url.toString(), { scroll: false })
+            })
         }
     }, [activeCycleTag, router, searchParams])
 

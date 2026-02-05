@@ -208,7 +208,7 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                 return
             }
         }
-        const newMember = { profile_id: profileId, slots: 1, is_owner: false, profile }
+        const newMember = { person_id: profileId, slots: 1, is_owner: false, person: profile }
         const updatedMembers = [...watchedMembers, newMember]
         setWatchedMembers(updatedMembers)
         await updateServiceMembersAction(service.id, updatedMembers)
@@ -365,21 +365,21 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                 <div className="grid gap-3">
                                     {watchedMembers.map((member) => (
                                         <div
-                                            key={member.id || member.profile_id}
+                                            key={member.id || member.person_id}
                                             className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-all group"
-                                            onClick={() => router.push(`/people/${member.profile_id}`)}
+                                            onClick={() => router.push(`/people/${member.person_id}`)}
                                         >
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 <div className={cn("h-12 w-12 rounded-lg flex items-center justify-center text-lg font-bold flex-shrink-0",
-                                                    member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
-                                                    {member.profile.image_url ? (
-                                                        <img src={member.profile.image_url} alt="" className="h-full w-full object-cover rounded-lg" />
+                                                    member.person?.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
+                                                    {member.person?.image_url ? (
+                                                        <img src={member.person.image_url} alt="" className="h-full w-full object-cover rounded-lg" />
                                                     ) : (
-                                                        member.profile.name.substring(0, 1).toUpperCase()
+                                                        member.person?.name?.substring(0, 1).toUpperCase() || '?'
                                                     )}
                                                 </div>
                                                 <div className="flex flex-col min-w-0 flex-1">
-                                                    <span className="text-base font-semibold text-slate-900 truncate">{member.profile.name}</span>
+                                                    <span className="text-base font-semibold text-slate-900 truncate">{member.person?.name || 'Unknown'}</span>
                                                     <span className="text-sm text-slate-500">{Math.round(unitCost * member.slots).toLocaleString()} ₫ per slot</span>
                                                 </div>
                                             </div>
@@ -455,7 +455,7 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                             <div className="max-h-[300px] overflow-y-auto space-y-2">
                                 {allPeople
                                     .filter(p =>
-                                        !watchedMembers.some(m => m.profile_id === p.id) &&
+                                        !watchedMembers.some(m => m.person_id === p.id) &&
                                         (searchQuery === '' || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
                                     )
                                     .map(person => (
@@ -478,7 +478,7 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                         </button>
                                     ))}
                                 {allPeople.filter(p =>
-                                    !watchedMembers.some(m => m.profile_id === p.id) &&
+                                    !watchedMembers.some(m => m.person_id === p.id) &&
                                     (searchQuery === '' || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
                                 ).length === 0 && (
                                         <div className="p-8 text-center text-sm text-slate-400">No members found</div>

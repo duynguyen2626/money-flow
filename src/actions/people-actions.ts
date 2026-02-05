@@ -20,9 +20,9 @@ async function findOrCreateBankShop() {
 
 export type CreatePersonPayload = {
   name: string
-
   image_url?: string | null
   sheet_link?: string | null
+  google_sheet_url?: string | null
   subscriptionIds?: string[]
   is_owner?: boolean
   is_archived?: boolean
@@ -33,7 +33,6 @@ export type CreatePersonPayload = {
 export async function createPersonAction(payload: CreatePersonPayload) {
   const result = await createPerson(
     payload.name,
-
     payload.image_url?.trim(),
     payload.sheet_link?.trim(),
     payload.subscriptionIds,
@@ -42,6 +41,7 @@ export async function createPersonAction(payload: CreatePersonPayload) {
       is_archived: payload.is_archived,
       is_group: payload.is_group,
       group_parent_id: payload.group_parent_id,
+      google_sheet_url: payload.google_sheet_url?.trim(),
     }
   )
 

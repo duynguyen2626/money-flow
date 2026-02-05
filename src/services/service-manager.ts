@@ -313,7 +313,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
   try {
     const memberIds = Array.from(new Set(members.map(m => m.person_id).filter(Boolean)))
     console.log(`[Sheet Sync] Triggering full sync for ${memberIds.length} members after distribution`)
-    
+
     const { syncAllTransactions } = await import('./sheet.service')
     for (const memberId of memberIds) {
       try {
@@ -343,7 +343,7 @@ export async function getServices() {
     .select(`
         *,
         shop:shops(*),
-        service_members:service_members(*, profile:people(*))
+        service_members:service_members(*, person:people(*))
       `)
     .order('name', { ascending: true })
 
@@ -424,7 +424,7 @@ export async function getServiceById(id: string) {
     .select(`
         *,
         shop:shops(*),
-        service_members:service_members(*, profile:people(*))
+        service_members:service_members(*, person:people(*))
       `)
     .eq('id', id)
     .single()

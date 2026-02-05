@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid } from "lucide-react";
+import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,9 @@ interface PeopleTableHeaderV2Props {
     };
     showArchived: boolean;
     onToggleArchived: (show: boolean) => void;
+    selectedYear: number;
+    onYearChange: (year: number) => void;
+    availableYears: number[];
 }
 
 export function PeopleTableHeaderV2({
@@ -39,7 +42,11 @@ export function PeopleTableHeaderV2({
     stats,
     showArchived,
     onToggleArchived,
+    selectedYear,
+    onYearChange,
+    availableYears,
 }: PeopleTableHeaderV2Props) {
+    const years = availableYears.length > 0 ? availableYears : [new Date().getFullYear()];
     const filters: { id: FilterStatus; label: string; icon: React.ReactNode; count?: number; color: string }[] = [
         { id: 'all', label: 'All Members', icon: <Filter className="h-4 w-4" />, color: "text-slate-600" },
         { id: 'outstanding', label: 'Outstanding Debt', icon: <TrendingUp className="h-4 w-4" />, count: stats.outstandingCount, color: "text-rose-600" },
@@ -106,6 +113,36 @@ export function PeopleTableHeaderV2({
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
             </div>
+
+            {/* Year Filter */}
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-10 gap-2 border-slate-200 bg-slate-50 hover:bg-white text-slate-700 font-medium min-w-[100px] justify-between">
+                        <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-slate-500" />
+                            <span>{selectedYear}</span>
+                        </div>
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[120px] p-1" align="start">
+                    <div className="flex flex-col gap-0.5">
+                        {years.map((year) => (
+                            <button
+                                key={year}
+                                onClick={() => onYearChange(year)}
+                                className={cn(
+                                    "px-3 py-2 text-sm rounded-md transition-colors w-full text-left",
+                                    selectedYear === year
+                                        ? "bg-slate-100 font-medium text-slate-900"
+                                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                )}
+                            >
+                                {year}
+                            </button>
+                        ))}
+                    </div>
+                </PopoverContent>
+            </Popover>
 
             {/* Add Button */}
             <Button

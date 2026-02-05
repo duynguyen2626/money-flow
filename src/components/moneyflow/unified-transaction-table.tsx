@@ -2208,7 +2208,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     e.preventDefault()
-                                    window.open(`/people/details?id=${personId}&tag=${debtTag}`, '_blank', 'noopener,noreferrer')
+                                    window.open(`/people/${personId}?tag=${debtTag}`, '_blank', 'noopener,noreferrer')
                                   }}
                                   className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[110px] cursor-pointer hover:bg-blue-100 transition-colors shadow-sm"
                                 >
@@ -2263,7 +2263,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             if (entityToShow === 'person') {
                               displayName = personName
                               displayImage = personImage
-                              displayLink = `/people/details?id=${personId}`
+                              displayLink = `/people/${personId}`
                               badgeToDisplay = peopleDebtTag
                               isCycleBadge = false
                             } else if (entityToShow === 'dest') {
@@ -2357,7 +2357,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           const targetEntity = {
                             name: hasPerson ? personName : destName,
                             icon: hasPerson ? personImage : destIcon,
-                            link: hasPerson ? `/people/details?id=${personId}` : (destId ? `/accounts/${destId}` : null),
+                            link: hasPerson ? `/people/${personId}` : (destId ? `/accounts/${destId}` : null),
                             isAccount: !hasPerson
                           }
 

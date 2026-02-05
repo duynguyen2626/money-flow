@@ -39,6 +39,7 @@ export function PeopleSlideV2({
         name: string
         image_url?: string
         sheet_link?: string
+        google_sheet_url?: string
         subscriptionIds: string[]
         is_owner?: boolean
         is_archived?: boolean
@@ -49,6 +50,7 @@ export function PeopleSlideV2({
                 name: values.name,
                 image_url: values.image_url,
                 sheet_link: values.sheet_link,
+                google_sheet_url: values.google_sheet_url,
                 subscriptionIds: values.subscriptionIds,
                 is_owner: values.is_owner,
                 is_archived: values.is_archived,
@@ -59,6 +61,7 @@ export function PeopleSlideV2({
                 name: values.name,
                 image_url: values.image_url,
                 sheet_link: values.sheet_link,
+                google_sheet_url: values.google_sheet_url,
                 subscriptionIds: values.subscriptionIds,
                 is_owner: values.is_owner,
                 is_archived: values.is_archived,
@@ -97,6 +100,7 @@ export function PeopleSlideV2({
                             name: person.name,
                             image_url: person.image_url ?? '',
                             sheet_link: person.sheet_link ?? '',
+                            google_sheet_url: person.google_sheet_url ?? '',
                             subscriptionIds: person.subscription_ids ?? [],
                             is_owner: person.is_owner ?? false,
                             is_archived: person.is_archived ?? false,

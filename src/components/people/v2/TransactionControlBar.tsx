@@ -1,5 +1,5 @@
 import { Search, RotateCcw, UserMinus, Plus, Check, ChevronDown, RefreshCw, RefreshCcw, X, Clipboard, Info } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { DebtCycle } from '@/hooks/use-person-details'
 import { Input } from '@/components/ui/input'
@@ -84,7 +84,7 @@ export function TransactionControlBar({
     onAddTransaction,
     currentCycleTag,
 }: TransactionControlBarProps) {
-    const [isLoading, setIsLoading] = useState(false)
+    const [isPending, startTransition] = useTransition()
     const [popoverOpen, setPopoverOpen] = useState(false)
     const router = useRouter()
     const isSettled = Math.abs(activeCycle.remains) < 100
@@ -92,45 +92,28 @@ export function TransactionControlBar({
     const isAllHistory = selectedYear === null
     const cycleLabel = isAllHistory ? 'All History' : activeCycle.tag
 
-    useEffect(() => {
-        if (!isLoading) return
-        const timeout = setTimeout(() => setIsLoading(false), 500)
-        return () => clearTimeout(timeout)
-    }, [isLoading, activeCycle.tag, selectedYear])
+    // URL sync effect or other logic can go here if needed, 
+    // but we use page-level Suspense for loading indicators now.
 
     const handleCycleChange = (tag: string) => {
-        setIsLoading(true)
-        onCycleChange(tag)
-        // Update URL with selected tag
-        const url = new URL(window.location.href)
-        url.searchParams.set('tag', tag)
-        router.push(url.toString())
+        startTransition(() => {
+            onCycleChange(tag)
+            // Update URL with selected tag
+            const url = new URL(window.location.href)
+            url.searchParams.set('tag', tag)
+            router.push(url.toString(), { scroll: false })
+        })
     }
 
     const handleYearChange = (year: string | null) => {
-        setIsLoading(true)
-        onYearChange(year)
-        if (year === null) {
-            // All history - remove tag param to default to 'current' or 'all' depending on page logic, 
-            // but user says just removing it is better as 'tag=all' is invalid.
-            // Actually user implies: "just http://.../details?id=... is understood as current period".
-            // Wait, if "All History" is selected, we probably want NO tag?
-            // Or does "All History" imply showing everything?
-            // User says: "tag=all không hoạt động... vì chỉ cần ?id=... là tự hiểu chọn kỳ hiện tại rồi" -> "id=... is understood as current period".
-            // This sounds contradictory. "All History" usually means everything, "Current Period" means now.
-            // If the user selects "All History", they probably want to see everything.
-            // But if `tag=all` breaks it, maybe passing NO tag shows all? Or shows current?
-            // The user complaint is confusing: "id=... is self-understood as current period".
-            // If I want ALL history, I suspect I should NOT enable `tag`.
-            // But if `tag` is missing, it defaults to current?
-            // If so, how do I show ALL?
-            // Maybe there is no "All" tag support yet? 
-            // Let's assume removing `tag` is the safest fix to unbreak the page, and maybe "All" isn't fully supported via URL or needs a different param.
-            // For now, I will remove the `tag` param.
-            const url = new URL(window.location.href)
-            url.searchParams.delete('tag')
-            router.push(url.toString())
-        }
+        startTransition(() => {
+            onYearChange(year)
+            if (year === null) {
+                const url = new URL(window.location.href)
+                url.searchParams.delete('tag')
+                router.push(url.toString(), { scroll: false })
+            }
+        })
     }
 
     const handlePasteSearch = async () => {
@@ -148,11 +131,11 @@ export function TransactionControlBar({
 
     return (
         <div className="flex flex-col gap-2 p-4 pb-0 relative">
-            {isLoading && (
-                <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-50 flex items-center justify-center rounded-xl">
-                    <div className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg">
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        <span className="text-sm font-semibold">Loading...</span>
+            {isPending && (
+                <div className="absolute inset-x-4 top-4 bottom-0 bg-white/30 z-50 flex items-start justify-center pt-2 rounded-xl pointer-events-none">
+                    <div className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-full shadow-lg scale-100 transition-transform animate-in fade-in slide-in-from-top-2 duration-200">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        <span className="text-[10px] font-bold tracking-tight uppercase">Updating...</span>
                     </div>
                 </div>
             )}
@@ -215,7 +198,7 @@ export function TransactionControlBar({
                                     </span>
                                 )}
                             </div>
-                            {isLoading ? (
+                            {isPending ? (
                                 <RefreshCw className="h-3.5 w-3.5 text-indigo-600 animate-spin" />
                             ) : (
                                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-slate-600" />

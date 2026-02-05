@@ -33,6 +33,7 @@ export function PeopleDirectoryV2({
 }: PeopleDirectoryV2Props) {
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
     const [showArchived, setShowArchived] = useState(false);
     const [isSlideOpen, setIsSlideOpen] = useState(false);
     const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
@@ -41,11 +42,33 @@ export function PeopleDirectoryV2({
     const [txnSlideOpen, setTxnSlideOpen] = useState(false);
     const [txnInitialData, setTxnInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>(undefined);
 
+    // Calculate Available Years from data
+    const availableYears = useMemo(() => {
+        const yearSet = new Set<number>();
+        people.forEach(p => {
+            p.monthly_debts?.forEach(d => {
+                if (d.tag) {
+                    const year = parseInt(d.tag.split('-')[0]);
+                    if (!isNaN(year)) yearSet.add(year);
+                }
+            });
+            p.cycle_sheets?.forEach(s => {
+                if (s.cycle_tag) {
+                    const year = parseInt(s.cycle_tag.split('-')[0]);
+                    if (!isNaN(year)) yearSet.add(year);
+                }
+            });
+        });
+        // Add current year
+        yearSet.add(new Date().getFullYear());
+        return Array.from(yearSet).sort((a, b) => b - a);
+    }, [people]);
+
     // Statistics
     const stats = useMemo(() => {
         return {
-            outstandingCount: people.filter(p => (p.balance || 0) > 0 && !p.is_archived).length,
-            settledCount: people.filter(p => (p.balance || 0) === 0 && !p.is_archived).length,
+            outstandingCount: people.filter(p => (p.current_debt || 0) > 0 && !p.is_archived).length,
+            settledCount: people.filter(p => (p.current_debt || 0) === 0 && !p.is_archived).length,
             archivedCount: people.filter(p => p.is_archived).length,
             groupsCount: people.filter(p => p.is_group).length,
         };
@@ -60,9 +83,9 @@ export function PeopleDirectoryV2({
 
         // Status Filter
         if (activeFilter === 'outstanding') {
-            result = result.filter(p => (p.balance || 0) > 0);
+            result = result.filter(p => (p.current_debt || 0) > 0);
         } else if (activeFilter === 'settled') {
-            result = result.filter(p => (p.balance || 0) === 0);
+            result = result.filter(p => (p.current_debt || 0) === 0);
         } else if (activeFilter === 'groups') {
             result = result.filter(p => p.is_group);
         }
@@ -75,11 +98,11 @@ export function PeopleDirectoryV2({
             );
         }
 
-        // Sort by highest debt (total debt = current_cycle_debt + outstanding_debt)
+        // Sort by current_debt (highest first)
         result.sort((a, b) => {
-            const totalDebtA = (a.current_cycle_debt || 0) + (a.outstanding_debt || 0);
-            const totalDebtB = (b.current_cycle_debt || 0) + (b.outstanding_debt || 0);
-            return totalDebtB - totalDebtA; // Descending order (highest first)
+            const currentDebtA = a.current_debt || 0;
+            const currentDebtB = b.current_debt || 0;
+            return currentDebtB - currentDebtA; // Descending order (highest first)
         });
 
         return result;
@@ -131,6 +154,9 @@ export function PeopleDirectoryV2({
                 onSearchChange={setSearchQuery}
                 activeFilter={activeFilter}
                 onFilterChange={setActiveFilter}
+                selectedYear={selectedYear}
+                onYearChange={setSelectedYear}
+                availableYears={availableYears}
                 onAdd={() => {
                     setSelectedPerson(null);
                     setIsSlideOpen(true);
