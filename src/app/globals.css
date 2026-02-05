@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* 
+  IDE Tip: If you see "Unknown at rule" warnings for @theme, @custom-variant, or @apply, 
+  it's because Tailwind CSS v4 is new. You can safely ignore them or add 
+  "css.lint.unknownAtRules": "ignore" to your VS Code settings.json.
+*/
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -116,33 +122,34 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
 }
 
 @layer utilities {
-  .scrollbar-visible {
-    scrollbar-width: auto;
-    scrollbar-color: oklch(0.556 0 0) oklch(0.97 0 0); /* thumb track */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
   }
-  /* Webkit styles for better control */
-  .scrollbar-visible::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-    display: block !important;
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
   }
-  .scrollbar-visible::-webkit-scrollbar-track {
-    background: oklch(0.97 0 0 / 0.1);
-    border-radius: 5px;
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: oklch(0.708 0 0 / 0.2);
+    border-radius: 10px;
   }
-  .scrollbar-visible::-webkit-scrollbar-thumb {
-    background: oklch(0.708 0 0);
-    border-radius: 5px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
+
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background: oklch(0.708 0 0 / 0.5);
   }
-  .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.45 0 0);
+}
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.708 0 0 / 0.2) transparent;
   }
 }

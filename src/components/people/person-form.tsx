@@ -9,9 +9,9 @@ import { Subscription } from '@/types/moneyflow.types'
 
 type PersonFormValues = {
   name: string
-
   image_url?: string
   sheet_link?: string
+  google_sheet_url?: string
   subscriptionIds: string[]
   is_owner?: boolean
   is_archived?: boolean
@@ -29,9 +29,9 @@ type PersonFormProps = {
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
-
-  image_url: z.string().url('Invalid image URL').optional().or(z.literal('')), // Changed from avatar_url and updated validation
+  image_url: z.string().url('Invalid image URL').optional().or(z.literal('')),
   sheet_link: z.string().url('Invalid script link URL').optional().or(z.literal('')),
+  google_sheet_url: z.string().url('Invalid Google Sheet URL').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
   is_owner: z.boolean().optional(),
   is_archived: z.boolean().optional(),
@@ -78,9 +78,9 @@ export function PersonForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: initialValues?.name ?? '',
-
-      image_url: initialValues?.image_url ?? '', // Changed from avatar_url
+      image_url: initialValues?.image_url ?? '',
       sheet_link: initialValues?.sheet_link ?? '',
+      google_sheet_url: initialValues?.google_sheet_url ?? '',
       subscriptionIds: initialValues?.subscriptionIds ?? [],
       is_owner: initialValues?.is_owner ?? false,
       is_archived: initialValues?.is_archived ?? false,
@@ -177,6 +177,19 @@ export function PersonForm({
                 <p className="text-sm text-rose-600">{errors.image_url.message}</p> // Changed from avatar_url
               )}
             </div >
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Google Sheet Link</label>
+              <input
+                {...register('google_sheet_url')}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+              />
+              {errors.google_sheet_url && (
+                <p className="text-sm text-rose-600">{errors.google_sheet_url.message}</p>
+              )}
+              <p className="text-xs text-slate-500">Direct link to the Google Sheet (English).</p>
+            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Script Link (Webhook)</label>

@@ -16,6 +16,7 @@ import { AccountDetailTransactions } from './AccountDetailTransactions'
 import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
 import { AccountContentWrapper } from '@/components/moneyflow/account-content-wrapper'
 import { normalizeMonthTag } from '@/lib/month-tag'
+import { useRecentItems } from '@/hooks/use-recent-items'
 
 type PendingBatchItem = {
     id: string
@@ -109,6 +110,19 @@ export function AccountDetailViewV2({
         const tabLabel = activeTab === 'cashback' ? 'Cashback' : 'History'
         document.title = `${account.name} ${tabLabel}`
     }, [account.name, activeTab])
+
+    const { addRecentItem } = useRecentItems()
+
+    useEffect(() => {
+        if (account.id && account.name) {
+            addRecentItem({
+                id: account.id,
+                type: 'account',
+                name: account.name,
+                image_url: account.image_url
+            })
+        }
+    }, [account.id, account.name, addRecentItem])
 
     const fetchPendingData = useCallback(async () => {
         try {

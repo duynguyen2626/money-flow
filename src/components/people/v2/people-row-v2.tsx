@@ -7,8 +7,8 @@ import { PeopleRowDetailsV2 } from "./people-row-details-v2";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, User, CheckCircle2, HandCoins, Banknote } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink } from "lucide-react";
+import { cn, formatMoneyVND } from "@/lib/utils";
 import { SubscriptionBadges } from "./subscription-badges";
 import {
     Tooltip,
@@ -59,7 +59,7 @@ export function PeopleRowV2({
                 onClick={handleRowClick}
             >
                 {/* Expand Column (always first) */}
-                <td className="w-10 px-2 py-3 text-center border-r border-slate-200">
+                <td className="sticky left-0 z-20 bg-inherit w-10 px-2 py-3 text-center border-r border-slate-200">
                     <ExpandIcon
                         isExpanded={isExpanded}
                         onClick={handleIconClick}
@@ -68,7 +68,16 @@ export function PeopleRowV2({
 
                 {/* Dynamic Columns */}
                 {visibleColumns.map((col, idx) => (
-                    <td key={`${person.id}-${col.key}`} className={`px-4 py-3 align-middle text-sm font-normal text-foreground ${idx < visibleColumns.length - 1 ? 'border-r border-slate-200' : ''}`}>
+                    <td
+                        key={`${person.id}-${col.key}`}
+                        className={cn(
+                            "px-4 py-3 align-middle text-sm font-normal text-foreground",
+                            idx < visibleColumns.length - 1 ? 'border-r border-slate-200' : '',
+                            col.key === 'current_debt' && "bg-amber-50/40",
+                            col.key === 'balance' && "bg-blue-50/30",
+                            col.key === 'name' && "sticky left-10 z-10 bg-inherit" // Part of freeze name logic if needed, but let's keep it simple
+                        )}
+                    >
                         {renderCell(person, col.key, onEdit, onLend, onRepay)}
                     </td>
                 ))}
@@ -94,38 +103,48 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
         case 'name':
             return (
                 <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-md flex-shrink-0">
+                    <Avatar className="h-10 w-10 rounded-full flex-shrink-0">
                         <AvatarImage src={person.image_url || undefined} alt={person.name} />
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-md">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-full">
                             {person.name?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 overflow-hidden">
                             <Link
-                                href={`/people/details?id=${person.id}`}
+                                href={`/people/${person.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-medium text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"
+                                className="font-semibold text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 {person.name}
                             </Link>
+
+                            {person.google_sheet_url && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <a
+                                                href={person.google_sheet_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 rounded-[3px] hover:bg-green-100 transition-colors h-4 shrink-0"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <ExternalLink className="h-2 w-2" />
+                                                <span className="text-[8px] font-bold uppercase">Sheet</span>
+                                            </a>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Open Google Sheet in new tab</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
                         </div>
                         <div className="flex items-center gap-1 mt-1">
-                            {person.google_sheet_url && (
-                                <a
-                                    href={person.google_sheet_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 rounded-[4px] hover:bg-green-100 transition-colors h-4 no-underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="Open Google Sheet"
-                                >
-                                    <span className="text-[9px] font-bold uppercase tracking-wider">Sheet</span>
-                                </a>
-                            )}
-                            {person.is_group && <span className="text-[10px] text-muted-foreground">Group</span>}
+                            {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
                         </div>
                     </div>
                 </div>
@@ -253,8 +272,3 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
     }
 }
 
-function formatMoneyVND(amount: number) {
-    if (amount === 0) return '-';
-    // Format: 1.000 (no currency symbol)
-    return new Intl.NumberFormat('vi-VN').format(amount);
-}

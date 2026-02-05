@@ -29,8 +29,9 @@
 3. **`.agent/rules/ui_rules.md`** - UI/UX standards (STRICT)
 
 ### Current Phase
-- Check `.agent/` for `HANDOVER_PHASE_*.md` files
-- Read the latest phase handover and plan
+- **Phase 14**: COMPLETED - People UI Refactor & Navigation Optimization
+- **Phase 15**: PLANNED - AI Intelligence & Voice (Gemini Integration)
+- See `.agent/HANDOVER_PHASE_14.md` for latest changes.
 
 ---
 

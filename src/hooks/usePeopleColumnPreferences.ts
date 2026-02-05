@@ -14,10 +14,10 @@ const defaultPeopleColumns: PeopleColumnConfig[] = [
     { key: 'name', label: 'Name', defaultWidth: 250, minWidth: 200, frozen: true },
     { key: 'active_subs', label: 'Active Subs', defaultWidth: 180, minWidth: 150 },
     { key: 'debt_tag', label: 'Debt Tag', defaultWidth: 120, minWidth: 100 },
-    { key: 'current_debt', label: 'Current Debt', defaultWidth: 140, minWidth: 120 },
-    { key: 'base_lend', label: 'Entire Base', defaultWidth: 140, minWidth: 120 },
-    { key: 'cashback', label: 'Entire Repaid', defaultWidth: 140, minWidth: 120 },
-    { key: 'net_lend', label: 'Current', defaultWidth: 140, minWidth: 120 },
+    { key: 'current_debt', label: 'Current Cycle', defaultWidth: 140, minWidth: 120 },
+    { key: 'base_lend', label: 'Base Lend', defaultWidth: 140, minWidth: 120 },
+    { key: 'cashback', label: 'Settled', defaultWidth: 140, minWidth: 120 },
+    { key: 'net_lend', label: 'Outstanding', defaultWidth: 140, minWidth: 120 },
     { key: 'balance', label: 'Remains', defaultWidth: 150, minWidth: 120 },
     { key: 'action', label: 'Actions', defaultWidth: 100, minWidth: 80, frozen: true },
 ];
@@ -60,7 +60,7 @@ export function usePeopleColumnPreferences() {
         } catch (e) {
             console.error("Failed to load people column settings", e);
         }
-         
+
     }, []);
 
     useEffect(() => {

@@ -779,3 +779,34 @@ export async function updateAccountStatus(id: string, isActive: boolean): Promis
   revalidatePath('/accounts')
   return true
 }
+
+export async function getRecentAccountsByTransactions(limit: number = 5): Promise<Account[]> {
+  const supabase = createClient()
+
+  // Query transactions, ordered by occurred_at
+  const { data: txns, error } = await supabase
+    .from('transactions')
+    .select('account_id')
+    .not('account_id', 'is', null)
+    .order('occurred_at', { ascending: false })
+    .limit(50)
+
+  if (error || !txns) return []
+
+  // Get unique account IDs in order of last transaction
+  const accountIds = Array.from(new Set(txns.map(t => t.account_id))).slice(0, limit)
+  if (accountIds.length === 0) return []
+
+  // Fetch account details
+  const { data: accounts, error: aError } = await supabase
+    .from('accounts')
+    .select('id, name, type, image_url')
+    .in('id', accountIds)
+
+  if (aError || !accounts) return []
+
+  // Return matched accounts in correct order
+  return accountIds
+    .map(id => accounts.find(a => a.id === id))
+    .filter(Boolean) as Account[]
+}

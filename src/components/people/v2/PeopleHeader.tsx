@@ -67,7 +67,7 @@ export function PeopleHeader({
     const currentCycleRepayPercent = activeCycle ? Math.min(100, Math.round((Math.abs(activeCycle.stats.repay) / currentCycleProgress) * 100)) : 0
     const currentCycleRemainsPercent = activeCycle ? Math.min(100, Math.round((Math.abs(activeCycle.remains) / currentCycleProgress) * 100)) : 0
     const isCycleSettled = activeCycle ? Math.abs(activeCycle.remains) < 100 : false
-    
+
     // Format percentage for display inside bar
     const formattedRepayPercent = repayPercent > 0 ? `${repayPercent}%` : ''
     const formattedRemainsPercent = remainsPercent > 0 ? `${remainsPercent}%` : ''
@@ -87,9 +87,9 @@ export function PeopleHeader({
 
                     {person.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-sm object-cover bg-slate-100" />
+                        <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-full object-cover bg-slate-100" />
                     ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-indigo-50 text-indigo-600 text-lg font-bold">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-lg font-bold">
                             {person.name.charAt(0).toUpperCase()}
                         </div>
                     )}
@@ -125,7 +125,7 @@ export function PeopleHeader({
                                     <Calendar className="h-3.5 w-3.5" />
                                 </button>
                             </StatsPopover>
-                            
+
                             <div className="flex flex-col gap-1.5 min-w-[320px]">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Cycle</span>
@@ -142,14 +142,14 @@ export function PeopleHeader({
                                     </span>
                                 </div>
                                 <div className="relative flex h-5 w-full overflow-hidden rounded-full bg-slate-100">
-                                    <div 
-                                        className="bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white" 
+                                    <div
+                                        className="bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white"
                                         style={{ width: `${currentCycleRepayPercent}%` }}
                                     >
                                         {currentCycleRepayPercent > 15 && `${currentCycleRepayPercent}%`}
                                     </div>
-                                    <div 
-                                        className="bg-rose-500 flex items-center justify-center text-[9px] font-bold text-white" 
+                                    <div
+                                        className="bg-rose-500 flex items-center justify-center text-[9px] font-bold text-white"
                                         style={{ width: `${currentCycleRemainsPercent}%` }}
                                     >
                                         {currentCycleRemainsPercent > 15 && `${currentCycleRemainsPercent}%`}

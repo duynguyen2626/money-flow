@@ -6,6 +6,7 @@ import './globals.css'
 import { TooltipProvider } from '@/components/ui/custom-tooltip'
 import { AppLayout } from '@/components/moneyflow/app-layout'
 import { Toaster } from '@/components/ui/sonner'
+import { BreadcrumbProvider } from '@/context/breadcrumb-context'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -47,7 +48,9 @@ export default function RootLayout({
           shadow="0 0 10px #2299DD,0 0 5px #2299DD"
         />
         <TooltipProvider>
-          <AppLayout>{children}</AppLayout>
+          <BreadcrumbProvider>
+            <AppLayout>{children}</AppLayout>
+          </BreadcrumbProvider>
           <Toaster position="top-right" richColors />
         </TooltipProvider>
       </body>

@@ -52,8 +52,8 @@ type Service = {
 
 type ServiceMember = {
   id: string
-  profile_id: string
-  profile: {
+  person_id: string
+  person: {
     id: string
     image_url: string | null
     name: string
@@ -287,10 +287,10 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     }
 
     const newMember = {
-      profile_id: profileId,
+      person_id: profileId,
       slots: 1,
       is_owner: false,
-      profile: profile // Optimistic update
+      person: profile // Optimistic update
     }
 
     const updatedMembers = [...watchedMembers, newMember]
@@ -404,7 +404,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                     {allPeople
                       .filter(p =>
                         p.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-                        !watchedMembers.some(m => m.profile_id === p.id)
+                        !watchedMembers.some(m => m.person_id === p.id)
                       )
                       .map(person => (
                         <div key={person.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded border">
@@ -423,22 +423,22 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
             {watchedMembers.map((member) => {
               const memberCost = Math.round(unitCost * (member.slots || 0));
               return (
-                <div key={member.id || member.profile_id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50/50">
+                <div key={member.id || member.person_id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${member.person?.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
                       }`}>
-                      {member.profile?.image_url ? (
-                        <img src={member.profile.image_url} alt="" className="h-full w-full object-cover" />
+                      {member.person?.image_url ? (
+                        <img src={member.person.image_url} alt="" className="h-full w-full object-cover" />
                       ) : (
-                        member.profile.name.substring(0, 2).toUpperCase()
+                        member.person?.name?.substring(0, 2).toUpperCase() || '?'
                       )}
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-slate-700">
-                        {member.profile.name} {member.profile.is_owner && '(Mine)'}
+                        {member.person?.name || 'Unknown'} {member.person?.is_owner && '(Mine)'}
                       </span>
                       <span className="text-[10px] text-slate-500">
-                        {memberCost.toLocaleString()} đ
+                        {memberCost.toLocaleString()} ₫
                       </span>
                     </div>
                   </div>

@@ -108,6 +108,7 @@ export async function createPerson(
     is_archived?: boolean;
     is_group?: boolean;
     group_parent_id?: string | null;
+    google_sheet_url?: string | null;
   }
 ): Promise<{ profileId: string; debtAccountId: string | null } | null> {
   const supabase = createClient()
@@ -121,9 +122,9 @@ export async function createPerson(
   const personPayload: PersonInsert & { is_archived?: boolean | null } = {
     id: randomUUID(),
     name: trimmedName,
-
     image_url: image_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
+    google_sheet_url: opts?.google_sheet_url?.trim() || null,
     is_owner: (opts?.is_owner ?? null) as any,
     is_archived: (typeof opts?.is_archived === 'boolean' ? opts.is_archived : null) as any,
     is_group: (typeof opts?.is_group === 'boolean' ? opts.is_group : null) as any,
@@ -859,6 +860,7 @@ export async function updatePerson(
 }
 
 export async function getPersonWithSubs(id: string): Promise<Person | null> {
+  if (!id || id === 'details') return null;
   const supabase = createClient()
 
   const profileSelect = async () => {
@@ -879,6 +881,11 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
       return { data: fallback.data, error: fallback.error }
     }
     return attempt
+  }
+
+  // Basic UUID validation to prevent DB errors
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null
   }
 
   const [
@@ -965,4 +972,35 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     debt_account_id,
     balance,
   }
+}
+
+export async function getRecentPeopleByTransactions(limit: number = 5): Promise<Person[]> {
+  const supabase = createClient()
+
+  // Query transactions that have a person_id, ordered by occurred_at
+  const { data: txns, error } = await supabase
+    .from('transactions')
+    .select('person_id')
+    .not('person_id', 'is', null)
+    .order('occurred_at', { ascending: false })
+    .limit(50)
+
+  if (error || !txns) return []
+
+  // Get unique person IDs in order of last transaction
+  const personIds = Array.from(new Set(txns.map(t => t.person_id))).slice(0, limit)
+  if (personIds.length === 0) return []
+
+  // Fetch people details
+  const { data: people, error: pError } = await supabase
+    .from('people')
+    .select('id, name, image_url')
+    .in('id', personIds)
+
+  if (pError || !people) return []
+
+  // Return matched people in correct order
+  return personIds
+    .map(id => people.find(p => p.id === id))
+    .filter(Boolean) as Person[]
 }

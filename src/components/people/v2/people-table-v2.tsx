@@ -7,8 +7,9 @@ import { usePeopleExpandableRows } from "@/hooks/usePeopleExpandableRows";
 import { PeopleRowV2 } from "./people-row-v2";
 import { PeopleGroupHeader } from "./people-group-header";
 import { ColumnCustomizer } from "@/components/moneyflow/column-customizer";
-import { Settings2 } from "lucide-react";
+import { Settings2, Minimize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface PeopleTableProps {
     people: Person[];
@@ -34,6 +35,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
     const {
         isExpanded,
         toggleRow,
+        clearAll,
     } = usePeopleExpandableRows();
 
     const [isCustomizeOpen, setCustomizeOpen] = useState(false);
@@ -108,14 +110,33 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
     };
 
     return (
-        <div className="rounded-md border bg-card">
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-muted/50 text-xs uppercase font-semibold text-muted-foreground border-b">
+        <div className="rounded-md border bg-card overflow-hidden">
+            <div className="overflow-auto max-h-[calc(100vh-140px)]">
+                <table className="w-full text-sm text-left border-collapse">
+                    <thead className="sticky top-0 z-30 bg-slate-50 text-xs uppercase font-bold text-muted-foreground border-b shadow-sm">
                         <tr>
-                            <th className="w-10 px-2 py-3 text-center border-r border-slate-200"></th>
+                            <th className="sticky left-0 z-40 bg-slate-50 w-10 px-2 py-3 text-center border-r border-slate-200">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-slate-400 hover:text-slate-900"
+                                    onClick={() => clearAll()}
+                                    title="Collapse All"
+                                >
+                                    <Minimize2 className="h-3.5 w-3.5" />
+                                </Button>
+                            </th>
                             {visibleCols.map((col, idx) => (
-                                <th key={col.key} className={`px-4 py-3 whitespace-nowrap group ${idx < visibleCols.length - 1 ? 'border-r border-slate-200' : ''}`}>
+                                <th
+                                    key={col.key}
+                                    className={cn(
+                                        "px-4 py-3 whitespace-nowrap group",
+                                        idx < visibleCols.length - 1 ? 'border-r border-slate-200' : '',
+                                        col.key === 'current_debt' && "bg-amber-100/50 text-amber-900",
+                                        col.key === 'balance' && "bg-blue-100/50 text-blue-900",
+                                        col.key === 'name' && "sticky left-10 z-40 bg-slate-50"
+                                    )}
+                                >
                                     <div className="flex items-center justify-between gap-2">
                                         <span>{col.label}</span>
                                         {col.key === 'action' && (
