@@ -18,9 +18,9 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 - **Cashback:** Advanced cashback calculation and tracking.
 - **Services:** Subscription management.
 
-## Current Status: Phase 13 (Feb 2026)
+## Current Status: Phase 15 (Feb 2026)
 
-**Focus**: Batch UI Refinements & Error Handling
+**Focus**: AI Intelligence & Voice (Gemini Integration)
 
 ### Phase 13 Updates (Current)
 - **Batch Detail UI Redesign**:
@@ -68,9 +68,8 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 - **UI Standards**: [.agent/rules/ui_rules.md](./.agent/rules/ui_rules.md) (STRICT)
 
 ### Current Work
-- **Phase 12 Handover**: [.agent/HANDOVER_PHASE_12.md](./.agent/HANDOVER_PHASE_12.md)
-- **Phase 12 Plan**: [.agent/PHASE_12_PLAN.md](./.agent/PHASE_12_PLAN.md)
-- **Phase 13 Plan**: [.agent/PHASE_13_PLAN.md](./.agent/PHASE_13_PLAN.md) (Future)
+- **Phase 14 Handover**: [.agent/HANDOVER_PHASE_14.md](./.agent/HANDOVER_PHASE_14.md)
+- **Phase 15 Plan**: [.agent/PHASE_15_PLAN.md](./.agent/PHASE_15_PLAN.md)
 
 ---
 

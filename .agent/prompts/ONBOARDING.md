@@ -98,7 +98,7 @@ npm run dev
 ### Read First
 1. `.agent/rules/rules.md` (coding standards)
 2. `.agent/rules/ui_rules.md` (UI standards)
-3. Current handover document (e.g., `HANDOVER_PHASE_12.md`)
+3. Current handover document (e.g., `HANDOVER_PHASE_14.md`)
 
 ---
 

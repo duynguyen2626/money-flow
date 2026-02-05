@@ -8,16 +8,9 @@
 - **UX**: All items are at the same level. No prioritization or grouping.
 - **Legacy Request**: "Recent" section (Phase 13) - not yet implemented in `AppLayout`.
 
-### Proposed Architecture for Phase 15
-- **Grouping**: Categorize nav items into:
-  - **Core**: Dashboard, Transactions, Accounts.
-  - **Relationships**: People, Shops, Services.
-  - **Processing**: Batches, Installments, Refunds.
-  - **Setup**: Categories, Settings.
-- **Recent Section**:
-  - Dynamically track and display top 3-5 most visited Account/Person detail pages.
-  - Persist in `localStorage` or `transaction_history` (via DB).
-- **Mobile UX**: 
+### Current State (Phase 15 Start)
+- **Done**: Grouping navigation items, "Recent" sidebar section, and Breadcrumbs (Implemented in late Phase 14).
+- **Mobile UX (Pending)**: 
   - Consider a Bottom Tab Bar for top-level pages (Dashboard, Transactions, Accounts, People).
   - Move secondary items to a "More" menu or Sidebar.
 
@@ -48,7 +41,7 @@
 
 | Feature | Decision | Priority |
 | :--- | :--- | :--- |
-| **Navigation** | Group items + Add "Recent" sidebar section | High |
+| **Navigation** | Group items + Add "Recent" sidebar section | Done |
 | **Mobile Nav** | Implement Bottom Tab Bar for PWA-like feel | Medium |
 | **Chatbot** | Document existing logic + Prep for LLM upgrade | High |
 | **Category Filter** | Keep as Quick-Filter in Header (Implemented in Phase 14) | Done |
