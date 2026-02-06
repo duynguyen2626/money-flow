@@ -26,7 +26,8 @@ import {
   Cloud,
   Database,
   Undo2,
-  Banknote
+  Banknote,
+  Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -41,6 +42,7 @@ import { RecentItems } from "@/components/navigation/RecentItems"
 import { RecentPeopleList } from "@/components/navigation/RecentPeopleList"
 import { RecentAccountsList } from "@/components/navigation/RecentAccountsList"
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs"
+import { GlobalAI } from "@/components/ai/global-ai"
 
 interface NavItem {
   title: string
@@ -60,6 +62,7 @@ const navItems: NavItem[] = [
   { title: "Batches", href: "/batch", icon: <Database className="h-5 w-5" /> },
   { title: "Services", href: "/services", icon: <Cloud className="h-5 w-5" /> },
   { title: "Refunds", href: "/refunds", icon: <Undo2 className="h-5 w-5" /> },
+  { title: "AI Management", href: "/settings/ai", icon: <Sparkles className="h-5 w-5" /> },
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -413,6 +416,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="mx-auto w-full max-w-[1920px] flex-1 min-h-0 bg-white">
           {children}
         </div>
+        <GlobalAI />
       </main >
     </div >
   )

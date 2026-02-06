@@ -7,7 +7,6 @@ import { getShops } from "@/services/shop.service";
 import { getTransactionById } from "@/services/transaction.service";
 import { EditableTempTable } from "@/components/moneyflow/editable-temp-table";
 import { TagFilterProvider } from "@/context/tag-filter-context";
-import { QuickAddChat } from "@/components/ai/quick-add-chat";
 import { TempTransactionGuard } from "@/components/moneyflow/temp-transaction-guard";
 import { AddTransactionDialog } from "@/components/moneyflow/add-transaction-dialog";
 
@@ -90,13 +89,6 @@ export default async function TempTransactionPage({
           </div>
         </div>
       </div>
-      <QuickAddChat
-        accounts={accounts}
-        categories={categories}
-        people={people}
-        shops={shops}
-        variant="floating"
-      />
     </TagFilterProvider>
   );
 }

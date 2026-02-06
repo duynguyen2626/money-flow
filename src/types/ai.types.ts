@@ -3,7 +3,21 @@ export type ParseTransactionIntent =
   | "income"
   | "transfer"
   | "lend"
-  | "repay";
+  | "repay"
+  | "debt"
+  | "repayment"
+  | "loan";
+
+export type ChatMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+  metadata?: {
+    tokens?: number;
+    latency?: number;
+    provider?: string;
+  };
+};
 
 export type ParsedPersonRef = {
   id: string | null;
@@ -33,6 +47,8 @@ export type ParsedTransaction = {
   needs: string[];
   confidence: number;
   mode?: "gemini" | "rules";
+  feedback?: string | null;
+  persona?: string | null;
 };
 
 export type ParseTransactionContext = {
@@ -41,6 +57,7 @@ export type ParseTransactionContext = {
   accounts?: Array<{ id: string; name: string }>;
   categories?: Array<{ id: string; name: string }>;
   shops?: Array<{ id: string; name: string }>;
+  previousData?: ParsedTransaction;
 };
 
 export type ParseTransactionRequest = {
@@ -50,4 +67,8 @@ export type ParseTransactionRequest = {
 
 export type ParseTransactionResponse = {
   result: ParsedTransaction;
+  metadata?: {
+    tokens?: number;
+    latency?: number;
+  };
 };
