@@ -137,6 +137,44 @@ export function UnifiedTransactionsPage({
     }, [transactions, selectedAccountId, selectedCycle])
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const draftParam = urlParams.get('draft');
+
+        if (draftParam) {
+            try {
+                const parsedDraft = JSON.parse(decodeURIComponent(draftParam));
+                console.log("🔗 Deep Link Draft detected:", parsedDraft);
+
+                // Set up slide
+                setSlideMode('add');
+                setDuplicateData({
+                    type: parsedDraft.type || parsedDraft.intent || 'expense',
+                    occurred_at: parsedDraft.occurred_at ? new Date(parsedDraft.occurred_at) : new Date(),
+                    amount: parsedDraft.amount || 0,
+                    note: parsedDraft.note || '',
+                    source_account_id: parsedDraft.source_account_id || (accounts[0]?.id || ''),
+                    target_account_id: parsedDraft.destination_account_id || undefined,
+                    category_id: parsedDraft.category_id || undefined,
+                    shop_id: parsedDraft.shop_id || undefined,
+                    person_id: (parsedDraft.person_ids && parsedDraft.person_ids.length > 0) ? parsedDraft.person_ids[0] : undefined,
+                    cashback_mode: parsedDraft.cashback_mode || 'none_back',
+                    cashback_share_percent: parsedDraft.cashback_share_percent,
+                    cashback_share_fixed: parsedDraft.cashback_share_fixed,
+                });
+                setIsSlideOpen(true);
+
+                // Clear the param from URL without refreshing
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, '', newUrl);
+            } catch (e) {
+                console.error("❌ Failed to parse deep link draft:", e);
+            }
+        }
+    }, [accounts]);
+
+    useEffect(() => {
         if (selectedCycle && !cycleOptions.some(o => o.value === selectedCycle)) {
             setSelectedCycle(undefined)
         }

@@ -794,7 +794,7 @@ export async function getRecentAccountsByTransactions(limit: number = 5): Promis
   if (error || !txns) return []
 
   // Get unique account IDs in order of last transaction
-  const accountIds = Array.from(new Set(txns.map(t => t.account_id))).slice(0, limit)
+  const accountIds = Array.from(new Set(txns.map(t => t.account_id as string))).slice(0, limit)
   if (accountIds.length === 0) return []
 
   // Fetch account details

@@ -395,7 +395,7 @@ export function TransactionHeader({
         items={filteredCategories.map(c => ({
           id: c.id,
           name: c.name,
-          image: c.image_url || c.icon,
+          image: c.image,
         }))}
         value={localCategoryId}
         onValueChange={handleFilterChange(setLocalCategoryId, onCategoryChange)}
@@ -606,7 +606,7 @@ export function TransactionHeader({
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Category</label>
               <QuickFilterDropdown
-                items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image_url || c.icon }))}
+                items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image }))}
                 value={localCategoryId}
                 onValueChange={setLocalCategoryId}
                 placeholder="Category"

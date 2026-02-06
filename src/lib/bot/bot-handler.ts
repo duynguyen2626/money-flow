@@ -117,7 +117,7 @@ export async function handleBotMessage(params: {
     }
 
     const { data: profile, error } = await supabase
-      .from("profiles")
+      .from("people")
       .select("id, name")
       .eq("id", profileId)
       .maybeSingle();
@@ -156,7 +156,7 @@ export async function handleBotMessage(params: {
     const defaultProfileId = process.env.BOT_DEFAULT_PROFILE_ID;
     if (defaultProfileId) {
       const { data: profile, error } = await supabase
-        .from("profiles")
+        .from("people")
         .select("id, name")
         .eq("id", defaultProfileId)
         .maybeSingle();
@@ -179,6 +179,51 @@ export async function handleBotMessage(params: {
         "Bot not linked. Please use /link <profile_id> or set BOT_DEFAULT_PROFILE_ID.",
       ],
     };
+  }
+
+  // Support Dynamic Shortcut Commands (e.g., /lam 50k)
+  if (command?.command.startsWith("/")) {
+    const templateName = command.command.substring(1); // remove /
+    const template = await getQuickAddTemplate(link.profile_id, templateName);
+
+    if (template) {
+      const payload = (template as any).payload ?? {};
+      const baseDraft = buildDraftFromTemplate(payload);
+
+      let nextState: BotWizardState = {
+        step: "review",
+        draft: baseDraft
+      };
+
+      // If extra args provided, try to parse them (e.g., amount)
+      if (command.args) {
+        const { context, raw } = await loadBotContext(supabase);
+        const { state: updatedState } = await advanceWizard({
+          text: command.args,
+          state: { step: "input", draft: baseDraft },
+          context,
+          rawContext: raw,
+        });
+        if (updatedState) nextState = updatedState;
+      }
+
+      await updateBotUserState({
+        platform: params.platform,
+        platformUserId: params.platformUserId,
+        state: nextState,
+      });
+
+      const { raw } = await loadBotContext(supabase);
+      const deepLink = `${process.env.APP_URL || 'https://money-flow-3.vercel.app'}/transactions/new?draft=${encodeURIComponent(JSON.stringify(nextState.draft))}`;
+
+      return {
+        replies: [
+          `Shortcut "${templateName}" applied.`,
+          summarizeDraft(nextState.draft, raw),
+          `🔗 [Open in App for Advanced Editing](${deepLink})`
+        ]
+      };
+    }
   }
 
   if (command?.command === "/reset" || command?.command === "/cancel") {
@@ -268,7 +313,10 @@ export async function handleBotMessage(params: {
   }
 
   const state = parseState(link.state as Json | null);
+  const { context, raw } = await loadBotContext(supabase);
+
   if (state?.step === "review") {
+    // ... same logic as before, but without redundant loadBotContext ...
     if (yesTokens.has(normalized)) {
       const draft = buildBotTransactionDraft(state.draft);
       if (!draft) {
@@ -312,7 +360,6 @@ export async function handleBotMessage(params: {
       return { replies: ["Okay, tell me what to change."] };
     }
 
-    const { context, raw } = await loadBotContext(supabase);
     const { replies, state: nextState } = await advanceWizard({
       text: trimmed,
       state: { step: "input", draft: state.draft },
@@ -327,7 +374,6 @@ export async function handleBotMessage(params: {
     return { replies };
   }
 
-  const { context, raw } = await loadBotContext(supabase);
   const { replies, state: nextState } = await advanceWizard({
     text: trimmed,
     state: state ?? undefined,
@@ -340,6 +386,12 @@ export async function handleBotMessage(params: {
     platformUserId: params.platformUserId,
     state: nextState,
   });
+
+  // Append Deep Link if in review step
+  if (nextState.step === "review") {
+    const deepLink = `${process.env.APP_URL || 'https://money-flow-3.vercel.app'}/transactions/new?draft=${encodeURIComponent(JSON.stringify(nextState.draft))}`;
+    replies.push(`🔗 [Open in App for Advanced Editing](${deepLink})`);
+  }
 
   return { replies };
 }

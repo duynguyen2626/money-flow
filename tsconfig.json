@@ -41,6 +41,7 @@
     "src/types/supabase.ts",
     "scripts",
     ".agent",
-    "integrations"
+    "integrations",
+    "supabase/functions"
   ]
 }

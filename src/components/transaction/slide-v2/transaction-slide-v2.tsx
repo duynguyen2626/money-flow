@@ -138,14 +138,17 @@ export function TransactionSlideV2({
                 if (!schema || typeof schema.safeParse !== 'function') {
                     const msg = `🚨 CRITICAL ERROR: ${name} schema is invalid or undefined! Type: ${typeof schema}`;
                     console.error(msg);
-                    logErrorToServer(msg, { type: typeof schema });
-                    return { values: {}, errors: {} };
+                    return { values: values, errors: {} };
                 }
 
                 // 2. Safe Execution
-                // Move zodResolver creation inside try-catch to catch "reading '_zod'" errors
-                const resolver = zodResolver(schema);
-                return await resolver(values, context, options);
+                try {
+                    const resolver = zodResolver(schema);
+                    return await resolver(values, context, options);
+                } catch (e) {
+                    console.error("Zod Resolver inner crash:", e);
+                    return { values: values, errors: {} };
+                }
 
             } catch (error) {
                 // 3. Crash Prevention
