@@ -5,6 +5,7 @@ import { QuickAddChatV2 } from "./quick-add-chat-v2";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { usePathname } from "next/navigation";
+import { getAccountRemindersAction, AIReminder } from "@/actions/ai-reminder-actions";
 
 export function GlobalAI() {
     const pathname = usePathname();
@@ -14,6 +15,7 @@ export function GlobalAI() {
         people: Person[];
         shops: Shop[];
     } | null>(null);
+    const [reminders, setReminders] = useState<AIReminder[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Context Detection
@@ -41,6 +43,7 @@ export function GlobalAI() {
         async function fetchData() {
             const supabase = createClient();
 
+            // Fetch Base Data
             const [
                 { data: accounts },
                 { data: categories },
@@ -59,6 +62,13 @@ export function GlobalAI() {
                 people: (people || []) as any,
                 shops: (shops || []) as any
             });
+
+            // Fetch AI Reminders (Due Dates)
+            const reminderRes = await getAccountRemindersAction();
+            if (reminderRes.success) {
+                setReminders(reminderRes.data);
+            }
+
             setLoading(false);
         }
 
@@ -76,6 +86,7 @@ export function GlobalAI() {
             variant="floating"
             contextPage={contextPage as any}
             currentPersonId={currentPersonId}
+            reminders={reminders}
         />
     );
 }

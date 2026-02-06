@@ -13,6 +13,8 @@ import { toast } from "sonner";
 import type { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import type { ChatMessage, ParsedTransaction } from "@/types/ai.types";
 
+import { AIReminder } from "@/actions/ai-reminder-actions";
+
 interface QuickAddChatV2Props {
     accounts: Account[];
     categories: Category[];
@@ -21,6 +23,7 @@ interface QuickAddChatV2Props {
     variant?: "floating" | "inline";
     contextPage?: "people" | "people_detail" | "accounts" | "transactions" | "batch" | "debt";
     currentPersonId?: string;
+    reminders?: AIReminder[];
 }
 
 export function QuickAddChatV2({
@@ -30,7 +33,8 @@ export function QuickAddChatV2({
     shops,
     variant = "floating",
     contextPage,
-    currentPersonId
+    currentPersonId,
+    reminders = []
 }: QuickAddChatV2Props) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
@@ -93,6 +97,37 @@ export function QuickAddChatV2({
         localStorage.setItem("mf_chat_history", JSON.stringify(messages));
         localStorage.setItem("mf_chat_open", open.toString());
     }, [messages, open]);
+
+    // Proactive Reminders Logic
+    useEffect(() => {
+        if (reminders.length > 0) {
+            const hasCritical = reminders.some(r => r.severity === 'critical' || r.days_remaining <= 1);
+
+            // Inject reminders into chat if not already there
+            const reminderMessages = reminders.map(r => ({
+                id: r.id,
+                role: "assistant" as const,
+                content: `🔔 **NHẮC NHỞ:** ${r.message}`,
+                metadata: { provider: "system_reminder" }
+            }));
+
+            setMessages(prev => {
+                const existingIds = new Set(prev.map(m => m.id));
+                const newReminders = reminderMessages.filter(rm => !existingIds.has(rm.id));
+                if (newReminders.length === 0) return prev;
+                return [...prev, ...newReminders];
+            });
+
+            // Auto-open if critical
+            if (hasCritical) {
+                const hasOpenedBefore = sessionStorage.getItem(`mf_reminder_opened_${new Date().toDateString()}`);
+                if (!hasOpenedBefore) {
+                    setOpen(true);
+                    sessionStorage.setItem(`mf_reminder_opened_${new Date().toDateString()}`, "true");
+                }
+            }
+        }
+    }, [reminders]);
     const handleParse = async (overrideInput?: string) => {
         const textToParse = overrideInput || input;
         if (!textToParse.trim() || isParsing) return;
@@ -231,6 +266,8 @@ export function QuickAddChatV2({
         }
     };
 
+    const unreadRemindersCount = messages.filter(m => m.metadata?.provider === "system_reminder" && !open).length;
+
     if (variant === "floating") {
         return (
             <>
@@ -238,9 +275,19 @@ export function QuickAddChatV2({
                 {!open && (
                     <button
                         onClick={() => setOpen(true)}
-                        className="fixed bottom-5 right-5 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-2xl transition-all hover:scale-110 hover:shadow-blue-500/50"
+                        className={cn(
+                            "fixed bottom-5 right-5 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-2xl transition-all hover:scale-110 hover:shadow-blue-500/50",
+                            unreadRemindersCount > 0 && "animate-pulse shadow-[0_0_20px_rgba(59,130,246,0.6)]"
+                        )}
                     >
-                        <Sparkles className="h-6 w-6" />
+                        <div className="relative">
+                            <Sparkles className="h-6 w-6" />
+                            {unreadRemindersCount > 0 && (
+                                <span className="absolute -top-3 -right-3 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white animate-bounce">
+                                    {unreadRemindersCount}
+                                </span>
+                            )}
+                        </div>
                     </button>
                 )}
 
