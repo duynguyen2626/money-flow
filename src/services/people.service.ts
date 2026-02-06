@@ -988,7 +988,7 @@ export async function getRecentPeopleByTransactions(limit: number = 5): Promise<
   if (error || !txns) return []
 
   // Get unique person IDs in order of last transaction
-  const personIds = Array.from(new Set(txns.map(t => t.person_id))).slice(0, limit)
+  const personIds = Array.from(new Set(txns.map(t => t.person_id as string))).slice(0, limit)
   if (personIds.length === 0) return []
 
   // Fetch people details

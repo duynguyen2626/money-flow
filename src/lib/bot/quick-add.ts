@@ -408,7 +408,7 @@ export async function loadBotContext(
     .neq("type", "system");
 
   const { data: people } = await supabase
-    .from("profiles")
+    .from("people")
     .select("id, name, is_group, is_owner, group_parent_id, is_archived");
 
   const { data: shops } = await supabase
@@ -699,7 +699,7 @@ export function buildBotTransactionDraft(draft: BotWizardDraft): BotTransactionD
     draft.person_ids.length > 1;
 
   return {
-    type,
+    type: type as any,
     amount: draft.amount,
     occurred_at: draft.occurred_at,
     source_account_id: draft.source_account_id,
