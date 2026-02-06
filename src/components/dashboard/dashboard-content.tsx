@@ -6,7 +6,6 @@ import { format } from 'date-fns'
 import { DashboardStats } from '@/services/dashboard.service'
 import { TrendingDown, TrendingUp, AlertCircle, FileText, Plus, Check, MoreHorizontal, Wallet, Users } from 'lucide-react'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
-import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { Select } from '@/components/ui/select'
 import { Person } from '@/types/moneyflow.types'
@@ -566,13 +565,6 @@ export function DashboardContent({
           </div>
         </div>
       </div>
-      <QuickAddChat
-        accounts={accounts}
-        categories={categories}
-        people={people}
-        shops={shops}
-        variant="floating"
-      />
 
       <TransactionSlideV2
         open={isSlideOpen}

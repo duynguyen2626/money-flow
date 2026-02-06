@@ -126,7 +126,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
     }
   }
 
-  const rawDueDate = getVal(['due_date', 'dueDate', 'due_day']);
+  const rawDueDate = program ? program.dueDate : getVal(['due_date', 'dueDate', 'due_day']);
   let dueDate: number | null = null;
   if (rawDueDate !== undefined && rawDueDate !== null) {
     const num = Number(rawDueDate);

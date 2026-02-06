@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import type { ComboboxGroup } from "@/components/ui/combobox";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { TransactionPreviewCard } from "./transaction-preview-card";
 import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
 import { generateTag } from "@/lib/tag";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import type { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import type {
   ParsedTransaction,
   ParseTransactionIntent,
+  ChatMessage,
 } from "@/types/ai.types";
 import type { TransactionFormValues } from "@/components/moneyflow/transaction-form";
 import {
@@ -32,7 +34,10 @@ import {
   Check,
   X,
   Pencil,
+  Zap,
+  Activity,
 } from "lucide-react";
+import { parseTransactionAction } from "@/actions/ai-actions";
 
 type WizardStep =
   | "input"
@@ -42,13 +47,10 @@ type WizardStep =
   | "account"
   | "transfer_destination"
   | "split_confirm"
-  | "review";
+  | "preview"
+  | "edit_details";
 
-type ChatMessage = {
-  id: string;
-  role: "assistant" | "user";
-  content: string;
-};
+// Local ChatMessage type removed (using imported one from ai.types)
 
 type QuickAddDraft = {
   intent: ParseTransactionIntent | null;
@@ -792,8 +794,13 @@ export function QuickAddChat({
     setIsMinimized(false);
   };
 
-  const appendMessage = (role: "assistant" | "user", content: string) => {
-    setMessages((prev) => [...prev, { id: createId(), role, content }]);
+  const appendMessage = (
+    role: "assistant" | "user",
+    content: string,
+    metadata?: { tokens?: number; latency?: number },
+  ) => {
+    const newMessage: ChatMessage = { id: createId(), role, content, metadata };
+    setMessages((prev) => [...prev, newMessage]);
     if (isMinimized || !open) {
       setUnreadCount((prev) => prev + 1);
     }
@@ -830,29 +837,54 @@ export function QuickAddChat({
   const applyParsedResult = (result: ParsedTransaction) => {
     const intent = result.intent;
     const groupCandidate =
-      findByName(groups, result.group_name ?? undefined) ?? null;
+      (result.group_id ? groups.find((g) => g.id === result.group_id) : null) ??
+      findByName(groups, result.group_name ?? undefined) ??
+      null;
+
     const resolvedPeople = dedupeById(
       result.people
-        .map((ref) => findByName(individualPeople, ref.name))
+        .map((ref) =>
+          ref.id
+            ? individualPeople.find((p) => p.id === ref.id)
+            : findByName(individualPeople, ref.name),
+        )
         .filter((person): person is Person => Boolean(person)),
     );
+
     const group =
       groupCandidate &&
         resolvedPeople.some(
-          (person) => normalizeName(person.name) === normalizeName(groupCandidate.name),
+          (person) =>
+            normalizeName(person.name) === normalizeName(groupCandidate.name),
         )
         ? null
         : groupCandidate;
+
     const sourceAccount =
-      findByName(accounts, result.source_account_name ?? undefined) ?? null;
+      (result.source_account_id
+        ? accounts.find((a) => a.id === result.source_account_id)
+        : null) ??
+      findByName(accounts, result.source_account_name ?? undefined) ??
+      null;
+
     const destinationAccount =
-      findByName(accounts, result.debt_account_name ?? undefined) ?? null;
-    const occurredAt = result.occurred_at
-      ? new Date(`${result.occurred_at}T12:00:00`)
-      : null;
+      (result.debt_account_id
+        ? accounts.find((a) => a.id === result.debt_account_id)
+        : null) ??
+      findByName(accounts, result.debt_account_name ?? undefined) ??
+      null;
+
+    const occurredAt = result.occurred_at ? new Date(result.occurred_at) : null;
+
     const shop =
+      (result.shop_id ? shops.find((s) => s.id === result.shop_id) : null) ??
       findByName(shops, result.shop_name ?? undefined) ??
       getDefaultShop(shops);
+
+    const category =
+      (result.category_id
+        ? categories.find((c) => c.id === result.category_id)
+        : null) ?? findByName(categories, result.category_name ?? undefined);
 
     const splitBill =
       group
@@ -880,7 +912,7 @@ export function QuickAddChat({
       splitBill,
       splitBillConfirmed,
       shop: shop ?? null,
-      category: findByName(categories, result.category_name ?? undefined),
+      category,
       cashbackSharePercent,
       cashbackShareFixed,
       cashbackMode: result.cashback_mode ?? null,
@@ -909,40 +941,41 @@ export function QuickAddChat({
     setIsParsing(true);
     setParseError(null);
     try {
-      const response = await fetch("/api/ai/parse-transaction", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text,
-          context: {
-            people: individualPeople.map((person) => ({
-              id: person.id,
-              name: person.name,
-            })),
-            groups: groups.map((group) => ({
-              id: group.id,
-              name: group.name,
-            })),
-            accounts: accounts.map((account) => ({
-              id: account.id,
-              name: account.name,
-            })),
-            categories: categories.map((category) => ({
-              id: category.id,
-              name: category.name,
-            })),
-            shops: shops.map((shop) => ({
-              id: shop.id,
-              name: shop.name,
-            })),
-          },
-        }),
+      const response = await parseTransactionAction(text, {
+        people: individualPeople.map((person) => ({
+          id: person.id,
+          name: person.name,
+        })),
+        groups: groups.map((group) => ({
+          id: group.id,
+          name: group.name,
+        })),
+        accounts: accounts.map((account) => ({
+          id: account.id,
+          name: account.name,
+        })),
+        categories: categories.map((category) => ({
+          id: category.id,
+          name: category.name,
+        })),
+        shops: shops.map((shop) => ({
+          id: shop.id,
+          name: shop.name,
+        })),
       });
-      if (!response.ok) {
-        throw new Error("Unable to parse");
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Unable to parse");
       }
-      const data = (await response.json()) as { result: ParsedTransaction };
-      let nextDraft: QuickAddDraft = applyParsedResult(data.result);
+
+      const parsedTx = response.data;
+
+      // SHOW ROLLY FEEDBACK
+      if (parsedTx.feedback) {
+        appendMessage("assistant", parsedTx.feedback, response.metadata);
+      }
+
+      let nextDraft: QuickAddDraft = applyParsedResult(parsedTx);
 
       // FIX: Preserve Context if AI returned no intent
       if (!nextDraft.intent && contextPerson) {
@@ -1009,6 +1042,11 @@ export function QuickAddChat({
       setAccountQuery(accountLookupText);
       const nextStep = computeNextStep(nextDraft);
       setDraft(nextDraft);
+
+      if (nextStep === "account" && candidates.length > 1) {
+        appendMessage("assistant", `Tôi tìm thấy ${candidates.length} tài khoản có tên "${nextDraft.sourceAccount?.name ?? accountLookupText}". Bạn dùng thẻ nào thế?`);
+      }
+
       goToStep(nextStep);
     } catch (error) {
       setParseError("Parsing failed. We'll continue manually.");
@@ -2640,6 +2678,21 @@ export function QuickAddChat({
               >
                 {message.content}
               </div>
+              {message.metadata && (
+                <div className={cn(
+                  "mt-2 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wider",
+                  message.role === "user" ? "text-blue-200" : "text-slate-400"
+                )}>
+                  <span className="flex items-center gap-1">
+                    <Zap className="h-2.5 w-2.5" />
+                    {message.metadata.latency}ms
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Activity className="h-2.5 w-2.5" />
+                    {message.metadata.tokens} tokens
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -2651,40 +2704,42 @@ export function QuickAddChat({
           {parseError}
         </div>
       )}
-      {templateError && step !== "review" && (
+      {templateError && step !== "preview" && step !== "edit_details" && (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           {templateError}
         </div>
       )}
 
-      {step === "review" ? (
+      {step === "edit_details" ? (
         renderReview()
       ) : (
         <>
           {renderQuickPicks()}
-          <div className="flex items-end gap-2">
-            <Textarea
-              value={inputValue}
-              onChange={(event) => setInputValue(event.target.value)}
-              placeholder="Type your answer..."
-              className="min-h-[72px]"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (!isParsing) {
-                    handleSubmitInput();
+          {step !== "preview" && ( // Hide input on preview step
+            <div className="flex items-end gap-2">
+              <Textarea
+                value={inputValue}
+                onChange={(event) => setInputValue(event.target.value)}
+                placeholder="Type your answer..."
+                className="min-h-[72px]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isParsing) {
+                      handleSubmitInput();
+                    }
                   }
-                }
-              }}
-            />
-            <Button
-              onClick={handleSubmitInput}
-              disabled={isParsing}
-              className="h-10"
-            >
-              {isParsing ? "Parsing..." : "Send"}
-            </Button>
-          </div>
+                }}
+              />
+              <Button
+                onClick={handleSubmitInput}
+                disabled={isParsing}
+                className="h-10"
+              >
+                {isParsing ? "Parsing..." : "Send"}
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"

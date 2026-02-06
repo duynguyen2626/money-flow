@@ -396,10 +396,16 @@ export function TransactionSlideV2({
                             onClick={() => {
                                 onBackButtonClick?.();
                             }}
-                            className="p-1.5 bg-slate-100 rounded-full text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
-                            title="Close"
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+                                initialData?.metadata?.source === 'chatbot'
+                                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            )}
+                            title="Back"
                         >
-                            <ArrowLeft className="w-4 h-4" />
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                            {initialData?.metadata?.source === 'chatbot' && "Quay lại Chat"}
                         </button>
 
                         <SheetTitle className="flex items-center gap-2">
