@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { QuickAddChatV2 } from "./quick-add-chat-v2";
 import { createClient } from "@/lib/supabase/client";
 import type { Account, Category, Person, Shop } from "@/types/moneyflow.types";
+import { usePathname } from "next/navigation";
 
 export function GlobalAI() {
+    const pathname = usePathname();
     const [data, setData] = useState<{
         accounts: Account[];
         categories: Category[];
@@ -13,6 +15,27 @@ export function GlobalAI() {
         shops: Shop[];
     } | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Context Detection
+    const contextPage = useMemo(() => {
+        if (!pathname) return undefined;
+        if (pathname.startsWith('/people/')) {
+            const id = pathname.split('/')[2];
+            if (id && id !== 'details') return 'people_detail';
+            return 'people';
+        }
+        if (pathname.startsWith('/people')) return 'people';
+        if (pathname.startsWith('/accounts')) return 'accounts';
+        if (pathname.startsWith('/transactions')) return 'transactions';
+        if (pathname.startsWith('/batch')) return 'batch';
+        return undefined;
+    }, [pathname]);
+
+    const currentPersonId = useMemo(() => {
+        if (!pathname || !pathname.startsWith('/people/')) return undefined;
+        const id = pathname.split('/')[2];
+        return id && id !== 'details' ? id : undefined;
+    }, [pathname]);
 
     useEffect(() => {
         async function fetchData() {
@@ -51,6 +74,8 @@ export function GlobalAI() {
             people={data.people}
             shops={data.shops}
             variant="floating"
+            contextPage={contextPage as any}
+            currentPersonId={currentPersonId}
         />
     );
 }

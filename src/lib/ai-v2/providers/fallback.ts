@@ -86,6 +86,19 @@ export class FallbackParser implements AIProviderInterface {
             ? context.categories?.find(c => c.name.toLowerCase().includes(categoryKeyword))
             : null;
 
+        // Detect person if on people_detail page
+        let peopleRefs = isRefinement ? (prev?.people || []) : [];
+        if (!isRefinement && context.context_page === "people_detail" && context.current_person_id) {
+            const currentPerson = context.people?.find(p => p.id === context.current_person_id);
+            if (currentPerson && !peopleRefs.some(p => p.id === currentPerson.id)) {
+                peopleRefs.push({ id: currentPerson.id, name: currentPerson.name });
+            }
+            // Auto-intent to lend if it was an expense
+            if (intent === "expense" || !intent) {
+                intent = "lend";
+            }
+        }
+
         return {
             intent: intent || (isRefinement ? prev?.intent : "expense") || "expense",
             amount: amount,
@@ -94,7 +107,7 @@ export class FallbackParser implements AIProviderInterface {
             source_account_name: matchedAccount?.name || (isRefinement ? prev?.source_account_name : null) || accountKeyword || null,
             category_id: matchedCategory?.id || (isRefinement ? prev?.category_id : null) || null,
             category_name: matchedCategory?.name || (isRefinement ? prev?.category_name : null) || categoryKeyword || null,
-            people: isRefinement ? (prev?.people || []) : [],
+            people: peopleRefs,
             occurred_at: occurredAt,
             split_bill: isRefinement ? prev?.split_bill : null,
             shop_id: isRefinement ? prev?.shop_id : null,

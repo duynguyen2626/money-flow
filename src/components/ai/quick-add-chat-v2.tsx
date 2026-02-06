@@ -19,6 +19,8 @@ interface QuickAddChatV2Props {
     people: Person[];
     shops: Shop[];
     variant?: "floating" | "inline";
+    contextPage?: "people" | "people_detail" | "accounts" | "transactions" | "batch" | "debt";
+    currentPersonId?: string;
 }
 
 export function QuickAddChatV2({
@@ -26,7 +28,9 @@ export function QuickAddChatV2({
     categories,
     people,
     shops,
-    variant = "floating"
+    variant = "floating",
+    contextPage,
+    currentPersonId
 }: QuickAddChatV2Props) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
@@ -110,7 +114,9 @@ export function QuickAddChatV2({
                 people: people.map(p => ({ id: p.id, name: p.name })),
                 shops: shops.map(s => ({ id: s.id, name: s.name })),
                 groups: [],
-                previousData: parsedData || undefined
+                previousData: parsedData || undefined,
+                context_page: contextPage,
+                current_person_id: currentPersonId
             });
 
             if (result.success && result.data) {

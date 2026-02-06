@@ -58,6 +58,8 @@ export type ParseTransactionContext = {
   categories?: Array<{ id: string; name: string }>;
   shops?: Array<{ id: string; name: string }>;
   previousData?: ParsedTransaction;
+  context_page?: "people" | "people_detail" | "accounts" | "transactions" | "batch" | "debt";
+  current_person_id?: string;
 };
 
 export type ParseTransactionRequest = {

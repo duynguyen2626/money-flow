@@ -20,8 +20,11 @@ IMPORTANT RULES:
    - MERGE the user's new request with "previous_transaction".
    - Example 1: User previously said "Ăn trưa 50k", context has amount 50000. Now user says "sửa lại thành ngày hôm qua" -> KEEP amount 50000, change occurred_at to yesterday's date.
    - Example 2: "không phải 50k mà là 100k" -> KEEP categories/accounts, change amount to 100000.
-   - NEVER say "Không có thông tin cụ thể" if a "previous_transaction" exists; just apply the change or return the original data if no change is detected.
-5. Provide sassy Vietnamese feedback in the "feedback" field.
+    - NEVER say "Không có thông tin cụ thể" if a "previous_transaction" exists; just apply the change or return the original data if no change is detected.
+5. Page Context Rules (CRITICAL):
+   - If "context_page" is "people_detail", and the user provides an expense (e.g., "Shopee 50k"), automatically set intent to "lend" and associate it with the "current_person_id" provided.
+   - If "context_page" is "people", prioritize identifying a person from the input. If no person is mentioned, provide feedback asking who it was for.
+6. Provide sassy Vietnamese feedback in the "feedback" field.
 
 Response format:
 {
@@ -127,6 +130,14 @@ export class GroqProvider implements AIProviderInterface {
         const parts: string[] = [];
 
         parts.push(`Current Date: ${new Date().toISOString().split('T')[0]}`);
+
+        if (context.context_page) {
+            parts.push(`Context Page: ${context.context_page}`);
+        }
+        if (context.current_person_id) {
+            const person = context.people?.find(p => p.id === context.current_person_id);
+            parts.push(`Current Person: ${person?.name || 'Unknown'} (id: ${context.current_person_id})`);
+        }
 
         if (context.accounts?.length) {
             parts.push(`Available accounts: ${context.accounts.map(a => `${a.name} (id: ${a.id})`).join(", ")}`);
