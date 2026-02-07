@@ -162,6 +162,8 @@ export function AccountDetailTransactions({
     // Dialog State
     const [isAddSlideOpen, setIsAddSlideOpen] = useState(false)
     const [addInitialData, setAddInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>()
+    const [isEditSlideOpen, setIsEditSlideOpen] = useState(false)
+    const [editingTransaction, setEditingTransaction] = useState<TransactionWithDetails | null>(null)
     const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false)
     const [clearType, setClearType] = useState<'filter' | 'all'>('filter')
     const hasAutoSelectedCycle = useRef(false)
@@ -461,6 +463,24 @@ export function AccountDetailTransactions({
                 }}
             />
 
+            {/* Edit Transaction Slide (V2) */}
+            <TransactionSlideV2
+                open={isEditSlideOpen}
+                onOpenChange={setIsEditSlideOpen}
+                mode="single"
+                editingId={editingTransaction?.id}
+                operationMode="edit"
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                onSuccess={() => {
+                    setIsEditSlideOpen(false)
+                    setEditingTransaction(null)
+                    router.refresh()
+                }}
+            />
+
             {/* Toolbar */}
             <div className="border-b border-slate-200 bg-white px-6 py-3">
                 <div className="flex items-center gap-2">
@@ -563,7 +583,11 @@ export function AccountDetailTransactions({
                                 mode={dateMode}
                                 onDateChange={setDate}
                                 onRangeChange={setDateRange}
-                                onModeChange={setDateMode}
+                                onModeChange={(mode) => {
+                                    if (mode === 'month' || mode === 'range' || mode === 'date') {
+                                        setDateMode(mode);
+                                    }
+                                }}
                                 availableMonths={availableMonths}
                                 accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : []}
                                 disabled={!!selectedCycle}
@@ -660,6 +684,10 @@ export function AccountDetailTransactions({
                     contextId={account.id}
                     activeTab={statusFilter}
                     showPagination
+                    onEdit={(txn) => {
+                        setEditingTransaction(txn)
+                        setIsEditSlideOpen(true)
+                    }}
                 />
             </div>
 

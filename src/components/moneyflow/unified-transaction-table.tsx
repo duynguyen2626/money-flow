@@ -2237,11 +2237,16 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
 
                             if (isSourceContext) {
-                              // Viewing Source (Account). Show where money went.
-                              // Flow: Source -> Dest/Person.
-                              // So we show Dest/Person with "TO" badge.
-                              entityToShow = hasPerson ? 'person' : 'dest'
-                              flowBadgeType = 'TO'
+                              // Viewing Source (Account).
+                              if (hasTarget || hasPerson) {
+                                // Movement TO somebody/something
+                                entityToShow = hasPerson ? 'person' : 'dest'
+                                flowBadgeType = 'TO'
+                              } else {
+                                // Simple Income/Expense from A's perspective
+                                entityToShow = 'dest'
+                                flowBadgeType = txn.type === 'income' ? 'FROM' : 'TO'
+                              }
                             }
                             else if (isDestContext || isPersonContext) {
                               // Viewing Dest/Person. Show where money came from.
@@ -2250,9 +2255,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               entityToShow = 'source'
                               flowBadgeType = 'FROM'
                             }
-                            // If (!hasTarget && !hasPerson), it's a simple expense/income, no flow badge needed.
-                            // Default entityToShow is 'source', flowBadgeType is null.
-
 
                             let displayName = sourceName
                             let displayImage = sourceIcon
@@ -2271,6 +2273,24 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               displayImage = destIcon
                               displayLink = destId ? `/accounts/${destId}` : null
                               // Destination usually no badge unless debt, but for account transfer no badge currently
+                              badgeToDisplay = null
+                              isCycleBadge = false
+
+                              // Fallback to Category/Shop for simple transactions
+                              if (displayName === 'Unknown' && !hasPerson && !hasTarget) {
+                                const cat = categories.find(c => c.id === txn.category_id)
+                                displayName = cat?.name || txn.category_name || 'General'
+                                displayImage = cat?.image_url || null
+                                displayLink = null
+                              }
+                            }
+
+                            // Universal fallback for Unknown in Single Flow
+                            if (displayName === 'Unknown' && !hasPerson && !hasTarget) {
+                              const cat = categories.find(c => c.id === txn.category_id)
+                              displayName = cat?.name || txn.category_name || 'General'
+                              displayImage = cat?.image_url || null
+                              displayLink = null
                               badgeToDisplay = null
                               isCycleBadge = false
                             }
