@@ -44,6 +44,7 @@ interface TransactionControlBarProps {
     shops: Shop[]
     onAddTransaction: (type: string) => void
     currentCycleTag: string
+    isPending?: boolean
 }
 
 import { useRouter } from 'next/navigation'
@@ -83,38 +84,23 @@ export function TransactionControlBar({
     shops,
     onAddTransaction,
     currentCycleTag,
+    isPending: isPendingProp,
 }: TransactionControlBarProps) {
-    const [isPending, startTransition] = useTransition()
     const [popoverOpen, setPopoverOpen] = useState(false)
-    const router = useRouter()
     const isSettled = Math.abs(activeCycle.remains) < 100
     const isCurrentCycle = activeCycle.tag === currentCycleTag
     const isAllHistory = selectedYear === null
     const cycleLabel = isAllHistory ? 'All History' : activeCycle.tag
 
-    // URL sync effect or other logic can go here if needed, 
-    // but we use page-level Suspense for loading indicators now.
-
     const handleCycleChange = (tag: string) => {
-        startTransition(() => {
-            onCycleChange(tag)
-            // Update URL with selected tag
-            const url = new URL(window.location.href)
-            url.searchParams.set('tag', tag)
-            router.push(url.toString(), { scroll: false })
-        })
+        onCycleChange(tag)
     }
 
     const handleYearChange = (year: string | null) => {
-        startTransition(() => {
-            onYearChange(year)
-            if (year === null) {
-                const url = new URL(window.location.href)
-                url.searchParams.delete('tag')
-                router.push(url.toString(), { scroll: false })
-            }
-        })
+        onYearChange(year)
     }
+
+    const isPending = isPendingProp
 
     const handlePasteSearch = async () => {
         try {
@@ -132,10 +118,10 @@ export function TransactionControlBar({
     return (
         <div className="flex flex-col gap-2 p-4 pb-0 relative">
             {isPending && (
-                <div className="absolute inset-x-4 top-4 bottom-0 bg-white/30 z-50 flex items-start justify-center pt-2 rounded-xl pointer-events-none">
-                    <div className="flex items-center gap-2 bg-indigo-600 text-white px-3 py-1.5 rounded-full shadow-lg scale-100 transition-transform animate-in fade-in slide-in-from-top-2 duration-200">
-                        <RefreshCw className="h-3 w-3 animate-spin" />
-                        <span className="text-[10px] font-bold tracking-tight uppercase">Updating...</span>
+                <div className="absolute inset-0 bg-white/40 z-50 flex items-center justify-center rounded-xl backdrop-blur-[1px] animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2 bg-white/90 px-4 py-2 rounded-2xl shadow-xl border border-slate-200/50">
+                        <RefreshCw className="h-4 w-4 animate-spin text-indigo-600" />
+                        <span className="text-[11px] font-bold text-slate-600 tracking-tight uppercase">Syncing...</span>
                     </div>
                 </div>
             )}
@@ -212,20 +198,27 @@ export function TransactionControlBar({
                         onMouseLeave={() => setPopoverOpen(false)}
                     >
                         <div className="max-h-[400px] overflow-y-auto">
-                            {/* All History Option */}
+                            {/* All History Option - Context Aware */}
                             <button
                                 onClick={() => {
-                                    handleYearChange(null)
+                                    if (selectedYear) {
+                                        // If a year is selected, 'All History' means 'All [Year]'
+                                        onCycleChange('all')
+                                    } else {
+                                        // If no year, it means 'All Time'
+                                        handleYearChange(null)
+                                        onCycleChange('all')
+                                    }
                                     setPopoverOpen(false)
                                 }}
                                 className={cn(
                                     "w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-xs mb-1",
-                                    selectedYear === null ? "bg-amber-50 text-amber-700" : "hover:bg-slate-50"
+                                    (selectedYear === null || activeCycle.tag === 'all') ? "bg-amber-50 text-amber-700" : "hover:bg-slate-50"
                                 )}
                             >
-                                <span className={cn("font-bold flex items-center gap-2", selectedYear === null ? "text-amber-900" : "text-slate-600")}>
+                                <span className={cn("font-bold flex items-center gap-2", (selectedYear === null || activeCycle.tag === 'all') ? "text-amber-900" : "text-slate-600")}>
                                     <RefreshCcw className="w-3 h-3" />
-                                    All History
+                                    {selectedYear ? `All ${selectedYear}` : 'All History'}
                                 </span>
                             </button>
 
@@ -295,7 +288,11 @@ export function TransactionControlBar({
                 <div className="h-6 w-px bg-slate-200 flex-shrink-0 hidden md:block" />
 
                 {/* 6. Type Filter */}
-                <TypeFilterDropdown value={filterType} onChange={onFilterTypeChange} />
+                <TypeFilterDropdown
+                    value={filterType}
+                    onChange={onFilterTypeChange}
+                    allowedTypes={['all', 'lend', 'repay', 'cashback']}
+                />
 
                 {/* 7. Status Filter */}
                 <StatusDropdown value={statusFilter} onChange={onStatusChange} />

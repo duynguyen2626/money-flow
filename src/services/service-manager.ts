@@ -207,23 +207,37 @@ export async function distributeService(serviceId: string, customDate?: string, 
     };
 
     // Query existing transaction
-    const { data: existingCanonicalTx } = await supabase
+    // Use .limit(1) and data[0] instead of maybeSingle/single to be more resilient to duplicates
+    const { data: existingTxns, error: queryError } = await supabase
       .from('transactions')
-      .select('id')
+      .select('id, status')
       .contains('metadata', canonicalMetadata)
-      .maybeSingle();
+      .limit(1);
 
+    if (queryError) {
+      console.error('Error querying existing transaction:', queryError);
+      throw queryError;
+    }
+
+    const existingCanonicalTx = existingTxns?.[0];
     let transactionId = (existingCanonicalTx as any)?.id;
+    let oldStatus = (existingCanonicalTx as any)?.status;
 
     let isUpdate = false;
     if (!transactionId && legacyMetadata) {
-      const { data: existingLegacyTx } = await supabase
+      const { data: legacyTxns, error: legacyQueryError } = await supabase
         .from('transactions')
-        .select('id')
+        .select('id, status')
         .contains('metadata', legacyMetadata)
-        .maybeSingle()
+        .limit(1);
 
-      transactionId = (existingLegacyTx as any)?.id
+      if (legacyQueryError) {
+        console.error('Error querying legacy transaction:', legacyQueryError);
+        throw legacyQueryError;
+      }
+
+      transactionId = (legacyTxns as any)?.[0]?.id;
+      oldStatus = (legacyTxns as any)?.[0]?.status;
     }
 
     if (transactionId) {
@@ -233,7 +247,10 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .update(payload as any)
         .eq('id', transactionId);
 
-      if (updateError) console.error('Error updating transaction:', updateError);
+      if (updateError) {
+        console.error('Error updating transaction:', updateError);
+        throw updateError;
+      }
       isUpdate = true;
 
     } else {
@@ -246,7 +263,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
       if (insertError) {
         console.error('Error creating transaction:', insertError);
-        continue;
+        throw insertError;
       }
       transactionId = newTx.id;
     }
@@ -269,7 +286,9 @@ export async function distributeService(serviceId: string, customDate?: string, 
             shop_name: (service as any).name || 'Service',
           };
 
-          const action = isUpdate ? 'update' : 'create';
+          // If the existing transaction was 'void', we treat it as 'create' for the sheet
+          // to ensure it reappear since 'void' usually implies it was deleted from sheet.
+          const action = (isUpdate && oldStatus !== 'void') ? 'update' : 'create';
           console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`, {
             transactionId,
             memberId: member.person_id,
@@ -465,8 +484,17 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
   return true
 }
 
-export async function distributeAllServices(customDate?: string) {
+/**
+ * Distribute all active services for the current or custom month.
+ * @param customDate Optional date to distribute for (if null, uses current month)
+ * @param force If true, skips the due_day check (useful for manual distribution)
+ */
+export async function distributeAllServices(customDate?: string, force: boolean = true) {
   const supabase: any = createClient()
+  let successCount = 0
+  let skippedCount = 0
+  let failedCount = 0
+  const reports: any[] = []
 
   // [Sprint 3] Timezone Fix: Force Asia/Ho_Chi_Minh
   const now = new Date();
@@ -477,7 +505,7 @@ export async function distributeAllServices(customDate?: string) {
   const activeDate = customDate ? new Date(customDate) : vnNow;
   const monthTag = toYYYYMMFromDate(activeDate);
 
-  console.log(`Starting batch distribution for all active services... Tag: ${monthTag}, Today VN: ${vnNow.toISOString()}`)
+  console.log(`[DistributeAll] Starting for ${monthTag} (Force: ${force}, Today: ${todayDay})`);
 
   // 1. Fetch all active services
   const { data: services, error } = await supabase
@@ -497,58 +525,66 @@ export async function distributeAllServices(customDate?: string) {
 
   console.log(`Found ${services.length} active services.`)
 
-  let successCount = 0
-  let failedCount = 0
-  let skippedCount = 0
-  const reports: any[] = []
-
   // 2. Distribute each service
   for (const service of services) {
     try {
-      const dueDay = service.due_day || 1;
-
-      // [Sprint 3] Missed Day Recovery: today >= dueDay
-      // If we are testing with customDate, we bypass the dueDay check or use the customDate's day
+      // 1. Check Due Day (Skip if too early, unless forced)
+      const dueDay = (service as any).due_day || 1;
       const checkDay = customDate ? activeDate.getDate() : todayDay;
 
-      if (checkDay < dueDay) {
-        console.log(`Skipping ${service.name}: due on ${dueDay}, today is ${checkDay}`);
+      if (!force && checkDay < dueDay) {
+        console.log(`Skipping ${service.name}: too early (Due on day ${dueDay}, Today ${checkDay})`);
         skippedCount++;
         reports.push({ name: service.name, status: 'skipped', reason: `Due on day ${dueDay}` });
         continue;
       }
 
-      // [Sprint 3] Idempotency Check: Check if ALREADY distributed this month
-      // We check if ANY transaction exists for this service and monthTag
-      const { data: existingTx } = await supabase
+      // 2. [Sprint 3] Idempotency Check: Check if ALREADY distributed this month
+      // We check if ANY transaction exists for this service and monthTag with status 'posted'
+      // Use both canonical and potentially legacy metadata formats for robustness
+      const { data: existingTx, error: checkError } = await supabase
         .from('transactions')
         .select('id')
+        .eq('status', 'posted')
         .contains('metadata', { service_id: service.id, month_tag: monthTag })
         .limit(1);
 
+      if (checkError) {
+        console.error(`Error checking idempotency for ${service.name}:`, checkError);
+      }
+
       if (existingTx && existingTx.length > 0) {
-        console.log(`Skipping ${service.name}: already distributed for ${monthTag}`);
+        console.log(`Skipping ${service.name}: already distributed (posted) for ${monthTag}`);
         skippedCount++;
-        reports.push({ name: service.name, status: 'skipped', reason: `Already distributed for ${monthTag}` });
+        reports.push({ name: service.name, status: 'skipped', reason: `Already distributed (posted) for ${monthTag}` });
         continue;
       }
 
       const result = await distributeService(service.id, customDate)
-      successCount++
-      reports.push({ name: service.name, status: 'success' });
 
-      // [Service Sheet Integration] Auto-sync cycle sheets for people with sheet settings
-      if (result.personIds && result.personIds.length > 0) {
-        console.log(`[AutoSync] Triggering auto-sync for ${result.personIds.length} people from service ${service.name}`)
-        for (const personId of result.personIds) {
-          try {
-            await autoSyncCycleSheetIfNeeded(personId, monthTag)
-          } catch (autoSyncError) {
-            console.error(`[AutoSync] Failed for person ${personId}:`, autoSyncError)
-            // Don't fail the distribution if auto-sync fails
+      // In distributeService, it returns createdTransactions
+      // If transactions were created or updated, count as success and sync to sheets
+      if (result.transactions && result.transactions.length > 0) {
+        successCount++
+        reports.push({ name: service.name, status: 'success', count: result.transactions.length });
+
+        // [Service Sheet Integration] Auto-sync cycle sheets for people with sheet settings
+        if (result.personIds && result.personIds.length > 0) {
+          console.log(`[Service Sheet] Syncing sheets for members of ${service.name}:`, result.personIds);
+          for (const personId of result.personIds) {
+            try {
+              await autoSyncCycleSheetIfNeeded(personId, monthTag);
+            } catch (autoSyncError) {
+              console.error(`[AutoSync] Failed for person ${personId}:`, autoSyncError)
+              // Don't fail the distribution if auto-sync fails
+            }
           }
         }
+      } else {
+        skippedCount++
+        reports.push({ name: service.name, status: 'skipped', reason: 'No members to distribute' });
       }
+
     } catch (err) {
       console.error(`Failed to distribute service ${service.name} (${service.id}):`, err)
       failedCount++
@@ -564,4 +600,105 @@ export async function distributeAllServices(customDate?: string) {
     total: services.length,
     reports
   }
+}
+
+/**
+ * Recall (revoke) service distribution for a specific month
+ * Voids the transactions and triggers sheet line deletion
+ */
+export async function recallServiceDistribution(monthTag: string) {
+  const supabase = createClient()
+  console.log(`Recalling service distribution for month: ${monthTag}`)
+
+  // 1. Find all transactions distributed for this month
+  // metadata contains service_id and month_tag
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+        id, 
+        person_id, 
+        metadata, 
+        amount, 
+        occurred_at, 
+        note,
+        shop:shops(name)
+    `)
+    .eq('status', 'posted')
+    .contains('metadata', { month_tag: monthTag })
+    .not('metadata->service_id', 'is', null)
+
+  const txns = (data || []) as any[]
+
+  if (error) {
+    console.error('Error fetching transactions for recall:', error)
+    throw error
+  }
+
+  if (!txns || txns.length === 0) {
+    console.log('No transactions found to recall.')
+    return { success: true, count: 0 }
+  }
+
+  console.log(`Found ${txns.length} transactions to recall.`)
+  const { syncTransactionToSheet } = await import('./sheet.service')
+  const { recalculateBalance } = await import('./account.service')
+
+  let recalledCount = 0
+
+  for (const txn of txns) {
+    try {
+      const personId = txn.person_id
+      const shopName = (txn.shop as any)?.name || 'Service'
+
+      // 2. Void the transaction
+      const { error: voidError } = await supabase
+        .from('transactions')
+        .update({ status: 'void' })
+        .eq('id', txn.id)
+
+      if (voidError) {
+        console.error(`Error voiding txn ${txn.id}:`, voidError)
+        continue
+      }
+
+      recalledCount++
+
+      // 3. Sync to sheet (Delete the row)
+      if (personId) {
+        try {
+          // Prepare payload matching sheet.service expectations
+          const sheetPayload = {
+            id: txn.id,
+            occurred_at: txn.occurred_at,
+            amount: Math.abs(Number(txn.amount)),
+            note: txn.note,
+            tag: monthTag,
+            shop_name: shopName,
+            type: 'Debt' // Most service distributions are Debt for members
+          }
+
+          console.log(`[Recall Sync] Deleting sheet row for ${personId}`, {
+            transactionId: txn.id,
+            shopName,
+            monthTag
+          })
+
+          await syncTransactionToSheet(personId, sheetPayload as any, 'delete')
+        } catch (syncErr) {
+          console.error(`[Recall Sync] Error deleting from sheet for person ${personId}:`, syncErr)
+        }
+      }
+    } catch (txnErr) {
+      console.error(`Error processing recall for txn ${txn.id}:`, txnErr)
+    }
+  }
+
+  // 4. Recalculate DRAFT_FUND balance
+  try {
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+  } catch (balErr) {
+    console.error('Error recalculating DRAFT_FUND balance after recall:', balErr)
+  }
+
+  return { success: true, count: recalledCount }
 }

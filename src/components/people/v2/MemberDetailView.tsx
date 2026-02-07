@@ -42,20 +42,52 @@ export function MemberDetailView({
     people,
     shops,
 }: MemberDetailViewProps) {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const urlTag = searchParams.get('tag')
+    const currentMonthTag = toYYYYMMFromDate(new Date())
+
     const [activeTab, setActiveTab] = useState<'timeline' | 'history' | 'split-bill'>('timeline')
-    const [selectedYear, setSelectedYear] = useState<string | null>(new Date().getFullYear().toString())
     const [searchTerm, setSearchTerm] = useState('')
     const [filterType, setFilterType] = useState<FilterType>('all')
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [showPaidModal, setShowPaidModal] = useState(false)
-    const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>(undefined)
+    const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>()
 
-    // Active cycle - must be declared before useEffects that reference it
-    const currentMonthTag = toYYYYMMFromDate(new Date())
-    const [activeCycleTag, setActiveCycleTag] = useState<string>(currentMonthTag)
+    // Derive active month/year from URL (Single Source of Truth)
+    const urlYear = searchParams.get('year')
+    const activeCycleTag = urlTag || currentMonthTag
+    const selectedYear = useMemo(() => {
+        if (urlYear) return urlYear // Explicit year param takes priority
+        if (urlTag === 'all') return null
+        if (urlTag && urlTag.includes('-')) return urlTag.split('-')[0]
+        return new Date().getFullYear().toString()
+    }, [urlTag, urlYear])
 
     const [isPending, startTransition] = useTransition()
+
+    // Data Hooks
+    const { debtCycles, availableYears, currentCycle } = usePersonDetails({
+        person,
+        transactions,
+        debtTags,
+        cycleSheets,
+        urlTag,
+    })
+
+    const accountItems = useMemo(() => {
+        const ids = new Set<string>()
+        transactions.forEach(t => {
+            if (t.source_account_id) ids.add(t.source_account_id)
+            if (t.target_account_id) ids.add(t.target_account_id)
+            if (t.account_id) ids.add(t.account_id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const toAccountId = (t as any).to_account_id as string | undefined
+            if (toAccountId) ids.add(toAccountId)
+        })
+        return accounts.filter(a => ids.has(a.id))
+    }, [transactions, accounts])
 
     // Slide State
     const [isSlideOpen, setIsSlideOpen] = useState(false)
@@ -63,8 +95,6 @@ export function MemberDetailView({
     const [selectedTxn, setSelectedTxn] = useState<TransactionWithDetails | null>(null)
     const [slideOverrideType, setSlideOverrideType] = useState<string | undefined>(undefined)
 
-    const router = useRouter()
-    const searchParams = useSearchParams()
     const { setCustomName } = useBreadcrumbs()
 
     useEffect(() => {
@@ -89,95 +119,83 @@ export function MemberDetailView({
         }
     }, [person.id, person.name, addRecentItem])
 
-    // Handle URL parameters for tag and date range filter
+    // 4. Update Navigation Handlers
+    const handleCycleChange = (tag: string) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tag', tag)
+        if (tag.includes('-')) {
+            params.set('year', tag.split('-')[0])
+        }
+        startTransition(() => {
+            router.push(`?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    const handleYearChange = (year: string | null) => {
+        const params = new URLSearchParams(searchParams.toString())
+        if (year === null) {
+            params.set('tag', 'all')
+            params.delete('year')
+        } else {
+            params.set('tag', 'all')
+            params.set('year', year)
+        }
+        startTransition(() => {
+            router.push(`?${params.toString()}`, { scroll: false })
+        })
+    }
+
+    // Passively sync date range from URL if present
     useEffect(() => {
-        const tag = searchParams.get('tag')
         const dateFrom = searchParams.get('dateFrom')
         const dateTo = searchParams.get('dateTo')
-
-        // Handle tag parameter
-        if (tag) {
-            if (tag === 'all') {
-                // Show all history
-                setSelectedYear(null)
-            } else {
-                // Sync cycle tag from URL
-                setActiveCycleTag(tag)
-                // Extract year from tag (e.g., "2025-12" -> "2025")
-                const year = tag.split('-')[0]
-                setSelectedYear(year)
-            }
-        }
-
-        // Handle date range
         if (dateFrom && dateTo) {
             try {
-                const fromDate = parseISO(dateFrom)
-                const toDate = parseISO(dateTo)
-                setDateRangeFilter({ from: fromDate, to: toDate })
+                setDateRangeFilter({ from: parseISO(dateFrom), to: parseISO(dateTo) })
             } catch (err) {
-                console.error('Failed to parse date range from URL:', err)
+                console.error('Failed to parse date range:', err)
             }
         }
     }, [searchParams])
 
-    // Sync activeCycleTag to URL (for consistency)
-    useEffect(() => {
-        const currentTag = searchParams.get('tag')
-        if (activeCycleTag && currentTag !== activeCycleTag) {
-            const url = new URL(window.location.href)
-            url.searchParams.set('tag', activeCycleTag)
-            startTransition(() => {
-                router.replace(url.toString(), { scroll: false })
-            })
-        }
-    }, [activeCycleTag, router, searchParams])
+    // Calculate stats for Header based on Selected Year or All Time
+    const headerStats = useMemo(() => {
+        const targetCycles = selectedYear
+            ? debtCycles.filter(c => c.tag.startsWith(selectedYear))
+            : debtCycles
 
-    const { debtCycles, availableYears } = usePersonDetails({
-        person,
-        transactions,
-        debtTags,
-        cycleSheets,
-    })
+        return targetCycles.reduce((acc, cycle) => ({
+            originalLend: acc.originalLend + cycle.stats.originalLend,
+            cashback: acc.cashback + cycle.stats.cashback,
+            netLend: acc.netLend + cycle.stats.lend,
+            repay: acc.repay + cycle.stats.repay,
+            remains: acc.remains + cycle.remains
+        }), { originalLend: 0, cashback: 0, netLend: 0, repay: 0, remains: 0 })
+    }, [debtCycles, selectedYear])
 
-    const accountItems = useMemo(() => {
-        const ids = new Set<string>()
-        transactions.forEach(t => {
-            if (t.source_account_id) ids.add(t.source_account_id)
-            if (t.target_account_id) ids.add(t.target_account_id)
-            if (t.account_id) ids.add(t.account_id)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const toAccountId = (t as any).to_account_id as string | undefined
-            if (toAccountId) ids.add(toAccountId)
-        })
-        return accounts.filter(a => ids.has(a.id))
-    }, [transactions, accounts])
-
-    // Initialize activeCycleTag based on available cycles (after debtCycles is computed)
-    useEffect(() => {
-        if (debtCycles.length > 0) {
-            const urlTag = searchParams.get('tag')
-            if (!urlTag) {
-                // If no tag in URL, default to logic (match current or first)
-                const match = debtCycles.find(c => c.tag === currentMonthTag)
-                const initialTag = match ? match.tag : (debtCycles[0]?.tag || currentMonthTag)
-                if (initialTag !== activeCycleTag) {
-                    setActiveCycleTag(initialTag)
-                }
-            } else if (urlTag === currentMonthTag) {
-                // Check if current tag exists in debtCycles
-                const match = debtCycles.find(c => c.tag === currentMonthTag)
-                if (!match) {
-                    // Current tag requested but no data -> Redirect to All
-                    const url = new URL(window.location.href)
-                    url.searchParams.set('tag', 'all')
-                    router.replace(url.toString())
-                }
+    // Absolute Active Cycle Logic (No fuzzy fallbacks)
+    const activeCycle = useMemo(() => {
+        if (urlTag === 'all') {
+            return {
+                tag: selectedYear ? `All for ${selectedYear}` : "All History",
+                remains: headerStats.remains,
+                transactions: [], // Not used for 'all' mode
+                stats: {
+                    lend: headerStats.netLend,
+                    repay: headerStats.repay,
+                    originalLend: headerStats.originalLend,
+                    cashback: headerStats.cashback,
+                },
+                isSettled: Math.abs(headerStats.remains) < 100,
+                latestDate: 0,
+                tagDateVal: 0,
             }
         }
-    }, [debtCycles, currentMonthTag, activeCycleTag, searchParams, router])
 
-    const activeCycle = debtCycles.find(c => c.tag === activeCycleTag)
+        // Find specific tag. If it has a tag in URL, it MUST exist in debtCycles (thanks to hook refactor)
+        // If no tag in URL, we fallback to currentCycle for the 'default' view
+        return debtCycles.find(c => c.tag === (urlTag || activeCycleTag)) || currentCycle
+    }, [urlTag, debtCycles, headerStats, selectedYear, activeCycleTag, currentCycle])
 
     const applyFilters = (txns: TransactionWithDetails[]) => {
         let result = txns
@@ -191,8 +209,18 @@ export function MemberDetailView({
         }
 
         if (filterType !== 'all') {
-            const matchType = filterType === 'lend' ? 'debt' : (filterType === 'repay' ? 'repayment' : filterType)
-            result = result.filter(t => (t.type || '').toLowerCase() === matchType)
+            if (filterType === 'cashback') {
+                result = result.filter(t => {
+                    const amount = Math.abs(Number(t.amount) || 0)
+                    const finalPrice = t.final_price !== null && t.final_price !== undefined ? Math.abs(Number(t.final_price)) : amount
+                    const hasBackMetadata = (t.metadata as any)?.is_cashback === true || t.note?.toLowerCase().includes('cashback')
+                    const hasSharedCashback = (Number(t.cashback_share_amount) || 0) > 0 || (Number(t.cashback_share_percent) || 0) > 0
+                    return (finalPrice < amount && finalPrice > 0) || hasBackMetadata || hasSharedCashback
+                })
+            } else {
+                const matchType = filterType === 'lend' ? 'debt' : (filterType === 'repay' ? 'repayment' : filterType)
+                result = result.filter(t => (t.type || '').toLowerCase() === matchType)
+            }
         }
 
         if (selectedAccountId) {
@@ -229,36 +257,29 @@ export function MemberDetailView({
 
     // Transactions for active cycle or all (if selectedYear is null)
     const cycleTransactions = useMemo(() => {
-        // If selectedYear is null, show all transactions (All History mode)
-        // Otherwise, show active cycle transactions
-        if (!activeCycle) return []
+        // Mode 1: All Time (selectedYear === null)
+        if (selectedYear === null) {
+            return applyFilters(transactions)
+        }
 
-        const baseTransactions = selectedYear === null
-            ? transactions  // Show all transactions when "All history" selected
-            : activeCycle.transactions
+        // Mode 2: All for specific year
+        if (activeCycleTag === 'all') {
+            const yearTransactions = transactions.filter(t => t.tag?.startsWith(selectedYear))
+            return applyFilters(yearTransactions)
+        }
 
-        return applyFilters(baseTransactions)
-    }, [activeCycle, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter, transactions])
+        // Mode 3: Specific Cycle
+        const cycle = debtCycles.find(c => c.tag === activeCycleTag)
+        if (!cycle) return []
+
+        return applyFilters(cycle.transactions)
+    }, [activeCycleTag, debtCycles, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter, transactions])
 
     const historyTransactions = useMemo(() => {
         const base = transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))
         return applyFilters(base)
     }, [transactions, selectedYear, searchTerm, filterType, statusFilter, selectedAccountId, dateRangeFilter])
 
-    // Calculate stats for Header based on Selected Year or All Time
-    const headerStats = useMemo(() => {
-        const targetCycles = selectedYear
-            ? debtCycles.filter(c => c.tag.startsWith(selectedYear))
-            : debtCycles
-
-        return targetCycles.reduce((acc, cycle) => ({
-            originalLend: acc.originalLend + cycle.stats.originalLend,
-            cashback: acc.cashback + cycle.stats.cashback,
-            netLend: acc.netLend + cycle.stats.lend,
-            repay: acc.repay + cycle.stats.repay,
-            remains: acc.remains + cycle.remains
-        }), { originalLend: 0, cashback: 0, netLend: 0, repay: 0, remains: 0 })
-    }, [debtCycles, selectedYear])
 
     // Slide Handlers
     const handleAddTransaction = (type: string) => {
@@ -339,7 +360,7 @@ export function MemberDetailView({
                 stats={headerStats}
                 selectedYear={selectedYear}
                 availableYears={availableYears}
-                onYearChange={setSelectedYear}
+                onYearChange={handleYearChange}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
             />
@@ -351,10 +372,10 @@ export function MemberDetailView({
                         person={person}
                         activeCycle={activeCycle}
                         allCycles={debtCycles}
-                        onCycleChange={setActiveCycleTag}
+                        onCycleChange={handleCycleChange}
                         availableYears={availableYears}
                         selectedYear={selectedYear}
-                        onYearChange={setSelectedYear}
+                        onYearChange={handleYearChange}
                         transactionCount={cycleTransactions.length}
                         paidCount={paidCount}
                         onViewPaid={() => setShowPaidModal(true)}
@@ -372,6 +393,7 @@ export function MemberDetailView({
                         shops={shops}
                         onAddTransaction={handleAddTransaction}
                         currentCycleTag={currentMonthTag}
+                        isPending={isPending}
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3">
                         <SimpleTransactionTable

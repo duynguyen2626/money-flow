@@ -17,9 +17,10 @@ interface PeopleTableProps {
     onEdit: (person: Person) => void;
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
+    onSync?: (personId: string) => void;
 }
 
-export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }: PeopleTableProps) {
+export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay, onSync }: PeopleTableProps) {
     const {
         columns,
         columnOrder,
@@ -187,6 +188,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
                                                 onEdit={onEdit}
                                                 onLend={onLend}
                                                 onRepay={onRepay}
+                                                onSync={onSync}
                                             />
                                         ))}
                                     </React.Fragment>

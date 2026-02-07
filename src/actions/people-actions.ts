@@ -142,6 +142,24 @@ export async function syncAllSheetDataAction(personId: string) {
   return syncAllTransactions(personId);
 }
 
+export async function syncAllPeopleSheetsAction() {
+  const people = await getPeople({ includeArchived: false });
+  const peopleWithSheets = people.filter(p => !!p.sheet_link && !p.is_archived);
+
+  const results = await Promise.all(peopleWithSheets.map(async (p) => {
+    try {
+      await syncAllTransactions(p.id);
+      return { id: p.id, name: p.name, success: true };
+    } catch (err) {
+      console.error(`Failed to sync sheet for ${p.name}:`, err);
+      return { id: p.id, name: p.name, success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }));
+
+  revalidatePath('/people');
+  return results;
+}
+
 import { createTransaction } from '@/services/transaction.service';
 
 export type RolloverDebtState = {

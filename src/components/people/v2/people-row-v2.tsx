@@ -7,7 +7,7 @@ import { PeopleRowDetailsV2 } from "./people-row-details-v2";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink } from "lucide-react";
+import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet } from "lucide-react";
 import { cn, formatMoneyVND } from "@/lib/utils";
 import { SubscriptionBadges } from "./subscription-badges";
 import {
@@ -25,6 +25,7 @@ interface PeopleRowProps {
     onEdit: (person: Person) => void;
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
+    onSync?: (personId: string) => void;
 }
 
 export function PeopleRowV2({
@@ -35,6 +36,7 @@ export function PeopleRowV2({
     onEdit,
     onLend,
     onRepay,
+    onSync,
 }: PeopleRowProps) {
     const handleRowClick = (e: React.MouseEvent) => {
         // Only expand on row click if not clicking action buttons
@@ -78,7 +80,7 @@ export function PeopleRowV2({
                             col.key === 'name' && "sticky left-10 z-10 bg-inherit" // Part of freeze name logic if needed, but let's keep it simple
                         )}
                     >
-                        {renderCell(person, col.key, onEdit, onLend, onRepay)}
+                        {renderCell(person, col.key, onEdit, onLend, onRepay, onSync)}
                     </td>
                 ))}
             </tr>
@@ -98,7 +100,7 @@ export function PeopleRowV2({
     );
 }
 
-function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void) {
+function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void, onSync?: (pid: string) => void) {
     switch (key) {
         case 'name':
             return (
@@ -121,6 +123,27 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                                 {person.name}
                             </Link>
 
+                            {person.sheet_link && onSync && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                className="inline-flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200 w-5 h-5 rounded hover:bg-blue-100 transition-colors"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onSync(person.id);
+                                                }}
+                                            >
+                                                <RotateCw className="h-3 w-3" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Sync Google Sheet Now</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+
                             {person.google_sheet_url && (
                                 <TooltipProvider>
                                     <Tooltip>
@@ -129,15 +152,15 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                                                 href={person.google_sheet_url}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 rounded-[3px] hover:bg-green-100 transition-colors h-4 shrink-0"
+                                                className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded hover:bg-green-100 transition-colors h-5 shrink-0"
                                                 onClick={(e) => e.stopPropagation()}
                                             >
-                                                <ExternalLink className="h-2 w-2" />
-                                                <span className="text-[8px] font-bold uppercase">Sheet</span>
+                                                <FileSpreadsheet className="h-3 w-3" />
+                                                <span className="text-[10px] font-bold uppercase">Sheet</span>
                                             </a>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Open Google Sheet in new tab</p>
+                                            <p>Open Google Sheet</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>

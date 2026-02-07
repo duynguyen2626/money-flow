@@ -25,6 +25,7 @@ interface UsePersonDetailsProps {
     transactions: TransactionWithDetails[]
     debtTags: any[]
     cycleSheets: PersonCycleSheet[]
+    urlTag?: string | null
 }
 
 export function usePersonDetails({
@@ -32,6 +33,7 @@ export function usePersonDetails({
     transactions,
     debtTags,
     cycleSheets,
+    urlTag,
 }: UsePersonDetailsProps) {
     // Map for O(1) lookup of Server Side Status
     const debtTagsMap = useMemo(() => {
@@ -99,6 +101,14 @@ export function usePersonDetails({
     // Group transactions by cycle tag
     const debtCycles = useMemo(() => {
         const groups = new Map<string, TransactionWithDetails[]>()
+
+        // Ensure current month and urlTag are always present
+        const now = new Date()
+        const currentMonthTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        groups.set(currentMonthTag, [])
+        if (urlTag && isYYYYMM(urlTag)) {
+            groups.set(urlTag, [])
+        }
 
         transactions.forEach(txn => {
             const normalizedTag = normalizeMonthTag(txn.tag)

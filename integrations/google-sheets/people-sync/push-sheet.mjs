@@ -8,6 +8,8 @@ import dotenv from 'dotenv'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const claspPath = join(__dirname, '.clasp.json')
 const repoRoot = join(__dirname, '..', '..', '..')
+const homeDir = process.env.HOME || process.env.USERPROFILE
+const globalClasprcPath = join(homeDir, '.clasprc.json')
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -233,10 +235,10 @@ const main = async () => {
         if (forceFlag) pushArgs.push('--force')
 
         const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
-        const result = spawnSync(claspCmd, pushArgs, {
+        let result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: true,
+          shell: false, // Avoid security warning, arguments are passed as array
         })
 
         if (result.status === 0) {
@@ -244,21 +246,20 @@ const main = async () => {
           successCount++
 
           // AUTO-DEPLOY LOGIC
-          // Strategy: specific var PEOPLE_SHEET_DEPLOY_XYZ matching PEOPLE_SHEET_SCRIPT_XYZ
-          // OR: simply look for a variable with "DEPLOY" instead of "SCRIPT"
           const deployEnvKey = profile.key.replace('_SCRIPT_', '_DEPLOY_')
           const deployId = process.env[deployEnvKey]
 
           if (deployId) {
             console.log(`   🚀 Auto-deploying to ${deployId}...`)
-            // Use explicit command string to avoid spawnSync/shell arg parsing issues
-            // and use full flags for clarity/compatibility
-            const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
 
-            const deployResult = spawnSync(deployCmd, [], {
+            const deployResult = spawnSync(claspCmd, [
+              'deploy',
+              '--deploymentId', deployId,
+              '--description', 'Auto-updated_via_script'
+            ], {
               cwd: __dirname,
               stdio: 'inherit',
-              shell: true,
+              shell: false,
             })
 
             if (deployResult.status === 0) {
@@ -268,14 +269,68 @@ const main = async () => {
               console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
             }
           } else {
-            // Optional: Check generic pattern if simple replace didn't work? 
-            // current convention is strict: PEOPLE_SHEET_SCRIPT_LAM -> PEOPLE_SHEET_DEPLOY_LAM
             console.log(`   ℹ️ No deploy ID found for ${profile.key} (Expected: ${deployEnvKey})`)
           }
 
         } else {
           console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
-          failCount++
+
+          // Enhanced Auth Handling
+          console.log(`\nPush to ${profile.key} failed. This is likely a permission issue for namnt05@gmail.com.`)
+          console.log(`Please ensure the script ID (${profile.value}) is shared with namnt05@gmail.com as Editor.`)
+
+          const loginChoice = await ask(`Would you like to run 'clasp login' to refresh your token and retry? (y/n): `)
+
+          if (loginChoice.toLowerCase() === 'y') {
+            console.log(`\nRunning 'clasp login'... Please refresh your session.`)
+            const loginResult = spawnSync(claspCmd, ['login'], {
+              stdio: 'inherit',
+              shell: false,
+            })
+
+            if (loginResult.status === 0) {
+              console.log(`Retrying push for ${profile.key}...`)
+              result = spawnSync(claspCmd, pushArgs, {
+                cwd: __dirname,
+                stdio: 'inherit',
+                shell: false,
+              })
+
+              if (result.status === 0) {
+                console.log(`[${indexLabel}] ${profile.key} ✅ PUSHED (after retry)`)
+                successCount++
+                // AUTO-DEPLOY LOGIC (REPEATED FOR RETRY SUCCESS)
+                const deployEnvKey = profile.key.replace('_SCRIPT_', '_DEPLOY_')
+                const deployId = process.env[deployEnvKey]
+                if (deployId) {
+                  console.log(`   🚀 Auto-deploying to ${deployId}...`)
+                  const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script_and_retry"`
+                  const deployResult = spawnSync(claspCmd, [
+                    'deploy',
+                    '--deploymentId', deployId,
+                    '--description', 'Auto-updated_via_script_and_retry'
+                  ], {
+                    cwd: __dirname,
+                    stdio: 'inherit',
+                    shell: false,
+                  })
+                  if (deployResult.status === 0) {
+                    console.log(`   ✨ [${new Date().toLocaleString()}] Deployed Successfully!`)
+                  } else {
+                    console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
+                  }
+                }
+              } else {
+                console.log(`[${indexLabel}] ${profile.key} ❌ RETRY FAILED`)
+                failCount++
+              }
+            } else {
+              console.log(`\n⚠️ Login failed or cancelled. Skipping ${profile.key}.`)
+              failCount++
+            }
+          } else {
+            failCount++
+          }
         }
       }
 
@@ -313,11 +368,34 @@ const main = async () => {
   if (forceFlag) pushArgs.push('--force')
 
   const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
-  const result = spawnSync(claspCmd, pushArgs, {
+  let result = spawnSync(claspCmd, pushArgs, {
     cwd: __dirname,
     stdio: 'inherit',
-    shell: true,
+    shell: false,
   })
+
+  // Retry logic for single push
+  if (result.status !== 0 && selected?.profile?.key) {
+    console.log(`\nPush failed. This is likely a permission issue for namnt05@gmail.com.`)
+    const loginChoice = await ask(`Would you like to run 'clasp login' to refresh your token and retry? (y/n): `)
+
+    if (loginChoice.toLowerCase() === 'y') {
+      console.log(`\nRunning 'clasp login'... Please refresh your session.`)
+      const loginResult = spawnSync(claspCmd, ['login'], {
+        stdio: 'inherit',
+        shell: false,
+      })
+
+      if (loginResult.status === 0) {
+        console.log(`Retrying push...`)
+        result = spawnSync(claspCmd, pushArgs, {
+          cwd: __dirname,
+          stdio: 'inherit',
+          shell: false,
+        })
+      }
+    }
+  }
 
   if (selected?.profile?.key) {
     const indexLabel = selected.index ? `${selected.index}) ` : ''
@@ -339,12 +417,15 @@ const main = async () => {
 
       if (deployId) {
         console.log(`   🚀 Auto-deploying to ${deployId}...`)
-        const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
 
-        const deployResult = spawnSync(deployCmd, [], {
+        const deployResult = spawnSync(claspCmd, [
+          'deploy',
+          '--deploymentId', deployId,
+          '--description', 'Auto-updated_via_script'
+        ], {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: true,
+          shell: false,
         })
 
         if (deployResult.status === 0) {

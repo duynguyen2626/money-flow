@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import { rolloverDebtAction, RolloverDebtState } from '@/actions/people-actions'
 import { toast } from 'sonner'
-import { toYYYYMMFromDate } from '@/lib/month-tag'
+import { toYYYYMMFromDate, isYYYYMM } from '@/lib/month-tag'
 import { Select } from "@/components/ui/select"
 
 interface RolloverDebtDialogProps {
@@ -35,9 +35,14 @@ export function RolloverDebtDialog({ personId, currentCycle, remains, trigger }:
     const [open, setOpen] = useState(false)
     const [state, formAction, isPending] = useActionState(rolloverDebtAction, initialState)
 
+    // Early return if currentCycle is not a valid YYYY-MM tag (e.g. "All History")
+    if (!isYYYYMM(currentCycle)) {
+        return null
+    }
+
     // Helper to get next month tag
     const getNextMonth = (cycle: string) => {
-        if (!cycle) return ''
+        if (!isYYYYMM(cycle)) return ''
         const [year, month] = cycle.split('-').map(Number)
         const date = new Date(year, month, 1) // Month is 0-indexed in Date, so month (1-12) used as index is actually next month.
         return toYYYYMMFromDate(date)

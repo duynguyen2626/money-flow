@@ -1,9 +1,9 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 7.2 (Layout Optimized & UX Refined)
- * @date 2026-01-28 17:01
+ * @version 7.3 (Service Distribution Fix)
+ * @date 2026-02-07 18:05
  *
- * LAYOUT v7.2 (Explicit Columns):
+ * LAYOUT v7.3 (Explicit Columns):
  * A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
  * F: Amount | G: % Back | H: đ Back | I: Σ Back | J: Final | K: Src
  */
@@ -45,7 +45,7 @@ function doPost(e) {
 
             Logger.log("doPost Action: " + action);
             Logger.log("doPost Payload Keys: " + Object.keys(payload).join(", "));
-            
+
             if (action === 'create' || action === 'edit' || action === 'delete') {
                 Logger.log("doPost Single Transaction Sync - ID: " + payload.id + ", Shop: " + (payload.shop || '(empty)') + ", Person: " + (payload.person_id || payload.personId || '(empty)'));
             }
@@ -207,9 +207,9 @@ function handleSyncTransactions(payload) {
     for (var i = 0; i < validTxns.length; i++) {
         var txn = validTxns[i];
         var type = normalizeType(txn.type, txn.amount);
-        var amt = Math.abs(txn.amount);
-        var dateObj = new Date(txn.date);
-        var shopSrc = (txn.shop || "");
+        var amt = Math.abs(Number(txn.amount || 0));
+        var dateObj = new Date(txn.date || txn.occurred_at);
+        var shopSrc = (txn.shop || txn.shop_name || "");
 
         // Prepare Row Data (Array size 11 - matching A:K)
         var rowData = new Array(11);
@@ -217,10 +217,10 @@ function handleSyncTransactions(payload) {
         rowData[1] = type;      // B: Type
         rowData[2] = dateObj;   // C: Date
         rowData[3] = "";        // D: Shop (Formula)
-        rowData[4] = txn.notes || ""; // E: Notes
+        rowData[4] = txn.notes || txn.note || ""; // E: Notes
         rowData[5] = amt;       // F: Amount
-        rowData[6] = txn.percent_back || 0; // G
-        rowData[7] = txn.fixed_back || 0;   // H
+        rowData[6] = Number(txn.percent_back || txn.cashback_share_percent || 0); // G
+        rowData[7] = Number(txn.fixed_back || txn.cashback_share_fixed || 0);   // H
         rowData[8] = "";        // I: S Back (Formula)
         rowData[9] = "";        // J: Final (Formula)
         rowData[10] = shopSrc;  // K: Shop Source (Hidden)
@@ -349,7 +349,14 @@ function handleSyncTransactions(payload) {
     }
 
     if (validOutputRows.length > 0) {
-        sheet.getRange(1, 1, validOutputRows.length, 11).setValues(validOutputRows);
+        var range = sheet.getRange(1, 1, validOutputRows.length, 11);
+        range.setValues(validOutputRows);
+
+        // Force Black Text for data rows (skip header row 1) ONLY for A:J (cols 1-10)
+        if (validOutputRows.length > 1) {
+            sheet.getRange(2, 1, validOutputRows.length - 1, 10).setFontColor("#000000");
+        }
+
         // Date Format (C = 3)
         sheet.getRange(2, 3, validOutputRows.length - 1, 1).setNumberFormat('dd-MM');
         // Amount Format (F = 6)
@@ -412,16 +419,24 @@ function handleSingleTransaction(payload, action) {
 
     sheet.getRange(targetRow, 1).setValue(payload.id);
     sheet.getRange(targetRow, 2).setValue(normalizeType(payload.type, payload.amount)); // B: Type
-    sheet.getRange(targetRow, 3).setValue(new Date(payload.date)); // C: Date
-    sheet.getRange(targetRow, 4).setValue(payload.shop || ""); // D: Shop (Direct set + Formula will override if needed)
-    sheet.getRange(targetRow, 5).setValue(payload.notes || ""); // E: Note
+    sheet.getRange(targetRow, 3).setValue(new Date(payload.date || payload.occurred_at)); // C: Date
+    sheet.getRange(targetRow, 4).setValue(""); // D: Clear to let ARRAYFORMULA work or handle manually if needed
+    // However, the current ARRAYFORMULA approach at D2 expects D:D to be empty below.
+    // If we write ANY value to D, it breaks the whole ARRAYFORMULA from above.
+    // So we should strictly NOT write to D.
+    // sheet.getRange(targetRow, 4).clearContent(); // D: Shop (Formula managed)
 
-    var amt = Math.abs(payload.amount);
+    sheet.getRange(targetRow, 5).setValue(payload.notes || payload.note || ""); // E: Note
+
+    var amt = Math.abs(Number(payload.amount || 0));
     sheet.getRange(targetRow, 6).setValue(amt); // F: Amount
 
-    sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0); // G
-    sheet.getRange(targetRow, 8).setValue(payload.fixed_back || 0);   // H
-    sheet.getRange(targetRow, 11).setValue(payload.shop || ""); // K: ShopSource
+    sheet.getRange(targetRow, 7).setValue(Number(payload.percent_back || payload.cashback_share_percent || 0)); // G
+    sheet.getRange(targetRow, 8).setValue(Number(payload.fixed_back || payload.cashback_share_fixed || 0));   // H
+    sheet.getRange(targetRow, 11).setValue(payload.shop || payload.shop_name || ""); // K: ShopSource
+
+    // Force Black Text for the updated row (A:J only)
+    sheet.getRange(targetRow, 1, 1, 10).setFontColor("#000000");
 
     Logger.log('[handleSingleTransaction] Row ' + targetRow + ' populated with:', {
         id: payload.id,
@@ -723,6 +738,9 @@ function setupSummaryTable(sheet, summaryOptions) {
         [3, 'Total Back'],
         [4, 'Remains']
     ];
+    sheet.getRange(2, startCol, 4, 1).setHorizontalAlignment('center'); // No. (M)
+    sheet.getRange(2, startCol + 1, 4, 1).setHorizontalAlignment('left'); // Summary (N)
+    sheet.getRange(2, startCol + 2, 4, 1).setHorizontalAlignment('right'); // Value (O)
     sheet.getRange(2, startCol, 4, 2).setValues(labels);
     sheet.getRange(2, startCol, 4, 2).setFontWeight('bold');
 
