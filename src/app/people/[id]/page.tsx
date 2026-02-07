@@ -71,7 +71,7 @@ export default async function PeopleDetailPage({
     notFound()
   }
 
-  const key = `${resolvedParams.id}-${resolvedSearchParams.tag || 'default'}`
+  const key = resolvedParams.id
 
   return (
     <Suspense key={key} fallback={<Loading />}>
