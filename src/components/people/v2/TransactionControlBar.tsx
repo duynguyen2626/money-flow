@@ -24,6 +24,7 @@ interface TransactionControlBarProps {
     activeCycle: DebtCycle
     allCycles: DebtCycle[]
     onCycleChange: (tag: string) => void
+    onCycleSelect?: (tag: string, year: string | null) => void
     availableYears: string[]
     selectedYear: string | null
     onYearChange: (year: string | null) => void
@@ -45,6 +46,7 @@ interface TransactionControlBarProps {
     onAddTransaction: (type: string) => void
     currentCycleTag: string
     isPending?: boolean
+    initialSheetUrl?: string | null
 }
 
 import { useRouter } from 'next/navigation'
@@ -64,6 +66,7 @@ export function TransactionControlBar({
     activeCycle,
     allCycles,
     onCycleChange,
+    onCycleSelect,
     availableYears,
     selectedYear,
     onYearChange,
@@ -85,6 +88,7 @@ export function TransactionControlBar({
     onAddTransaction,
     currentCycleTag,
     isPending: isPendingProp,
+    initialSheetUrl,
 }: TransactionControlBarProps) {
     const [popoverOpen, setPopoverOpen] = useState(false)
     const isSettled = Math.abs(activeCycle.remains) < 100
@@ -254,8 +258,12 @@ export function TransactionControlBar({
                                                 <button
                                                     key={cycle.tag}
                                                     onClick={() => {
-                                                        handleCycleChange(cycle.tag)
-                                                        onYearChange(year)
+                                                        if (onCycleSelect) {
+                                                            onCycleSelect(cycle.tag, year)
+                                                        } else {
+                                                            handleCycleChange(cycle.tag)
+                                                            onYearChange(year)
+                                                        }
                                                         setPopoverOpen(false)
                                                     }}
                                                     className={cn(
@@ -345,6 +353,7 @@ export function TransactionControlBar({
                 <ManageSheetButton
                     personId={person.id}
                     cycleTag={activeCycle.tag}
+                    initialSheetUrl={initialSheetUrl}
                     scriptLink={person.sheet_link}
                     googleSheetUrl={person.google_sheet_url}
                     sheetFullImg={person.sheet_full_img}

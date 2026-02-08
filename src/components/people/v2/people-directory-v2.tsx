@@ -13,6 +13,7 @@ import { SingleTransactionFormValues } from "@/components/transaction/slide-v2/t
 import { toast } from "sonner";
 import { PeopleTableHeaderV2, FilterStatus } from "./people-table-header-v2";
 import { syncAllSheetDataAction, syncAllPeopleSheetsAction } from "@/actions/people-actions";
+import { PeopleColumnKey } from "@/hooks/usePeopleColumnPreferences";
 
 interface PeopleDirectoryV2Props {
     people: Person[];
@@ -38,6 +39,19 @@ export function PeopleDirectoryV2({
     const [showArchived, setShowArchived] = useState(false);
     const [isSlideOpen, setIsSlideOpen] = useState(false);
     const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+
+    const [sortConfig, setSortConfig] = useState<{ key: PeopleColumnKey; direction: 'asc' | 'desc' } | null>(null);
+
+    const handleSort = (key: PeopleColumnKey) => {
+        setSortConfig(current => ({
+            key,
+            direction: current?.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+        }));
+    };
+
+    const handleResetSort = () => {
+        setSortConfig(null);
+    };
 
     // Transaction Slide State
     const [txnSlideOpen, setTxnSlideOpen] = useState(false);
@@ -84,9 +98,9 @@ export function PeopleDirectoryV2({
 
         // Status Filter
         if (activeFilter === 'outstanding') {
-            result = result.filter(p => (p.current_debt || 0) > 0);
+            result = result.filter(p => ((p as any).current_debt || 0) > 0);
         } else if (activeFilter === 'settled') {
-            result = result.filter(p => (p.current_debt || 0) === 0);
+            result = result.filter(p => ((p as any).current_debt || 0) === 0);
         } else if (activeFilter === 'groups') {
             result = result.filter(p => p.is_group);
         }
@@ -99,15 +113,42 @@ export function PeopleDirectoryV2({
             );
         }
 
-        // Sort by current_debt (highest first)
-        result.sort((a, b) => {
-            const currentDebtA = a.current_debt || 0;
-            const currentDebtB = b.current_debt || 0;
-            return currentDebtB - currentDebtA; // Descending order (highest first)
-        });
+        // Apply Manual Sort if exists
+        if (sortConfig) {
+            result.sort((a, b) => {
+                let valA: any = (a as any)[sortConfig.key] ?? 0;
+                let valB: any = (b as any)[sortConfig.key] ?? 0;
+
+                // Priority for current_tag
+                if (sortConfig.key === 'current_tag') {
+                    valA = a.current_cycle_label || '';
+                    valB = b.current_cycle_label || '';
+                } else if (sortConfig.key === 'current_debt') {
+                    valA = a.current_cycle_debt || 0;
+                    valB = b.current_cycle_debt || 0;
+                }
+
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    return sortConfig.direction === 'asc'
+                        ? valA.localeCompare(valB)
+                        : valB.localeCompare(valA);
+                }
+
+                return sortConfig.direction === 'asc'
+                    ? (valA > valB ? 1 : -1)
+                    : (valA < valB ? 1 : -1);
+            });
+        } else {
+            // Default Sort: by current_debt (highest first)
+            result.sort((a, b) => {
+                const currentDebtA = (a as any).current_debt || 0;
+                const currentDebtB = (b as any).current_debt || 0;
+                return currentDebtB - currentDebtA;
+            });
+        }
 
         return result;
-    }, [people, activeFilter, searchQuery, showArchived]);
+    }, [people, activeFilter, searchQuery, showArchived, sortConfig]);
 
 
 
@@ -195,6 +236,8 @@ export function PeopleDirectoryV2({
                 onToggleArchived={setShowArchived}
                 onRefreshAll={handleRefreshAll}
                 isSyncingAll={isSyncingAll}
+                canResetSort={!!sortConfig}
+                onResetSort={handleResetSort}
             />
 
             {/* Main Content Area */}
@@ -207,6 +250,8 @@ export function PeopleDirectoryV2({
                         onLend={(p) => handleAction(p, 'lend')}
                         onRepay={(p) => handleAction(p, 'repay')}
                         onSync={handleSyncPerson}
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
                     />
                 </div>
             </div>

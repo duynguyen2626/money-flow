@@ -75,14 +75,29 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
           return type === 'expense' || type === 'transfer' || type === 'debt'
         })
         .reduce((sum, t) => sum + Math.abs(t.amount || 0), 0)
-      
+
       const progress = Math.min(100, (spent / waiver_target) * 100)
       const met = spent >= waiver_target
-      
+
+      const limit = account.credit_limit ?? 0
+      const currentBalanceAbs = Math.abs(account.current_balance ?? 0)
+      const usage_percent = limit > 0 ? (currentBalanceAbs / limit) * 100 : 0
+      const remaining_limit = Math.max(0, limit - currentBalanceAbs)
+
       accountWithStats = {
         ...account,
         stats: {
+          usage_percent,
+          remaining_limit,
           spent_this_cycle: spent,
+          min_spend: cashbackStats?.minSpend ?? null,
+          missing_for_min: cashbackStats?.minSpend ? Math.max(0, cashbackStats.minSpend - spent) : null,
+          is_qualified: cashbackStats?.is_min_spend_met ?? false,
+          cycle_range: cashbackStats?.cycle?.label ?? '',
+          due_date_display: null,
+          due_date: null,
+          remains_cap: cashbackStats?.remainingBudget ?? null,
+          shared_cashback: cashbackStats?.sharedAmount ?? null,
           annual_fee_waiver_target: waiver_target,
           annual_fee_waiver_progress: progress,
           annual_fee_waiver_met: met,

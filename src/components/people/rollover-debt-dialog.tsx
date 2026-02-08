@@ -31,33 +31,30 @@ const initialState: RolloverDebtState = {
     message: '',
 }
 
+// Helper to get next month tag
+const getNextMonth = (cycle: string) => {
+    if (!isYYYYMM(cycle)) return ''
+    const [year, month] = cycle.split('-').map(Number)
+    const date = new Date(year, month, 1) // Month is 0-indexed in Date, so month (1-12) used as index is actually next month.
+    return toYYYYMMFromDate(date)
+}
+
 export function RolloverDebtDialog({ personId, currentCycle, remains, trigger }: RolloverDebtDialogProps) {
     const [open, setOpen] = useState(false)
     const [state, formAction, isPending] = useActionState(rolloverDebtAction, initialState)
 
-    // Early return if currentCycle is not a valid YYYY-MM tag (e.g. "All History")
-    if (!isYYYYMM(currentCycle)) {
-        return null
-    }
-
-    // Helper to get next month tag
-    const getNextMonth = (cycle: string) => {
-        if (!isYYYYMM(cycle)) return ''
-        const [year, month] = cycle.split('-').map(Number)
-        const date = new Date(year, month, 1) // Month is 0-indexed in Date, so month (1-12) used as index is actually next month.
-        return toYYYYMMFromDate(date)
-    }
-
-    const [toCycle, setToCycle] = useState(getNextMonth(currentCycle))
+    const [toCycle, setToCycle] = useState(isYYYYMM(currentCycle) ? getNextMonth(currentCycle) : '')
     const [amount, setAmount] = useState(remains > 0 ? remains : 0)
 
     // Generate upcoming cycle options (next 12 months)
-    const cycleSelectItems = []
-    let baseCycle = currentCycle
-    for (let i = 0; i < 12; i++) {
-        const next = getNextMonth(baseCycle)
-        cycleSelectItems.push({ value: next, label: next })
-        baseCycle = next
+    const cycleSelectItems = [];
+    if (isYYYYMM(currentCycle)) {
+        let baseCycle = currentCycle
+        for (let i = 0; i < 12; i++) {
+            const next = getNextMonth(baseCycle)
+            cycleSelectItems.push({ value: next, label: next })
+            baseCycle = next
+        }
     }
 
     useEffect(() => {
@@ -70,12 +67,15 @@ export function RolloverDebtDialog({ personId, currentCycle, remains, trigger }:
     }, [state])
 
     useEffect(() => {
-        if (open) {
+        if (open && isYYYYMM(currentCycle)) {
             setAmount(remains > 0 ? remains : 0)
             setToCycle(getNextMonth(currentCycle))
         }
     }, [open, currentCycle, remains])
 
+    if (!isYYYYMM(currentCycle)) {
+        return null
+    }
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>

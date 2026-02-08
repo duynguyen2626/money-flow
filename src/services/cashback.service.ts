@@ -7,6 +7,7 @@ import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange, getC
 import { normalizePolicyMetadata } from '@/lib/cashback-policy';
 import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
 
+import { resolveCashbackPolicy } from './cashback/policy-resolver'
 /**
  * Ensures a cashback cycle exists for the given account and tag.
  * Returns the cycle ID.
@@ -155,8 +156,6 @@ export async function upsertTransactionCashback(
   // transaction.cashback_share_percent IS already the source of truth if set.
   // But wait, "resolveCashbackPolicy" is the new way.
 
-  // Let's import the resolver
-  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
 
   const config = parseCashbackConfig(account.cashback_config, account.id);
   const date = new Date(transaction.occurred_at);
@@ -645,7 +644,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           const txnAmount = Math.abs(t.amount);
           // Use the spent amount from THIS cycle being viewed, not current cycle
           const cycleSpentForPolicy = (cycle as any)?.spent_amount ?? 0;
-          
+
           const resolvedPolicy = resolveCashbackPolicy({
             account: acc,
             categoryId: category?.id,
@@ -666,7 +665,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           let bankBack = txnAmount * policyRate;
           const ruleMaxReward = policyMetadata?.ruleMaxReward ?? resolvedPolicy.maxReward ?? null;
           const cycleMaxBudget = (cycle as any)?.max_budget ?? null;
-          
+
           // Apply cap from rule first, then from cycle budget
           if (ruleMaxReward !== null && ruleMaxReward > 0) {
             bankBack = Math.min(bankBack, ruleMaxReward);
@@ -676,11 +675,11 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             // For now, we cap individual transaction to avoid exceeding cycle budget per transaction.
             bankBack = Math.min(bankBack, cycleMaxBudget);
           }
-          
+
           // People CB: What was shared with others
           // If shareFixed is set, use it; otherwise calculate from sharePercent
           const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
-          
+
           // Profit: Your profit (capped bank back minus share)
           const profit = bankBack - peopleBack;
 

@@ -137,6 +137,19 @@ export function MemberDetailView({
         })
     }
 
+    const handleCycleSelect = (tag: string, year: string | null) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set('tag', tag)
+        if (year) {
+            params.set('year', year)
+        } else {
+            params.delete('year')
+        }
+        startTransition(() => {
+            router.push(`?${params.toString()}`, { scroll: false })
+        })
+    }
+
     const handleYearChange = (year: string | null) => {
         const params = new URLSearchParams(searchParams.toString())
         if (year === null) {
@@ -362,6 +375,10 @@ export function MemberDetailView({
         }).length
     }, [activeCycle])
 
+    const activeCycleSheet = useMemo(() => {
+        return cycleSheets.find(s => s.cycle_tag === activeCycle.tag)
+    }, [cycleSheets, activeCycle.tag])
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             {/* V2 Header */}
@@ -386,6 +403,7 @@ export function MemberDetailView({
                         activeCycle={activeCycle}
                         allCycles={debtCycles}
                         onCycleChange={handleCycleChange}
+                        onCycleSelect={handleCycleSelect}
                         availableYears={availableYears}
                         selectedYear={selectedYear}
                         onYearChange={handleYearChange}
@@ -407,6 +425,7 @@ export function MemberDetailView({
                         onAddTransaction={handleAddTransaction}
                         currentCycleTag={currentMonthTag}
                         isPending={isPending}
+                        initialSheetUrl={activeCycleSheet?.sheet_url}
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3">
                         <SimpleTransactionTable

@@ -594,68 +594,42 @@ export async function createTransaction(
 
     // CASHBACK INTEGRATION
     if (transactionId) {
-      // We need to fetch the full transaction details to pass to the cashback service
-      // reusing loadTransactions is the safest way to get derived fields like category_name
-      const { loadTransactions } = await import("./transaction.service"); // self-import to avoid recursion issues if any? actually we are inside it.
-      // But loadTransactions is exported.
-      // Call internal function if possible, or just use the exported one.
-      // Since we are in the module, we can just call loadTransactions directly if not for "this" binding issues (which don't exist in module scope).
-      // However, loadTransactions uses `fetchLookups` etc.
-
-      // Let's just create a small helper to fetch single transaction or use loadTransactions logic.
-      // Actually, creating a specific fetcher for cashback might be lighter?
-      // loadTransactions is heavy.
-      // But for correctness of "category_name" (which is needed for tiered cashback), we need the join.
-      // Let's us loadTransactions for now, it's fine for a single item.
+      // Re-fetch the transaction with category details for cashback logic
+      // Using direct re-fetch instead of loadTransactions to avoid recursion/overhead
       try {
         const [txn] = await loadTransactions({
-          limit: 1,
-          accountId: normalized.account_id,
+          transactionId: transactionId,
         });
-        // We can't filter by ID in loadTransactions currently except via filter logic...
-        // loadTransactions options are limited.
-        // Let's just add a quick helper or fetch it manually.
 
-        // Actually, let's just fetch what we need manually to avoid overhead.
-        const supabase = createClient();
-        const { data: rawTxn } = await supabase
-          .from("transactions")
-          .select("*, categories(name)")
-          .eq("id", transactionId)
-          .single();
-        if (rawTxn) {
-          const txnShape: any = {
-            ...(rawTxn as any),
-            category_name: (rawTxn as any).categories?.name,
-          };
-          await upsertTransactionCashback(txnShape);
+        if (txn) {
+          await upsertTransactionCashback(txn);
         }
       } catch (cbError) {
         console.error("Failed to upsert cashback entry:", cbError);
       }
+    }
 
-      // INSTALLMENT INTEGRATION: Process Monthly Payment
-      const meta = normalized.metadata as any;
-      if (meta && meta.installment_id) {
-        try {
-          const { processMonthlyPayment } =
-            await import("./installment.service");
-          await processMonthlyPayment(
-            meta.installment_id,
-            Math.abs(normalized.amount),
-          );
-          revalidatePath("/installments");
-        } catch (instError) {
-          console.error("Failed to process installment payment:", instError);
-        }
+    // INSTALLMENT INTEGRATION: Process Monthly Payment
+    const meta = normalized.metadata as any;
+    if (meta && meta.installment_id) {
+      try {
+        const { processMonthlyPayment } =
+          await import("./installment.service");
+        await processMonthlyPayment(
+          meta.installment_id,
+          Math.abs(normalized.amount),
+        );
+        revalidatePath("/installments");
+      } catch (instError) {
+        console.error("Failed to process installment payment:", instError);
       }
+    }
 
-      // Phase 7X: Auto-Settle Installment
-      if (normalized.installment_plan_id) {
-        import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
-          checkAndAutoSettleInstallment(normalized.installment_plan_id!);
-        });
-      }
+    // Phase 7X: Auto-Settle Installment
+    if (normalized.installment_plan_id) {
+      import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
+        checkAndAutoSettleInstallment(normalized.installment_plan_id!);
+      });
     }
 
     return transactionId;
@@ -1328,7 +1302,7 @@ export type PendingRefundItem = {
   tag: string | null;
   amount: number;
   status: string;
-   
+
   original_note: string | null;
   original_category: string | null;
   linked_transaction_id?: string;

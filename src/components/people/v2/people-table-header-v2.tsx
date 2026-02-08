@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid, Calendar, RotateCw } from "lucide-react";
+import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid, Calendar, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,8 @@ interface PeopleTableHeaderV2Props {
     availableYears: number[];
     onRefreshAll?: () => void;
     isSyncingAll?: boolean;
+    canResetSort?: boolean;
+    onResetSort?: () => void;
 }
 
 export function PeopleTableHeaderV2({
@@ -49,6 +51,8 @@ export function PeopleTableHeaderV2({
     availableYears,
     onRefreshAll,
     isSyncingAll,
+    canResetSort,
+    onResetSort,
 }: PeopleTableHeaderV2Props) {
     const years = availableYears.length > 0 ? availableYears : [new Date().getFullYear()];
     const filters: { id: FilterStatus; label: string; icon: React.ReactNode; count?: number; color: string }[] = [
@@ -201,6 +205,19 @@ export function PeopleTableHeaderV2({
                 <RotateCw className={cn("h-4 w-4", isSyncingAll && "animate-spin")} />
                 <span className="hidden lg:inline">Sync All Sheets</span>
             </Button>
+
+            {/* Reset Sort Button */}
+            {canResetSort && (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-3 gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold"
+                    onClick={onResetSort}
+                >
+                    <X className="h-4 w-4" />
+                    <span>Reset Sort</span>
+                </Button>
+            )}
         </div>
     );
 }

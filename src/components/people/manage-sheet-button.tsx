@@ -259,7 +259,7 @@ export function ManageSheetButton({
                   <Button
                     variant="ghost"
                     size={size === 'md' ? 'default' : size}
-                    className={cn("rounded-none border-r border-slate-200 px-3 hover:bg-slate-100 h-8 flex-1 shrink-0", buttonClassName)}
+                    className={cn("rounded-none border-r border-slate-200 px-3 hover:bg-slate-100 h-9 flex-1 shrink-0 flex items-center justify-center", buttonClassName)}
                     disabled={isDisabled || !hasValidScriptLink || !hasValidCycle}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -286,7 +286,7 @@ export function ManageSheetButton({
                     <Button
                       variant="ghost"
                       size={size === 'md' ? 'default' : size}
-                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-8 text-slate-500 border-l border-slate-200 shrink-0"
+                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-9 text-slate-500 border-l border-slate-200 shrink-0 flex items-center justify-center"
                       disabled={isDisabled}
                       onClick={handleTriggerClick}
                     >
@@ -300,16 +300,16 @@ export function ManageSheetButton({
               </Tooltip>
 
               {/* Open Sheet Link (New) */}
-              {currentSheetUrl && isValidLink(currentSheetUrl) && (
+              {(sheetUrl || currentSheetUrl) && isValidLink(sheetUrl || currentSheetUrl) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size={size === 'md' ? 'default' : size}
-                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-8 text-emerald-600 border-l border-slate-200 shrink-0"
+                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-full text-emerald-600 border-l border-slate-200 shrink-0 flex items-center justify-center"
                       onClick={(e) => {
                         e.stopPropagation()
-                        window.open(currentSheetUrl, '_blank', 'noopener,noreferrer')
+                        window.open(sheetUrl || currentSheetUrl || '', '_blank', 'noopener,noreferrer')
                       }}
                     >
                       <FileSpreadsheet className="h-4 w-4" />

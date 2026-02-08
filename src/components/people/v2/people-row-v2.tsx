@@ -7,8 +7,8 @@ import { PeopleRowDetailsV2 } from "./people-row-details-v2";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet, Calendar } from "lucide-react";
-import { cn, formatMoneyVND } from "@/lib/utils";
+import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet, Calendar, RefreshCcw, Landmark, Info } from "lucide-react";
+import { cn, formatMoneyVND, formatVNLongAmount } from "@/lib/utils";
 import { SubscriptionBadges } from "./subscription-badges";
 import { ManageSheetButton } from "@/components/people/manage-sheet-button";
 import { Account } from "@/types/moneyflow.types";
@@ -27,9 +27,23 @@ interface PeopleRowProps {
     onEdit: (person: Person) => void;
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
-    onSync?: (personId: string) => void;
+    onSync: (personId: string) => Promise<void>;
     accounts?: Account[];
 }
+
+const VNLongAmount = ({ amount, className }: { amount: number, className?: string }) => {
+    const text = formatVNLongAmount(amount);
+    const parts = text.split(/(\d+)/g);
+    return (
+        <span className={cn("inline-flex items-center gap-0.5", className)}>
+            {parts.map((part, i) => (
+                /^\d+$/.test(part)
+                    ? <strong key={i} className="font-black text-rose-600/90">{part}</strong>
+                    : <span key={i} className="text-slate-400 font-medium">{part}</span>
+            ))}
+        </span>
+    );
+};
 
 export function PeopleRowV2({
     person,
@@ -50,7 +64,7 @@ export function PeopleRowV2({
         }
     };
 
-    const handleIconClick = (e: React.MouseEvent) => {
+    const handleExpandToggle = (e: React.MouseEvent) => {
         e.stopPropagation();
         onToggleExpand(person.id);
     };
@@ -68,7 +82,7 @@ export function PeopleRowV2({
                 <td className="sticky left-0 z-20 bg-inherit w-10 px-2 py-3 text-center border-r border-slate-200">
                     <ExpandIcon
                         isExpanded={isExpanded}
-                        onClick={handleIconClick}
+                        onClick={handleExpandToggle}
                     />
                 </td>
 
@@ -116,27 +130,24 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 overflow-hidden">
+                        <div className="flex items-center gap-2 overflow-hidden w-full pr-1">
                             <Link
                                 href={`/people/${person.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-semibold text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"
+                                className="font-semibold text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate flex-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 {person.name}
                             </Link>
 
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
                                 {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
+                                <SubscriptionBadges
+                                    subscriptions={person.subscription_details || []}
+                                    maxDisplay={2}
+                                />
                             </div>
-                        </div>
-
-                        <div className="mt-1">
-                            <SubscriptionBadges
-                                subscriptions={person.subscription_details || []}
-                                maxDisplay={2}
-                            />
                         </div>
                     </div>
                 </div>
@@ -146,22 +157,30 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                 <div className="flex items-center gap-2">
                     {/* ManageSheetButton with Split Mode */}
                     {person.sheet_link ? (
-                        <div className="flex items-center gap-1.5">
-                            <ManageSheetButton
-                                personId={person.id}
-                                cycleTag={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
-                                scriptLink={person.sheet_link}
-                                googleSheetUrl={person.google_sheet_url}
-                                sheetFullImg={person.sheet_full_img}
-                                showBankAccount={person.sheet_show_bank_account ?? undefined}
-                                sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
-                                showQrImage={person.sheet_show_qr_image ?? undefined}
-                                accounts={accounts}
-                                buttonClassName="h-8 text-xs px-3"
-                                size="sm"
-                                showCycleAction={true}
-                                splitMode={true}
-                            />
+                        <div className="flex items-center gap-1.5 h-full">
+                            {(() => {
+                                const now = new Date();
+                                const currentTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                                const cycleSheet = person.cycle_sheets?.find(s => s.cycle_tag === currentTag);
+                                return (
+                                    <ManageSheetButton
+                                        personId={person.id}
+                                        cycleTag={currentTag}
+                                        initialSheetUrl={cycleSheet?.sheet_url}
+                                        scriptLink={person.sheet_link}
+                                        googleSheetUrl={person.google_sheet_url}
+                                        sheetFullImg={person.sheet_full_img}
+                                        showBankAccount={person.sheet_show_bank_account ?? undefined}
+                                        sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
+                                        showQrImage={person.sheet_show_qr_image ?? undefined}
+                                        accounts={accounts}
+                                        buttonClassName="h-8 text-xs px-3"
+                                        size="sm"
+                                        showCycleAction={true}
+                                        splitMode={true}
+                                    />
+                                );
+                            })()}
                         </div>
                     ) : (
                         <div className="w-[170px] min-w-[170px]">
@@ -179,50 +198,62 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
         case 'current_debt':
             // Show current cycle debt amount only (label is in debt_tag column)
             return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
+                <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5">
                     {formatMoneyVND(person.current_cycle_debt || 0)}
-                </div>
+                </Badge>
             );
         case 'base_lend':
             return (
-                <div className="tabular-nums tracking-tight text-muted-foreground">
+                <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5">
                     {formatMoneyVND(person.total_base_debt || 0)}
-                </div>
+                </Badge>
             );
-        case 'cashback':
+        case 'cashback': // Settled
             return (
-                <div className="tabular-nums tracking-tight text-muted-foreground">
+                <Badge variant="outline" className="tabular-nums tracking-tight font-bold bg-emerald-50 text-emerald-600 border-emerald-100 px-2 py-0.5">
                     {formatMoneyVND(person.total_cashback || 0)}
-                </div>
+                </Badge>
             );
-        case 'net_lend':
+        case 'net_lend': // Outstanding
             return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
+                <Badge variant="outline" className="tabular-nums tracking-tight font-bold bg-indigo-50 text-indigo-600 border-indigo-100 px-2 py-0.5">
                     {formatMoneyVND(person.total_net_debt || 0)}
-                </div>
-            );
-        case 'active_subs':
-            return (
-                <SubscriptionBadges
-                    subscriptions={person.subscription_details || []}
-                    maxDisplay={2}
-                />
+                </Badge>
             );
         case 'balance': // Remains
             // Show TOTAL debt (current + outstanding)
-            const totalDebt = (person.current_cycle_debt || 0) + (person.outstanding_debt || 0);
+            const totalDebt = (person.current_debt || 0) + (person.outstanding_debt || 0);
             return (
-                <Badge
-                    variant="outline"
-                    className={cn(
-                        "tabular-nums tracking-tight font-medium border-0 px-2 py-1",
-                        totalDebt > 0
-                            ? "bg-red-50 text-red-600"
-                            : "bg-slate-50 text-slate-500 opacity-50"
+                <div className="flex flex-col items-start gap-1 justify-center py-1">
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "tabular-nums tracking-tight font-medium border-0 px-2 py-0.5 text-[15px] leading-none",
+                            totalDebt > 0
+                                ? "bg-red-50 text-red-600 ring-1 ring-inset ring-red-200"
+                                : "bg-slate-50 text-slate-500 opacity-40 grayscale"
+                        )}
+                    >
+                        {formatMoneyVND(totalDebt)}
+                    </Badge>
+                    {totalDebt > 0 && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="cursor-help transition-all hover:opacity-80">
+                                        <VNLongAmount amount={totalDebt} className="text-[12px] truncate max-w-[160px]" />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="bg-slate-900 text-white border-none p-2 shadow-xl">
+                                    <p className="text-xs font-bold flex items-center gap-1.5">
+                                        <Info className="h-3.5 w-3.5 text-blue-400" />
+                                        <VNLongAmount amount={totalDebt} className="text-white" />
+                                    </p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     )}
-                >
-                    {formatMoneyVND(totalDebt)}
-                </Badge>
+                </div>
             );
         case 'action':
             return (

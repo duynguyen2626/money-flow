@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export type PeopleColumnKey = 'name' | 'current_tag' | 'current_debt' | 'active_subs' | 'base_lend' | 'cashback' | 'net_lend' | 'balance' | 'action';
+export type PeopleColumnKey = 'name' | 'current_tag' | 'current_debt' | 'base_lend' | 'cashback' | 'net_lend' | 'balance' | 'action';
 
 export interface PeopleColumnConfig {
     key: PeopleColumnKey;
@@ -16,7 +16,6 @@ const defaultPeopleColumns: PeopleColumnConfig[] = [
     { key: 'cashback', label: 'Settled', defaultWidth: 140, minWidth: 120 },
     { key: 'net_lend', label: 'Outstanding', defaultWidth: 140, minWidth: 120 },
     { key: 'balance', label: 'Remains', defaultWidth: 150, minWidth: 120 },
-    { key: 'active_subs', label: 'Active Subs', defaultWidth: 120, minWidth: 100 },
     { key: 'current_tag', label: 'Current Tag', defaultWidth: 200, minWidth: 180 },
     { key: 'current_debt', label: 'Current Cycle', defaultWidth: 140, minWidth: 120 },
     { key: 'action', label: 'Actions', defaultWidth: 100, minWidth: 80, frozen: true },
@@ -31,7 +30,6 @@ export function usePeopleColumnPreferences() {
         name: true,
         current_tag: true,
         current_debt: true,
-        active_subs: true,
         base_lend: true,
         cashback: true,
         net_lend: true,
@@ -106,7 +104,6 @@ export function usePeopleColumnPreferences() {
         setVisibleColumns({
             name: true,
             current_tag: true,
-            active_subs: true,
             current_debt: true,
             base_lend: true,
             cashback: true,
