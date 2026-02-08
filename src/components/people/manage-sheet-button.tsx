@@ -300,7 +300,7 @@ export function ManageSheetButton({
               </Tooltip>
 
               {/* Open Sheet Link (New) */}
-              {(sheetUrl || currentSheetUrl) && isValidLink(sheetUrl || currentSheetUrl) && (
+              {!(cycleTag === 'all' || cycleTag.toLowerCase().includes('all')) && (sheetUrl || currentSheetUrl) && isValidLink(sheetUrl || currentSheetUrl) && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

@@ -2259,23 +2259,22 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
 
                             if (isSourceContext) {
-                              // Viewing Source (Account).
-                              if (hasTarget || hasPerson) {
-                                // Movement TO somebody/something
-                                entityToShow = hasPerson ? 'person' : 'dest'
-                                flowBadgeType = 'TO'
-                              } else {
-                                // Simple Income/Expense from A's perspective
-                                entityToShow = 'dest'
-                                flowBadgeType = txn.type === 'income' ? 'FROM' : 'TO'
-                              }
+                              // Viewing Account. Show where money went/came from.
+                              entityToShow = hasPerson ? 'person' : 'dest'
+                              // If account received money (income/repayment), it came FROM the other side.
+                              flowBadgeType = visualType === 'income' ? 'FROM' : 'TO'
                             }
                             else if (isDestContext || isPersonContext) {
-                              // Viewing Dest/Person. Show where money came from.
-                              // Flow: Source -> Dest/Person.
-                              // So we show Source with "FROM" badge.
+                              // Viewing Person/Target. Show the Source Account involved.
                               entityToShow = 'source'
-                              flowBadgeType = 'FROM'
+                              // If account received money (income/repayment), money went TO the account.
+                              flowBadgeType = visualType === 'income' ? 'TO' : 'FROM'
+                            }
+                            else {
+                              // Default if somehow showSingleFlow is true but context not matched
+                              // (e.g. general view for simple single transactions)
+                              entityToShow = 'dest'
+                              flowBadgeType = visualType === 'income' ? 'FROM' : 'TO'
                             }
 
                             let displayName = sourceName
@@ -2330,7 +2329,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                   {/* Flow Badge */}
                                   {flowBadgeType && (
                                     <span className={cn(
-                                      "inline-flex items-center justify-center rounded-[4px] px-2 h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0",
+                                      "inline-flex items-center justify-center rounded-[4px] h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0 w-11 shadow-sm transition-all group-hover/pill:scale-105",
                                       flowBadgeType === 'FROM' ? "bg-orange-50 border border-orange-200 text-orange-700" : "bg-sky-50 border border-sky-200 text-sky-700"
                                     )}>
                                       {flowBadgeType}

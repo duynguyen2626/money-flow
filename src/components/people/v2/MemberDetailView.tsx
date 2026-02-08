@@ -17,6 +17,8 @@ import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
 import { parseISO, isWithinInterval } from 'date-fns'
+import { Info } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface MemberDetailViewProps {
     person: Person
@@ -57,6 +59,7 @@ export function MemberDetailView({
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [showPaidModal, setShowPaidModal] = useState(false)
     const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>()
+    const [isSubmitting, setIsSubmitting] = useState(false)
 
     // Derive active month/year from URL (Single Source of Truth)
     const urlYear = searchParams.get('year')
@@ -327,10 +330,19 @@ export function MemberDetailView({
     }
 
     const handleSlideSuccess = () => {
-        setIsSlideOpen(false)
+        // setIsSlideOpen(false) // Handled by onSubmissionStart for immediate feel
         setSelectedTxn(null)
         setSlideOverrideType(undefined)
         router.refresh()
+    }
+
+    const handleSubmissionStart = () => {
+        setIsSlideOpen(false)
+        setIsSubmitting(true)
+    }
+
+    const handleSubmissionEnd = () => {
+        setIsSubmitting(false)
     }
 
     // Initial Data for Slide
@@ -427,7 +439,29 @@ export function MemberDetailView({
                         isPending={isPending}
                         initialSheetUrl={activeCycleSheet?.sheet_url}
                     />
-                    <div className="flex-1 overflow-y-auto px-4 py-3">
+                    <div className="flex-1 overflow-y-auto px-4 py-3 relative">
+                        {isSubmitting && (
+                            <div className="absolute inset-0 bg-white/60 z-50 flex flex-col items-center justify-center backdrop-blur-[1px] animate-in fade-in duration-300">
+                                <div className="flex flex-col items-center gap-4 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100 scale-95 animate-in zoom-in-95 duration-300">
+                                    <div className="relative">
+                                        <div className="h-12 w-12 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-1.5 text-center">
+                                        <span className="text-base font-black text-slate-900 leading-tight">
+                                            {slideMode === 'edit' ? 'Updating...' :
+                                                slideMode === 'duplicate' ? 'Duplicating...' :
+                                                    'Creating...'}
+                                        </span>
+                                        <p className="text-xs text-slate-500 font-medium max-w-[160px]">
+                                            One moment, syncing with database
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <SimpleTransactionTable
                             transactions={cycleTransactions}
                             accounts={accounts}
@@ -443,6 +477,8 @@ export function MemberDetailView({
                     </div>
                 </>
             )}
+
+
 
             {activeTab === 'history' && (
                 <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -510,7 +546,27 @@ export function MemberDetailView({
                 people={people}
                 shops={shops}
                 onSuccess={handleSlideSuccess}
+                onSubmissionStart={handleSubmissionStart}
+                onSubmissionEnd={handleSubmissionEnd}
             />
+            <FlowLegend />
         </div>
     )
 }
+
+const FlowLegend = () => (
+    <div className="px-6 py-2 border-t border-slate-200 bg-white flex items-center gap-6 text-[11px] text-slate-500 font-medium shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center gap-2 group cursor-help">
+            <span className="inline-flex items-center justify-center rounded-[4px] h-5 w-11 text-[9px] font-black bg-orange-50 border border-orange-200 text-orange-700 shadow-sm transition-transform group-hover:scale-105">FROM</span>
+            <span className="text-slate-400 font-normal">→ Origin / Source</span>
+        </div>
+        <div className="flex items-center gap-2 group cursor-help">
+            <span className="inline-flex items-center justify-center rounded-[4px] h-5 w-11 text-[9px] font-black bg-sky-50 border border-sky-200 text-sky-700 shadow-sm transition-transform group-hover:scale-105">TO</span>
+            <span className="text-slate-400 font-normal">→ Target / Destination</span>
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-slate-300">
+            <Info className="h-3.5 w-3.5" />
+            <span className="italic">Flow labels are context-aware (Repayment = TO Account)</span>
+        </div>
+    </div>
+)

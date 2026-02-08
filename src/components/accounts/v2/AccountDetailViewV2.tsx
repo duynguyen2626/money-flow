@@ -17,6 +17,7 @@ import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-v
 import { AccountContentWrapper } from '@/components/moneyflow/account-content-wrapper'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { useRecentItems } from '@/hooks/use-recent-items'
+import { Info } from 'lucide-react'
 
 type PendingBatchItem = {
     id: string
@@ -273,6 +274,24 @@ export function AccountDetailViewV2({
                     </div>
                 )}
             </div>
+            <FlowLegend />
         </div>
     )
 }
+
+const FlowLegend = () => (
+    <div className="px-6 py-2 border-t border-slate-200 bg-white flex items-center gap-6 text-[11px] text-slate-500 font-medium shrink-0 shadow-[0_-1px_3px_rgba(0,0,0,0.02)]">
+        <div className="flex items-center gap-2 group cursor-help">
+            <span className="inline-flex items-center justify-center rounded-[4px] h-5 w-11 text-[9px] font-black bg-orange-50 border border-orange-200 text-orange-700 shadow-sm transition-transform group-hover:scale-105">FROM</span>
+            <span className="text-slate-400 font-normal">→ Origin / Source</span>
+        </div>
+        <div className="flex items-center gap-2 group cursor-help">
+            <span className="inline-flex items-center justify-center rounded-[4px] h-5 w-11 text-[9px] font-black bg-sky-50 border border-sky-200 text-sky-700 shadow-sm transition-transform group-hover:scale-105">TO</span>
+            <span className="text-slate-400 font-normal">→ Target / Destination</span>
+        </div>
+        <div className="ml-auto flex items-center gap-2 text-slate-300">
+            <Info className="h-3.5 w-3.5" />
+            <span className="italic">Flow labels are context-aware (Income = FROM Sender)</span>
+        </div>
+    </div>
+)
