@@ -13,6 +13,7 @@ import { toYYYYMMFromDate } from '@/lib/month-tag'
 import { useRecentItems } from '@/hooks/use-recent-items'
 import { useBreadcrumbs } from '@/context/breadcrumb-context'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
 import { parseISO, isWithinInterval } from 'date-fns'
@@ -28,6 +29,7 @@ interface MemberDetailViewProps {
     categories: Category[]
     people: Person[]
     shops: Shop[]
+    subscriptions: any[]
 }
 
 export function MemberDetailView({
@@ -41,6 +43,7 @@ export function MemberDetailView({
     categories,
     people,
     shops,
+    subscriptions = [],
 }: MemberDetailViewProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -94,6 +97,9 @@ export function MemberDetailView({
     const [slideMode, setSlideMode] = useState<'add' | 'edit' | 'duplicate'>('add')
     const [selectedTxn, setSelectedTxn] = useState<TransactionWithDetails | null>(null)
     const [slideOverrideType, setSlideOverrideType] = useState<string | undefined>(undefined)
+
+    // Person Slide State
+    const [isPersonSlideOpen, setIsPersonSlideOpen] = useState(false)
 
     const { setCustomName } = useBreadcrumbs()
 
@@ -295,7 +301,12 @@ export function MemberDetailView({
         setIsSlideOpen(true)
     }
 
-    const handleDuplicateTransaction = (t: TransactionWithDetails) => {
+    const handleDuplicateTransaction = (input: string | TransactionWithDetails) => {
+        const t = typeof input === 'string'
+            ? transactions.find(x => x.id === input)
+            : input
+        if (!t) return
+
         setSlideMode('duplicate')
         setSelectedTxn(t)
         setSlideOverrideType(undefined)
@@ -332,11 +343,12 @@ export function MemberDetailView({
             target_account_id: selectedTxn.to_account_id || undefined,
             category_id: selectedTxn.category_id || undefined,
             shop_id: selectedTxn.shop_id || undefined,
-            person_id: selectedTxn.person_id || undefined,
+            person_id: selectedTxn.person_id || person.id,
             tag: selectedTxn.tag || undefined,
             cashback_mode: selectedTxn.cashback_mode || "none_back",
             cashback_share_percent: selectedTxn.cashback_share_percent,
             cashback_share_fixed: selectedTxn.cashback_share_fixed,
+            metadata: slideMode === 'duplicate' ? { duplicated_from_id: selectedTxn.id } : selectedTxn.metadata,
         }
     }, [selectedTxn, slideMode, slideOverrideType, person.id])
 
@@ -363,6 +375,7 @@ export function MemberDetailView({
                 onYearChange={handleYearChange}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
+                onEdit={() => setIsPersonSlideOpen(true)}
             />
 
             {/* Content Area */}
@@ -445,12 +458,19 @@ export function MemberDetailView({
             <PaidTransactionsModal
                 open={showPaidModal}
                 onOpenChange={setShowPaidModal}
-                transactions={activeCycle?.transactions || []}
                 personId={person.id}
+                transactions={transactions}
                 accounts={accounts}
                 categories={categories}
                 people={people}
                 shops={shops}
+            />
+
+            <PeopleSlideV2
+                open={isPersonSlideOpen}
+                onOpenChange={setIsPersonSlideOpen}
+                person={person}
+                subscriptions={subscriptions}
             />
             {/* Transaction Slide V2 */}
             <TransactionSlideV2
@@ -463,6 +483,7 @@ export function MemberDetailView({
                     }
                 }}
                 mode="single"
+                operationMode={slideMode}
                 editingId={(slideMode === 'edit' && selectedTxn) ? selectedTxn.id : undefined}
                 initialData={slideInitialData}
                 accounts={accounts}

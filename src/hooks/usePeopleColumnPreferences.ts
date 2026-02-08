@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export type PeopleColumnKey = 'name' | 'active_subs' | 'debt_tag' | 'current_debt' | 'base_lend' | 'cashback' | 'net_lend' | 'balance' | 'action';
+export type PeopleColumnKey = 'name' | 'current_tag' | 'current_debt' | 'active_subs' | 'base_lend' | 'cashback' | 'net_lend' | 'balance' | 'action';
 
 export interface PeopleColumnConfig {
     key: PeopleColumnKey;
@@ -11,14 +11,14 @@ export interface PeopleColumnConfig {
 }
 
 const defaultPeopleColumns: PeopleColumnConfig[] = [
-    { key: 'name', label: 'Name', defaultWidth: 250, minWidth: 200, frozen: true },
-    { key: 'active_subs', label: 'Active Subs', defaultWidth: 180, minWidth: 150 },
-    { key: 'debt_tag', label: 'Debt Tag', defaultWidth: 120, minWidth: 100 },
-    { key: 'current_debt', label: 'Current Cycle', defaultWidth: 140, minWidth: 120 },
+    { key: 'name', label: 'Name', defaultWidth: 160, minWidth: 140, frozen: true },
     { key: 'base_lend', label: 'Base Lend', defaultWidth: 140, minWidth: 120 },
     { key: 'cashback', label: 'Settled', defaultWidth: 140, minWidth: 120 },
     { key: 'net_lend', label: 'Outstanding', defaultWidth: 140, minWidth: 120 },
     { key: 'balance', label: 'Remains', defaultWidth: 150, minWidth: 120 },
+    { key: 'active_subs', label: 'Active Subs', defaultWidth: 120, minWidth: 100 },
+    { key: 'current_tag', label: 'Current Tag', defaultWidth: 200, minWidth: 180 },
+    { key: 'current_debt', label: 'Current Cycle', defaultWidth: 140, minWidth: 120 },
     { key: 'action', label: 'Actions', defaultWidth: 100, minWidth: 80, frozen: true },
 ];
 
@@ -29,9 +29,9 @@ export function usePeopleColumnPreferences() {
 
     const [visibleColumns, setVisibleColumns] = useState<Record<PeopleColumnKey, boolean>>({
         name: true,
-        active_subs: true,
-        debt_tag: true,
+        current_tag: true,
         current_debt: true,
+        active_subs: true,
         base_lend: true,
         cashback: true,
         net_lend: true,
@@ -54,8 +54,26 @@ export function usePeopleColumnPreferences() {
             const savedVis = localStorage.getItem('mf_v3_people_col_vis');
             const savedWidths = localStorage.getItem('mf_v3_people_col_width');
 
-            if (savedOrder) setColumnOrder(JSON.parse(savedOrder));
-            if (savedVis) setVisibleColumns(JSON.parse(savedVis));
+            if (savedOrder) {
+                let parsedOrder = JSON.parse(savedOrder) as PeopleColumnKey[];
+                // Filter out invalid/removed columns and add missing ones
+                const validKeys = defaultPeopleColumns.map(c => c.key);
+                parsedOrder = parsedOrder.filter(k => validKeys.includes(k as any)) as PeopleColumnKey[];
+                validKeys.forEach(k => {
+                    if (!parsedOrder.includes(k)) parsedOrder.push(k);
+                });
+                setColumnOrder(parsedOrder);
+            }
+            if (savedVis) {
+                const parsedVis = JSON.parse(savedVis);
+                // Ensure new column is visible by default if it wasn't there
+                if (parsedVis.debt_tag !== undefined) {
+                    parsedVis.current_tag = parsedVis.debt_tag;
+                    delete parsedVis.debt_tag;
+                }
+                if (parsedVis.active_subs !== undefined) delete parsedVis.active_subs;
+                setVisibleColumns(prev => ({ ...prev, ...parsedVis }));
+            }
             if (savedWidths) setColumnWidths(JSON.parse(savedWidths));
         } catch (e) {
             console.error("Failed to load people column settings", e);
@@ -87,8 +105,8 @@ export function usePeopleColumnPreferences() {
         setColumnOrder(defaultPeopleColumns.map(c => c.key));
         setVisibleColumns({
             name: true,
+            current_tag: true,
             active_subs: true,
-            debt_tag: true,
             current_debt: true,
             base_lend: true,
             cashback: true,

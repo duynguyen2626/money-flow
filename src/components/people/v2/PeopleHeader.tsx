@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Person } from '@/types/moneyflow.types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { EditPersonDialog } from '@/components/people/edit-person-dialog'
 import { StatsPopover } from './StatsPopover'
 
 interface PeopleHeaderProps {
@@ -31,6 +30,7 @@ interface PeopleHeaderProps {
     onYearChange: (year: string | null) => void
     activeTab: string
     onTabChange: (tab: 'timeline' | 'history' | 'split-bill') => void
+    onEdit?: () => void
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -47,6 +47,7 @@ export function PeopleHeader({
     onYearChange,
     activeTab,
     onTabChange,
+    onEdit,
 }: PeopleHeaderProps) {
     const isSettled = Math.abs(stats.remains) < 100
     const totalProgress = Math.max(
@@ -87,9 +88,9 @@ export function PeopleHeader({
 
                     {person.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-full object-cover bg-slate-100" />
+                        <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-none border border-slate-200 object-cover bg-slate-100" />
                     ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 text-lg font-bold">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-none border border-slate-200 bg-indigo-50 text-indigo-600 text-lg font-bold">
                             {person.name.charAt(0).toUpperCase()}
                         </div>
                     )}
@@ -245,16 +246,13 @@ export function PeopleHeader({
                         Split
                     </button>
 
-                    <EditPersonDialog
-                        person={person}
-                        subscriptions={[]}
-                        trigger={
-                            <button className="h-9 px-3 flex items-center gap-1.5 border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors bg-white">
-                                <Edit className="h-3.5 w-3.5" />
-                                Edit
-                            </button>
-                        }
-                    />
+                    <button
+                        onClick={onEdit}
+                        className="h-9 px-3 flex items-center gap-1.5 border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors bg-white whitespace-nowrap"
+                    >
+                        <Edit className="h-3.5 w-3.5" />
+                        Edit
+                    </button>
                 </div>
             </div>
         </div>

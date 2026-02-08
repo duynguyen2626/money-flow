@@ -144,7 +144,7 @@ export function MobileTransactionsSimpleList({
                                             <img
                                                 src={shopImage}
                                                 alt=""
-                                                className={`h-5 w-5 object-contain flex-shrink-0 ${isShop ? 'rounded-none' : 'rounded-full'}`}
+                                                className={`h-5 w-5 object-contain flex-shrink-0 rounded-none`}
                                             />
                                         )}
                                         <span className="text-sm font-medium text-slate-900 truncate">

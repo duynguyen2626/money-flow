@@ -52,6 +52,7 @@ Open DevTools Console → Submit form → See logs:
 ### Step 4: Read Key Files (5 min)
 - [UnifiedTransactionsPage.tsx](./src/components/transactions/UnifiedTransactionsPage.tsx#L558) - initialSlideData
 - [transaction-slide-v2.tsx](./src/components/transaction/slide-v2/transaction-slide-v2.tsx#L215) - onSingleSubmit
+- [MemberDetailView.tsx](./src/components/people/v2/MemberDetailView.tsx) - People detail logic
 - [types.ts](./src/components/transaction/slide-v2/types.ts#L11) - Form schema
 
 ---

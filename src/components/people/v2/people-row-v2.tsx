@@ -7,9 +7,11 @@ import { PeopleRowDetailsV2 } from "./people-row-details-v2";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet } from "lucide-react";
+import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet, Calendar } from "lucide-react";
 import { cn, formatMoneyVND } from "@/lib/utils";
 import { SubscriptionBadges } from "./subscription-badges";
+import { ManageSheetButton } from "@/components/people/manage-sheet-button";
+import { Account } from "@/types/moneyflow.types";
 import {
     Tooltip,
     TooltipContent,
@@ -26,6 +28,7 @@ interface PeopleRowProps {
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
     onSync?: (personId: string) => void;
+    accounts?: Account[];
 }
 
 export function PeopleRowV2({
@@ -37,6 +40,7 @@ export function PeopleRowV2({
     onLend,
     onRepay,
     onSync,
+    accounts = [],
 }: PeopleRowProps) {
     const handleRowClick = (e: React.MouseEvent) => {
         // Only expand on row click if not clicking action buttons
@@ -80,7 +84,7 @@ export function PeopleRowV2({
                             col.key === 'name' && "sticky left-10 z-10 bg-inherit" // Part of freeze name logic if needed, but let's keep it simple
                         )}
                     >
-                        {renderCell(person, col.key, onEdit, onLend, onRepay, onSync)}
+                        {renderCell(person, col.key, onEdit, onLend, onRepay, onSync, accounts)}
                     </td>
                 ))}
             </tr>
@@ -100,14 +104,14 @@ export function PeopleRowV2({
     );
 }
 
-function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void, onSync?: (pid: string) => void) {
+function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void, onSync?: (pid: string) => void, accounts?: Account[]) {
     switch (key) {
         case 'name':
             return (
                 <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-full flex-shrink-0">
-                        <AvatarImage src={person.image_url || undefined} alt={person.name} />
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-full">
+                    <Avatar className="h-10 w-10 rounded-none border border-slate-200 flex-shrink-0">
+                        <AvatarImage src={person.image_url || undefined} alt={person.name} className="object-cover" />
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-none">
                             {person.name?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
                         </AvatarFallback>
                     </Avatar>
@@ -123,67 +127,53 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                                 {person.name}
                             </Link>
 
-                            {person.sheet_link && onSync && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <button
-                                                className="inline-flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200 w-5 h-5 rounded hover:bg-blue-100 transition-colors"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onSync(person.id);
-                                                }}
-                                            >
-                                                <RotateCw className="h-3 w-3" />
-                                            </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Sync Google Sheet Now</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
-
-                            {person.google_sheet_url && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <a
-                                                href={person.google_sheet_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.5 rounded hover:bg-green-100 transition-colors h-5 shrink-0"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <FileSpreadsheet className="h-3 w-3" />
-                                                <span className="text-[10px] font-bold uppercase">Sheet</span>
-                                            </a>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Open Google Sheet</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
+                            <div className="flex items-center gap-1">
+                                {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1 mt-1">
-                            {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
+
+                        <div className="mt-1">
+                            <SubscriptionBadges
+                                subscriptions={person.subscription_details || []}
+                                maxDisplay={2}
+                            />
                         </div>
                     </div>
                 </div>
             );
-        case 'active_subs':
+        case 'current_tag':
             return (
-                <SubscriptionBadges
-                    subscriptions={person.subscription_details || []}
-                    maxDisplay={2}
-                />
-            );
-        case 'debt_tag':
-            // Show debt tag (e.g., "2026-01")
-            return (
-                <div className="text-sm text-slate-600">
-                    {person.current_cycle_label || '-'}
+                <div className="flex items-center gap-2">
+                    {/* ManageSheetButton with Split Mode */}
+                    {person.sheet_link ? (
+                        <div className="flex items-center gap-1.5">
+                            <ManageSheetButton
+                                personId={person.id}
+                                cycleTag={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
+                                scriptLink={person.sheet_link}
+                                googleSheetUrl={person.google_sheet_url}
+                                sheetFullImg={person.sheet_full_img}
+                                showBankAccount={person.sheet_show_bank_account ?? undefined}
+                                sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
+                                showQrImage={person.sheet_show_qr_image ?? undefined}
+                                accounts={accounts}
+                                buttonClassName="h-8 text-xs px-3"
+                                size="sm"
+                                showCycleAction={true}
+                                splitMode={true}
+                            />
+                        </div>
+                    ) : (
+                        <div className="w-[170px] min-w-[170px]">
+                            <Badge
+                                variant="outline"
+                                className="h-8 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 bg-white border-2 border-slate-200 rounded-md tracking-tight shadow-none"
+                            >
+                                <Calendar className="h-3 w-3 opacity-70" />
+                                {person.current_cycle_label || 'NO TAG'}
+                            </Badge>
+                        </div>
+                    )}
                 </div>
             );
         case 'current_debt':
@@ -210,6 +200,13 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                 <div className="tabular-nums tracking-tight font-medium text-slate-700">
                     {formatMoneyVND(person.total_net_debt || 0)}
                 </div>
+            );
+        case 'active_subs':
+            return (
+                <SubscriptionBadges
+                    subscriptions={person.subscription_details || []}
+                    maxDisplay={2}
+                />
             );
         case 'balance': // Remains
             // Show TOTAL debt (current + outstanding)

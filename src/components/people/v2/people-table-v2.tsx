@@ -77,7 +77,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay, 
             if (!groups[statusId]) {
                 groups[statusId] = {
                     id: statusId,
-                    name: statusId === 'outstanding' ? 'Outstanding' : 'Settled',
+                    name: statusId === 'outstanding' ? 'outstanding' : 'settled',
                     image: null,
                     members: [],
                     totalDebt: 0,
@@ -114,7 +114,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay, 
         <div className="rounded-md border bg-card overflow-hidden">
             <div className="overflow-auto max-h-[calc(100vh-140px)]">
                 <table className="w-full text-sm text-left border-collapse">
-                    <thead className="sticky top-0 z-30 bg-slate-50 text-xs uppercase font-bold text-muted-foreground border-b shadow-sm">
+                    <thead className="sticky top-0 z-30 bg-slate-50 text-xs font-bold text-muted-foreground border-b shadow-sm">
                         <tr>
                             <th className="sticky left-0 z-40 bg-slate-50 w-10 px-2 py-3 text-center border-r border-slate-200">
                                 <Button
@@ -189,6 +189,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay, 
                                                 onLend={onLend}
                                                 onRepay={onRepay}
                                                 onSync={onSync}
+                                                accounts={accounts}
                                             />
                                         ))}
                                     </React.Fragment>

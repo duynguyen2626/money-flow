@@ -379,6 +379,36 @@ export async function syncAllTransactions(personId: string) {
       .neq('status', 'void')
       .order('occurred_at', { ascending: true })
 
+    // Fetch person's sheet preferences for bank info & QR
+    const { data: personData } = await supabase
+      .from('people')
+      .select('sheet_show_bank_account, sheet_bank_info, sheet_linked_bank_id, sheet_show_qr_image, sheet_full_img')
+      .eq('id', personId)
+      .single()
+
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const manualBankInfo = (personData as any)?.sheet_bank_info ?? ''
+    const linkedBankId = (personData as any)?.sheet_linked_bank_id
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
+
+    let resolvedBankInfo = manualBankInfo
+    if (showBankAccount && linkedBankId) {
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('name, receiver_name, account_number')
+        .eq('id', linkedBankId)
+        .single()
+      if (acc) {
+        const parts = [
+          (acc as any).name,
+          (acc as any).account_number,
+          (acc as any).receiver_name
+        ].filter(Boolean)
+        resolvedBankInfo = parts.join(' ') || manualBankInfo
+      }
+    }
+
     if (error) {
       console.error('Failed to load transactions for sync:', error)
       return { success: false, message: 'Failed to load transactions' }
@@ -443,6 +473,8 @@ export async function syncAllTransactions(personId: string) {
         personId: personId,
         cycleTag: cycleTag,
         rows: rowsPayload,
+        bank_account: showBankAccount ? resolvedBankInfo : '',
+        img: showQrImage && qrImageUrl ? qrImageUrl : ''
       }
 
       const result = await postToSheet(sheetLink, payload)

@@ -44,6 +44,18 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
   - ✅ Fixed network errors from unhandled promise rejections
   - ✅ Updated action signatures to accept batchId for correct revalidation
 
+### Phase 75 Updates (Feb 2026)
+- **People UI & Detail Enhancements**:
+  - ✅ Replaced legacy modals with **PeopleSlideV2** for editing and management.
+  - ✅ Standardized **Sync Button Group** (170px width, Title Case tags, centered FileSheet icon).
+  - ✅ Integrated **Active Subs** column into People list with visibility preferences.
+  - ✅ Switched all stat labels and group headers to **Title Case** for modern aesthetics.
+- **Transaction Slide V2**:
+  - ✅ Fixed **Duplication Bug**: amount, category, and shop now persist correctly during cloning.
+  - ✅ Replaced native confirms with custom **UnsavedChangesDialog**.
+  - ✅ Redesigned **Cashback Section** with icon-based tabs and refined styling.
+  - ✅ Standardized all transaction avatars to **Square (`rounded-none`)** across table and mobile views.
+
 ### Previous Phase 12 Updates
 - **Account Details Flow UI**: Implemented "Single Flow" mode for simple Income/Expense transactions
   - Removed redundant self-reference badges (e.g., "FROM Msb Online" for Cashback)

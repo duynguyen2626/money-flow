@@ -41,7 +41,7 @@ export function SmartAmountInput({
     // Sync internal string state with external number value
     React.useEffect(() => {
         if (!isFocused) {
-            setInputValue(value ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) : '')
+            setInputValue((value === 0 || value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) : '')
         }
     }, [value, isFocused])
 

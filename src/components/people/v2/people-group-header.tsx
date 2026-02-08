@@ -61,7 +61,7 @@ export function PeopleGroupHeader({
 
                         {/* Status label instead of just account name if requested */}
                         {hasDebt && (
-                            <Badge variant="destructive" className="ml-2 font-normal text-[10px] h-4 px-1.5 bg-red-100 text-red-600 hover:bg-red-200 border-none uppercase tracking-tighter">
+                            <Badge variant="destructive" className="ml-2 font-normal text-[10px] h-4 px-1.5 bg-red-100 text-red-600 hover:bg-red-200 border-none tracking-tighter">
                                 Outstanding
                             </Badge>
                         )}
@@ -78,7 +78,7 @@ export function PeopleGroupHeader({
                         {/* Total indicator if different */}
                         {isExpanded && totalDebt !== currentCycleDebt && (
                             <div className="px-2 py-0.5 rounded bg-slate-200/50 flex flex-col items-end">
-                                <span className="text-[9px] uppercase font-bold text-slate-500 leading-none">Total</span>
+                                <span className="text-[9px] font-bold text-slate-500 leading-none">Total</span>
                                 <span className="text-[11px] font-black text-slate-700 tabular-nums">
                                     {formatMoneyVND(totalDebt)}
                                 </span>

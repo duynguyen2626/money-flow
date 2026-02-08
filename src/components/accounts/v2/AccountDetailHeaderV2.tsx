@@ -15,7 +15,8 @@ import {
     TrendingUp,
     LineChart,
     Edit,
-    ExternalLink
+    ExternalLink,
+    Hash
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Account, Category } from '@/types/moneyflow.types'
@@ -26,7 +27,10 @@ import { getAccountTypeLabel } from '@/lib/account-utils'
 import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { AccountSlideV2 } from './AccountSlideV2'
 import { formatCycleTag, formatCycleTagWithYear } from '@/lib/cycle-utils'
-import { Calendar } from 'lucide-react'
+import { updateAccountInfo } from '@/actions/account-actions'
+import { Check, X, Calendar } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 
 interface AccountDetailHeaderV2Props {
     account: Account
@@ -111,6 +115,47 @@ export function AccountDetailHeaderV2({
         fetchCashbackStats()
     }, [selectedCycle, account.id, isCreditCard, cashbackStats])
 
+    const [isEditingInfo, setIsEditingInfo] = React.useState(false)
+    const [editValues, setEditValues] = React.useState({
+        account_number: account.account_number || '',
+        receiver_name: account.receiver_name || ''
+    })
+
+    const handleSaveInfo = async () => {
+        try {
+            const hasChanges =
+                editValues.account_number !== (account.account_number || '') ||
+                editValues.receiver_name !== (account.receiver_name || '')
+
+            if (!hasChanges) {
+                setIsEditingInfo(false)
+                return
+            }
+
+            const result = await updateAccountInfo(account.id, {
+                account_number: editValues.account_number || null,
+                receiver_name: editValues.receiver_name || null
+            })
+
+            if (result.success) {
+                toast.success('Account info updated')
+                setIsEditingInfo(false)
+            } else {
+                toast.error('Failed to update')
+            }
+        } catch (error) {
+            toast.error('Something went wrong')
+        }
+    }
+
+    const startEditing = () => {
+        setEditValues({
+            account_number: account.account_number || '',
+            receiver_name: account.receiver_name || account.name
+        })
+        setIsEditingInfo(true)
+    }
+
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky top-0 z-20 shadow-sm">
             <AccountSlideV2
@@ -145,25 +190,21 @@ export function AccountDetailHeaderV2({
                     )}
                 </div>
 
-                <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                        <h1 className="text-xl font-bold text-slate-900 leading-none">{account.name}</h1>
-                        {/* Type Badge - Only show if NOT credit card with waiver target */}
-                        {!(isCreditCard && account.annual_fee_waiver_target) && (
-                            <span className={cn(
-                                "text-[9px] uppercase font-black px-1.5 py-0.5 rounded border leading-none tracking-wider",
-                                isCreditCard
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-100"
-                                    : "bg-emerald-50 text-emerald-700 border-emerald-100"
-                            )}>
-                                {typeLabel}
-                            </span>
-                        )}
-                    </div>
-                    {account.account_number && (
-                        <span className="text-[10px] font-mono text-slate-400 mt-0.5">
-                            {account.account_number}
-                        </span>
+                <div className="flex flex-col min-w-0 flex-1 mr-4">
+                    <h1 className="text-xl font-bold text-slate-900 leading-none truncate pr-2" title={account.name}>
+                        {account.name}
+                    </h1>
+
+                    {/* Cycle Badge - Moved from Right Side */}
+                    {isCreditCard && selectedCycle && (
+                        <div className="flex items-center gap-1 mt-1.5 w-fit">
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded text-[10px] font-medium whitespace-nowrap">
+                                <Calendar className="h-3 w-3 text-indigo-500" />
+                                <span className="text-indigo-700 font-bold">
+                                    {formatCycleTagWithYear(selectedCycle)}
+                                </span>
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>
@@ -241,8 +282,8 @@ export function AccountDetailHeaderV2({
                                 )
                             })()}
 
-                            {/* Waiver Bar - Only show if applicable */}
-                            {account.annual_fee_waiver_target && account.stats?.annual_fee_waiver_target > 0 && (
+                            {/* Waiver Bar OR Placeholder */}
+                            {account.annual_fee_waiver_target && account.stats?.annual_fee_waiver_target > 0 ? (
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <div className="flex items-center gap-2 group cursor-help">
@@ -289,6 +330,19 @@ export function AccountDetailHeaderV2({
                                         </div>
                                     </PopoverContent>
                                 </Popover>
+                            ) : (
+                                /* No Need Waiver Placeholder */
+                                <div className="flex items-center gap-2 opacity-60">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none flex-shrink-0 w-16 text-right">
+                                        WAIVER
+                                    </span>
+                                    <div className="h-5 flex-1 bg-slate-50 border border-slate-200/60 rounded-md flex items-center justify-start px-2 gap-2">
+                                        <div className="flex items-center justify-center h-3 w-3 rounded-full bg-emerald-100 text-emerald-600">
+                                            <TrendingUp className="h-2 w-2 transform rotate-180" />
+                                        </div>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">No annual Fee</span>
+                                    </div>
+                                </div>
                             )}
                         </div>
 
@@ -472,15 +526,78 @@ export function AccountDetailHeaderV2({
             {/* Right: Tools & Actions */}
             <div className="flex items-center gap-2 ml-auto">
                 {/* Cycle Date Range Display - Only for credit cards with selected cycle */}
-                {isCreditCard && selectedCycle ? (
-                    <div className="h-9 px-3 flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-md text-xs font-medium">
-                        <Calendar className="h-3.5 w-3.5 text-indigo-600" />
-                        <span className="font-bold text-indigo-700">
-                            {formatCycleTagWithYear(selectedCycle)}
-                        </span>
-                    </div>
-                ) : !isCreditCard && availableYears.length > 0 ? (
-                    /* Year Filter - Only for non-credit accounts */
+                {/* Account Number & Info - Replaces Cycle Date */}
+                {/* Account Number & Info - Replaces Cycle Date */}
+                <div className="flex flex-col items-end mr-2 text-right relative group/edit">
+                    {!isEditingInfo ? (
+                        <div
+                            onClick={startEditing}
+                            className="cursor-pointer hover:bg-slate-50 p-1 -m-1 rounded transition-colors relative"
+                            title="Click to quick edit"
+                        >
+                            {account.account_number ? (
+                                <>
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <span className="text-sm font-bold text-slate-700 leading-none">
+                                            {account.account_number}
+                                        </span>
+                                        <Edit className="h-3 w-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5 block whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
+                                        {account.receiver_name || account.name}
+                                    </span>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-end opacity-40 hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">No Account #</span>
+                                        <div className="p-0.5 bg-slate-100 rounded">
+                                            <Hash className="h-3 w-3 text-slate-400" />
+                                        </div>
+                                        <Edit className="h-3 w-3 text-slate-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-1 items-end bg-white p-2 rounded-lg border border-slate-200 shadow-lg absolute right-0 top-0 z-50 min-w-[220px]">
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 w-full text-left">Quick Edit</div>
+                            <Input
+                                value={editValues.account_number}
+                                onChange={(e) => setEditValues(prev => ({ ...prev, account_number: e.target.value }))}
+                                placeholder="Account Number"
+                                className="h-7 text-xs font-bold"
+                                autoFocus
+                            />
+                            <Input
+                                value={editValues.receiver_name}
+                                onChange={(e) => setEditValues(prev => ({ ...prev, receiver_name: e.target.value }))}
+                                placeholder="Receiver Name"
+                                className="h-7 text-xs font-bold"
+                            />
+                            <div className="flex items-center gap-1 mt-1 justify-end w-full">
+                                <button
+                                    onClick={() => setIsEditingInfo(false)}
+                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600"
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                    onClick={handleSaveInfo}
+                                    className="p-1 bg-indigo-50 hover:bg-indigo-100 rounded text-indigo-600 border border-indigo-200"
+                                >
+                                    <Check className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Vertical Divider */}
+                <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+                {/* Year Filter - Only for non-credit accounts */}
+                {!isCreditCard && availableYears.length > 0 && (
                     <Popover>
                         <PopoverTrigger asChild>
                             <button className="h-9 px-3 flex items-center gap-2 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 transition-colors text-xs font-medium shadow-sm">
@@ -503,9 +620,7 @@ export function AccountDetailHeaderV2({
                             ))}
                         </PopoverContent>
                     </Popover>
-                ) : null}
-
-                <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
+                )}
 
                 {/* Tab Actions */}
                 <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg border border-slate-200">
