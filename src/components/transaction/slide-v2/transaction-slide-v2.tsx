@@ -43,6 +43,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { CreateAccountDialog } from "@/components/moneyflow/create-account-dialog";
 import { CategoryDialog } from "@/components/moneyflow/category-dialog";
 import { QuickPeopleSettingsDialog } from "@/components/moneyflow/quick-people-settings-dialog";
+import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function TransactionSlideV2({
     open,
@@ -70,6 +71,10 @@ export function TransactionSlideV2({
     const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [isPeopleDialogOpen, setIsPeopleDialogOpen] = useState(false);
+
+    // Unsaved Changes Dialog State
+    const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+    const [pendingClose, setPendingClose] = useState(false);
 
     // DEBUG: Verify schemas are defined
     useEffect(() => {
@@ -203,7 +208,10 @@ export function TransactionSlideV2({
     // Reset form when slide opens or initialData changes - optimized to prevent unnecessary resets
     useEffect(() => {
         if (open) {
-            console.log("🔄 Resetting form with values:", defaultFormValues);
+            console.log("🔄 TransactionSlideV2 RESET TRIGGERED");
+            console.log("   - operationMode:", operationMode);
+            console.log("   - initialData present:", !!initialData);
+            console.log("   - reset values:", defaultFormValues);
             singleForm.reset(defaultFormValues);
             setHasChanges(false);
             onHasChanges?.(false);
@@ -374,187 +382,242 @@ export function TransactionSlideV2({
         }
     };
 
+    const handleOpenChange = (newOpen: boolean) => {
+        if (!newOpen && hasChanges && !isSubmitting) {
+            setPendingClose(true);
+            setShowUnsavedDialog(true);
+            return;
+        }
+        // Force reset changes state to allow closing
+        if (!newOpen) {
+            setHasChanges(false);
+        }
+        onOpenChange(newOpen);
+    };
+
+    const handleConfirmDiscard = () => {
+        setShowUnsavedDialog(false);
+        setHasChanges(false);
+        setPendingClose(false);
+        onOpenChange(false);
+    };
+
+    const handleCancelDiscard = () => {
+        setShowUnsavedDialog(false);
+        setPendingClose(false);
+    };
+
+    const handleBackWithCheck = () => {
+        if (hasChanges) {
+            setShowUnsavedDialog(true);
+            return;
+        }
+        onBackButtonClick?.();
+    };
+
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent
-                showClose={false}
-                className={cn(
-                    "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100]",
-                    mode === 'single' ? "sm:max-w-[500px]" : "sm:max-w-[1000px]"
-                )}
-                side="right"
-                onInteractOutside={(e) => {
-                    // Prevent closing if a dialog is open on top
-                    if (isAccountDialogOpen || isCategoryDialogOpen || isPeopleDialogOpen) {
-                        e.preventDefault();
-                    }
-                }}
-            >
-                {/* Header */}
-                <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-3">
-                        {/* Back Button */}
-                        <button
-                            type="button"
-                            onClick={() => {
-                                onBackButtonClick?.();
-                            }}
-                            className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
-                                initialData?.metadata?.source === 'chatbot'
-                                    ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            )}
-                            title="Back"
-                        >
-                            <ArrowLeft className="w-3.5 h-3.5" />
-                            {initialData?.metadata?.source === 'chatbot' && "Quay lại Chat"}
-                        </button>
+        <>
+            <Sheet open={open} onOpenChange={handleOpenChange}>
+                <SheetContent
+                    showClose={false}
+                    className={cn(
+                        "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100]",
+                        mode === 'single' ? "sm:max-w-[500px]" : "sm:max-w-[1000px]"
+                    )}
+                    side="right"
+                    onInteractOutside={(e) => {
+                        // Prevent closing if a dialog is open on top
+                        if (isAccountDialogOpen || isCategoryDialogOpen || isPeopleDialogOpen) {
+                            e.preventDefault();
+                        }
+                    }}
+                >
+                    {/* Header */}
+                    <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-3">
+                            {/* Back Button */}
+                            <button
+                                type="button"
+                                onClick={handleBackWithCheck}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all",
+                                    initialData?.metadata?.source === 'chatbot'
+                                        ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                )}
+                                title="Back"
+                            >
+                                <ArrowLeft className="w-3.5 h-3.5" />
+                                {initialData?.metadata?.source === 'chatbot' && "Quay lại Chat"}
+                            </button>
 
-                        <SheetTitle className="flex items-center gap-2">
-                            {mode === 'single'
-                                ? (operationMode === 'duplicate'
-                                    ? 'Duplicate Transaction'
-                                    : operationMode === 'edit'
-                                        ? 'Edit Transaction'
-                                        : 'New Transaction')
-                                : 'Bulk Add'
-                            }
-                            {isLoadingEdit && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Loading...
-                                </span>
-                            )}
-                        </SheetTitle>
+                            <SheetTitle className="flex items-center gap-2">
+                                {mode === 'single'
+                                    ? (operationMode === 'duplicate'
+                                        ? 'Duplicate Transaction'
+                                        : (operationMode === 'edit' || editingId)
+                                            ? 'Edit Transaction'
+                                            : 'New Transaction')
+                                    : 'Bulk Add'
+                                }
+                                {isLoadingEdit && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Loading...
+                                    </span>
+                                )}
+                            </SheetTitle>
+                        </div>
+
+                        {/* Quick Mode Toggle */}
+                        <div className="flex bg-slate-100 rounded-lg p-1">
+                            <button
+                                type="button"
+                                onClick={() => setMode('single')}
+                                className={cn(
+                                    "px-3 py-1 text-xs font-semibold rounded-md transition-all",
+                                    mode === 'single' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Single
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMode('bulk')}
+                                className={cn(
+                                    "px-3 py-1 text-xs font-semibold rounded-md transition-all",
+                                    mode === 'bulk' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Bulk
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Quick Mode Toggle */}
-                    <div className="flex bg-slate-100 rounded-lg p-1">
-                        <button
-                            type="button"
-                            onClick={() => setMode('single')}
-                            className={cn(
-                                "px-3 py-1 text-xs font-semibold rounded-md transition-all",
-                                mode === 'single' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
-                            )}
-                        >
-                            Single
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setMode('bulk')}
-                            className={cn(
-                                "px-3 py-1 text-xs font-semibold rounded-md transition-all",
-                                mode === 'bulk' ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
-                            )}
-                        >
-                            Bulk
-                        </button>
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto bg-slate-50/50 relative">
-                    {/* Note: relative needed for potential absolute positioning context if any, but mainly purely for scroll */}
-                    {mode === 'single' ? (
-                        <div className="px-6 py-6">
-                            <FormProvider {...singleForm}>
-                                <form
-                                    id="single-txn-form"
-                                    onSubmit={singleForm.handleSubmit(
-                                        onSingleSubmit,
-                                        (errors) => {
-                                            console.error("❌ Form validation FAILED");
-                                            console.error("Validation errors object:", errors);
-                                            console.error("Form state:", {
-                                                isValid: singleForm.formState.isValid,
-                                                isSubmitting: singleForm.formState.isSubmitting,
-                                                errors: singleForm.formState.errors,
-                                            });
-                                            console.error("Current form values:", singleForm.getValues());
-                                            console.error("Operation mode:", operationMode, "| editingId:", editingId);
-                                            console.error("Initial data passed:", initialData);
-                                            toast.error("Please fill in all required fields correctly.");
-                                        }
-                                    )}
-                                    className="space-y-6"
-                                >
-                                    <BasicInfoSection
+                    <div className="flex-1 overflow-y-auto bg-slate-50/50 relative">
+                        {isSubmitting && (
+                            <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in duration-200">
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="h-10 w-10 rounded-xl bg-white shadow-xl flex items-center justify-center border border-slate-100">
+                                        <svg className="animate-spin h-6 w-6 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-900">Saving transaction...</span>
+                                </div>
+                            </div>
+                        )}
+                        {/* Note: relative needed for potential absolute positioning context if any, but mainly purely for scroll */}
+                        {mode === 'single' ? (
+                            <div className="px-6 py-6">
+                                <FormProvider {...singleForm}>
+                                    <form
+                                        id="single-txn-form"
+                                        onSubmit={singleForm.handleSubmit(
+                                            onSingleSubmit,
+                                            (errors) => {
+                                                console.error("❌ Form validation FAILED");
+                                                console.error("Validation errors object:", errors);
+                                                console.error("Form state:", {
+                                                    isValid: singleForm.formState.isValid,
+                                                    isSubmitting: singleForm.formState.isSubmitting,
+                                                    errors: singleForm.formState.errors,
+                                                });
+                                                console.error("Current form values:", singleForm.getValues());
+                                                console.error("Operation mode:", operationMode, "| editingId:", editingId);
+                                                console.error("Initial data passed:", initialData);
+                                                toast.error("Please fill in all required fields correctly.");
+                                            }
+                                        )}
+                                        className="space-y-6"
+                                    >
+                                        <BasicInfoSection
+                                            shops={shops}
+                                            categories={categories}
+                                            people={people}
+                                            onAddNewCategory={() => setIsCategoryDialogOpen(true)}
+                                            operationMode={operationMode}
+                                        />
+                                        <AccountSelector
+                                            accounts={accounts}
+                                            people={people}
+                                            onAddNewAccount={() => setIsAccountDialogOpen(true)}
+                                            onAddNewPerson={() => setIsPeopleDialogOpen(true)}
+                                        />
+                                        <SplitBillSection people={people} />
+                                        <CashbackSection accounts={accounts} categories={categories} />
+                                    </form>
+                                </FormProvider>
+                            </div>
+                        ) : (
+                            <FormProvider {...bulkForm}>
+                                <form id="bulk-txn-form" onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="flex flex-col min-h-full">
+                                    {/* Changed h-full to min-h-full to allow expansion */}
+                                    <BulkInputSection
                                         shops={shops}
-                                        categories={categories}
-                                        people={people}
-                                        onAddNewCategory={() => setIsCategoryDialogOpen(true)}
-                                    />
-                                    <AccountSelector
                                         accounts={accounts}
                                         people={people}
                                         onAddNewAccount={() => setIsAccountDialogOpen(true)}
                                         onAddNewPerson={() => setIsPeopleDialogOpen(true)}
                                     />
-                                    <SplitBillSection people={people} />
-                                    <CashbackSection accounts={accounts} categories={categories} />
                                 </form>
                             </FormProvider>
-                        </div>
-                    ) : (
-                        <FormProvider {...bulkForm}>
-                            <form id="bulk-txn-form" onSubmit={bulkForm.handleSubmit(onBulkSubmit)} className="flex flex-col min-h-full">
-                                {/* Changed h-full to min-h-full to allow expansion */}
-                                <BulkInputSection
-                                    shops={shops}
-                                    accounts={accounts}
-                                    people={people}
-                                    onAddNewAccount={() => setIsAccountDialogOpen(true)}
-                                    onAddNewPerson={() => setIsPeopleDialogOpen(true)}
-                                />
-                            </form>
-                        </FormProvider>
-                    )}
-                </div>
+                        )}
+                    </div>
 
-                {/* Footer */}
-                <div className="bg-white border-t px-6 py-4 shrink-0 flex justify-end gap-3">
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="submit"
-                        form={mode === 'single' ? 'single-txn-form' : 'bulk-txn-form'}
-                        disabled={isSubmitting}
-                        className="bg-slate-900 hover:bg-slate-800 text-white min-w-[100px]"
-                    >
-                        {isSubmitting ? "Saving..." : "Save Transaction"}
-                    </Button>
-                </div>
+                    {/* Footer */}
+                    <div className="bg-white border-t px-6 py-4 shrink-0 flex justify-end gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => handleOpenChange(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            form={mode === 'single' ? 'single-txn-form' : 'bulk-txn-form'}
+                            disabled={isSubmitting}
+                            className="bg-slate-900 hover:bg-slate-800 text-white min-w-[100px]"
+                        >
+                            {isSubmitting ? "Saving..." : "Save Transaction"}
+                        </Button>
+                    </div>
 
-                {/* Dialogs */}
-                <CreateAccountDialog
-                    open={isAccountDialogOpen}
-                    onOpenChange={setIsAccountDialogOpen}
-                    trigger={null}
-                />
+                    {/* Dialogs */}
+                    <CreateAccountDialog
+                        open={isAccountDialogOpen}
+                        onOpenChange={setIsAccountDialogOpen}
+                        trigger={null}
+                    />
 
-                <CategoryDialog
-                    open={isCategoryDialogOpen}
-                    onOpenChange={setIsCategoryDialogOpen}
-                    onSuccess={() => {
-                        setIsCategoryDialogOpen(false);
-                    }}
-                />
+                    <CategoryDialog
+                        open={isCategoryDialogOpen}
+                        onOpenChange={setIsCategoryDialogOpen}
+                        onSuccess={() => {
+                            setIsCategoryDialogOpen(false);
+                        }}
+                    />
 
-                <QuickPeopleSettingsDialog
-                    isOpen={isPeopleDialogOpen}
-                    onOpenChange={setIsPeopleDialogOpen}
-                    people={people}
-                />
+                    <QuickPeopleSettingsDialog
+                        isOpen={isPeopleDialogOpen}
+                        onOpenChange={setIsPeopleDialogOpen}
+                        people={people}
+                    />
 
-            </SheetContent>
-        </Sheet>
+                </SheetContent>
+            </Sheet>
+
+            {/* Unsaved Changes Dialog */}
+            <UnsavedChangesDialog
+                open={showUnsavedDialog}
+                onOpenChange={setShowUnsavedDialog}
+                onConfirm={handleConfirmDiscard}
+                onCancel={handleCancelDiscard}
+            />
+        </>
     );
 }

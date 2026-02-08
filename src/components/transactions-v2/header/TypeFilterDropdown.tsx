@@ -34,12 +34,13 @@ interface TypeFilterDropdownProps {
   value: FilterType
   onChange: (value: FilterType) => void
   fullWidth?: boolean
+  allowedTypes?: FilterType[]
 }
 
-export function TypeFilterDropdown({ value, onChange, fullWidth }: TypeFilterDropdownProps) {
+export function TypeFilterDropdown({ value, onChange, fullWidth, allowedTypes }: TypeFilterDropdownProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
-  
+
   const currentOption = TYPE_OPTIONS.find(opt => opt.value === value) || TYPE_OPTIONS[0]
 
   // Get recent items from localStorage
@@ -78,12 +79,16 @@ export function TypeFilterDropdown({ value, onChange, fullWidth }: TypeFilterDro
     closeTimeout.current = setTimeout(() => setOpen(false), 120)
   }
 
+  const availableOptions = allowedTypes
+    ? TYPE_OPTIONS.filter(opt => allowedTypes.includes(opt.value))
+    : TYPE_OPTIONS
+
   const recentTypes = getRecentTypes()
   const recentOptions = recentTypes
-    .map(t => TYPE_OPTIONS.find(opt => opt.value === t))
+    .map(t => availableOptions.find(opt => opt.value === t))
     .filter(Boolean) as TypeOption[]
 
-  const allOptions = TYPE_OPTIONS.filter(
+  const allOptions = availableOptions.filter(
     opt => !recentTypes.includes(opt.value)
   )
 
@@ -121,8 +126,8 @@ export function TypeFilterDropdown({ value, onChange, fullWidth }: TypeFilterDro
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="w-[180px] p-1" 
+      <PopoverContent
+        className="w-[180px] p-1"
         align="end"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}

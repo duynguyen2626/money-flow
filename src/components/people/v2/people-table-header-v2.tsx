@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid, Calendar } from "lucide-react";
+import { Search, Plus, Filter, CheckCircle2, TrendingUp, Archive, LayoutGrid, Calendar, RotateCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,10 @@ interface PeopleTableHeaderV2Props {
     selectedYear: number;
     onYearChange: (year: number) => void;
     availableYears: number[];
+    onRefreshAll?: () => void;
+    isSyncingAll?: boolean;
+    canResetSort?: boolean;
+    onResetSort?: () => void;
 }
 
 export function PeopleTableHeaderV2({
@@ -45,6 +49,10 @@ export function PeopleTableHeaderV2({
     selectedYear,
     onYearChange,
     availableYears,
+    onRefreshAll,
+    isSyncingAll,
+    canResetSort,
+    onResetSort,
 }: PeopleTableHeaderV2Props) {
     const years = availableYears.length > 0 ? availableYears : [new Date().getFullYear()];
     const filters: { id: FilterStatus; label: string; icon: React.ReactNode; count?: number; color: string }[] = [
@@ -182,6 +190,34 @@ export function PeopleTableHeaderV2({
                     Archive
                 </Button>
             </div>
+
+            {/* Refresh All Sheets Button */}
+            <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                    "h-10 px-3 gap-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-semibold shadow-sm transition-all",
+                    isSyncingAll && "opacity-50 cursor-not-allowed"
+                )}
+                onClick={onRefreshAll}
+                disabled={isSyncingAll}
+            >
+                <RotateCw className={cn("h-4 w-4", isSyncingAll && "animate-spin")} />
+                <span className="hidden lg:inline">Sync All Sheets</span>
+            </Button>
+
+            {/* Reset Sort Button */}
+            {canResetSort && (
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-3 gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-bold"
+                    onClick={onResetSort}
+                >
+                    <X className="h-4 w-4" />
+                    <span>Reset Sort</span>
+                </Button>
+            )}
         </div>
     );
 }

@@ -162,9 +162,13 @@ export function AccountDetailTransactions({
     // Dialog State
     const [isAddSlideOpen, setIsAddSlideOpen] = useState(false)
     const [addInitialData, setAddInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>()
+    const [isEditSlideOpen, setIsEditSlideOpen] = useState(false)
+    const [editingTransaction, setEditingTransaction] = useState<TransactionWithDetails | null>(null)
     const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false)
     const [clearType, setClearType] = useState<'filter' | 'all'>('filter')
+
     const hasAutoSelectedCycle = useRef(false)
+    const currentCycleRef = useRef<string | undefined>()
 
     // Filter State
     const [searchTerm, setSearchTerm] = useState('')
@@ -181,12 +185,11 @@ export function AccountDetailTransactions({
 
     const [cycles, setCycles] = useState<Array<{ label: string; value: string }>>([])
 
-    // Handle cycle changes with URL sync
+    // Handle cycle changes with URL sync (Performance Optimized)
     const handleCycleChange = (cycle: string | undefined) => {
         startTransition(() => {
             setSelectedCycle(cycle)
 
-            // Update URL params
             const params = new URLSearchParams(window.location.search)
             if (cycle) {
                 params.set('tag', cycle)
@@ -195,7 +198,8 @@ export function AccountDetailTransactions({
             }
 
             const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
-            router.replace(newUrl, { scroll: false })
+            // Use history.replaceState to avoid server component re-render (which is slow)
+            window.history.replaceState(null, '', newUrl)
         })
     }
 
@@ -251,11 +255,21 @@ export function AccountDetailTransactions({
                 const cycleRange = getCashbackCycleRange(config, new Date())
                 if (cycleRange) {
                     const currentTag = formatIsoCycleTag(cycleRange.end)
+                    // Store current cycle for reset functionality
+                    currentCycleRef.current = currentTag
+
                     const matchingCycle = cycleOptions.find(c => c.value === currentTag)
                     if (matchingCycle) {
                         setSelectedCycle(currentTag)
                         hasAutoSelectedCycle.current = true
                     }
+                }
+            } else {
+                // Even if already selected, we still want to know what "current" is for reset purposes
+                const config = parseCashbackConfig(account.cashback_config)
+                const cycleRange = getCashbackCycleRange(config, new Date())
+                if (cycleRange) {
+                    currentCycleRef.current = formatIsoCycleTag(cycleRange.end)
                 }
             }
         }).catch(err => {
@@ -461,6 +475,24 @@ export function AccountDetailTransactions({
                 }}
             />
 
+            {/* Edit Transaction Slide (V2) */}
+            <TransactionSlideV2
+                open={isEditSlideOpen}
+                onOpenChange={setIsEditSlideOpen}
+                mode="single"
+                editingId={editingTransaction?.id}
+                operationMode="edit"
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                onSuccess={() => {
+                    setIsEditSlideOpen(false)
+                    setEditingTransaction(null)
+                    router.refresh()
+                }}
+            />
+
             {/* Toolbar */}
             <div className="border-b border-slate-200 bg-white px-6 py-3">
                 <div className="flex items-center gap-2">
@@ -544,7 +576,15 @@ export function AccountDetailTransactions({
                             <CycleFilterDropdown
                                 cycles={cycles}
                                 value={selectedCycle}
-                                onChange={handleCycleChange}
+                                onChange={(val) => {
+                                    // If user clears (val is undefined), reset to CURRENT cycle if available
+                                    if (!val && currentCycleRef.current) {
+                                        handleCycleChange(currentCycleRef.current)
+                                        toast.info("Reset to current cycle")
+                                    } else {
+                                        handleCycleChange(val)
+                                    }
+                                }}
                             />
                         )}
 
@@ -563,7 +603,11 @@ export function AccountDetailTransactions({
                                 mode={dateMode}
                                 onDateChange={setDate}
                                 onRangeChange={setDateRange}
-                                onModeChange={setDateMode}
+                                onModeChange={(mode) => {
+                                    if (mode === 'month' || mode === 'range' || mode === 'date') {
+                                        setDateMode(mode);
+                                    }
+                                }}
                                 availableMonths={availableMonths}
                                 accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : []}
                                 disabled={!!selectedCycle}
@@ -660,6 +704,10 @@ export function AccountDetailTransactions({
                     contextId={account.id}
                     activeTab={statusFilter}
                     showPagination
+                    onEdit={(txn) => {
+                        setEditingTransaction(txn)
+                        setIsEditSlideOpen(true)
+                    }}
                 />
             </div>
 

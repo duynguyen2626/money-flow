@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { Percent, Info, Settings2, AlertTriangle, RotateCcw } from "lucide-react";
+import { Percent, Info, Settings2, AlertTriangle, RotateCcw, DollarSign, Gift, Heart } from "lucide-react";
 import { SingleTransactionFormValues } from "../types";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { Account, Category } from "@/types/moneyflow.types";
@@ -138,8 +139,11 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
     const currentTab = getTabFromMode(cashbackMode);
 
     return (
-        <div className="border rounded-lg bg-slate-50 overflow-hidden transition-all duration-300">
-            {/* COMPACT HEADER */}
+        <div className={cn(
+            "rounded-lg transition-all duration-300",
+            isExpanded ? "bg-slate-50/50 border border-slate-200/60 shadow-sm" : "bg-transparent border-none shadow-none"
+        )}>
+            {/* COMPACT HEADER - Removed border-b */}
             <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-700 flex items-center gap-1">
@@ -156,28 +160,53 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                         </span>
                     )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={toggleExpand} className="h-7 w-7 p-0 hover:bg-slate-200" type="button">
-                    <Settings2 className="w-4 h-4 text-slate-500" />
-                </Button>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-medium">Auto-Estimate</span>
+                    <Switch
+                        checked={isExpanded}
+                        onCheckedChange={(checked) => form.setValue("ui_is_cashback_expanded", checked)}
+                        className="scale-75 origin-right"
+                    />
+                </div>
             </div>
 
             {isExpanded && (
-                <div className="px-3 pb-3 border-t border-slate-200 pt-3">
+                <div className="px-3 pb-3 pt-3">
                     <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 h-9 bg-slate-100 p-1 mb-4">
-                            <TabsTrigger value="claim" className="text-xs">Claim</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-3 h-10 bg-transparent p-0 mb-4 gap-2">
+                            <TabsTrigger
+                                value="claim"
+                                className={cn(
+                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "data-[state=active]:border-emerald-300 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm",
+                                    "hover:border-slate-300 hover:bg-slate-50"
+                                )}
+                            >
+                                <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                                Claim
+                            </TabsTrigger>
                             <TabsTrigger
                                 value="giveaway"
-                                className="text-xs"
+                                className={cn(
+                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "data-[state=active]:border-amber-300 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 data-[state=active]:shadow-sm",
+                                    "hover:border-slate-300 hover:bg-slate-50"
+                                )}
                                 disabled={!personId}
                             >
+                                <Gift className="h-3.5 w-3.5 mr-1.5" />
                                 Give Away
                             </TabsTrigger>
                             <TabsTrigger
                                 value="voluntary"
-                                className="text-xs"
+                                className={cn(
+                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "data-[state=active]:border-rose-300 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm",
+                                    "hover:border-slate-300 hover:bg-slate-50"
+                                )}
                                 disabled={!personId}
                             >
+                                <Heart className="h-3.5 w-3.5 mr-1.5" />
                                 Voluntary
                             </TabsTrigger>
                         </TabsList>
@@ -299,25 +328,49 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 </div>
                             )}
 
-                            {/* VOLUNTARY CONTENT */}
+                            {/* VOLUNTARY CONTENT - Match Give Away Styling */}
                             {currentTab === 'voluntary' && (
-                                <FormField
-                                    control={form.control}
-                                    name="cashback_share_fixed"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-500">Voluntary Contribution</FormLabel>
-                                            <SmartAmountInput
-                                                value={field.value ?? 0}
-                                                onChange={field.onChange}
-                                                placeholder="Enter amount..."
-                                            />
-                                            <div className="text-[10px] text-slate-400 mt-1">
-                                                * This amount is tracked but not deducted from transaction total.
-                                            </div>
-                                        </FormItem>
-                                    )}
-                                />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="cashback_share_percent"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-semibold text-slate-500">% Back</FormLabel>
+                                                <div className="relative">
+                                                    <SmartAmountInput
+                                                        value={field.value ?? 0}
+                                                        onChange={field.onChange}
+                                                        placeholder="0"
+                                                        unit="%"
+                                                        hideLabel={true}
+                                                        className="h-10"
+                                                    />
+                                                </div>
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="cashback_share_fixed"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-xs font-semibold text-slate-500">Fixed Back</FormLabel>
+                                                <SmartAmountInput
+                                                    value={field.value ?? 0}
+                                                    onChange={field.onChange}
+                                                    placeholder="0"
+                                                    hideLabel={true}
+                                                    className="h-10"
+                                                />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <div className="col-span-2 text-[10px] text-slate-400 mt-1">
+                                        * Voluntary cashback is tracked but not deducted from transaction total.
+                                    </div>
+                                </div>
                             )}
 
                             {/* TOTAL PROJECTED REWARD (BANK) */}
@@ -338,7 +391,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 <div className="flex justify-between text-xs border-b border-slate-100 pb-2 mb-2">
                                     <span className="text-slate-500 font-bold">Cycle Spent:</span>
                                     <span className="font-black text-indigo-600">
-                                        {activeAccount?.stats?.spent_this_cycle 
+                                        {activeAccount?.stats?.spent_this_cycle
                                             ? new Intl.NumberFormat('vi-VN').format(activeAccount.stats.spent_this_cycle)
                                             : '—'}
                                     </span>

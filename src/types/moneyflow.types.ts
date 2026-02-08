@@ -152,6 +152,7 @@ export type Person = {
   subscription_details?: { id: string; name: string; slots: number; image_url?: string | null }[]
   monthly_debts?: MonthlyDebtSummary[]
   cycle_sheets?: PersonCycleSheet[]
+  current_debt?: number | null
   current_cycle_debt?: number | null
   outstanding_debt?: number | null
   current_cycle_label?: string | null

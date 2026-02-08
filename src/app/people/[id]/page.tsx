@@ -7,6 +7,7 @@ import { getDebtByTags } from '@/services/debt.service'
 import { getUnifiedTransactions, getTransactionsByPeople } from '@/services/transaction.service'
 import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { getPersonWithSubs } from '@/services/people.service'
+import { getServices } from '@/services/service-manager'
 import { MemberDetailView } from '@/components/people/v2/MemberDetailView'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { Metadata } from 'next'
@@ -71,7 +72,7 @@ export default async function PeopleDetailPage({
     notFound()
   }
 
-  const key = `${resolvedParams.id}-${resolvedSearchParams.tag || 'default'}`
+  const key = resolvedParams.id
 
   return (
     <Suspense key={key} fallback={<Loading />}>
@@ -101,13 +102,14 @@ async function PeopleDetailContent({
   const sheetProfileId = person.id
 
   // Fetch all required data in parallel
-  const [accounts, categories, people, shops, debtTags, cycleSheets] = await Promise.all([
+  const [accounts, categories, people, shops, debtTags, cycleSheets, subscriptions] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
     getDebtByTags(personId),
     getPersonCycleSheets(sheetProfileId),
+    getServices(),
   ]) as any
 
   // Handle group profiles
@@ -149,6 +151,7 @@ async function PeopleDetailContent({
         categories={categories}
         people={people}
         shops={shops}
+        subscriptions={subscriptions}
       />
     </TagFilterProvider>
   )

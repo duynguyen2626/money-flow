@@ -524,9 +524,12 @@ export function UnifiedTransactionsPage({
         setIsSlideOpen(true)
     }
 
-    const handleDuplicate = (transactionId: string) => {
-        console.log("🛠 handleDuplicate called with ID:", transactionId);
-        const t = transactions.find((txn) => txn.id === transactionId)
+    const handleDuplicate = (input: string | TransactionWithDetails) => {
+        const transactionId = typeof input === 'string' ? input : input.id;
+        console.log("🛠 handleDuplicate called with:", transactionId);
+        const t = typeof input === 'string'
+            ? transactions.find((txn) => txn.id === input)
+            : input;
         if (!t) {
             console.error("❌ Transaction not found in list for ID:", transactionId);
             return;

@@ -18,6 +18,7 @@ import { Search, ChevronDown, Check, ChevronsUpDown } from 'lucide-react'
 import { isYYYYMM } from '@/lib/month-tag'
 import { updatePersonAction } from '@/actions/people-actions'
 import { SyncReportDialog } from './sync-report-dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Account } from '@/types/moneyflow.types'
 
 function isValidLink(value: string | null | undefined): boolean {
@@ -161,8 +162,11 @@ export function ManageSheetButton({
           return
         }
         toast.dismiss(toastId)
-        toast.success('Settings saved.')
+        toast.success('Settings saved. Syncing sheet...')
         router.refresh()
+
+        // Trigger sync automatically
+        handleManageCycle()
       } catch (error) {
         toast.dismiss(toastId)
         toast.error('Saving settings failed.')
@@ -237,7 +241,7 @@ export function ManageSheetButton({
   }
 
   return (
-    <div className={cn(splitMode ? 'flex items-center rounded-md border-2 border-slate-300 hover:border-slate-400 overflow-hidden transition-colors' : 'inline-flex items-center gap-2', className)}>
+    <div className={cn(splitMode ? 'flex items-center w-[170px] min-w-[170px] rounded-md border-2 border-slate-200 hover:border-slate-300 overflow-hidden transition-colors bg-white flex-nowrap' : 'inline-flex items-center gap-2', className)}>
       <SyncReportDialog
         open={showReport}
         onOpenChange={setShowReport}
@@ -247,55 +251,77 @@ export function ManageSheetButton({
 
       <Popover open={showPopover} onOpenChange={setShowPopover}>
         {splitMode ? (
-          <>
-            {/* Sync Action Button */}
-            <Button
-              variant="ghost"
-              size={size === 'md' ? 'default' : size}
-              className={cn("rounded-none border-r border-slate-300 px-3 hover:bg-slate-100 h-8", buttonClassName)}
-              disabled={isDisabled || !hasValidScriptLink || !hasValidCycle}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleManageCycle();
-              }}
-            >
-              <RefreshCcw className={cn("h-3.5 w-3.5 mr-1.5", isManaging && "animate-spin")} />
-              {isManaging ? (
-                'Syncing'
-              ) : (
-                <span className="font-bold">{cycleTag || 'Sheet'}</span>
+          <TooltipProvider>
+            <div className="flex items-center w-full">
+              {/* Sync Action Button */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size={size === 'md' ? 'default' : size}
+                    className={cn("rounded-none border-r border-slate-200 px-3 hover:bg-slate-100 h-9 flex-1 shrink-0 flex items-center justify-center", buttonClassName)}
+                    disabled={isDisabled || !hasValidScriptLink || !hasValidCycle}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleManageCycle();
+                    }}
+                  >
+                    <RefreshCcw className={cn("h-3.5 w-3.5 mr-1.5", (isManaging || isSaving) && "animate-spin")} />
+                    {isManaging || isSaving ? (
+                      isSaving ? 'Saving...' : 'Syncing...'
+                    ) : (
+                      <span className="font-bold">{cycleTag || 'Sheet'}</span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Sync this cycle to Google Sheet</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Settings Trigger Icon */}
+              <Tooltip>
+                <PopoverTrigger asChild>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size={size === 'md' ? 'default' : size}
+                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-9 text-slate-500 border-l border-slate-200 shrink-0 flex items-center justify-center"
+                      disabled={isDisabled}
+                      onClick={handleTriggerClick}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                </PopoverTrigger>
+                <TooltipContent>
+                  <p>Sheet Settings</p>
+                </TooltipContent>
+              </Tooltip>
+
+              {/* Open Sheet Link (New) */}
+              {(sheetUrl || currentSheetUrl) && isValidLink(sheetUrl || currentSheetUrl) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size={size === 'md' ? 'default' : size}
+                      className="rounded-none w-9 px-0 hover:bg-slate-100 h-full text-emerald-600 border-l border-slate-200 shrink-0 flex items-center justify-center"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        window.open(sheetUrl || currentSheetUrl || '', '_blank', 'noopener,noreferrer')
+                      }}
+                    >
+                      <FileSpreadsheet className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Open Google Sheet in new tab</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
-            </Button>
-
-            {/* Settings Trigger Icon */}
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size={size === 'md' ? 'default' : size}
-                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500 border-l border-slate-200"
-                disabled={isDisabled}
-                onClick={handleTriggerClick}
-              >
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </PopoverTrigger>
-
-            {/* Open Sheet Link (New) */}
-            {currentSheetUrl && isValidLink(currentSheetUrl) && (
-              <Button
-                variant="ghost"
-                size={size === 'md' ? 'default' : size}
-                className="rounded-none px-2 hover:bg-slate-100 h-8 text-emerald-600 border-l border-slate-200"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  window.open(currentSheetUrl, '_blank', 'noopener,noreferrer')
-                }}
-                title="Open Google Sheet"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            )}
-          </>
+            </div>
+          </TooltipProvider>
         ) : (
           <PopoverTrigger asChild>
             <Button
@@ -312,9 +338,19 @@ export function ManageSheetButton({
         )}
 
         <PopoverContent className="w-[380px] p-0" align="end" sideOffset={8}>
-          <div className="flex items-center gap-2 p-3 border-b border-slate-100 bg-slate-50/50">
-            <Settings2 className="h-4 w-4 text-slate-500" />
-            <h4 className="font-bold text-sm text-slate-900">Sheet Configuration</h4>
+          <div className="flex items-center justify-between p-3 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-slate-500" />
+              <h4 className="font-bold text-sm text-slate-900">Sheet Configuration</h4>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-slate-400 hover:text-slate-900"
+              onClick={() => setShowPopover(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
           <div className="p-4 space-y-4">

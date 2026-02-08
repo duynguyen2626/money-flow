@@ -217,8 +217,10 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     id: txn.id,
     type: type,
     date: txn.occurred_at ?? txn.date ?? null,
+    occurred_at: txn.occurred_at ?? txn.date ?? null, // Legacy compatibility
     shop: txn.shop_name ?? '',
     notes: txn.note ?? '',
+    note: txn.note ?? '', // Legacy compatibility
     amount: originalAmount,
     // We want to send the raw number (0-100).
     // If input was 5, normalizePercent made it 0.05.
@@ -298,7 +300,17 @@ export async function syncTransactionToSheet(
       bank_account: showBankAccount ? resolvedBankInfo : '', // Send empty to clear if disabled
       img: showQrImage && qrImageUrl ? qrImageUrl : '' // Send empty to clear if disabled
     }
-    console.log('Syncing to sheet for Person:', personId, 'Payload:', payload)
+
+    console.log(`[Sheet Sync] Sending payload to ${personId}:`, {
+      action: payload.action,
+      id: payload.id,
+      shop: payload.shop,
+      amount: payload.amount,
+      note: payload.note,
+      notes: payload.notes,
+      type: payload.type
+    })
+
     const result = await postToSheet(sheetLink, payload)
     if (!result.success) {
       console.error('Sheet sync failed:', result.message ?? 'Sheet sync failed')
@@ -367,6 +379,36 @@ export async function syncAllTransactions(personId: string) {
       .neq('status', 'void')
       .order('occurred_at', { ascending: true })
 
+    // Fetch person's sheet preferences for bank info & QR
+    const { data: personData } = await supabase
+      .from('people')
+      .select('sheet_show_bank_account, sheet_bank_info, sheet_linked_bank_id, sheet_show_qr_image, sheet_full_img')
+      .eq('id', personId)
+      .single()
+
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const manualBankInfo = (personData as any)?.sheet_bank_info ?? ''
+    const linkedBankId = (personData as any)?.sheet_linked_bank_id
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
+
+    let resolvedBankInfo = manualBankInfo
+    if (showBankAccount && linkedBankId) {
+      const { data: acc } = await supabase
+        .from('accounts')
+        .select('name, receiver_name, account_number')
+        .eq('id', linkedBankId)
+        .single()
+      if (acc) {
+        const parts = [
+          (acc as any).name,
+          (acc as any).account_number,
+          (acc as any).receiver_name
+        ].filter(Boolean)
+        resolvedBankInfo = parts.join(' ') || manualBankInfo
+      }
+    }
+
     if (error) {
       console.error('Failed to load transactions for sync:', error)
       return { success: false, message: 'Failed to load transactions' }
@@ -419,20 +461,11 @@ export async function syncAllTransactions(personId: string) {
           }
         }
 
-        // Determine type: debt = lending out, repayment = receiving back
-        const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
-
-        return {
-          id: txn.id,
-          date: txn.occurred_at,
-          type: syncType,
-          notes: txn.note || '',
-          shop: shopName || '',
-          amount: Math.abs(txn.amount),
-          percent_back: txn.cashback_share_percent || 0,
-          fixed_back: txn.cashback_share_fixed || 0,
-          status: txn.status,
-        }
+        // Pass the raw transaction fields that buildPayload needs
+        return buildPayload({
+          ...txn,
+          shop_name: shopName
+        }, 'create')
       })
 
       const payload = {
@@ -440,6 +473,8 @@ export async function syncAllTransactions(personId: string) {
         personId: personId,
         cycleTag: cycleTag,
         rows: rowsPayload,
+        bank_account: showBankAccount ? resolvedBankInfo : '',
+        img: showQrImage && qrImageUrl ? qrImageUrl : ''
       }
 
       const result = await postToSheet(sheetLink, payload)
@@ -568,51 +603,33 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    // Filter out transactions marked as #nosync or #deprecated
-    // This allows users to create "Aggregate" transactions in App (for balance) 
-    // but keep detailed manual rows in Sheet without duplication.
     const rawRows = (data ?? []) as unknown as any[]
-    const rows = rawRows.filter(txn => {
-      const note = (txn.note || '').toLowerCase()
-      return !note.includes('#nosync') && !note.includes('#deprecated')
-    })
-    const batchRows = rows.map((txn) => {
-      const shopData = txn.shops as any
-      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+    const rows = rawRows
+      .filter(txn => {
+        const note = (txn.note || '').toLowerCase()
+        return !note.includes('#nosync') && !note.includes('#deprecated')
+      })
+      .map(txn => {
+        const shopData = txn.shops as any
+        let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
 
-      // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
-      if (!shopName) {
-        if (txn.note?.toLowerCase().startsWith('rollover')) {
-          shopName = 'Bank'
-        } else {
-          const accData = txn.accounts as any
-          shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        if (!shopName) {
+          if (txn.note?.toLowerCase().startsWith('rollover')) {
+            shopName = 'Bank'
+          } else {
+            const accData = txn.accounts as any
+            shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+          }
         }
-      }
-      const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
-      // We explicitly call buildPayload to get the formatted fields, 
-      // but we strip the 'action' since we are sending a batch.
-      const payload = buildPayload(
-        {
-          id: txn.id,
-          occurred_at: txn.occurred_at,
-          note: txn.note,
-          shop_name: shopName ?? '',
-          tag: txn.tag ?? undefined,
-          amount: txn.amount,
-          original_amount: Math.abs(txn.amount),
-          cashback_share_percent: txn.cashback_share_percent ?? undefined,
-          cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
-          type: syncType,
-        },
-        'create' // Dummy action, ignored
-      )
+        // Pass the raw transaction fields that buildPayload needs
+        return buildPayload({
+          ...txn,
+          shop_name: shopName
+        }, 'create')
+      })
 
-      return payload
-    })
-
-    console.log(`[SheetSync] Sending batch of ${batchRows.length} transactions for ${cycleTag}`)
+    console.log(`[Sheet Sync] Sending ${rows.length} mapped transactions to ${personId} for cycle ${cycleTag}`)
 
     // Fetch person's sheet preferences (replaces hardcoded ANH_SCRIPT)
     const supabaseCycle = await createClient()
@@ -662,7 +679,7 @@ export async function syncCycleTransactions(
       person_id: personId,
       cycle_tag: cycleTag,
       sheet_id: sheetId ?? undefined,
-      rows: batchRows,
+      rows: rows,
       bank_account: showBankAccount ? resolvedBankInfo : '',
       img: showQrImage && qrImageUrl ? qrImageUrl : ''
     }
@@ -677,7 +694,7 @@ export async function syncCycleTransactions(
 
     return {
       success: true,
-      count: batchRows.length,
+      count: rows.length,
       syncedCount: result.json?.syncedCount,
       manualPreserved: result.json?.manualPreserved,
       totalRows: result.json?.totalRows

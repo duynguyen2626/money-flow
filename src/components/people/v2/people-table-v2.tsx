@@ -7,19 +7,31 @@ import { usePeopleExpandableRows } from "@/hooks/usePeopleExpandableRows";
 import { PeopleRowV2 } from "./people-row-v2";
 import { PeopleGroupHeader } from "./people-group-header";
 import { ColumnCustomizer } from "@/components/moneyflow/column-customizer";
-import { Settings2, Minimize2 } from "lucide-react";
+import { Settings2, Minimize2, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface PeopleTableProps {
     people: Person[];
-    accounts?: Account[];
+    accounts: Account[];
     onEdit: (person: Person) => void;
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
+    onSync: (personId: string) => Promise<void>;
+    sortConfig?: { key: PeopleColumnKey; direction: 'asc' | 'desc' } | null;
+    onSort?: (key: PeopleColumnKey) => void;
 }
 
-export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }: PeopleTableProps) {
+export function PeopleTableV2({
+    people,
+    accounts,
+    onEdit,
+    onLend,
+    onRepay,
+    onSync,
+    sortConfig: propSortConfig,
+    onSort,
+}: PeopleTableProps) {
     const {
         columns,
         columnOrder,
@@ -39,11 +51,27 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
     } = usePeopleExpandableRows();
 
     const [isCustomizeOpen, setCustomizeOpen] = useState(false);
+
+    // Internal fallback if not provided via props
+    const [internalSortConfig, setInternalSortConfig] = useState<{ key: PeopleColumnKey; direction: 'asc' | 'desc' }>({
+        key: 'balance',
+        direction: 'desc'
+    });
+
+    const sortConfig = propSortConfig || internalSortConfig;
+
+    const handleSort = (key: PeopleColumnKey) => {
+        if (onSort) {
+            onSort(key);
+        } else {
+            setInternalSortConfig(current => ({
+                key,
+                direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+            }));
+        }
+    };
+
     // Track expanded groups. Default true? We'll assume yes or handle init.
-    // Using a Set string of accountIds.
-    // Initial state: we can't easily know all IDs on first render without effect or lazy init.
-    // We'll use "all" logic or just default to expanding logic.
-    // Simpler: Allow checking if group is explicitly CLOSED. So default OPEN.
     const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
 
     const visibleCols = getVisibleColumns();
@@ -89,13 +117,40 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
             groups[statusId].currentCycleDebt += (person.current_cycle_debt || 0);
         });
 
+        // Sort members within groups
+        Object.values(groups).forEach(group => {
+            group.members.sort((a, b) => {
+                let valA: any = (a as any)[sortConfig.key] ?? 0;
+                let valB: any = (b as any)[sortConfig.key] ?? 0;
+
+                // Priority for current_tag
+                if (sortConfig.key === 'current_tag') {
+                    valA = a.current_cycle_label || '';
+                    valB = b.current_cycle_label || '';
+                } else if (sortConfig.key === 'current_debt') {
+                    valA = a.current_cycle_debt || 0;
+                    valB = b.current_cycle_debt || 0;
+                }
+
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    return sortConfig.direction === 'asc'
+                        ? valA.localeCompare(valB)
+                        : valB.localeCompare(valA);
+                }
+
+                return sortConfig.direction === 'asc'
+                    ? (valA > valB ? 1 : -1)
+                    : (valA < valB ? 1 : -1);
+            });
+        });
+
         // Sort: Outstanding first, then Settled
         return Object.values(groups).sort((a, b) => {
             if (a.id === 'outstanding') return -1;
             if (b.id === 'outstanding') return 1;
             return 0;
         });
-    }, [people]);
+    }, [people, sortConfig]);
 
     const toggleGroup = (groupId: string) => {
         setClosedGroups(prev => {
@@ -113,7 +168,7 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
         <div className="rounded-md border bg-card overflow-hidden">
             <div className="overflow-auto max-h-[calc(100vh-140px)]">
                 <table className="w-full text-sm text-left border-collapse">
-                    <thead className="sticky top-0 z-30 bg-slate-50 text-xs uppercase font-bold text-muted-foreground border-b shadow-sm">
+                    <thead className="sticky top-0 z-30 bg-slate-50 text-xs font-bold text-muted-foreground border-b shadow-sm">
                         <tr>
                             <th className="sticky left-0 z-40 bg-slate-50 w-10 px-2 py-3 text-center border-r border-slate-200">
                                 <Button
@@ -129,22 +184,32 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
                             {visibleCols.map((col, idx) => (
                                 <th
                                     key={col.key}
+                                    style={{ width: columnWidths[col.key], minWidth: col.minWidth }}
                                     className={cn(
-                                        "px-4 py-3 whitespace-nowrap group",
-                                        idx < visibleCols.length - 1 ? 'border-r border-slate-200' : '',
-                                        col.key === 'current_debt' && "bg-amber-100/50 text-amber-900",
-                                        col.key === 'balance' && "bg-blue-100/50 text-blue-900",
-                                        col.key === 'name' && "sticky left-10 z-40 bg-slate-50"
+                                        "h-10 px-4 text-left align-middle font-bold text-slate-500 text-[12px] bg-slate-50/50 border-b border-slate-200",
+                                        col.frozen && "sticky left-0 z-20 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]",
+                                        "cursor-pointer hover:bg-slate-100 transition-colors"
                                     )}
+                                    onClick={() => handleSort(col.key)}
                                 >
                                     <div className="flex items-center justify-between gap-2">
-                                        <span>{col.label}</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>{col.label}</span>
+                                            {sortConfig?.key === col.key && (
+                                                sortConfig.direction === 'asc'
+                                                    ? <ChevronUp className="h-3 w-3 text-indigo-600" />
+                                                    : <ChevronDown className="h-3 w-3 text-indigo-600" />
+                                            )}
+                                        </div>
                                         {col.key === 'action' && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-6 w-6 opacity-50 hover:opacity-100"
-                                                onClick={() => setCustomizeOpen(true)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCustomizeOpen(true);
+                                                }}
                                             >
                                                 <Settings2 className="h-3.5 w-3.5" />
                                             </Button>
@@ -187,6 +252,8 @@ export function PeopleTableV2({ people, accounts = [], onEdit, onLend, onRepay }
                                                 onEdit={onEdit}
                                                 onLend={onLend}
                                                 onRepay={onRepay}
+                                                onSync={onSync}
+                                                accounts={accounts}
                                             />
                                         ))}
                                     </React.Fragment>

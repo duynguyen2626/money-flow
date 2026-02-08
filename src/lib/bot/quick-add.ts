@@ -584,61 +584,120 @@ export async function advanceWizard(params: {
   }
 
   if (step === "account") {
-    const candidates =
-      draft.account_candidates.length > 0
-        ? draft.account_candidates
-        : findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
+    let selectedCandidate: { id: string; name: string } | null = null;
+    let candidates = draft.account_candidates;
+
+    // 1. If we have previous candidates, try to resolve from them (Index or Refinement)
+    if (candidates.length > 0) {
+      const index = parseInt(trimmed, 10);
+      if (!isNaN(index) && index >= 1 && index <= candidates.length) {
+        selectedCandidate = candidates[index - 1]; // Index Match
+      } else {
+        // Not a number? Try to refine the search globally.
+        const refined = findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
           id: account.id,
           name: account.name,
         }));
-    if (candidates.length > 1) {
+
+        if (refined.length > 0) {
+          candidates = refined; // Update candidates list
+          if (refined.length === 1) selectedCandidate = refined[0];
+        } else {
+          candidates = []; // No match found
+        }
+      }
+    } else {
+      // 2. First time search
+      candidates = findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
+        id: account.id,
+        name: account.name,
+      }));
+      if (candidates.length === 1) selectedCandidate = candidates[0];
+    }
+
+    if (selectedCandidate) {
+      // Success!
+      draft.source_account_id = selectedCandidate.id;
+      draft.account_candidates = [];
+      draft = applyCashbackModeForAccount(draft, params.rawContext);
+      // Advance to next step
+      step = getNextStep(draft);
+      if (step === "review") {
+        replies.push(buildReview(draft, params.rawContext));
+      } else {
+        replies.push(promptForStep(step));
+      }
+      return { replies, state: { step, draft } };
+
+    } else if (candidates.length > 1) {
+      // Still ambiguous
       draft.account_candidates = candidates;
       replies.push(promptForStep(step, { candidates }));
       return { replies, state: { step, draft } };
-    }
-    const selected =
-      candidates.length === 1
-        ? candidates[0]
-        : pickCandidate(trimmed, params.rawContext.accounts);
-    if (!selected) {
+
+    } else {
+      // No candidates found
+      draft.account_candidates = [];
       replies.push("I could not find that account.");
       replies.push(promptForStep(step));
-      return { replies, state };
+      return { replies, state: { step, draft } };
     }
-    draft.source_account_id = selected.id;
-    draft.account_candidates = [];
-    draft = applyCashbackModeForAccount(draft, params.rawContext);
   }
 
   if (step === "transfer_destination") {
-    const candidates =
-      draft.destination_candidates.length > 0
-        ? draft.destination_candidates
-        : findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
+    let selectedCandidate: { id: string; name: string } | null = null;
+    let candidates = draft.destination_candidates;
+
+    if (candidates.length > 0) {
+      const index = parseInt(trimmed, 10);
+      if (!isNaN(index) && index >= 1 && index <= candidates.length) {
+        selectedCandidate = candidates[index - 1];
+      } else {
+        const refined = findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
           id: account.id,
           name: account.name,
         }));
-    if (candidates.length > 1) {
+        if (refined.length > 0) {
+          candidates = refined;
+          if (refined.length === 1) selectedCandidate = refined[0];
+        } else {
+          candidates = [];
+        }
+      }
+    } else {
+      candidates = findCandidates(params.rawContext.accounts, trimmed).map((account) => ({
+        id: account.id,
+        name: account.name,
+      }));
+      if (candidates.length === 1) selectedCandidate = candidates[0];
+    }
+
+    if (selectedCandidate) {
+      if (draft.source_account_id && selectedCandidate.id === draft.source_account_id) {
+        replies.push("Destination must differ from source.");
+        replies.push(promptForStep(step));
+        return { replies, state: { step, draft } };
+      }
+      draft.destination_account_id = selectedCandidate.id;
+      draft.destination_candidates = [];
+
+      step = getNextStep(draft);
+      if (step === "review") {
+        replies.push(buildReview(draft, params.rawContext));
+      } else {
+        replies.push(promptForStep(step));
+      }
+      return { replies, state: { step, draft } };
+    } else if (candidates.length > 1) {
       draft.destination_candidates = candidates;
       replies.push(promptForStep(step, { candidates }));
       return { replies, state: { step, draft } };
-    }
-    const selected =
-      candidates.length === 1
-        ? candidates[0]
-        : pickCandidate(trimmed, params.rawContext.accounts);
-    if (!selected) {
+    } else {
+      draft.destination_candidates = [];
       replies.push("I could not find that account.");
       replies.push(promptForStep(step));
-      return { replies, state };
+      return { replies, state: { step, draft } };
     }
-    if (draft.source_account_id && selected.id === draft.source_account_id) {
-      replies.push("Destination must differ from source.");
-      replies.push(promptForStep(step));
-      return { replies, state };
-    }
-    draft.destination_account_id = selected.id;
-    draft.destination_candidates = [];
   }
 
   if (step === "split_confirm") {

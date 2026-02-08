@@ -180,3 +180,23 @@ export async function runAllServiceDistributionsAction(date?: string) {
     return { success: 0, failed: 0, skipped: 0, total: 0, reports: [], error: error.message }
   }
 }
+
+export async function recallServiceDistributionAction(monthTag: string) {
+  try {
+    const { recallServiceDistribution } = await import('@/services/service-manager')
+    const result = await recallServiceDistribution(monthTag)
+
+    // Recalculate balance for DRAFT_FUND
+    const { recalculateBalance } = await import('@/services/account.service')
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+
+    revalidatePath('/services')
+    revalidatePath('/transactions')
+    revalidatePath('/')
+
+    return { success: true, count: result.count }
+  } catch (error: any) {
+    console.error('Error recalling service distribution:', error)
+    return { success: false, error: error.message }
+  }
+}

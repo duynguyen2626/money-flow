@@ -31,9 +31,10 @@ type BasicInfoSectionProps = {
     categories: Category[];
     people: Person[];
     onAddNewCategory?: () => void;
+    operationMode?: 'add' | 'edit' | 'duplicate';
 };
 
-export function BasicInfoSection({ shops, categories, people, onAddNewCategory }: BasicInfoSectionProps) {
+export function BasicInfoSection({ shops, categories, people, onAddNewCategory, operationMode }: BasicInfoSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const isShopHidden = ['income', 'repayment', 'transfer', 'credit_pay'].includes(transactionType);
@@ -62,9 +63,9 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory }
 
     // Auto-select defaults for Debt (Lend) and Repayment
     useEffect(() => {
-        // Skip auto-assignment if category already set (edit mode)
+        // Skip auto-assignment if not a new transaction or if category already set
         const currentCategoryId = form.getValues('category_id');
-        if (currentCategoryId) return;
+        if (operationMode === 'edit' || operationMode === 'duplicate' || currentCategoryId) return;
 
         if (transactionType === 'debt') {
             const shoppingCat = categories.find(c => c.name === 'Shopping');
@@ -266,7 +267,7 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory }
                             <FormControl>
                                 <Combobox
                                     items={categoryOptions}
-                                    value={field.value}
+                                    value={field.value || undefined}
                                     onValueChange={field.onChange}
                                     placeholder="Category"
                                     inputPlaceholder="Search category..."
@@ -290,7 +291,7 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory }
                                 <FormControl>
                                     <Combobox
                                         items={shopOptions}
-                                        value={field.value}
+                                        value={field.value || undefined}
                                         onValueChange={field.onChange}
                                         placeholder="Select Shop"
                                         inputPlaceholder="Search shops..."

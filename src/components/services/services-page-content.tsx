@@ -5,12 +5,13 @@ import { ServiceTable } from '@/components/services/service-table'
 import { ServiceCompactCard } from '@/components/services/service-compact-card'
 import { ServiceTransactionsTable } from '@/components/services/service-transactions-table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Globe, Bot, Send, Plus } from 'lucide-react'
+import { Globe, Bot, Send, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ServiceCreateDialog } from '@/components/services/service-create-dialog'
 import { runAllServiceDistributionsAction } from '@/actions/service-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 interface ServicesPageContentProps {
     services: any[]
@@ -126,6 +127,17 @@ export function ServicesPageContent({ services, people }: ServicesPageContentPro
                                 >
                                     <Bot className="h-4 w-4 mr-2" />
                                     {isTesting ? 'Testing...' : 'Test Bot'}
+                                </Button>
+                                <Button
+                                    asChild
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white hover:border-orange-600 rounded-lg transition-all"
+                                >
+                                    <Link href="/services/recall">
+                                        <RefreshCw className="h-4 w-4 mr-2" />
+                                        Recall
+                                    </Link>
                                 </Button>
                                 <Button
                                     onClick={handleDistributeAll}

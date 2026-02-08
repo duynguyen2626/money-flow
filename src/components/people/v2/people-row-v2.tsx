@@ -7,9 +7,11 @@ import { PeopleRowDetailsV2 } from "./people-row-details-v2";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink } from "lucide-react";
-import { cn, formatMoneyVND } from "@/lib/utils";
+import { Edit, User, CheckCircle2, HandCoins, Banknote, ExternalLink, RotateCw, FileSpreadsheet, Calendar, RefreshCcw, Landmark, Info } from "lucide-react";
+import { cn, formatMoneyVND, formatVNLongAmount } from "@/lib/utils";
 import { SubscriptionBadges } from "./subscription-badges";
+import { ManageSheetButton } from "@/components/people/manage-sheet-button";
+import { Account } from "@/types/moneyflow.types";
 import {
     Tooltip,
     TooltipContent,
@@ -25,7 +27,59 @@ interface PeopleRowProps {
     onEdit: (person: Person) => void;
     onLend: (person: Person) => void;
     onRepay: (person: Person) => void;
+    onSync: (personId: string) => Promise<void>;
+    accounts?: Account[];
 }
+
+const VNLongAmount = ({ amount, className }: { amount: number, className?: string }) => {
+    const text = formatVNLongAmount(amount);
+    if (!text) return null;
+    const parts = text.split(/(\d+)/g);
+    return (
+        <span className={cn("inline-flex items-center gap-0.5", className)}>
+            {parts.map((part, i) => (
+                /^\d+$/.test(part)
+                    ? <strong key={i} className="font-black text-rose-600/90">{part}</strong>
+                    : <span key={i} className="text-slate-400 font-medium">{part}</span>
+            ))}
+        </span>
+    );
+};
+
+const AmountCellV2 = ({ amount, badgeClassName, showLongText = true }: { amount: number, badgeClassName?: string, showLongText?: boolean }) => {
+    if (amount === 0) {
+        return (
+            <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 opacity-40 border-slate-100 px-2 py-0.5">
+                0
+            </Badge>
+        );
+    }
+
+    return (
+        <div className="flex flex-col items-start gap-0.5 justify-center py-0.5">
+            <Badge variant="outline" className={cn("tabular-nums tracking-tight font-bold border-slate-200 px-2 py-0.5", badgeClassName)}>
+                {formatMoneyVND(amount)}
+            </Badge>
+            {showLongText && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-help transition-all hover:opacity-80">
+                                <VNLongAmount amount={amount} className="text-[10px] truncate max-w-[120px]" />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="bg-slate-900 text-white border-none p-2 shadow-xl">
+                            <p className="text-xs font-bold flex items-center gap-1.5">
+                                <Info className="h-3.5 w-3.5 text-blue-400" />
+                                <VNLongAmount amount={amount} className="text-white" />
+                            </p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
+        </div>
+    );
+};
 
 export function PeopleRowV2({
     person,
@@ -35,6 +89,8 @@ export function PeopleRowV2({
     onEdit,
     onLend,
     onRepay,
+    onSync,
+    accounts = [],
 }: PeopleRowProps) {
     const handleRowClick = (e: React.MouseEvent) => {
         // Only expand on row click if not clicking action buttons
@@ -44,7 +100,7 @@ export function PeopleRowV2({
         }
     };
 
-    const handleIconClick = (e: React.MouseEvent) => {
+    const handleExpandToggle = (e: React.MouseEvent) => {
         e.stopPropagation();
         onToggleExpand(person.id);
     };
@@ -62,7 +118,7 @@ export function PeopleRowV2({
                 <td className="sticky left-0 z-20 bg-inherit w-10 px-2 py-3 text-center border-r border-slate-200">
                     <ExpandIcon
                         isExpanded={isExpanded}
-                        onClick={handleIconClick}
+                        onClick={handleExpandToggle}
                     />
                 </td>
 
@@ -78,7 +134,7 @@ export function PeopleRowV2({
                             col.key === 'name' && "sticky left-10 z-10 bg-inherit" // Part of freeze name logic if needed, but let's keep it simple
                         )}
                     >
-                        {renderCell(person, col.key, onEdit, onLend, onRepay)}
+                        {renderCell(person, col.key, onEdit, onLend, onRepay, onSync, accounts)}
                     </td>
                 ))}
             </tr>
@@ -98,111 +154,145 @@ export function PeopleRowV2({
     );
 }
 
-function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void) {
+function renderCell(person: Person, key: string, onEdit: (p: Person) => void, onLend: (p: Person) => void, onRepay: (p: Person) => void, onSync?: (pid: string) => void, accounts?: Account[]) {
     switch (key) {
         case 'name':
             return (
                 <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 rounded-full flex-shrink-0">
-                        <AvatarImage src={person.image_url || undefined} alt={person.name} />
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-full">
+                    <Avatar className="h-10 w-10 rounded-none border border-slate-200 flex-shrink-0">
+                        <AvatarImage src={person.image_url || undefined} alt={person.name} className="object-cover" />
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary rounded-none">
                             {person.name?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 overflow-hidden">
+                        <div className="flex items-center gap-2 overflow-hidden w-full pr-1">
                             <Link
                                 href={`/people/${person.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="font-semibold text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"
+                                className="font-semibold text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate flex-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 {person.name}
                             </Link>
 
-                            {person.google_sheet_url && (
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <a
-                                                href={person.google_sheet_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 bg-green-50 text-green-700 border border-green-200 px-1.5 rounded-[3px] hover:bg-green-100 transition-colors h-4 shrink-0"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <ExternalLink className="h-2 w-2" />
-                                                <span className="text-[8px] font-bold uppercase">Sheet</span>
-                                            </a>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Open Google Sheet in new tab</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-1 mt-1">
-                            {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
+                            <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+                                {person.is_group && <span className="text-[10px] text-muted-foreground bg-slate-100 px-1 rounded">Group</span>}
+                                <SubscriptionBadges
+                                    subscriptions={person.subscription_details || []}
+                                    maxDisplay={2}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
             );
-        case 'active_subs':
+        case 'current_tag':
             return (
-                <SubscriptionBadges
-                    subscriptions={person.subscription_details || []}
-                    maxDisplay={2}
-                />
-            );
-        case 'debt_tag':
-            // Show debt tag (e.g., "2026-01")
-            return (
-                <div className="text-sm text-slate-600">
-                    {person.current_cycle_label || '-'}
+                <div className="flex items-center gap-2">
+                    {/* ManageSheetButton with Split Mode */}
+                    {person.sheet_link ? (
+                        <div className="flex items-center gap-1.5 h-full">
+                            {(() => {
+                                const now = new Date();
+                                const currentTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                                const cycleSheet = person.cycle_sheets?.find(s => s.cycle_tag === currentTag);
+                                return (
+                                    <ManageSheetButton
+                                        personId={person.id}
+                                        cycleTag={currentTag}
+                                        initialSheetUrl={cycleSheet?.sheet_url}
+                                        scriptLink={person.sheet_link}
+                                        googleSheetUrl={person.google_sheet_url}
+                                        sheetFullImg={person.sheet_full_img}
+                                        showBankAccount={person.sheet_show_bank_account ?? undefined}
+                                        sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
+                                        showQrImage={person.sheet_show_qr_image ?? undefined}
+                                        accounts={accounts}
+                                        buttonClassName="h-8 text-xs px-3"
+                                        size="sm"
+                                        showCycleAction={true}
+                                        splitMode={true}
+                                    />
+                                );
+                            })()}
+                        </div>
+                    ) : (
+                        <div className="w-[170px] min-w-[170px]">
+                            <Badge
+                                variant="outline"
+                                className="h-8 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500 bg-white border-2 border-slate-200 rounded-md tracking-tight shadow-none"
+                            >
+                                <Calendar className="h-3 w-3 opacity-70" />
+                                {person.current_cycle_label || 'NO TAG'}
+                            </Badge>
+                        </div>
+                    )}
                 </div>
             );
         case 'current_debt':
-            // Show current cycle debt amount only (label is in debt_tag column)
             return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
-                    {formatMoneyVND(person.current_cycle_debt || 0)}
-                </div>
+                <AmountCellV2
+                    amount={person.current_cycle_debt || 0}
+                    badgeClassName="bg-slate-50 text-slate-500"
+                />
             );
         case 'base_lend':
             return (
-                <div className="tabular-nums tracking-tight text-muted-foreground">
-                    {formatMoneyVND(person.total_base_debt || 0)}
-                </div>
+                <AmountCellV2
+                    amount={person.total_base_debt || 0}
+                    badgeClassName="bg-slate-50 text-slate-500"
+                />
             );
-        case 'cashback':
+        case 'cashback': // Settled
             return (
-                <div className="tabular-nums tracking-tight text-muted-foreground">
-                    {formatMoneyVND(person.total_cashback || 0)}
-                </div>
+                <AmountCellV2
+                    amount={person.total_cashback || 0}
+                    badgeClassName="bg-emerald-50 text-emerald-600 border-emerald-100"
+                />
             );
-        case 'net_lend':
+        case 'net_lend': // Outstanding
             return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
-                    {formatMoneyVND(person.total_net_debt || 0)}
-                </div>
+                <AmountCellV2
+                    amount={person.total_net_debt || 0}
+                    badgeClassName="bg-indigo-50 text-indigo-600 border-indigo-100"
+                />
             );
         case 'balance': // Remains
             // Show TOTAL debt (current + outstanding)
-            const totalDebt = (person.current_cycle_debt || 0) + (person.outstanding_debt || 0);
+            const totalDebt = (person.current_debt || 0) + (person.outstanding_debt || 0);
             return (
-                <Badge
-                    variant="outline"
-                    className={cn(
-                        "tabular-nums tracking-tight font-medium border-0 px-2 py-1",
-                        totalDebt > 0
-                            ? "bg-red-50 text-red-600"
-                            : "bg-slate-50 text-slate-500 opacity-50"
+                <div className="flex flex-col items-start gap-1 justify-center py-1">
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            "tabular-nums tracking-tight font-medium border-0 px-2 py-0.5 text-[15px] leading-none",
+                            totalDebt > 0
+                                ? "bg-red-50 text-red-600 ring-1 ring-inset ring-red-200"
+                                : "bg-slate-50 text-slate-500 opacity-40 grayscale"
+                        )}
+                    >
+                        {formatMoneyVND(totalDebt)}
+                    </Badge>
+                    {totalDebt > 0 && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div className="cursor-help transition-all hover:opacity-80">
+                                        <VNLongAmount amount={totalDebt} className="text-[12px] truncate max-w-[160px]" />
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="bg-slate-900 text-white border-none p-2 shadow-xl">
+                                    <p className="text-xs font-bold flex items-center gap-1.5">
+                                        <Info className="h-3.5 w-3.5 text-blue-400" />
+                                        <VNLongAmount amount={totalDebt} className="text-white" />
+                                    </p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     )}
-                >
-                    {formatMoneyVND(totalDebt)}
-                </Badge>
+                </div>
             );
         case 'action':
             return (

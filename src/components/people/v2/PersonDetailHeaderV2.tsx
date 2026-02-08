@@ -44,8 +44,8 @@ export function PersonDetailHeaderV2({
                         </Link>
                         <div className="h-4 w-px bg-slate-200" />
                         <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 rounded-full">
-                                <AvatarImage src={person.image_url || undefined} alt={person.name} />
+                            <Avatar className="h-10 w-10 rounded-none border border-slate-200">
+                                <AvatarImage src={person.image_url || undefined} alt={person.name} className="object-cover" />
                                 <AvatarFallback className="bg-primary/10 text-primary text-xs">
                                     {person.name?.[0]?.toUpperCase() || <User className="h-4 w-4" />}
                                 </AvatarFallback>
@@ -71,9 +71,10 @@ export function PersonDetailHeaderV2({
                                 sheetLinkedBankId={person.sheet_linked_bank_id ?? undefined}
                                 showQrImage={person.sheet_show_qr_image ?? undefined}
                                 accounts={accounts}
-                                buttonClassName="h-9 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                buttonClassName="h-10 flex-1 px-3 text-xs"
                                 size="sm"
-                                showCycleAction={false}
+                                showCycleAction={true}
+                                splitMode={true}
                             />
                         )}
                         <Button variant="outline" size="sm" className="h-9 px-3 gap-2 text-slate-600 border-slate-200 rounded-lg">
@@ -141,7 +142,7 @@ export function PersonDetailHeaderV2({
 function StatCard({ label, value, icon, variant, isCurrency = true }: { label: string; value: number; icon: React.ReactNode; variant: 'danger' | 'success' | 'info' | 'neutral'; isCurrency?: boolean }) {
     return (
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-slate-400">
                 {icon}
                 {label}
             </div>

@@ -166,7 +166,7 @@ interface UnifiedTransactionTableProps {
   fontSize?: number
   onFontSizeChange?: (size: number) => void
   onEdit?: (txn: TransactionWithDetails) => void
-  onDuplicate?: (transactionId: string) => void
+  onDuplicate?: (input: any) => void
   loadingIds?: Set<string>
   setIsGlobalLoading?: (loading: boolean) => void
   setLoadingMessage?: (message: string) => void
@@ -855,6 +855,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     setActionMenuOpen(null);
   };
 
+  const handleDuplicate = (txn: TransactionWithDetails) => {
+    if (externalOnDuplicate) {
+      externalOnDuplicate(txn as any);
+      return;
+    }
+    // Fallback if no external handler
+    setEditingTxn(txn);
+    // Note: If adding internal slide support, set operation mode here
+    setActionMenuOpen(null);
+  };
+
   const handleSingleDeleteConfirm = async () => {
     if (!confirmDeletingTarget) return
     setIsDeleting(true)
@@ -1166,6 +1177,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         >
           <Pencil className="h-4 w-4" />
           <span>Edit</span>
+        </button>
+        <button
+          className={baseItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            handleDuplicate(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Copy className="h-4 w-4" />
+          <span>Duplicate</span>
         </button>
         <button
           className={dangerItemClass}
@@ -1607,7 +1629,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img src={catImg} alt="" className="h-full w-full object-contain" />
                                 ) : (
-                                  <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                  <div className="h-6 w-6 rounded-none bg-slate-100 flex items-center justify-center">
                                     <span className="text-[10px]">🏷️</span>
                                   </div>
                                 )}
@@ -1792,10 +1814,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               {shopLogo ? (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none" />
+                                  <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-none border-none ring-0 outline-none" />
                                 </>
                               ) : (
-                                <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm shrink-0">
+                                <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-none shrink-0">
                                   {txn.type === 'repayment' ? (
                                     <Wallet className="h-4 w-4 text-orange-600" />
                                   ) : (
@@ -2101,10 +2123,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                     {displayImage ? (
                                       <div className="flex h-8 w-8 items-center justify-center">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm ring-0 outline-none" />
+                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
                                       </div>
                                     ) : (
-                                      <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm text-sm border border-slate-200">
+                                      <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-none text-sm border border-slate-200">
                                         {categoryIcon}
                                       </div>
                                     )}
@@ -2237,11 +2259,16 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             let flowBadgeType: 'FROM' | 'TO' | null = null; // New variable
 
                             if (isSourceContext) {
-                              // Viewing Source (Account). Show where money went.
-                              // Flow: Source -> Dest/Person.
-                              // So we show Dest/Person with "TO" badge.
-                              entityToShow = hasPerson ? 'person' : 'dest'
-                              flowBadgeType = 'TO'
+                              // Viewing Source (Account).
+                              if (hasTarget || hasPerson) {
+                                // Movement TO somebody/something
+                                entityToShow = hasPerson ? 'person' : 'dest'
+                                flowBadgeType = 'TO'
+                              } else {
+                                // Simple Income/Expense from A's perspective
+                                entityToShow = 'dest'
+                                flowBadgeType = txn.type === 'income' ? 'FROM' : 'TO'
+                              }
                             }
                             else if (isDestContext || isPersonContext) {
                               // Viewing Dest/Person. Show where money came from.
@@ -2250,9 +2277,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               entityToShow = 'source'
                               flowBadgeType = 'FROM'
                             }
-                            // If (!hasTarget && !hasPerson), it's a simple expense/income, no flow badge needed.
-                            // Default entityToShow is 'source', flowBadgeType is null.
-
 
                             let displayName = sourceName
                             let displayImage = sourceIcon
@@ -2271,6 +2295,24 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               displayImage = destIcon
                               displayLink = destId ? `/accounts/${destId}` : null
                               // Destination usually no badge unless debt, but for account transfer no badge currently
+                              badgeToDisplay = null
+                              isCycleBadge = false
+
+                              // Fallback to Category/Shop for simple transactions
+                              if (displayName === 'Unknown' && !hasPerson && !hasTarget) {
+                                const cat = categories.find(c => c.id === txn.category_id)
+                                displayName = cat?.name || txn.category_name || 'General'
+                                displayImage = cat?.image_url || null
+                                displayLink = null
+                              }
+                            }
+
+                            // Universal fallback for Unknown in Single Flow
+                            if (displayName === 'Unknown' && !hasPerson && !hasTarget) {
+                              const cat = categories.find(c => c.id === txn.category_id)
+                              displayName = cat?.name || txn.category_name || 'General'
+                              displayImage = cat?.image_url || null
+                              displayLink = null
                               badgeToDisplay = null
                               isCycleBadge = false
                             }
@@ -2308,9 +2350,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                     >
                                       <div className="shrink-0 h-7 w-7 flex items-center justify-center">
                                         {displayImage ? (
-                                          <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm" />
+                                          <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none" />
                                         ) : (
-                                          <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-sm bg-white">
+                                          <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-none bg-white">
                                             <Wallet className="h-4 w-4 text-slate-400" />
                                           </div>
                                         )}
@@ -2388,9 +2430,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                 >
                                   <div className="shrink-0 h-7 w-7 flex items-center justify-center">
                                     {entity.icon ? (
-                                      <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-sm" />
+                                      <img src={entity.icon} alt="" className="h-full w-full object-contain rounded-none" />
                                     ) : (
-                                      <div className={cn("h-full w-full flex items-center justify-center border border-slate-100 bg-white", entity.isAccount ? "rounded-sm" : "rounded-full")}>
+                                      <div className={cn("h-full w-full flex items-center justify-center border border-slate-100 bg-white rounded-none")}>
                                         {entity.isAccount ? <Wallet className="h-4 w-4 text-slate-400" /> : <User className="h-4 w-4 text-slate-400" />}
                                       </div>
                                     )}
