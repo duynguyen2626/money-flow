@@ -33,6 +33,7 @@ interface PeopleRowProps {
 
 const VNLongAmount = ({ amount, className }: { amount: number, className?: string }) => {
     const text = formatVNLongAmount(amount);
+    if (!text) return null;
     const parts = text.split(/(\d+)/g);
     return (
         <span className={cn("inline-flex items-center gap-0.5", className)}>
@@ -42,6 +43,41 @@ const VNLongAmount = ({ amount, className }: { amount: number, className?: strin
                     : <span key={i} className="text-slate-400 font-medium">{part}</span>
             ))}
         </span>
+    );
+};
+
+const AmountCellV2 = ({ amount, badgeClassName, showLongText = true }: { amount: number, badgeClassName?: string, showLongText?: boolean }) => {
+    if (amount === 0) {
+        return (
+            <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 opacity-40 border-slate-100 px-2 py-0.5">
+                0
+            </Badge>
+        );
+    }
+
+    return (
+        <div className="flex flex-col items-start gap-0.5 justify-center py-0.5">
+            <Badge variant="outline" className={cn("tabular-nums tracking-tight font-bold border-slate-200 px-2 py-0.5", badgeClassName)}>
+                {formatMoneyVND(amount)}
+            </Badge>
+            {showLongText && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="cursor-help transition-all hover:opacity-80">
+                                <VNLongAmount amount={amount} className="text-[10px] truncate max-w-[120px]" />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="bg-slate-900 text-white border-none p-2 shadow-xl">
+                            <p className="text-xs font-bold flex items-center gap-1.5">
+                                <Info className="h-3.5 w-3.5 text-blue-400" />
+                                <VNLongAmount amount={amount} className="text-white" />
+                            </p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
+        </div>
     );
 };
 
@@ -196,29 +232,32 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                 </div>
             );
         case 'current_debt':
-            // Show current cycle debt amount only (label is in debt_tag column)
             return (
-                <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5">
-                    {formatMoneyVND(person.current_cycle_debt || 0)}
-                </Badge>
+                <AmountCellV2
+                    amount={person.current_cycle_debt || 0}
+                    badgeClassName="bg-slate-50 text-slate-500"
+                />
             );
         case 'base_lend':
             return (
-                <Badge variant="outline" className="tabular-nums tracking-tight font-medium bg-slate-50 text-slate-500 border-slate-200 px-2 py-0.5">
-                    {formatMoneyVND(person.total_base_debt || 0)}
-                </Badge>
+                <AmountCellV2
+                    amount={person.total_base_debt || 0}
+                    badgeClassName="bg-slate-50 text-slate-500"
+                />
             );
         case 'cashback': // Settled
             return (
-                <Badge variant="outline" className="tabular-nums tracking-tight font-bold bg-emerald-50 text-emerald-600 border-emerald-100 px-2 py-0.5">
-                    {formatMoneyVND(person.total_cashback || 0)}
-                </Badge>
+                <AmountCellV2
+                    amount={person.total_cashback || 0}
+                    badgeClassName="bg-emerald-50 text-emerald-600 border-emerald-100"
+                />
             );
         case 'net_lend': // Outstanding
             return (
-                <Badge variant="outline" className="tabular-nums tracking-tight font-bold bg-indigo-50 text-indigo-600 border-indigo-100 px-2 py-0.5">
-                    {formatMoneyVND(person.total_net_debt || 0)}
-                </Badge>
+                <AmountCellV2
+                    amount={person.total_net_debt || 0}
+                    badgeClassName="bg-indigo-50 text-indigo-600 border-indigo-100"
+                />
             );
         case 'balance': // Remains
             // Show TOTAL debt (current + outstanding)
