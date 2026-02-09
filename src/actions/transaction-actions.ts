@@ -415,6 +415,13 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     void syncTransactionToSheet(personId, payload as any, 'delete').catch(err => {
       console.error('Sheet Sync Error (Void):', err);
     });
+
+    // Revalidate relevant paths
+    const { revalidatePath } = await import('next/cache');
+    revalidatePath('/transactions');
+    revalidatePath('/accounts');
+    revalidatePath('/people');
+    revalidatePath('/people/[id]', 'page');
   }
 
   return true;

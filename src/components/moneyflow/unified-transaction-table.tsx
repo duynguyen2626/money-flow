@@ -2863,7 +2863,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         {
           confirmVoidTarget && createPortal(
             <div
-              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4"
               onClick={closeVoidDialog}
             >
               <div
@@ -2903,7 +2903,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         {
           confirmCancelTarget && createPortal(
             <div
-              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4"
               onClick={() => setConfirmCancelTarget(null)}
             >
               <div
@@ -2954,7 +2954,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         {
           confirmDeletingTarget && createPortal(
             <div
-              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4"
               onClick={() => setConfirmDeletingTarget(null)}
             >
               <div
@@ -3014,7 +3014,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
             return createPortal(
               <div
-                className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4"
                 onClick={() => setRefundFormTxn(null)}
               >
                 <div
@@ -3061,7 +3061,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
           bulkDialog?.open &&
           createPortal(
             <div
-              className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
               onClick={() => setBulkDialog(null)}
             >
               <div

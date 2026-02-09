@@ -6,6 +6,7 @@ import { Person, TransactionWithDetails, PersonCycleSheet, Account, Category, Sh
 import { usePersonDetails } from '@/hooks/use-person-details'
 import { SplitBillManager } from '@/components/people/split-bill-manager'
 import { SimpleTransactionTable } from '@/components/people/v2/SimpleTransactionTable'
+import { SimpleTransactionTableSkeleton } from '@/components/people/v2/SimpleTransactionTableSkeleton'
 import { PaidTransactionsModal } from '@/components/people/paid-transactions-modal'
 import { PeopleHeader } from '@/components/people/v2/PeopleHeader'
 import { TransactionControlBar } from '@/components/people/v2/TransactionControlBar'
@@ -19,6 +20,7 @@ import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown
 import { parseISO, isWithinInterval } from 'date-fns'
 import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface MemberDetailViewProps {
     person: Person
@@ -165,6 +167,16 @@ export function MemberDetailView({
         startTransition(() => {
             router.push(`?${params.toString()}`, { scroll: false })
         })
+    }
+    const handleRefresh = () => {
+        startTransition(() => {
+            router.refresh()
+            toast.success('Table data refreshed')
+        })
+    }
+
+    const handleBack = () => {
+        router.back()
     }
 
     // Passively sync date range from URL if present
@@ -438,6 +450,7 @@ export function MemberDetailView({
                         currentCycleTag={currentMonthTag}
                         isPending={isPending}
                         initialSheetUrl={activeCycleSheet?.sheet_url}
+                        onRefresh={handleRefresh}
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3 relative">
                         {isSubmitting && (
@@ -462,18 +475,22 @@ export function MemberDetailView({
                                 </div>
                             </div>
                         )}
-                        <SimpleTransactionTable
-                            transactions={cycleTransactions}
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            searchTerm={searchTerm}
-                            context="person"
-                            contextId={person.id}
-                            onEdit={handleEditTransaction}
-                            onDuplicate={handleDuplicateTransaction}
-                        />
+                        {isPending ? (
+                            <SimpleTransactionTableSkeleton />
+                        ) : (
+                            <SimpleTransactionTable
+                                transactions={cycleTransactions}
+                                accounts={accounts}
+                                categories={categories}
+                                people={people}
+                                shops={shops}
+                                searchTerm={searchTerm}
+                                context="person"
+                                contextId={person.id}
+                                onEdit={handleEditTransaction}
+                                onDuplicate={handleDuplicateTransaction}
+                            />
+                        )}
                     </div>
                 </>
             )}
