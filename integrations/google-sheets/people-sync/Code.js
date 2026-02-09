@@ -1,9 +1,9 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 7.3 (Service Distribution Fix)
- * @date 2026-02-07 18:05
+ * @version 7.6 (QR Range M7:N17 & Forced Format Update)
+ * @date 2026-02-09 09:05
  *
- * LAYOUT v7.3 (Explicit Columns):
+ * LAYOUT v7.6 (Explicit Columns):
  * A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
  * F: Amount | G: % Back | H: đ Back | I: Σ Back | J: Final | K: Src
  */
@@ -125,10 +125,13 @@ function handleSyncTransactions(payload) {
     var sheet = getOrCreateCycleTab(ss, cycleTag);
     if (!sheet) throw new Error("Could not create or find sheet for tag: " + cycleTag);
 
-    // UPDATE VERSION NOTE (Verification)
-    sheet.getRange('A1').setNote('Script Version: 6.9\nUpdated: ' + new Date().toISOString());
-
     var syncOptions = buildSheetSyncOptions(payload);
+
+    // FORCED FORMAT UPDATE: Ensure layout and headers are refreshed even for existing sheets
+    setupNewSheet(sheet, syncOptions.summaryOptions);
+
+    // UPDATE VERSION NOTE (Verification)
+    sheet.getRange('A1').setNote('Script Version: 7.6\nUpdated: ' + new Date().toISOString());
 
     // --- UPSERT STRATEGY v6.9 ---
     // A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
@@ -199,6 +202,8 @@ function handleSyncTransactions(payload) {
 
     // 3. PROCESS TRANSACTIONS
     var validTxns = transactions.filter(function (txn) { return txn.status !== 'void'; });
+    var payloadIds = validTxns.map(function (t) { return t.id; });
+
     // Sort transactions by Date ASC
     validTxns.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
 
@@ -219,7 +224,12 @@ function handleSyncTransactions(payload) {
         rowData[3] = "";        // D: Shop (Formula)
         rowData[4] = txn.notes || txn.note || ""; // E: Notes
         rowData[5] = amt;       // F: Amount
-        rowData[6] = Number(txn.percent_back || txn.cashback_share_percent || 0); // G
+
+        // % Back Mapping (Force to whole number if decimal detected)
+        var pBackVal = Number(txn.percent_back || txn.cashback_share_percent || 0);
+        if (pBackVal > 0 && pBackVal < 1) pBackVal = Math.round(pBackVal * 100);
+        rowData[6] = pBackVal; // G
+
         rowData[7] = Number(txn.fixed_back || txn.cashback_share_fixed || 0);   // H
         rowData[8] = "";        // I: S Back (Formula)
         rowData[9] = "";        // J: Final (Formula)
@@ -296,9 +306,10 @@ function handleSyncTransactions(payload) {
         var hasId = idVal.length > 5;
 
         // Manual Preservation check
-        var isManual = manualRowIndices.includes(i);
+        var isManual = manualRowIndices.indexOf(i) !== -1;
 
-        if (hasId || isManual) {
+        // ONLY PRESERVE if it's manual or if it exists in current payload (mirrors UI state)
+        if (isManual || (hasId && payloadIds.indexOf(idVal) !== -1)) {
             var outRow = new Array(11);
             // Check if this row is already in v6.9 format (from update loop)
             var isV69 = (row[0] === idVal && (row[1] === 'In' || row[1] === 'Out'));
@@ -431,7 +442,11 @@ function handleSingleTransaction(payload, action) {
     var amt = Math.abs(Number(payload.amount || 0));
     sheet.getRange(targetRow, 6).setValue(amt); // F: Amount
 
-    sheet.getRange(targetRow, 7).setValue(Number(payload.percent_back || payload.cashback_share_percent || 0)); // G
+    // % Back Mapping (Force to whole number if decimal detected)
+    var singlePBack = Number(payload.percent_back || payload.cashback_share_percent || 0);
+    if (singlePBack > 0 && singlePBack < 1) singlePBack = Math.round(singlePBack * 100);
+    sheet.getRange(targetRow, 7).setValue(singlePBack); // G
+
     sheet.getRange(targetRow, 8).setValue(Number(payload.fixed_back || payload.cashback_share_fixed || 0));   // H
     sheet.getRange(targetRow, 11).setValue(payload.shop || payload.shop_name || ""); // K: ShopSource
 
@@ -550,7 +565,8 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
             // Number Formats
             sheet.getRange(2, 3, totalRows, 1).setNumberFormat('dd-MM'); // Date(C)
             sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0'); // Amount(F)
-            sheet.getRange(2, 8, totalRows, 3).setNumberFormat('#,##0'); // H-J (d, S, Final)
+            sheet.getRange(2, 7, totalRows, 1).setNumberFormat('0');     // % Back (G) - Force Whole Number
+            sheet.getRange(2, 8, totalRows, 3).setNumberFormat('#,##0'); // H-J (đ, S, Final)
         }
     }
 
@@ -577,7 +593,7 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
         sheet.setColumnWidth(2, 50);  // B: Type
         sheet.setColumnWidth(3, 80);  // C: Date
         sheet.setColumnWidth(4, 60);  // D: Shop
-        sheet.setColumnWidth(5, 250); // E: Notes
+        sheet.setColumnWidth(5, 300); // E: Notes
         sheet.setColumnWidth(6, 100); // F: Amount
         sheet.setColumnWidth(7, 65);  // G: % Back
         sheet.setColumnWidth(8, 70);  // H: đ Back
@@ -586,7 +602,7 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
         sheet.setColumnWidth(12, 10); // Blank L
         sheet.setColumnWidth(13, 25);  // No. M (Very Narrow)
         sheet.setColumnWidth(14, 150); // Summary N
-        sheet.setColumnWidth(15, 100); // Value O
+        sheet.setColumnWidth(15, 230); // Value O
 
         // Set Data Row Heights (2:Max)
         var maxRowForHeight = sheet.getLastRow();
@@ -616,7 +632,7 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 7.2');
+    sheet.getRange('A1').setNote('Script Version: 7.4');
     setMonthTabColor(sheet);
 
     sheet.getRange('A:O').setFontSize(12);
@@ -646,7 +662,7 @@ function setupNewSheet(sheet, summaryOptions) {
         sheet.setColumnWidth(2, 50);  // B: Type
         sheet.setColumnWidth(3, 80);  // C: Date
         sheet.setColumnWidth(4, 60);  // D: Shop
-        sheet.setColumnWidth(5, 250); // E: Notes
+        sheet.setColumnWidth(5, 300); // E: Notes
         sheet.setColumnWidth(6, 100); // F: Amount
         sheet.setColumnWidth(7, 65);  // G: % Back
         sheet.setColumnWidth(8, 70);  // H: đ Back
@@ -655,7 +671,7 @@ function setupNewSheet(sheet, summaryOptions) {
         sheet.setColumnWidth(12, 10); // Blank L
         sheet.setColumnWidth(13, 25);  // No. M
         sheet.setColumnWidth(14, 150); // Summary N
-        sheet.setColumnWidth(15, 100); // Value O
+        sheet.setColumnWidth(15, 230); // Value O
     } catch (e) { }
 
     // Conditional Formatting for Type (Column B - 2)
@@ -915,21 +931,16 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
         showBankAccount = summaryOptions.showBankAccount;
     }
 
-    var baseRange = sheet.getRange(7, 13, 20, 3); // M7:O26 (Range as requested)
-    var accountRange = sheet.getRange(7, 13, 20, 3); // M7:O26
+    // NEW RANGE (User request): M7:N17
+    // Col M=13, Row 7, Width 2, Height 11 (covers rows 7 to 17)
+    var targetRangeA1 = "M7:N17";
+    var imgRange = sheet.getRange(targetRangeA1);
 
-    if (showBankAccount) {
-        try {
-            // BREAK APART FIRST to ensure reliable merge
-            sheet.getRange(7, 13, 50, 3).breakApart();
-            accountRange.clearContent();
-        } catch (e) { }
-    } else {
-        try {
-            sheet.getRange(7, 13, 50, 3).breakApart();
-            baseRange.clearContent();
-        } catch (e) { }
-    }
+    try {
+        // BREAK APART FIRST to ensure reliable merge
+        sheet.getRange(7, 12, 50, 4).breakApart(); // Clear L:O merges
+        imgRange.clearContent();
+    } catch (e) { }
 
     try {
         var existing = sheet.getImages();
@@ -940,31 +951,14 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
 
     if (!imgUrl) return;
 
-    var targetRange = showBankAccount ? accountRange : baseRange;
-
-    // CRITICAL FIX: Ensure accountRange (L6:M35) is properly merged
-    // This prevents Summary image from shifting when rows above are modified
-    if (showBankAccount) {
-        try {
-            targetRange.breakApart();
-            targetRange.merge();
-            Logger.log('Merged M7:O26 for Summary image protection');
-        } catch (e) {
-            Logger.log('Merge error for M7:O26: ' + e);
-        }
-    } else {
-        try {
-            targetRange.breakApart();
-            targetRange.merge();
-        } catch (e) { }
-    }
-
+    // CRITICAL: Ensure L7:N17 is properly merged
     try {
+        imgRange.merge();
         var escapedUrl = imgUrl.replace(/"/g, '""');
-        targetRange.getCell(1, 1).setFormula('=IMAGE("' + escapedUrl + '";2)');
-        Logger.log('Image applied to ' + targetRange.getA1Notation());
+        imgRange.getCell(1, 1).setFormula('=IMAGE("' + escapedUrl + '";2)');
+        Logger.log('Image applied to ' + targetRangeA1);
     } catch (e) {
-        Logger.log('Image formula error: ' + e);
+        Logger.log('Image application error: ' + e);
     }
 }
 

@@ -75,46 +75,46 @@ export function PeopleHeader({
 
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 sticky top-0 z-20 shadow-sm">
-            {/* First Row: User Info + Stats + Tools */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                {/* Left: User Info */}
-                <div className="flex items-center gap-3">
-                    <Link
-                        href="/people"
-                        className="flex items-center justify-center h-8 w-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Link>
+            {/* Main Header Row */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                {/* Left side info groups */}
+                <div className="flex flex-col md:flex-row items-stretch gap-4 flex-1">
+                    {/* 1. Left: User Info (People Section) */}
+                    <div className="flex items-center gap-3 px-4 py-2 border border-slate-200 rounded-xl bg-slate-50/30 shrink-0">
+                        <Link
+                            href="/people"
+                            className="flex items-center justify-center h-8 w-8 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors bg-white shadow-sm"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Link>
 
-                    {person.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-none border border-slate-200 object-cover bg-slate-100" />
-                    ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-none border border-slate-200 bg-indigo-50 text-indigo-600 text-lg font-bold">
-                            {person.name.charAt(0).toUpperCase()}
-                        </div>
-                    )}
+                        {person.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-none border border-slate-200 object-cover bg-slate-100 shadow-sm" />
+                        ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-none border border-slate-200 bg-indigo-50 text-indigo-600 text-lg font-bold shadow-sm">
+                                {person.name.charAt(0).toUpperCase()}
+                            </div>
+                        )}
 
-                    <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-xl font-bold text-slate-900">{person.name}</h1>
-                            <span className={cn(
-                                "text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border",
-                                isSettled
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                    : "bg-blue-50 text-blue-700 border-blue-100"
-                            )}>
-                                {isSettled ? 'SETTLED' : 'ACTIVE'}
-                            </span>
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-xl font-bold text-slate-900">{person.name}</h1>
+                                <span className={cn(
+                                    "text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border",
+                                    isSettled
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                        : "bg-blue-50 text-blue-700 border-blue-100"
+                                )}>
+                                    {isSettled ? 'SETTLED' : 'ACTIVE'}
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Center: Current Cycle + Total Lended Stats */}
-                <div className="flex items-center gap-0 px-0 hidden md:flex">
-                    {/* Current Cycle Section (if active cycle exists and year selected) */}
+                    {/* 2. Center: Current Cycle Section */}
                     {activeCycle && selectedYear !== null && (
-                        <div className="flex items-center gap-3 px-4 border-r border-slate-100">
+                        <div className="flex items-center gap-3 px-4 py-2 border border-slate-200 rounded-xl bg-slate-50/30">
                             <StatsPopover
                                 originalLend={activeCycle.stats.originalLend}
                                 cashback={activeCycle.stats.cashback}
@@ -122,12 +122,12 @@ export function PeopleHeader({
                                 repay={activeCycle.stats.repay}
                                 remains={activeCycle.remains}
                             >
-                                <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-amber-600 hover:bg-amber-50 transition-colors" title="Current cycle details">
+                                <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-amber-600 bg-white hover:bg-amber-50 transition-colors shadow-sm" title="Current cycle details">
                                     <Calendar className="h-3.5 w-3.5" />
                                 </button>
                             </StatsPopover>
 
-                            <div className="flex flex-col gap-1.5 min-w-[320px]">
+                            <div className="flex flex-col gap-1.5 min-w-[260px]">
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Cycle</span>
                                     <span className={cn(
@@ -142,15 +142,15 @@ export function PeopleHeader({
                                         {numberFormatter.format(currentCycleNetLend)}
                                     </span>
                                 </div>
-                                <div className="relative flex h-5 w-full overflow-hidden rounded-full bg-slate-100">
+                                <div className="relative flex h-5 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner border border-slate-200/50">
                                     <div
-                                        className="bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white"
+                                        className="bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
                                         style={{ width: `${currentCycleRepayPercent}%` }}
                                     >
                                         {currentCycleRepayPercent > 15 && `${currentCycleRepayPercent}%`}
                                     </div>
                                     <div
-                                        className="bg-rose-500 flex items-center justify-center text-[9px] font-bold text-white"
+                                        className="bg-rose-500 flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
                                         style={{ width: `${currentCycleRemainsPercent}%` }}
                                     >
                                         {currentCycleRemainsPercent > 15 && `${currentCycleRemainsPercent}%`}
@@ -160,8 +160,8 @@ export function PeopleHeader({
                         </div>
                     )}
 
-                    {/* Total Balance Section (1 line only, with report icon) */}
-                    <div className="flex items-center gap-3 px-4 min-w-[320px]">
+                    {/* 3. Current Balance Section */}
+                    <div className="flex items-center gap-3 px-4 py-2 border border-slate-200 rounded-xl bg-slate-50/30 min-w-[280px]">
                         <StatsPopover
                             originalLend={stats.originalLend}
                             cashback={stats.cashback}
@@ -169,15 +169,18 @@ export function PeopleHeader({
                             repay={stats.repay}
                             remains={stats.remains}
                         >
-                            <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-emerald-600 hover:bg-emerald-50 transition-colors" title="Balance for entire selected year">
+                            <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-emerald-600 bg-white hover:bg-emerald-50 transition-colors shadow-sm" title="Balance for entire selected year">
                                 <TrendingUp className="h-3.5 w-3.5" />
                             </button>
                         </StatsPopover>
-                        <div className="flex items-center gap-2 flex-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Balance ({selectedYear ? 'Year' : 'All Time'})</span>
-                            <span className="text-sm font-bold text-slate-900 ml-auto tabular-nums">
-                                {numberFormatter.format(stats.netLend)}
-                            </span>
+                        <div className="flex flex-col gap-1.5 flex-1">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Current Balance</span>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase">Status</span>
+                                <span className="text-xl font-bold tabular-nums ml-auto text-emerald-600">
+                                    {numberFormatter.format(stats.netLend)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -187,7 +190,7 @@ export function PeopleHeader({
                     {/* Year Filter */}
                     <Popover>
                         <PopoverTrigger asChild>
-                            <button className="h-9 px-3 flex items-center gap-2 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 transition-colors text-xs font-medium">
+                            <button className="h-9 px-3 flex items-center gap-2 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 transition-colors text-xs font-medium bg-white shadow-sm">
                                 <span className="font-bold">{selectedYear || 'All Time'}</span>
                                 <ChevronDown className="h-3.5 w-3.5 opacity-50" />
                             </button>
@@ -221,9 +224,9 @@ export function PeopleHeader({
 
                     {/* Action Buttons */}
                     <button
-                        onClick={() => onTabChange('history')}
+                        onClick={() => onTabChange(activeTab === 'history' ? 'timeline' : 'history')}
                         className={cn(
-                            "h-9 px-3 flex items-center gap-1.5 border rounded-md text-xs font-medium transition-colors",
+                            "h-9 px-3 flex items-center gap-1.5 border rounded-md text-xs font-medium transition-colors shadow-sm",
                             activeTab === 'history'
                                 ? "bg-slate-800 text-white border-slate-800"
                                 : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -236,7 +239,7 @@ export function PeopleHeader({
                     <button
                         onClick={() => onTabChange('split-bill')}
                         className={cn(
-                            "h-9 px-3 flex items-center gap-1.5 border rounded-md text-xs font-medium transition-colors",
+                            "h-9 px-3 flex items-center gap-1.5 border rounded-md text-xs font-medium transition-colors shadow-sm",
                             activeTab === 'split-bill'
                                 ? "bg-slate-800 text-white border-slate-800"
                                 : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -248,7 +251,7 @@ export function PeopleHeader({
 
                     <button
                         onClick={onEdit}
-                        className="h-9 px-3 flex items-center gap-1.5 border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors bg-white whitespace-nowrap"
+                        className="h-9 px-3 flex items-center gap-1.5 border border-slate-200 rounded-md text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors bg-white whitespace-nowrap shadow-sm"
                     >
                         <Edit className="h-3.5 w-3.5" />
                         Edit

@@ -59,8 +59,8 @@ export default async function MemberDetailsPage({ params }: { params: Promise<{ 
         : await getUnifiedTransactions({
             accountId: actualAccountId,
             personId: person.id,
-            limit: 1000,
             context: 'person',
+            includeVoided: true,
         })
 
     const balance = person.balance ?? 0

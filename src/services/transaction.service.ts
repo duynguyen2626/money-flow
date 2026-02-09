@@ -590,6 +590,7 @@ export async function createTransaction(
     revalidatePath("/people");
     if (input.person_id) {
       revalidatePath(`/people/${input.person_id}`);
+      revalidatePath(`/people/${input.person_id}/details`);
     }
 
     // CASHBACK INTEGRATION
@@ -698,14 +699,14 @@ export async function updateTransaction(
   // LOG HISTORY BEFORE UPDATE
   await logHistory(id, "edit", existing);
 
-  const { error } = await (supabase.from("transactions").update as any)(
-    normalized,
-  ).eq("id", id);
+  console.log(`[Service] Updating transaction ${id}...`);
+  const { error } = await supabase.from("transactions").update(normalized).eq("id", id);
 
   if (error) {
-    console.error("Failed to update transaction:", error);
+    console.error(`[Service] Failed to update transaction ${id}:`, error);
     return false;
   }
+  console.log(`[Service] Transaction ${id} updated successfully in DB.`);
 
   const affectedAccounts = new Set<string>();
   if ((existing as any).account_id)
@@ -935,6 +936,7 @@ export async function updateTransaction(
   revalidatePath("/people");
   if (input.person_id) {
     revalidatePath(`/people/${input.person_id}`);
+    revalidatePath(`/people/${input.person_id}/details`);
   }
 
   return true;
