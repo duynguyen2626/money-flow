@@ -35,7 +35,7 @@ interface AccountDetailFilterBarProps {
     dateMode: 'month' | 'range' | 'date'
     onDateChange: (date: Date) => void
     onRangeChange: (range: DateRange | undefined) => void
-    onModeChange: (mode: 'month' | 'range' | 'date') => void
+    onModeChange: (mode: 'all' | 'date' | 'month' | 'range' | 'year') => void
 
     // Filter State
     personId?: string
@@ -155,7 +155,7 @@ export function AccountDetailFilterBar({
                                     <SelectItem key={`person-${person.id}`} value={`person-${person.id}`}>
                                         <div className="flex items-center gap-2">
                                             {person.image_url && (
-                                                <img src={person.image_url} alt="" className="h-4 w-4 rounded-full object-cover" />
+                                                <img src={person.image_url} alt="" className="h-4 w-4 rounded-none object-cover" />
                                             )}
                                             <span>{person.name}</span>
                                         </div>

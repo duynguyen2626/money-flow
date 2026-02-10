@@ -22,7 +22,7 @@ export async function generateMetadata({
   searchParams
 }: {
   params: Promise<{ id: string }>,
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; tag?: string; id?: string }>
 }): Promise<Metadata> {
   const { id } = await params
   if (id === 'details') return { title: 'Redirecting...' }
@@ -45,7 +45,7 @@ export default async function PeopleDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>,
-  searchParams: Promise<{ tab?: string; tag?: string }>
+  searchParams: Promise<{ tab?: string; tag?: string; id?: string }>
 }) {
   const resolvedParams = await params
   const resolvedSearchParams = await searchParams
@@ -86,7 +86,7 @@ async function PeopleDetailContent({
   searchParams
 }: {
   params: Promise<{ id: string }>,
-  searchParams: Promise<{ tab?: string; tag?: string }>
+  searchParams: Promise<{ tab?: string; tag?: string; id?: string }>
 }) {
   const resolvedParams = await params
   const personId = resolvedParams.id

@@ -46,7 +46,7 @@ export type ParsedTransaction = {
   cashback_mode?: "none_back" | "voluntary" | "real_fixed" | "real_percent" | null;
   needs: string[];
   confidence: number;
-  mode?: "gemini" | "rules";
+  mode?: "gemini" | "groq" | "fallback" | "rules";
   feedback?: string | null;
   persona?: string | null;
 };
