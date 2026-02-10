@@ -37,10 +37,10 @@ interface AccountDetailControlBarProps {
     // Date State
     date: Date
     dateRange: DateRange | undefined
-    dateMode: 'month' | 'range' | 'date'
+    dateMode: 'all' | 'date' | 'month' | 'range' | 'year'
     onDateChange: (date: Date) => void
     onRangeChange: (range: DateRange | undefined) => void
-    onModeChange: (mode: 'month' | 'range' | 'date') => void
+    onModeChange: (mode: 'all' | 'date' | 'month' | 'range' | 'year') => void
 
     // Cycle State (cycles passed to MonthYearPickerV2 for smart auto-set)
     cycles: { label: string; value: string }[]

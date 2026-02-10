@@ -61,16 +61,16 @@ export function AccountHeaderV2({
             </div>
 
             {/* Center Group: Filter Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg border border-slate-200 shadow-inner">
+            <div className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
                 {filters.map((f) => (
                     <button
                         key={f.id}
                         onClick={() => onFilterChange(f.id)}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
+                            "flex items-center gap-2 px-5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200",
                             activeFilter === f.id
-                                ? `bg-white text-slate-900 shadow-sm border border-slate-200`
-                                : "text-slate-500 hover:text-slate-800"
+                                ? `bg-white text-slate-900 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border border-slate-200 border-b-slate-300 ring-1 ring-slate-100`
+                                : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
                         )}
                     >
                         <span>{f.label}</span>
@@ -93,7 +93,7 @@ export function AccountHeaderV2({
                         className="h-9 w-36 text-xs"
                     />
                 )}
-                
+
                 <div className="relative w-48 lg:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input

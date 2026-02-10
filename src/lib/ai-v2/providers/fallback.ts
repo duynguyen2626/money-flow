@@ -22,10 +22,12 @@ export class FallbackParser implements AIProviderInterface {
                 success: true,
                 data: {
                     ...result,
+                    needs: (result as any).needs || [],
+                    confidence: (result as any).confidence || 0.5,
                     mode: "fallback",
                     persona: "strict",
                     feedback: "Tôi đã parse bằng regex đơn giản. Có thể chưa chính xác 100% đâu nhé! 🤖"
-                },
+                } as ParsedTransaction,
                 metadata: {
                     provider: "fallback",
                     tokens: 0,

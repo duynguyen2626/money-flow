@@ -505,6 +505,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     policyMetadata: policyMetadata ?? undefined,
     is_min_spend_met: isMinSpendMet,
     cycle: cycleRange ? {
+      tag: cycleTag,
       label: cycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),

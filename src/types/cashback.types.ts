@@ -90,6 +90,7 @@ export type AccountSpendingStats = {
     start: string
     end: string
     label: string
+    tag: string
   } | null
 }
 
