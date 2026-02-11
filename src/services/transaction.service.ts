@@ -76,6 +76,7 @@ type FlatTransactionRow = {
 
   final_price?: number | null;
   transaction_history?: { count: number }[];
+  cashback_entries?: { amount: number; mode: string; metadata: Json | null }[];
 };
 
 type NormalizedTransaction = Omit<FlatTransactionRow, "id" | "created_at">;
@@ -423,6 +424,10 @@ export async function mapTransactionRow(
     final_price: row.final_price ?? null,
     history_count: row.transaction_history?.[0]?.count ?? 0,
     account_billing_cycle,
+    // Cashback Analysis Fields
+    bank_back: row.cashback_entries?.reduce((sum, entry) => sum + (entry.amount || 0), 0) ?? 0,
+    cashback_share_amount: (row.cashback_share_fixed ?? 0) + (Math.abs(row.amount) * (row.cashback_share_percent ?? 0)),
+    profit: (row.cashback_entries?.reduce((sum, entry) => sum + (entry.amount || 0), 0) ?? 0) - ((row.cashback_share_fixed ?? 0) + (Math.abs(row.amount) * (row.cashback_share_percent ?? 0))),
   };
 }
 
@@ -438,10 +443,11 @@ export async function loadTransactions(options: {
   includeVoided?: boolean;
 }): Promise<TransactionWithDetails[]> {
   const supabase = createClient();
+
   let query = supabase
     .from("transactions")
     .select(
-      "id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count)",
+      "id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count), cashback_entries(amount, mode, metadata)"
     )
     .order("occurred_at", { ascending: false });
 
@@ -1182,6 +1188,15 @@ export async function voidTransaction(id: string): Promise<boolean> {
     console.error("Failed to remove cashback entry (void):", cbError);
   }
 
+  // BATCH INTEGRATION: Revert batch item if exists
+  try {
+    // Dynamic import to avoid circular dependency if any
+    const { revertBatchItem } = await import("./batch.service");
+    await revertBatchItem(id);
+  } catch (batchError) {
+    console.error("Failed to revert batch item (void):", batchError);
+  }
+
   return true;
 }
 
@@ -1565,12 +1580,12 @@ export async function confirmRefund(
   return { success: true };
 }
 
-export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
+export async function getPendingRefunds(accountId?: string): Promise<PendingRefundItem[]> {
   const supabase = createClient()
 
   // Logic: status='waiting_refund' OR metadata->has_refund_request=true
   // Single query with OR logic
-  const { data, error } = await supabase
+  let query = supabase
     .from('transactions')
     .select(`
       id,
@@ -1580,11 +1595,18 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
       status,
       tag,
       metadata,
+      account_id,
       category:categories(name)
     `)
     .or('status.eq.waiting_refund,metadata->>has_refund_request.eq.true')
     .neq('status', 'void')
     .order('occurred_at', { ascending: false })
+
+  if (accountId) {
+    query = query.eq('account_id', accountId)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('Failed to fetch pending refunds:', error)

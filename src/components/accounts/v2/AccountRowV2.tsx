@@ -41,6 +41,7 @@ import { getShopsAction } from "@/actions/shop-actions";
 import { Person } from "@/types/moneyflow.types";
 import { Shop } from "@/types/moneyflow.types";
 import { toast } from 'sonner';
+import { isToday, isTomorrow, startOfDay } from 'date-fns';
 import { AccountRewardsCell } from "./cells/account-rewards-cell";
 
 interface AccountRowProps {
@@ -486,21 +487,34 @@ function renderCell(
                                         );
                                     }
 
-                                    const tone = daysLeft <= 0
-                                        ? "bg-rose-100 text-rose-800 border-rose-300"
-                                        : daysLeft <= 10
-                                            ? "bg-amber-100 text-amber-800 border-amber-300"
-                                            : "bg-emerald-100 text-emerald-800 border-emerald-300";
+                                    const dayDate = startOfDay(dueDate);
+                                    const isDueToday = isToday(dayDate);
+                                    const isDueTomorrow = isTomorrow(dayDate);
 
-                                    const dayNumber = Math.abs(daysLeft);
+                                    const tone = isDueToday
+                                        ? "bg-rose-100 text-rose-800 border-rose-400 shadow-[0_0_12px_rgba(225,29,72,0.2)]"
+                                        : isDueTomorrow || (daysLeft > 0 && daysLeft <= 10)
+                                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                                            : daysLeft <= 0
+                                                ? "bg-rose-100 text-rose-800 border-rose-300"
+                                                : "bg-emerald-100 text-emerald-800 border-emerald-300";
+
                                     const labelDate = formatDate(dueDate);
                                     const [month, day] = labelDate.split(' ');
 
                                     return (
-                                        <span className={`${badgeBase} ${tone} w-[140px]`}>
-                                            <span className="font-medium text-xs"><b className="font-extrabold">{dayNumber}</b> Days</span>
-                                            <span className="text-slate-400 mx-0.5">-</span>
-                                            <span className="font-medium text-xs">{month} <b className="font-extrabold">{day}</b></span>
+                                        <span className={cn(badgeBase, tone, isDueToday ? "w-[100px]" : isDueTomorrow ? "w-[110px]" : "w-[140px]", isDueToday && "animate-pulse")}>
+                                            {isDueToday ? (
+                                                <span className="font-black text-xs uppercase tracking-tighter">Today Due</span>
+                                            ) : isDueTomorrow ? (
+                                                <span className="font-black text-xs uppercase tracking-tighter">Tomorrow</span>
+                                            ) : (
+                                                <>
+                                                    <span className="font-medium text-xs"><b className="font-extrabold">{Math.abs(daysLeft)}</b> Days</span>
+                                                    <span className="text-slate-400 mx-0.5 opacity-30">|</span>
+                                                    <span className="font-medium text-xs uppercase tracking-tighter">{month} <b className="font-extrabold">{day}</b></span>
+                                                </>
+                                            )}
                                         </span>
                                     );
                                 })()}

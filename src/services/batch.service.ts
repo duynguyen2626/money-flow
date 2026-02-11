@@ -320,7 +320,7 @@ export async function revertBatchItem(transactionId: string) {
     const { error: updateError } = await supabase
         .from('batch_items')
         .update({
-            status: 'funded', // Reset to Pending/Funded
+            status: 'pending', // Reset to Pending/Funded
             transaction_id: null,
             is_confirmed: false
         })
