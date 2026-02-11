@@ -6,6 +6,7 @@ import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange, getCashbackCycleTag, formatIsoCycleTag, formatLegacyCycleTag, parseCycleTag } from '@/lib/cashback';
 import { normalizePolicyMetadata } from '@/lib/cashback-policy';
 import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
+import { format } from 'date-fns';
 
 import { resolveCashbackPolicy } from './cashback/policy-resolver'
 /**
@@ -474,20 +475,80 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     categoryName
   });
 
-  const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
+  // MF6.1 FIX: Helper to aggregate cycle stats in real-time for accuracy
+  // 1. Calculate Spent Amount & Eligible Transactions
+  const { data: txns } = await supabase
+    .from('transactions')
+    .select(`
+      id, amount, type, occurred_at, note,
+      cashback_share_percent, cashback_share_fixed,
+      category:categories(id, name, icon),
+      shop:shops(name, image_url)
+    `)
+    .eq('account_id', accountId)
+    .eq('persisted_cycle_tag', cycleTag)
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt']);
+
+  const currentSpend = (txns ?? []).reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
-  const currentSpend = cycle?.spent_amount ?? 0;
-  const realAwarded = cycle?.real_awarded ?? 0;
-  const virtualProfit = cycle?.virtual_profit ?? 0;
-  const overflowLoss = cycle?.overflow_loss ?? 0;
+  const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
 
-  const sharedAmount = realAwarded;
-  const earnedSoFar = realAwarded + virtualProfit;
-  const netProfit = virtualProfit - overflowLoss;
-  const remainingBudget = cycle && cycleMaxBudget !== null ? Math.max(0, cycleMaxBudget - earnedSoFar) : null;
+  // 2. Real-time Cashback Estimation (Bank Back, Share, Profit)
+  let realAwarded = 0;
+  let virtualProfit = 0;
+  let overflowLoss = 0;
+  let earnedSoFarFromTxns = 0;
+  let sharedSoFarFromTxns = 0;
 
-  const policyMetadata = normalizePolicyMetadata(policy.metadata);
-  const isMinSpendMet = cycle?.met_min_spend ?? (typeof minSpendTarget === 'number' ? currentSpend >= minSpendTarget : true);
+  if (txns && txns.length > 0) {
+    for (const t of txns as any[]) {
+      const category = t.category;
+      const txnAmount = Math.abs(t.amount);
+
+      const resolvedPolicy = resolveCashbackPolicy({
+        account,
+        categoryId: category?.id,
+        amount: txnAmount,
+        cycleTotals: { spent: currentSpend }, // Note: using total current spend for policy tiered rates
+        categoryName: category?.name
+      });
+
+      const policyMetadata = normalizePolicyMetadata(resolvedPolicy.metadata);
+      const policyRate = policyMetadata?.rate ?? 0;
+      const sharePercent = t.cashback_share_percent ?? policyRate;
+      const shareFixed = t.cashback_share_fixed ?? 0;
+
+      let bankBack = txnAmount * policyRate;
+      const ruleMaxReward = policyMetadata?.ruleMaxReward ?? resolvedPolicy.maxReward ?? null;
+
+      if (ruleMaxReward !== null && ruleMaxReward > 0) {
+        bankBack = Math.min(bankBack, ruleMaxReward);
+      }
+
+      const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
+      const profit = bankBack - peopleBack;
+
+      earnedSoFarFromTxns += bankBack;
+      sharedSoFarFromTxns += peopleBack;
+    }
+  }
+
+  // Handle Cap Capping
+  if (cycleMaxBudget !== null && cycleMaxBudget > 0) {
+    // If we exceed max budget, the overflow is loss
+    const rawTotal = earnedSoFarFromTxns;
+    earnedSoFarFromTxns = Math.min(rawTotal, cycleMaxBudget);
+    // Any earning beyond cap is effectively not earned
+  }
+
+  // Values for UI
+  const earnedSoFar = earnedSoFarFromTxns;
+  const sharedAmount = sharedSoFarFromTxns;
+  const netProfit = earnedSoFar - sharedAmount;
+
+  const remainingBudget = cycleMaxBudget !== null ? Math.max(0, cycleMaxBudget - earnedSoFar) : null;
+  const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
 
   return {
     currentSpend,
@@ -497,16 +558,18 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     maxReward: policy.maxReward,
     earnedSoFar,
     sharedAmount,
-    potentialProfit: virtualProfit,
+    potentialProfit: netProfit, // For backward compatibility
     netProfit,
     remainingBudget,
     potentialRate: policy.rate,
-    matchReason: policyMetadata?.policySource,
-    policyMetadata: policyMetadata ?? undefined,
+    matchReason: normalizePolicyMetadata(policy.metadata)?.policySource,
+    policyMetadata: normalizePolicyMetadata(policy.metadata) ?? undefined,
     is_min_spend_met: isMinSpendMet,
     cycle: cycleRange ? {
       tag: cycleTag,
-      label: cycleTag,
+      label: config.cycleType === 'statement_cycle'
+        ? `${format(cycleRange.start, 'dd.MM')} - ${format(cycleRange.end, 'dd.MM')}`
+        : cycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),
     } : null

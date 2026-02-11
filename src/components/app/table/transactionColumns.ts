@@ -12,6 +12,9 @@ export type ColumnKey =
   | "id"
   | "people"
   | "actions"
+  | "actual_cashback"
+  | "est_share"
+  | "net_profit"
 
 export interface ColumnConfig {
   key: ColumnKey

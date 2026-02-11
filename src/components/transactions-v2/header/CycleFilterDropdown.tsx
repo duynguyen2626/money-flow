@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Check, ChevronDown, RefreshCw, X } from 'lucide-react'
+import { Check, ChevronDown, RotateCcw, RefreshCw, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -20,11 +20,12 @@ interface CycleFilterDropdownProps {
   cycles: CycleOption[]
   value?: string
   onChange: (value?: string) => void
+  onReset?: () => void
   disabled?: boolean
   fullWidth?: boolean
 }
 
-export function CycleFilterDropdown({ cycles, value, onChange, disabled, fullWidth }: CycleFilterDropdownProps) {
+export function CycleFilterDropdown({ cycles, value, onChange, onReset, disabled, fullWidth }: CycleFilterDropdownProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -70,15 +71,21 @@ export function CycleFilterDropdown({ cycles, value, onChange, disabled, fullWid
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
                 {selected && !disabled && (
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onChange(undefined)
-                    }}
-                    className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
-                  >
-                    <X className="w-3 h-3 opacity-70 hover:opacity-100" />
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onReset) onReset()
+                          else onChange(undefined)
+                        }}
+                        className="hover:bg-slate-100 rounded p-1 transition-colors cursor-pointer group/reset"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-400 group-hover/reset:text-indigo-600 transition-colors" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Reset to current cycle</TooltipContent>
+                  </Tooltip>
                 )}
                 <ChevronDown className="w-3 h-3 opacity-50" />
               </div>
@@ -88,14 +95,14 @@ export function CycleFilterDropdown({ cycles, value, onChange, disabled, fullWid
         <PopoverContent className="w-[240px] p-1" align="start" onOpenAutoFocus={(e) => e.preventDefault()} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
           <div className="space-y-0.5">
             <button
-              onClick={() => handleSelect(undefined)}
+              onClick={() => handleSelect('all')}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors",
-                !value && "bg-accent"
+                value === 'all' && "bg-accent"
               )}
             >
               <span className="truncate">All cycles</span>
-              {!value && <Check className="w-3.5 h-3.5" />}
+              {value === 'all' && <Check className="w-3.5 h-3.5" />}
             </button>
             <div className="h-px bg-border my-1" />
             {options.length === 0 && (

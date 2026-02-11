@@ -358,6 +358,14 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     return false;
   }
 
+  // 3b. Revert Batch Item if linked
+  try {
+    const { revertBatchItem } = await import('@/services/batch.service');
+    await revertBatchItem(id);
+  } catch (err) {
+    console.error('[Void] Failed to revert batch item:', err);
+  }
+
   // 4. Cascade Void to Children
   if (linkedChildren && linkedChildren.length > 0) {
 

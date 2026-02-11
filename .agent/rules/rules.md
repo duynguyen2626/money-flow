@@ -58,12 +58,13 @@ Installments: Installments are linked to transaction_lines. Do not double-count 
    
    CI/CD: GitHub Actions will block any PR/push that fails lint or build.
    
-   Local Check: BEFORE committing, you MUST run:
+   Local Check (MANDATORY): BEFORE committing or handing over, you MUST run:
    > npm run build
    > npm run lint
    
    Testing:
    - Vitest is configured. Run `npm test` (if available) or minimally ensure `npm run build` passes.
+   - HANDOVER REQUIREMENT: You MUST verify the build passes (`npm run build`) before ending the session.
    - Any Types: PROHIBITED. Fix them, do not cast as any unless absolutely necessary for external libraries.
    
 7. Database Schema & Migrations

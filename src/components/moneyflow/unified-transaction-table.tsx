@@ -317,13 +317,16 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   }, [])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 110, minWidth: 90 },
-    { key: "shop", label: "Note & Category", defaultWidth: 360, minWidth: 280 },
+    { key: "shop", label: "NOTE & CATEGORY", defaultWidth: 360, minWidth: 280 },
     { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
     { key: "account", label: "Flow", defaultWidth: 300, minWidth: 280 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
+    { key: "actual_cashback", label: "Actual Cashback", defaultWidth: 120, minWidth: 100 },
+    { key: "est_share", label: "Est. Share", defaultWidth: 100, minWidth: 80 },
+    { key: "net_profit", label: "Net Profit", defaultWidth: 100, minWidth: 80 },
     { key: "actions", label: "Action", defaultWidth: 100, minWidth: 60 },
   ]
   const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false)
@@ -353,6 +356,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       id: false,
       people: false,
       actions: true,
+      actual_cashback: false,
+      est_share: false,
+      net_profit: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -559,6 +565,28 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(hiddenColumns), isMobile])
+
+  // Cashback Columns Visibility based on Account Type
+  useEffect(() => {
+    setVisibleColumns(prev => {
+      const next = { ...prev };
+      const showCashback = accountType === "credit_card";
+
+      // Only update if changed
+      if (
+        prev.actual_cashback === showCashback &&
+        prev.est_share === showCashback &&
+        prev.net_profit === showCashback
+      ) {
+        return prev;
+      }
+
+      next.actual_cashback = showCashback;
+      next.est_share = showCashback;
+      next.net_profit = showCashback;
+      return next;
+    });
+  }, [accountType]);
 
   useEffect(() => {
     const updateIsMobile = () => {
@@ -1238,20 +1266,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
             </button>
           </>
         )}
-        <button
-          className={dangerItemClass}
-          onClick={event => {
-            event.stopPropagation();
-            setConfirmDeletingTarget(txn);
-            setActionMenuOpen(null);
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-          <span>Delete</span>
-        </button>
-
-        {divider}
-
         {(txn.history_count || 0) > 0 && (
           <button
             className={neutralItemClass}
@@ -1265,6 +1279,20 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
             <span>View History</span>
           </button>
         )}
+
+        {divider}
+
+        <button
+          className={dangerItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            setConfirmDeletingTarget(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>Delete (Forever)</span>
+        </button>
         {/* Request Refund Dialog */}
       </>
     )
@@ -1604,7 +1632,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                     // Row Background Logic (Restored)
                     let rowBgColor = "bg-white"
                     if (isVoided) {
-                      rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
+                      rowBgColor = "opacity-80 bg-gray-50 scale-[0.99] border-dashed"
                     } else {
                       const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
                       if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
@@ -1680,6 +1708,144 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               {renderRowActions(txn, isVoided)}
                             </div>
                           )
+                        }
+                        case "actual_cashback": {
+                          const val = txn.bank_back ?? 0;
+                          const amountAbs = Math.abs(txn.amount);
+
+                          // Default cashback logic if actual is 0/missing
+                          if (!val && amountAbs > 0) {
+                            const account = accounts.find(a => a.id === txn.account_id);
+                            if (account?.cashback_config) {
+                              try {
+                                const config = typeof account.cashback_config === 'string'
+                                  ? JSON.parse(account.cashback_config)
+                                  : account.cashback_config;
+
+                                // Look for defaultRate in program or root
+                                const defaultRate = config?.program?.defaultRate ?? config?.defaultRate ?? 0;
+
+                                if (defaultRate > 0) {
+                                  const projected = amountAbs * defaultRate;
+
+                                  return (
+                                    <CustomTooltip content={
+                                      <div className="text-xs space-y-1">
+                                        <div className="font-bold">Projected Cashback (Pending)</div>
+                                        <div className="text-slate-400 font-mono">
+                                          {numberFormatter.format(amountAbs)} × {(defaultRate * 100).toFixed(1)}% = {numberFormatter.format(projected)}
+                                        </div>
+                                        <div className="text-[10px] italic border-t pt-1 mt-1 text-slate-500">
+                                          Using bank's default rate: {(defaultRate * 100).toFixed(1)}%
+                                        </div>
+                                      </div>
+                                    }>
+                                      <span className="text-slate-400 font-medium cursor-help border-b border-dotted border-slate-300">
+                                        {numberFormatter.format(projected)}
+                                      </span>
+                                    </CustomTooltip>
+                                  );
+                                }
+                              } catch (e) {
+                                // ignore parse error
+                              }
+                            }
+                          }
+
+                          if (val === 0) return <span className="text-slate-300">-</span>;
+
+                          const effectiveRate = amountAbs > 0 ? (val / amountAbs) : 0;
+
+                          return (
+                            <CustomTooltip content={
+                              <div className="text-xs space-y-1">
+                                <div className="font-bold">Bank Cashback (Actual)</div>
+                                <div className="text-slate-400 font-mono">
+                                  {numberFormatter.format(amountAbs)} × {(effectiveRate * 100).toFixed(effectiveRate * 100 % 1 === 0 ? 0 : 2)}% = {numberFormatter.format(val)}
+                                </div>
+                              </div>
+                            }>
+                              <span className="text-emerald-600 font-medium cursor-help border-b border-dotted border-emerald-200">
+                                {numberFormatter.format(val)}
+                              </span>
+                            </CustomTooltip>
+                          );
+                        }
+                        case "est_share": {
+                          const val = txn.cashback_share_amount ?? 0;
+                          if (val === 0) return <span className="text-slate-300">-</span>;
+
+                          const shareFixed = txn.cashback_share_fixed ?? 0;
+                          const shareRate = txn.cashback_share_percent ?? 0;
+                          const amountAbs = Math.abs(txn.amount);
+
+                          return (
+                            <CustomTooltip content={
+                              <div className="text-xs space-y-1">
+                                <div className="font-bold text-orange-400">Cashback Shared</div>
+                                <div className="text-slate-400 font-mono">
+                                  {shareRate > 0 && (
+                                    <span>{numberFormatter.format(amountAbs)} × {(shareRate * 100).toFixed(shareRate * 100 % 1 === 0 ? 0 : 2)}%</span>
+                                  )}
+                                  {shareRate > 0 && shareFixed > 0 && <span> + </span>}
+                                  {shareFixed > 0 && (
+                                    <span>{numberFormatter.format(shareFixed)} (fixed)</span>
+                                  )}
+                                  <span> = {numberFormatter.format(val)}</span>
+                                </div>
+                              </div>
+                            }>
+                              <span className="text-orange-600 cursor-help border-b border-dotted border-orange-200">
+                                {numberFormatter.format(val)}
+                              </span>
+                            </CustomTooltip>
+                          );
+                        }
+                        case "net_profit": {
+                          let bankBack = txn.bank_back ?? 0;
+                          let isProjected = false;
+                          const amountAbs = Math.abs(txn.amount);
+
+                          if (!bankBack && amountAbs > 0) {
+                            const account = accounts.find(a => a.id === txn.account_id);
+                            if (account?.cashback_config) {
+                              try {
+                                const config = typeof account.cashback_config === 'string'
+                                  ? JSON.parse(account.cashback_config)
+                                  : account.cashback_config;
+                                const defaultRate = config?.program?.defaultRate ?? config?.defaultRate ?? 0;
+                                if (defaultRate > 0) {
+                                  bankBack = amountAbs * defaultRate;
+                                  isProjected = true;
+                                }
+                              } catch (e) { }
+                            }
+                          }
+
+                          const share = txn.cashback_share_amount ?? 0;
+                          const profit = bankBack - share;
+
+                          if (profit === 0 && bankBack === 0 && share === 0) return <span className="text-slate-300">-</span>;
+
+                          return (
+                            <CustomTooltip content={
+                              <div className="text-xs space-y-1">
+                                <div className="font-bold text-indigo-400">Net Profit Calculation</div>
+                                <div className="text-slate-400 font-mono">
+                                  {numberFormatter.format(bankBack)} {isProjected ? '(est)' : '(bank)'} - {numberFormatter.format(share)} (share) = <span className={profit > 0 ? "text-emerald-400" : "text-rose-400"}>{numberFormatter.format(profit)}</span>
+                                </div>
+                                {isProjected && <div className="mt-1 text-[10px] text-slate-500 italic border-t pt-1">* Using projection for Bank Cashback</div>}
+                              </div>
+                            }>
+                              <span className={cn(
+                                profit > 0 ? "text-emerald-700 font-black" : profit < 0 ? "text-rose-500 font-bold" : "text-slate-500",
+                                "cursor-help border-b border-dotted border-slate-300",
+                                isProjected && "opacity-70"
+                              )}>
+                                {numberFormatter.format(profit)}
+                              </span>
+                            </CustomTooltip>
+                          );
                         }
                         // Note: 'type' column was removed - it's now merged into the 'date' column
 
@@ -1852,8 +2018,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                   {txn.note ? (
                                     <CustomTooltip content={txn.note}>
                                       <span
-                                        className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                        style={{ fontSize: `0.9em` }}
+                                        className="text-slate-900 font-black truncate cursor-help block flex-1"
+                                        style={{ fontSize: `1.15em` }}
                                       >
                                         {txn.note}
                                       </span>
@@ -2872,7 +3038,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               >
                 <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  This action will mark the transaction as void and adjust the balances accordingly.
+                  This transaction will be marked as <span className="font-bold text-rose-600">VOID</span>. It will not be deleted, but it will be hidden from default views and excluded from calculations.
                 </p>
                 {voidError && (
                   <p className="mt-2 text-sm text-red-600">{voidError}</p>
@@ -2961,9 +3127,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                 className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
                 onClick={event => event.stopPropagation()}
               >
-                <h3 className="text-lg font-semibold text-slate-900">Delete transaction forever?</h3>
+                <h3 className="text-lg font-semibold text-slate-900 text-rose-600">Delete Forever?</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  This will PERMANENTLY remove this transaction from the database. This action cannot be undone.
+                  This will <span className="font-black text-rose-600 underline">PERMANENTLY remove</span> this data from the database. This action <span className="font-bold italic">CANNOT be undone</span> and will affect your reports.
                 </p>
                 {voidError && (
                   <p className="mt-2 text-sm text-red-600">{voidError}</p>

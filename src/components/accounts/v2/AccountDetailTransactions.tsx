@@ -16,7 +16,7 @@ import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transactio
 import { SingleTransactionFormValues } from '@/components/transaction/slide-v2/types'
 import { DateRange } from 'react-day-picker'
 import { normalizeMonthTag } from '@/lib/month-tag'
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay } from 'date-fns'
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, format } from 'date-fns'
 import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -218,12 +218,22 @@ export function AccountDetailTransactions({
     // Available months for date picker
     const availableMonths = useMemo(() => {
         const months = new Set<string>()
+
+        // Add current month
+        const now = new Date()
+        months.add(format(now, 'yyyy-MM'))
+
+        // Add selected date months
+        if (date) months.add(format(date, 'yyyy-MM'))
+        if (dateRange?.from) months.add(format(dateRange.from, 'yyyy-MM'))
+        if (dateRange?.to) months.add(format(dateRange.to, 'yyyy-MM'))
+
         transactions.forEach(t => {
             const tag = normalizeMonthTag(t.tag || '')
             if (tag) months.add(tag)
         })
         return months
-    }, [transactions])
+    }, [transactions, date, dateRange])
 
     // Fetch proper cycles for credit cards using cashback service
     useEffect(() => {
@@ -381,7 +391,7 @@ export function AccountDetailTransactions({
             }
 
             // Cycle filter (credit cards)
-            if (selectedCycle) {
+            if (selectedCycle && selectedCycle !== 'all') {
                 result = result.filter(t => {
                     const txCycle = t.persisted_cycle_tag || t.account_billing_cycle || ''
                     return txCycle === selectedCycle
@@ -408,6 +418,13 @@ export function AccountDetailTransactions({
                     return isWithinInterval(txDate, { start: dateRange.from!, end: rangeEnd })
                 })
             }
+        } else if (account.type === 'credit_card' && currentCycleRef.current && !isFilterActive && selectedCycle !== 'all') {
+            // Default behavior for credit cards: always show current cycle
+            // BUT skip if user explicitly selected 'all' (even if filter not "active" in standard sense)
+            result = result.filter(t => {
+                const txCycle = t.persisted_cycle_tag || t.account_billing_cycle || ''
+                return txCycle === currentCycleRef.current
+            })
         }
 
         return result
@@ -422,6 +439,7 @@ export function AccountDetailTransactions({
         // Ignore 'dateFrom/dateTo' as they should be derived from cycle
         if (account.type === 'credit_card' && tag) {
             setSelectedCycle(tag)
+            // If tag is 'all', we still want to activate filter mode
             setIsFilterActive(true)
         }
         // For non-credit accounts, accept date range params
@@ -576,13 +594,11 @@ export function AccountDetailTransactions({
                             <CycleFilterDropdown
                                 cycles={cycles}
                                 value={selectedCycle}
-                                onChange={(val) => {
-                                    // If user clears (val is undefined), reset to CURRENT cycle if available
-                                    if (!val && currentCycleRef.current) {
+                                onChange={handleCycleChange}
+                                onReset={() => {
+                                    if (currentCycleRef.current) {
                                         handleCycleChange(currentCycleRef.current)
                                         toast.info("Reset to current cycle")
-                                    } else {
-                                        handleCycleChange(val)
                                     }
                                 }}
                             />
@@ -711,29 +727,6 @@ export function AccountDetailTransactions({
                 />
             </div>
 
-            {/* Flow Column Legend */}
-            <div className="border-t border-slate-200 bg-slate-50 px-6 py-3">
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
-                    <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-600">Flow Legend:</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-orange-50 text-orange-700 border border-orange-200 rounded text-[10px] font-bold">
-                            FROM
-                        </div>
-                        <span className="text-slate-500">= Money received (incoming)</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-5 px-2 flex items-center justify-center bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-bold">
-                            TO
-                        </div>
-                        <span className="text-slate-500">= Money sent (outgoing)</span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 italic">
-                        * Orange indicates money flowing IN. Blue indicates money flowing OUT.
-                    </div>
-                </div>
-            </div>
 
             {/* Clear Confirmation Modal */}
             <AlertDialog open={clearConfirmationOpen} onOpenChange={setClearConfirmationOpen}>

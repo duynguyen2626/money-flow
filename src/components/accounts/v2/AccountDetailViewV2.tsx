@@ -13,11 +13,13 @@ import {
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { AccountDetailHeaderV2 } from './AccountDetailHeaderV2'
 import { AccountDetailTransactions } from './AccountDetailTransactions'
-import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
+
 import { AccountContentWrapper } from '@/components/moneyflow/account-content-wrapper'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { useRecentItems } from '@/hooks/use-recent-items'
 import { Info } from 'lucide-react'
+import { AccountPendingItemsModal } from './AccountPendingItemsModal'
+import { useBreadcrumbs } from '@/context/breadcrumb-context'
 
 type PendingBatchItem = {
     id: string
@@ -48,9 +50,7 @@ export function AccountDetailViewV2({
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
 
-    // Tab State
-    const initialTab = searchParams.get('tab') === 'cashback' ? 'cashback' : 'transactions'
-    const [activeTab, setActiveTab] = useState<'transactions' | 'cashback'>(initialTab)
+
 
     // Year Filter State (for header)
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
@@ -62,30 +62,37 @@ export function AccountDetailViewV2({
     const [pendingItems, setPendingItems] = useState<PendingBatchItem[]>([])
     const [isConfirmingPending, setIsConfirmingPending] = useState(false)
     const [pendingRefundAmount, setPendingRefundAmount] = useState(0)
+    const [pendingRefundCount, setPendingRefundCount] = useState(0)
+    const [isLoadingPending, setIsLoadingPending] = useState(true)
 
     const summary = useMemo(() => {
-        const currentYear = new Date().getFullYear()
+        const targetYear = selectedYear ? parseInt(selectedYear) : new Date().getFullYear();
         const categoryMap = new Map(categories.map(c => [c.id, c]))
         let yearDebtTotal = 0
         let debtTotal = 0
         let expensesTotal = 0
         let cashbackTotal = 0
+        let yearExpensesTotal = 0; // For Annual Fee Waiver check
 
         initialTransactions.forEach(tx => {
             const rawDate = tx?.occurred_at || tx?.date || tx?.created_at
             const date = rawDate ? new Date(rawDate) : null
             const amount = Math.abs(Number(tx?.amount || 0))
             const type = String(tx?.type || '').toLowerCase()
+            const year = date?.getFullYear();
 
             if (type === 'debt') {
                 debtTotal += amount
-                if (date && date.getFullYear() === currentYear) {
+                if (year === targetYear) {
                     yearDebtTotal += amount
                 }
             }
 
             if (type === 'expense' || type === 'transfer') {
                 expensesTotal += amount
+                if (year === targetYear) {
+                    yearExpensesTotal += amount
+                }
             }
 
             if (type === 'income') {
@@ -93,24 +100,27 @@ export function AccountDetailViewV2({
                 const category = categoryId ? categoryMap.get(categoryId) : null
                 const categoryName = category?.name?.toLowerCase() || ''
                 if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
-                    cashbackTotal += amount
+                    if (!selectedYear || year === targetYear) {
+                        cashbackTotal += amount
+                    }
                 }
             }
         })
 
-        return { yearDebtTotal, debtTotal, expensesTotal, cashbackTotal }
-    }, [initialTransactions, categories])
+        return {
+            yearDebtTotal,
+            debtTotal,
+            expensesTotal,
+            cashbackTotal,
+            yearExpensesTotal,
+            targetYear,
+            pendingCount: pendingItems.length + pendingRefundCount
+        }
+    }, [initialTransactions, categories, selectedYear, pendingItems.length, pendingRefundCount])
 
-    // Sync tab with URL
     useEffect(() => {
-        const tab = searchParams.get('tab') === 'cashback' ? 'cashback' : 'transactions'
-        setActiveTab(tab)
-    }, [searchParams])
-
-    useEffect(() => {
-        const tabLabel = activeTab === 'cashback' ? 'Cashback' : 'History'
-        document.title = `${account.name} ${tabLabel}`
-    }, [account.name, activeTab])
+        document.title = `${account.name} History`
+    }, [account.name])
 
     const { addRecentItem } = useRecentItems()
 
@@ -125,11 +135,19 @@ export function AccountDetailViewV2({
         }
     }, [account.id, account.name, addRecentItem])
 
+    const { setCustomName } = useBreadcrumbs();
+    useEffect(() => {
+        if (account.name) {
+            setCustomName(`/accounts/${account.id}`, account.name);
+        }
+    }, [account.id, account.name, setCustomName]);
+
     const fetchPendingData = useCallback(async () => {
+        setIsLoadingPending(true)
         try {
             const [batchRes, refundRes] = await Promise.all([
-                fetch(`/api/batch/pending-items?accountId=${account.id}`),
-                fetch(`/api/refunds/pending?accountId=${account.id}`)
+                fetch(`/api/batch/pending-items?accountId=${account.id}&t=${Date.now()}`, { cache: 'no-store' }),
+                fetch(`/api/refunds/pending?accountId=${account.id}&t=${Date.now()}`, { cache: 'no-store' })
             ])
 
             if (batchRes.ok) {
@@ -140,9 +158,12 @@ export function AccountDetailViewV2({
             if (refundRes.ok) {
                 const data = await refundRes.json()
                 setPendingRefundAmount(Math.max(0, data?.total ?? 0))
+                setPendingRefundCount(Array.isArray(data?.items) ? data.items.length : 0)
             }
         } catch (error) {
             console.error('Failed to fetch pending data', error)
+        } finally {
+            setIsLoadingPending(false)
         }
     }, [account.id])
 
@@ -200,14 +221,7 @@ export function AccountDetailViewV2({
         }
     }
 
-    const handleTabChange = (tab: 'transactions' | 'cashback') => {
-        setActiveTab(tab)
-        startTransition(() => {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('tab', tab)
-            router.push(`/accounts/${account.id}?${params.toString()}`)
-        })
-    }
+
 
     const availableYears = React.useMemo(() => {
         const years = new Set<string>()
@@ -233,48 +247,43 @@ export function AccountDetailViewV2({
     const pendingTotal = pendingBatchAmount + pendingRefundAmount
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-white">
+        <div className="flex flex-col h-full overflow-hidden bg-white pt-6">
             {/* Header V2 */}
             <AccountDetailHeaderV2
                 account={account}
                 allAccounts={allAccounts}
                 categories={categories}
                 cashbackStats={initialCashbackStats}
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
                 selectedYear={selectedYear}
                 availableYears={availableYears}
                 onYearChange={setSelectedYear}
                 selectedCycle={selectedCycle}
                 summary={summary}
+                isLoadingPending={isLoadingPending}
             />
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto space-y-4">
-                {activeTab === 'transactions' ? (
-                    <AccountDetailTransactions
-                        account={account}
-                        transactions={initialTransactions}
-                        accounts={allAccounts}
-                        categories={categories}
-                        people={people}
-                        shops={shops}
-                        selectedCycle={selectedCycle}
-                        onCycleChange={setSelectedCycle}
-                    />
-                ) : (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden min-h-[600px]">
-                        <CashbackAnalysisView
-                            accountId={account.id}
-                            accounts={allAccounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                        />
-                    </div>
-                )}
+                <AccountDetailTransactions
+                    account={account}
+                    transactions={initialTransactions}
+                    accounts={allAccounts}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    selectedCycle={selectedCycle}
+                    onCycleChange={setSelectedCycle}
+                />
             </div>
             <FlowLegend />
+
+            <AccountPendingItemsModal
+                accountId={account.id}
+                pendingItems={pendingItems}
+                pendingRefundCount={pendingRefundCount}
+                pendingRefundAmount={pendingRefundAmount}
+                onSuccess={() => fetchPendingData()}
+            />
         </div>
     )
 }
