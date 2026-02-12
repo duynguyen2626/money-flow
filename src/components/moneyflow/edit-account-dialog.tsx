@@ -18,7 +18,7 @@ import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 import { InputWithClear } from '@/components/ui/input-with-clear'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
-import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { ApplyRuleDialog } from '@/components/moneyflow/apply-rule-dialog'
 import { CashbackGuideModal } from '@/components/moneyflow/cashback-guide-modal'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -1230,7 +1230,7 @@ export function EditAccountDialog({
             cancelText="Keep Editing"
           />
 
-          <CategoryDialog
+          <CategorySlide
             open={isCategoryDialogOpen}
             onOpenChange={setIsCategoryDialogOpen}
             defaultType="expense"

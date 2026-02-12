@@ -44,7 +44,7 @@ import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { CustomTooltip } from "@/components/ui/custom-tooltip";
 import { DayOfMonthPicker } from "@/components/ui/day-of-month-picker";
-import { CategorySlideV2 } from "@/components/accounts/v2/CategorySlideV2";
+import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 
 interface AccountSlideV2Props {
     open: boolean;
@@ -91,6 +91,7 @@ export function AccountSlideV2({
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [activeCategoryCallback, setActiveCategoryCallback] = useState<((categoryId: string) => void) | null>(null);
+    const [isCashbackEnabled, setIsCashbackEnabled] = useState(false);
 
     // Form state
     const [name, setName] = useState("");
@@ -184,6 +185,10 @@ export function AccountSlideV2({
                     // Derived simple mode state for check
                     isCategoryRestricted: false,
                 };
+
+                // Determine if cashback is enabled based on loaded configuration
+                const hasCashbackData = !!config.defaultRate || (config.levels && config.levels.length > 0);
+                setIsCashbackEnabled(hasCashbackData);
 
                 // Normalizing logic for simple mode to match how valid levels look
                 const loadedLevels = (config.levels || []).map(lvl => ({
@@ -426,6 +431,7 @@ export function AccountSlideV2({
 
                     setLevels(loadedLevels);
                     setIsAdvancedCashback(loadedLevels.length > 1 || (loadedLevels.length === 1 && loadedLevels[0].rules.length > 1));
+                    setIsCashbackEnabled(cb.defaultRate > 0 || loadedLevels.length > 0);
 
                     // Check if it's a simple restricted config
                     if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
@@ -507,8 +513,7 @@ export function AccountSlideV2({
                     annual_fee_waiver_target: annualFeeWaiverTarget,
                     receiver_name: receiverName,
                     parent_account_id: parentAccountId,
-                    secured_by_account_id: isCollateralLinked && securedById !== "none" ? securedById : null,
-                    cashback_config: {
+                    cashback_config: isCashbackEnabled ? {
                         program: {
                             cycleType,
                             statementDay,
@@ -540,7 +545,7 @@ export function AccountSlideV2({
                                 }]
                             }] : [])
                         }
-                    }
+                    } : null
                 });
                 if (success) {
                     toast.success("Account updated successfully");
@@ -573,6 +578,15 @@ export function AccountSlideV2({
                     <div className="p-6 bg-slate-50/50 border-b border-slate-200">
                         <SheetHeader className="text-left">
                             <div className="flex items-center gap-3 mb-2">
+                                {onBack && (
+                                    <button
+                                        onClick={handleAttemptBack}
+                                        className="h-9 w-9 rounded-lg bg-white shadow-sm border border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-100 transition-all active:scale-95"
+                                        title="Back"
+                                    >
+                                        <ChevronLeft className="h-5 w-5" />
+                                    </button>
+                                )}
                                 <div className="h-9 w-9 rounded-lg bg-white shadow-sm border border-slate-200 flex items-center justify-center text-blue-600">
                                     <Wallet className="h-4 w-4" />
                                 </div>
@@ -616,7 +630,7 @@ export function AccountSlideV2({
                                 <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Account Type</Label>
                                 <div className="grid grid-cols-4 gap-2 bg-slate-100 p-1.5 rounded-lg">
                                     {[
-                                        { id: 'bank', icon: Building, label: 'Bank', color: 'text-blue-600' },
+                                        { id: 'bank', icon: Building, label: 'Account', color: 'text-blue-600' },
                                         { id: 'credit', icon: CreditCard, label: 'Credit', color: 'text-indigo-600' },
                                         { id: 'savings', icon: PiggyBank, label: 'Savings', color: 'text-amber-600' },
                                         { id: 'others', icon: Wallet, label: 'Others', color: 'text-slate-600' },
@@ -905,740 +919,750 @@ export function AccountSlideV2({
                                 </div>
                             )}
 
-                            {/* Collateral / Secured By - For all account types */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Collateral / Secured By</Label>
-                                    <Switch
-                                        checked={isCollateralLinked}
-                                        onCheckedChange={(checked) => {
-                                            setIsCollateralLinked(checked);
-                                            if (!checked) setSecuredById("none");
-                                        }}
-                                        className="scale-75"
-                                    />
-                                </div>
-
-                                {isCollateralLinked && (
-                                    <Popover open={openCollateralCombo} onOpenChange={setOpenCollateralCombo}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                role="combobox"
-                                                aria-expanded={openCollateralCombo}
-                                                className="w-full justify-between h-10 border-slate-200"
-                                            >
-                                                {securedById && securedById !== "none" ? (
-                                                    <div className="flex items-center gap-2">
-                                                        {(() => {
-                                                            const sel = allAccounts.find(a => a.id === securedById);
-                                                            return sel ? (
-                                                                <>
-                                                                    <div className="w-5 h-5 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
-                                                                        {sel.image_url ? (
-                                                                            <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
-                                                                        ) : (
-                                                                            <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <span className="truncate">{sel.name}</span>
-                                                                </>
-                                                            ) : "Select Account...";
-                                                        })()}
-                                                    </div>
-                                                ) : (
-                                                    "Select Account..."
-                                                )}
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                                            <Command>
-                                                <CommandInput placeholder="Search account..." />
-                                                <CommandList>
-                                                    <CommandEmpty>No account found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                        <CommandItem
-                                                            onSelect={() => {
-                                                                toast.info("Savings creation coming soon");
-                                                                setOpenCollateralCombo(false);
-                                                            }}
-                                                            className="text-blue-600 font-bold"
-                                                        >
-                                                            <Plus className="mr-2 h-4 w-4" />
-                                                            Create New Savings
-                                                        </CommandItem>
-                                                        {allAccounts
-                                                            .filter(a => a.id !== account?.id && (a.type === 'bank' || a.type === 'savings'))
-                                                            .map((a) => (
-                                                                <CommandItem
-                                                                    key={a.id}
-                                                                    value={a.name}
-                                                                    onSelect={() => {
-                                                                        setSecuredById(a.id);
-                                                                        setOpenCollateralCombo(false);
-                                                                    }}
-                                                                >
-                                                                    <div className="flex items-center gap-2 w-full">
-                                                                        <div className="w-6 h-6 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
-                                                                            {a.image_url ? (
-                                                                                <img src={a.image_url} alt="" className="w-full h-full object-contain" />
-                                                                            ) : (
-                                                                                <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-sm font-medium">{a.name}</span>
-                                                                            <span className="text-[10px] text-slate-400 font-mono">{(a.current_balance || 0).toLocaleString()} VND</span>
-                                                                        </div>
-                                                                        <Check
-                                                                            className={cn(
-                                                                                "ml-auto h-4 w-4",
-                                                                                securedById === a.id ? "opacity-100" : "opacity-0"
-                                                                            )}
-                                                                        />
-                                                                    </div>
-                                                                </CommandItem>
-                                                            ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
-                            </div>
-
-                            {/* Cashback Configuration */}
-                            <div className="pt-4 border-t border-slate-200">
-                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                                    <div className="px-4 py-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="bg-amber-100 p-1.5 rounded-full">
-                                                <Coins className="h-3.5 w-3.5 text-amber-600" />
-                                            </div>
-                                            <h3 className="text-sm font-bold text-slate-800">Cashback Policy</h3>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Advanced?</span>
-                                            <Switch
-                                                checked={isAdvancedCashback}
-                                                onCheckedChange={setIsAdvancedCashback}
-                                            />
-                                        </div>
+                            {/* Collateral / Secured By - Only for Credit Cards */}
+                            {type === 'credit_card' && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Collateral / Secured By</Label>
+                                        <Switch
+                                            checked={isCollateralLinked}
+                                            onCheckedChange={(checked) => {
+                                                setIsCollateralLinked(checked);
+                                                if (!checked) setSecuredById("none");
+                                            }}
+                                            className="scale-75"
+                                        />
                                     </div>
 
-                                    <div className="p-4 space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Cycle</Label>
-                                                <Select
-                                                    value={cycleType ?? 'calendar_month'}
-                                                    onValueChange={(v) => {
-                                                        setCycleType(v as any);
-                                                        if (v === 'calendar_month') {
-                                                            setStatementDay(1);
-                                                        }
-                                                    }}
-                                                    items={[
-                                                        { value: "calendar_month", label: "Calendar Month" },
-                                                        { value: "statement_cycle", label: "Statement Cycle" },
-                                                    ]}
-                                                    className="h-9 font-bold bg-slate-50"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Date</Label>
-                                                <DayOfMonthPicker
-                                                    value={cycleType === 'calendar_month' ? 1 : statementDay}
-                                                    onChange={setStatementDay}
-                                                    disabled={cycleType === 'calendar_month'}
-                                                    className="h-9"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
-                                                <SmartAmountInput
-                                                    value={defaultRate * 100}
-                                                    onChange={(val) => setDefaultRate((val ?? 0) / 100)}
-                                                    unit="%"
-                                                    hideLabel
-                                                    className="h-9 font-bold"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Max Budget</Label>
-                                                <SmartAmountInput
-                                                    value={maxCashback}
-                                                    onChange={setMaxCashback}
-                                                    hideLabel
-                                                    className="h-9 font-bold"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Day</Label>
-                                                <DayOfMonthPicker
-                                                    value={dueDate}
-                                                    onChange={setDueDate}
-                                                    className="h-9"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend</Label>
-                                                <SmartAmountInput
-                                                    value={minSpendTarget}
-                                                    onChange={setMinSpendTarget}
-                                                    hideLabel
-                                                    className="h-9 font-bold"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-3">
-                                                <div className="space-y-1.5 text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <Label className="text-[10px] font-black uppercase tracking-wider">Category Restriction</Label>
-                                                        <Switch
-                                                            checked={isCategoryRestricted}
-                                                            onCheckedChange={setIsCategoryRestricted}
-                                                            className="scale-[0.7] data-[state=checked]:bg-rose-500"
-                                                        />
-                                                    </div>
-                                                    {isCategoryRestricted && (
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button variant="outline" size="sm" className="w-full h-8 px-2 text-[10px] font-bold justify-between bg-white border-rose-200 text-rose-700 hover:bg-rose-50 animate-in fade-in zoom-in-95">
-                                                                    <span className="truncate">
-                                                                        {restrictedCategoryIds.length === 0 ? "Pick Categories..." : `${restrictedCategoryIds.length} Selected`}
-                                                                    </span>
-                                                                    <Plus className="h-3 w-3 opacity-50" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-64 p-0" align="start">
-                                                                <Command>
-                                                                    <CommandInput placeholder="Search category..." className="h-8 text-[11px]" />
-                                                                    <CommandList className="max-h-48">
-                                                                        <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
-                                                                        <CommandGroup>
-                                                                            {categories.map((cat) => (
-                                                                                <CommandItem
-                                                                                    key={cat.id}
-                                                                                    value={cat.name}
-                                                                                    onSelect={() => {
-                                                                                        if (restrictedCategoryIds.includes(cat.id)) {
-                                                                                            setRestrictedCategoryIds(restrictedCategoryIds.filter(id => id !== cat.id));
-                                                                                        } else {
-                                                                                            setRestrictedCategoryIds([...restrictedCategoryIds, cat.id]);
-                                                                                        }
-                                                                                    }}
-                                                                                    className="text-[11px]"
-                                                                                >
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                            {cat.image_url ? (
-                                                                                                <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                            ) : (
-                                                                                                <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <span className="truncate">{cat.name}</span>
-                                                                                    </div>
-                                                                                    <Check className={cn("ml-auto h-3 w-3", restrictedCategoryIds.includes(cat.id) ? "opacity-100" : "opacity-0")} />
-                                                                                </CommandItem>
-                                                                            ))}
-                                                                        </CommandGroup>
-                                                                    </CommandList>
-                                                                    <div className="p-1 border-t border-slate-100 bg-slate-50">
-                                                                        <CommandItem
-                                                                            onSelect={() => {
-                                                                                setActiveCategoryCallback(() => (categoryId: string) => {
-                                                                                    setRestrictedCategoryIds([...restrictedCategoryIds, categoryId]);
-                                                                                });
-                                                                                setIsCategoryDialogOpen(true);
-                                                                            }}
-                                                                            className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
-                                                                        >
-                                                                            <Plus className="mr-2 h-3 w-3" />
-                                                                            Add New Category
-                                                                        </CommandItem>
-                                                                    </div>
-                                                                </Command>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-1 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                                <Info className="h-3 w-3 text-blue-500 shrink-0" />
-                                                <p className="text-[9px] text-blue-700 font-medium leading-tight">
-                                                    {isCategoryRestricted
-                                                        ? "Rates will only apply to these categories. Everything else 0%."
-                                                        : "Default rate applies to all spending."}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {isAdvancedCashback && (
-                                        <div className="bg-slate-50 border-t border-slate-100">
-                                            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Cashback Levels</Label>
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Info className="h-3 w-3 text-slate-400 cursor-help" />
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>Define multi-tier cashback rules based on total spend.</TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                </div>
+                                    {isCollateralLinked && (
+                                        <Popover open={openCollateralCombo} onOpenChange={setOpenCollateralCombo}>
+                                            <PopoverTrigger asChild>
                                                 <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const newLevels = [...levels];
-                                                        newLevels.push({
-                                                            id: Math.random().toString(36).substr(2, 9),
-                                                            name: `Level ${levels.length + 1}`,
-                                                            minTotalSpend: 0,
-                                                            defaultRate: 0,
-                                                            rules: []
-                                                        });
-                                                        setLevels(newLevels);
-                                                    }}
-                                                    className="h-7 px-3 text-[10px] bg-white border border-slate-200 hover:bg-slate-100 text-blue-600 font-bold uppercase tracking-wider shadow-sm"
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={openCollateralCombo}
+                                                    className="w-full justify-between h-10 border-slate-200"
                                                 >
-                                                    <Plus className="h-3 w-3 mr-1" /> Add Level
-                                                </Button>
-                                            </div>
-
-                                            <div className="divide-y divide-slate-100">
-                                                {levels.length === 0 && (
-                                                    <div className="text-center py-8 text-xs text-slate-400 italic">No levels defined. Add a level to start.</div>
-                                                )}
-                                                {levels.map((level, lIdx) => (
-                                                    <div key={level.id} className="p-4 space-y-4 bg-white/50">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex-1 space-y-1.5">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-[10px] font-black text-slate-400 uppercase">Level {lIdx + 1}</span>
-                                                                    <Input
-                                                                        value={level.name}
-                                                                        onChange={(e) => {
-                                                                            const newLevels = [...levels];
-                                                                            newLevels[lIdx].name = e.target.value;
-                                                                            setLevels(newLevels);
-                                                                        }}
-                                                                        placeholder="e.g. Premium Tier"
-                                                                        className="h-8 text-sm font-bold bg-white"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-1">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-slate-400 hover:text-slate-600"
-                                                                    onClick={() => {
-                                                                        const newLevels = [...levels];
-                                                                        const dupe = JSON.parse(JSON.stringify(level));
-                                                                        dupe.id = Math.random().toString(36).substr(2, 9);
-                                                                        newLevels.splice(lIdx + 1, 0, dupe);
-                                                                        setLevels(newLevels);
-                                                                    }}
-                                                                >
-                                                                    <RotateCcw className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-slate-400 hover:text-rose-500"
-                                                                    onClick={() => setLevels(levels.filter((_, i) => i !== lIdx))}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="grid grid-cols-2 gap-3 mb-4">
-                                                            <div className="space-y-1.5">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Total Spend</Label>
-                                                                    <Info className="h-3 w-3 text-slate-300" />
-                                                                </div>
-                                                                <SmartAmountInput
-                                                                    value={level.minTotalSpend}
-                                                                    onChange={(val) => {
-                                                                        const newLevels = [...levels];
-                                                                        newLevels[lIdx].minTotalSpend = val ?? 0;
-                                                                        setLevels(newLevels);
-                                                                    }}
-                                                                    hideLabel
-                                                                    className="h-9 bg-white"
-                                                                />
-                                                            </div>
-                                                            <div className="space-y-1.5">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
-                                                                    <CustomTooltip content="This rate applies to all categories NOT listed in the specific rules below.">
-                                                                        <Info className="h-3 w-3 text-slate-300 cursor-help" />
-                                                                    </CustomTooltip>
-                                                                </div>
-                                                                <SmartAmountInput
-                                                                    value={level.defaultRate * 100}
-                                                                    onChange={(val) => {
-                                                                        const newLevels = [...levels];
-                                                                        newLevels[lIdx].defaultRate = (val ?? 0) / 100;
-                                                                        setLevels(newLevels);
-                                                                    }}
-                                                                    unit="%"
-                                                                    hideLabel
-                                                                    placeholder="e.g. 0.1"
-                                                                    className="h-9 bg-white"
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="space-y-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Category Rules</Label>
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => {
-                                                                        const newLevels = [...levels];
-                                                                        newLevels[lIdx].rules.push({
-                                                                            id: Math.random().toString(36).substr(2, 9),
-                                                                            categoryIds: [],
-                                                                            rate: 0,
-                                                                            maxReward: null
-                                                                        });
-                                                                        setLevels(newLevels);
-                                                                    }}
-                                                                    className="h-6 px-2 text-[9px] text-blue-600 font-bold bg-white border border-slate-100 hover:bg-slate-50"
-                                                                >
-                                                                    <Plus className="h-3 w-3 mr-1" /> Add Rule
-                                                                </Button>
-                                                            </div>
-
-                                                            <div className="space-y-2">
-                                                                {level.rules.length > 0 && (
-                                                                    <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 px-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                                                                        <div>Category</div>
-                                                                        <div className="text-center">Rate</div>
-                                                                        <div className="text-right">Max Reward</div>
-                                                                        <div className="text-center">Action</div>
-                                                                    </div>
-                                                                )}
-                                                                {level.rules.map((rule: any, rIdx: number) => (
-                                                                    <div key={rule.id} className="bg-slate-50 p-2 rounded-lg border border-slate-200 group">
-                                                                        {/* Desktop/Tablet: Single Row Grid */}
-                                                                        <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 sm:items-start">
-
-                                                                            {/* 1. Categories Column */}
-                                                                            <div className="space-y-1 min-w-0">
-                                                                                <Popover>
-                                                                                    <PopoverTrigger asChild>
-                                                                                        <Button
-                                                                                            variant="outline"
-                                                                                            className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium px-2"
-                                                                                        >
-                                                                                            <span className="truncate">
-                                                                                                {(() => {
-                                                                                                    const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
-                                                                                                    return validCount === 0
-                                                                                                        ? "Select categories..."
-                                                                                                        : `${validCount} categories`;
-                                                                                                })()}
-                                                                                            </span>
-                                                                                            <ChevronsUpDown className="h-3 w-3 opacity-50 flex-shrink-0 ml-1" />
-                                                                                        </Button>
-                                                                                    </PopoverTrigger>
-                                                                                    <PopoverContent className="w-64 p-0" align="start">
-                                                                                        <Command>
-                                                                                            <CommandInput placeholder="Search category..." className="h-8 text-xs" />
-                                                                                            <CommandList className="max-h-48">
-                                                                                                <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
-                                                                                                <CommandGroup>
-                                                                                                    {categories.map((cat: any) => (
-                                                                                                        <CommandItem
-                                                                                                            key={cat.id}
-                                                                                                            value={cat.name}
-                                                                                                            onSelect={() => {
-                                                                                                                const newLevels = [...levels];
-                                                                                                                const currentIds = newLevels[lIdx].rules[rIdx].categoryIds;
-                                                                                                                if (currentIds.includes(cat.id)) {
-                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = currentIds.filter(id => id !== cat.id);
-                                                                                                                } else {
-                                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds.push(cat.id);
-                                                                                                                }
-                                                                                                                setLevels(newLevels);
-                                                                                                            }}
-                                                                                                            className="text-xs"
-                                                                                                        >
-                                                                                                            <div className="flex items-center gap-2 w-full">
-                                                                                                                <div className={cn(
-                                                                                                                    "w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors",
-                                                                                                                    rule.categoryIds.includes(cat.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
-                                                                                                                )}>
-                                                                                                                    <Check className="h-2.5 w-2.5" />
-                                                                                                                </div>
-                                                                                                                <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                                                    {cat.image_url ? (
-                                                                                                                        <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                                                    ) : (
-                                                                                                                        <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
-                                                                                                                    )}
-                                                                                                                </div>
-                                                                                                                <span>{cat.name}</span>
-                                                                                                            </div>
-                                                                                                        </CommandItem>
-                                                                                                    ))}
-                                                                                                </CommandGroup>
-                                                                                            </CommandList>
-                                                                                            <div className="p-1 border-t border-slate-100 bg-slate-50">
-                                                                                                <CommandItem
-                                                                                                    onSelect={() => {
-                                                                                                        setActiveCategoryCallback(() => (categoryId: string) => {
-                                                                                                            // This is for cashback level rules - would need different context
-                                                                                                        });
-                                                                                                        setIsCategoryDialogOpen(true);
-                                                                                                    }}
-                                                                                                    className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
-                                                                                                >
-                                                                                                    <Plus className="mr-2 h-3 w-3" />
-                                                                                                    Add New Category
-                                                                                                </CommandItem>
-                                                                                            </div>
-                                                                                        </Command>
-                                                                                    </PopoverContent>
-                                                                                </Popover>
-                                                                            </div>
-
-                                                                            {/* 2. Rate Column */}
-                                                                            <div>
-                                                                                <SmartAmountInput
-                                                                                    value={rule.rate !== null ? rule.rate * 100 : undefined}
-                                                                                    onChange={(val) => {
-                                                                                        const newLevels = [...levels];
-                                                                                        // Method 3: If cleared (undefined), store null to inherit Default Rate
-                                                                                        newLevels[lIdx].rules[rIdx].rate = (val !== undefined ? val / 100 : null) as any;
-                                                                                        setLevels(newLevels);
-                                                                                    }}
-                                                                                    unit="%"
-                                                                                    hideLabel
-                                                                                    className="h-8 text-xs bg-white text-center placeholder:text-slate-300"
-                                                                                    placeholder={level.defaultRate ? `${level.defaultRate * 100}` : "0"}
-                                                                                />
-                                                                            </div>
-
-                                                                            {/* 3. Max Reward Column */}
-                                                                            <div>
-                                                                                <SmartAmountInput
-                                                                                    value={rule.maxReward ?? undefined}
-                                                                                    onChange={(val) => {
-                                                                                        const newLevels = [...levels];
-                                                                                        newLevels[lIdx].rules[rIdx].maxReward = val ?? null;
-                                                                                        setLevels(newLevels);
-                                                                                    }}
-                                                                                    hideLabel
-                                                                                    className="h-8 text-xs bg-white text-right"
-                                                                                    placeholder="Max (opt)"
-                                                                                />
-                                                                            </div>
-
-                                                                            {/* 4. Delete Button */}
-                                                                            <div className="flex sm:justify-center pt-0.5 gap-1">
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-7 w-7 text-slate-400 hover:text-slate-600"
-                                                                                    onClick={() => {
-                                                                                        const newLevels = [...levels];
-                                                                                        const dupe = JSON.parse(JSON.stringify(rule));
-                                                                                        dupe.id = Math.random().toString(36).substr(2, 9);
-                                                                                        newLevels[lIdx].rules.splice(rIdx + 1, 0, dupe);
-                                                                                        setLevels(newLevels);
-                                                                                    }}
-                                                                                    title="Clone Rule"
-                                                                                >
-                                                                                    <Copy className="h-3.5 w-3.5" />
-                                                                                </Button>
-                                                                                <Button
-                                                                                    type="button"
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50"
-                                                                                    onClick={() => {
-                                                                                        const newLevels = [...levels];
-                                                                                        newLevels[lIdx].rules = newLevels[lIdx].rules.filter((_: any, i: number) => i !== rIdx);
-                                                                                        setLevels(newLevels);
-                                                                                    }}
-                                                                                    title="Delete Rule"
-                                                                                >
-                                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                                </Button>
-                                                                            </div>
+                                                    {securedById && securedById !== "none" ? (
+                                                        <div className="flex items-center gap-2">
+                                                            {(() => {
+                                                                const sel = allAccounts.find(a => a.id === securedById);
+                                                                return sel ? (
+                                                                    <>
+                                                                        <div className="w-5 h-5 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
+                                                                            {sel.image_url ? (
+                                                                                <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
+                                                                            )}
                                                                         </div>
-
-                                                                        {/* Tags Row (Full Width Below) */}
-                                                                        {rule.categoryIds.length > 0 && (
-                                                                            <div className="flex flex-wrap gap-1 mt-2 border-t border-slate-100 pt-2">
-                                                                                {rule.categoryIds.map((id: string) => {
-                                                                                    const cat = categories.find(c => c.id === id);
-                                                                                    return cat ? (
-                                                                                        <TooltipProvider key={id}>
-                                                                                            <Tooltip delayDuration={300}>
-                                                                                                <TooltipTrigger asChild>
-                                                                                                    <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-full truncate h-5">
-                                                                                                        {cat.image_url ? (
-                                                                                                            <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
-                                                                                                        ) : (
-                                                                                                            <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
-                                                                                                        )}
-                                                                                                        <span className="truncate">{cat.name}</span>
-                                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                                            <span className="text-[9px] text-blue-400 font-normal ml-1">({cat.mcc_codes.join(', ')})</span>
-                                                                                                        )}
-                                                                                                        <button
-                                                                                                            type="button"
-                                                                                                            onClick={(e) => {
-                                                                                                                e.stopPropagation(); // Prevent tooltip from interfering
-                                                                                                                const newLevels = [...levels];
-                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
-                                                                                                                setLevels(newLevels);
-                                                                                                            }}
-                                                                                                            className="ml-1 hover:text-rose-500 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-blue-100"
-                                                                                                        >
-                                                                                                            &times;
-                                                                                                        </button>
-                                                                                                    </div>
-                                                                                                </TooltipTrigger>
-                                                                                                <TooltipContent className="text-xs">
-                                                                                                    <p className="font-bold">{cat.name}</p>
-                                                                                                    {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                                        <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
-                                                                                                    )}
-                                                                                                </TooltipContent>
-                                                                                            </Tooltip>
-                                                                                        </TooltipProvider>
-                                                                                    ) : null;
-                                                                                })}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
+                                                                        <span className="truncate">{sel.name}</span>
+                                                                    </>
+                                                                ) : "Select Account...";
+                                                            })()}
                                                         </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
+                                                    ) : (
+                                                        "Select Account..."
+                                                    )}
+                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search account..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>No account found.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                onSelect={() => {
+                                                                    toast.info("Savings creation coming soon");
+                                                                    setOpenCollateralCombo(false);
+                                                                }}
+                                                                className="text-blue-600 font-bold"
+                                                            >
+                                                                <Plus className="mr-2 h-4 w-4" />
+                                                                Create New Savings
+                                                            </CommandItem>
+                                                            {allAccounts
+                                                                .filter(a => a.id !== account?.id && (a.type === 'bank' || a.type === 'savings'))
+                                                                .map((a) => (
+                                                                    <CommandItem
+                                                                        key={a.id}
+                                                                        value={a.name}
+                                                                        onSelect={() => {
+                                                                            setSecuredById(a.id);
+                                                                            setOpenCollateralCombo(false);
+                                                                        }}
+                                                                    >
+                                                                        <div className="flex items-center gap-2 w-full">
+                                                                            <div className="w-6 h-6 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
+                                                                                {a.image_url ? (
+                                                                                    <img src={a.image_url} alt="" className="w-full h-full object-contain" />
+                                                                                ) : (
+                                                                                    <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-sm font-medium">{a.name}</span>
+                                                                                <span className="text-[10px] text-slate-400 font-mono">{(a.current_balance || 0).toLocaleString()} VND</span>
+                                                                            </div>
+                                                                            <Check
+                                                                                className={cn(
+                                                                                    "ml-auto h-4 w-4",
+                                                                                    securedById === a.id ? "opacity-100" : "opacity-0"
+                                                                                )}
+                                                                            />
+                                                                        </div>
+                                                                    </CommandItem>
+                                                                ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     )}
                                 </div>
+                            )}
+
+                            {/* Cashback Configuration - For Credit Cards & Bank/Debit Accounts */}
+                            {(type === 'credit_card' || type === 'bank') && (
+                                <div className="pt-4 border-t border-slate-200">
+                                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                                        <div className="px-4 py-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-amber-100 p-1.5 rounded-full">
+                                                    <Coins className="h-3.5 w-3.5 text-amber-600" />
+                                                </div>
+                                                <h3 className="text-sm font-bold text-slate-800">Cashback Policy</h3>
+                                                <Switch
+                                                    checked={isCashbackEnabled}
+                                                    onCheckedChange={setIsCashbackEnabled}
+                                                    className="scale-75"
+                                                />
+                                            </div>
+                                            {isCashbackEnabled && (
+                                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-1">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Advanced?</span>
+                                                    <Switch
+                                                        checked={isAdvancedCashback}
+                                                        onCheckedChange={setIsAdvancedCashback}
+                                                        className="scale-[0.6]"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {isCashbackEnabled && (
+                                            <div className="flex flex-col">
+                                                <div className="p-4 space-y-4 animate-in fade-in slide-in-from-top-1">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Cycle</Label>
+                                                            <Select
+                                                                value={cycleType ?? 'calendar_month'}
+                                                                onValueChange={(v) => {
+                                                                    setCycleType(v as any);
+                                                                    if (v === 'calendar_month') {
+                                                                        setStatementDay(1);
+                                                                    }
+                                                                }}
+                                                                items={[
+                                                                    { value: "calendar_month", label: "Calendar Month" },
+                                                                    { value: "statement_cycle", label: "Statement Cycle" },
+                                                                ]}
+                                                                className="h-9 font-bold bg-slate-50"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Date</Label>
+                                                            <DayOfMonthPicker
+                                                                value={cycleType === 'calendar_month' ? 1 : statementDay}
+                                                                onChange={setStatementDay}
+                                                                disabled={cycleType === 'calendar_month'}
+                                                                className="h-9"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
+                                                            <SmartAmountInput
+                                                                value={defaultRate * 100}
+                                                                onChange={(val) => setDefaultRate((val ?? 0) / 100)}
+                                                                unit="%"
+                                                                hideLabel
+                                                                className="h-9 font-bold"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Max Budget</Label>
+                                                            <SmartAmountInput
+                                                                value={maxCashback}
+                                                                onChange={setMaxCashback}
+                                                                hideLabel
+                                                                className="h-9 font-bold"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Day</Label>
+                                                            <DayOfMonthPicker
+                                                                value={dueDate}
+                                                                onChange={setDueDate}
+                                                                className="h-9"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend</Label>
+                                                            <SmartAmountInput
+                                                                value={minSpendTarget}
+                                                                onChange={setMinSpendTarget}
+                                                                hideLabel
+                                                                className="h-9 font-bold"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-3">
+                                                            <div className="space-y-1.5 text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <Label className="text-[10px] font-black uppercase tracking-wider">Category Restriction</Label>
+                                                                    <Switch
+                                                                        checked={isCategoryRestricted}
+                                                                        onCheckedChange={setIsCategoryRestricted}
+                                                                        className="scale-[0.7] data-[state=checked]:bg-rose-500"
+                                                                    />
+                                                                </div>
+                                                                {isCategoryRestricted && (
+                                                                    <Popover>
+                                                                        <PopoverTrigger asChild>
+                                                                            <Button variant="outline" size="sm" className="w-full h-8 px-2 text-[10px] font-bold justify-between bg-white border-rose-200 text-rose-700 hover:bg-rose-50 animate-in fade-in zoom-in-95">
+                                                                                <span className="truncate">
+                                                                                    {restrictedCategoryIds.length === 0 ? "Pick Categories..." : `${restrictedCategoryIds.length} Selected`}
+                                                                                </span>
+                                                                                <Plus className="h-3 w-3 opacity-50" />
+                                                                            </Button>
+                                                                        </PopoverTrigger>
+                                                                        <PopoverContent className="w-64 p-0" align="start">
+                                                                            <Command>
+                                                                                <CommandInput placeholder="Search category..." className="h-8 text-[11px]" />
+                                                                                <CommandList className="max-h-48">
+                                                                                    <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
+                                                                                    <CommandGroup>
+                                                                                        {categories.map((cat) => (
+                                                                                            <CommandItem
+                                                                                                key={cat.id}
+                                                                                                value={cat.name}
+                                                                                                onSelect={() => {
+                                                                                                    if (restrictedCategoryIds.includes(cat.id)) {
+                                                                                                        setRestrictedCategoryIds(restrictedCategoryIds.filter(id => id !== cat.id));
+                                                                                                    } else {
+                                                                                                        setRestrictedCategoryIds([...restrictedCategoryIds, cat.id]);
+                                                                                                    }
+                                                                                                }}
+                                                                                                className="text-[11px]"
+                                                                                            >
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                                        {cat.image_url ? (
+                                                                                                            <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                                        ) : (
+                                                                                                            <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                    <span className="truncate">{cat.name}</span>
+                                                                                                </div>
+                                                                                                <Check className={cn("ml-auto h-3 w-3", restrictedCategoryIds.includes(cat.id) ? "opacity-100" : "opacity-0")} />
+                                                                                            </CommandItem>
+                                                                                        ))}
+                                                                                    </CommandGroup>
+                                                                                </CommandList>
+                                                                                <div className="p-1 border-t border-slate-100 bg-slate-50">
+                                                                                    <CommandItem
+                                                                                        onSelect={() => {
+                                                                                            setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                                setRestrictedCategoryIds([...restrictedCategoryIds, categoryId]);
+                                                                                            });
+                                                                                            setIsCategoryDialogOpen(true);
+                                                                                        }}
+                                                                                        className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
+                                                                                    >
+                                                                                        <Plus className="mr-2 h-3 w-3" />
+                                                                                        Add New Category
+                                                                                    </CommandItem>
+                                                                                </div>
+                                                                            </Command>
+                                                                        </PopoverContent>
+                                                                    </Popover>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
+                                                            <Info className="h-3 w-3 text-blue-500 shrink-0" />
+                                                            <p className="text-[9px] text-blue-700 font-medium leading-tight">
+                                                                {isCategoryRestricted
+                                                                    ? "Rates will only apply to these categories. Everything else 0%."
+                                                                    : "Default rate applies to all spending."}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {isAdvancedCashback && (
+                                                    <div className="bg-slate-50 border-t border-slate-100">
+                                                        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Cashback Levels</Label>
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Define multi-tier cashback rules based on total spend.</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    const newLevels = [...levels];
+                                                                    newLevels.push({
+                                                                        id: Math.random().toString(36).substr(2, 9),
+                                                                        name: `Level ${levels.length + 1}`,
+                                                                        minTotalSpend: 0,
+                                                                        defaultRate: 0,
+                                                                        rules: []
+                                                                    });
+                                                                    setLevels(newLevels);
+                                                                }}
+                                                                className="h-7 px-3 text-[10px] bg-white border border-slate-200 hover:bg-slate-100 text-blue-600 font-bold uppercase tracking-wider shadow-sm"
+                                                            >
+                                                                <Plus className="h-3 w-3 mr-1" /> Add Level
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="divide-y divide-slate-100">
+                                                            {levels.length === 0 && (
+                                                                <div className="text-center py-8 text-xs text-slate-400 italic">No levels defined. Add a level to start.</div>
+                                                            )}
+                                                            {levels.map((level, lIdx) => (
+                                                                <div key={level.id} className="p-4 space-y-4 bg-white/50">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="flex-1 space-y-1.5">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <span className="text-[10px] font-black text-slate-400 uppercase">Level {lIdx + 1}</span>
+                                                                                <Input
+                                                                                    value={level.name}
+                                                                                    onChange={(e) => {
+                                                                                        const newLevels = [...levels];
+                                                                                        newLevels[lIdx].name = e.target.value;
+                                                                                        setLevels(newLevels);
+                                                                                    }}
+                                                                                    placeholder="e.g. Premium Tier"
+                                                                                    className="h-8 text-sm font-bold bg-white"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-slate-400 hover:text-slate-600"
+                                                                                onClick={() => {
+                                                                                    const newLevels = [...levels];
+                                                                                    const dupe = JSON.parse(JSON.stringify(level));
+                                                                                    dupe.id = Math.random().toString(36).substr(2, 9);
+                                                                                    newLevels.splice(lIdx + 1, 0, dupe);
+                                                                                    setLevels(newLevels);
+                                                                                }}
+                                                                            >
+                                                                                <RotateCcw className="h-4 w-4" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-slate-400 hover:text-rose-500"
+                                                                                onClick={() => setLevels(levels.filter((_, i) => i !== lIdx))}
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                        <div className="space-y-1.5">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Total Spend</Label>
+                                                                                <Info className="h-3 w-3 text-slate-300" />
+                                                                            </div>
+                                                                            <SmartAmountInput
+                                                                                value={level.minTotalSpend}
+                                                                                onChange={(val) => {
+                                                                                    const newLevels = [...levels];
+                                                                                    newLevels[lIdx].minTotalSpend = val ?? 0;
+                                                                                    setLevels(newLevels);
+                                                                                }}
+                                                                                hideLabel
+                                                                                className="h-9 bg-white"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="space-y-1.5">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
+                                                                                <CustomTooltip content="This rate applies to all categories NOT listed in the specific rules below.">
+                                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                                </CustomTooltip>
+                                                                            </div>
+                                                                            <SmartAmountInput
+                                                                                value={level.defaultRate * 100}
+                                                                                onChange={(val) => {
+                                                                                    const newLevels = [...levels];
+                                                                                    newLevels[lIdx].defaultRate = (val ?? 0) / 100;
+                                                                                    setLevels(newLevels);
+                                                                                }}
+                                                                                unit="%"
+                                                                                hideLabel
+                                                                                placeholder="e.g. 0.1"
+                                                                                className="h-9 bg-white"
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Category Rules</Label>
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="ghost"
+                                                                                size="sm"
+                                                                                onClick={() => {
+                                                                                    const newLevels = [...levels];
+                                                                                    newLevels[lIdx].rules.push({
+                                                                                        id: Math.random().toString(36).substr(2, 9),
+                                                                                        categoryIds: [],
+                                                                                        rate: 0,
+                                                                                        maxReward: null
+                                                                                    });
+                                                                                    setLevels(newLevels);
+                                                                                }}
+                                                                                className="h-6 px-2 text-[9px] text-blue-600 font-bold bg-white border border-slate-100 hover:bg-slate-50"
+                                                                            >
+                                                                                <Plus className="h-3 w-3 mr-1" /> Add Rule
+                                                                            </Button>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            {level.rules.length > 0 && (
+                                                                                <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 px-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                                                                    <div>Category</div>
+                                                                                    <div className="text-center">Rate</div>
+                                                                                    <div className="text-right">Max Reward</div>
+                                                                                    <div className="text-center">Action</div>
+                                                                                </div>
+                                                                            )}
+                                                                            {level.rules.map((rule: any, rIdx: number) => (
+                                                                                <div key={rule.id} className="bg-slate-50 p-2 rounded-lg border border-slate-200 group">
+                                                                                    {/* Desktop/Tablet: Single Row Grid */}
+                                                                                    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 sm:items-start">
+
+                                                                                        {/* 1. Categories Column */}
+                                                                                        <div className="space-y-1 min-w-0">
+                                                                                            <Popover>
+                                                                                                <PopoverTrigger asChild>
+                                                                                                    <Button
+                                                                                                        variant="outline"
+                                                                                                        className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium px-2"
+                                                                                                    >
+                                                                                                        <span className="truncate">
+                                                                                                            {(() => {
+                                                                                                                const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
+                                                                                                                return validCount === 0
+                                                                                                                    ? "Select categories..."
+                                                                                                                    : `${validCount} categories`;
+                                                                                                            })()}
+                                                                                                        </span>
+                                                                                                        <ChevronsUpDown className="h-3 w-3 opacity-50 flex-shrink-0 ml-1" />
+                                                                                                    </Button>
+                                                                                                </PopoverTrigger>
+                                                                                                <PopoverContent className="w-64 p-0" align="start">
+                                                                                                    <Command>
+                                                                                                        <CommandInput placeholder="Search category..." className="h-8 text-xs" />
+                                                                                                        <CommandList className="max-h-48">
+                                                                                                            <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
+                                                                                                            <CommandGroup>
+                                                                                                                {categories.map((cat: any) => (
+                                                                                                                    <CommandItem
+                                                                                                                        key={cat.id}
+                                                                                                                        value={cat.name}
+                                                                                                                        onSelect={() => {
+                                                                                                                            const newLevels = [...levels];
+                                                                                                                            const currentIds = newLevels[lIdx].rules[rIdx].categoryIds;
+                                                                                                                            if (currentIds.includes(cat.id)) {
+                                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds = currentIds.filter(id => id !== cat.id);
+                                                                                                                            } else {
+                                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds.push(cat.id);
+                                                                                                                            }
+                                                                                                                            setLevels(newLevels);
+                                                                                                                        }}
+                                                                                                                        className="text-xs"
+                                                                                                                    >
+                                                                                                                        <div className="flex items-center gap-2 w-full">
+                                                                                                                            <div className={cn(
+                                                                                                                                "w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors",
+                                                                                                                                rule.categoryIds.includes(cat.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
+                                                                                                                            )}>
+                                                                                                                                <Check className="h-2.5 w-2.5" />
+                                                                                                                            </div>
+                                                                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                                                                {cat.image_url ? (
+                                                                                                                                    <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                                                                ) : (
+                                                                                                                                    <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
+                                                                                                                                )}
+                                                                                                                            </div>
+                                                                                                                            <span>{cat.name}</span>
+                                                                                                                        </div>
+                                                                                                                    </CommandItem>
+                                                                                                                ))}
+                                                                                                            </CommandGroup>
+                                                                                                        </CommandList>
+                                                                                                        <div className="p-1 border-t border-slate-100 bg-slate-50">
+                                                                                                            <CommandItem
+                                                                                                                onSelect={() => {
+                                                                                                                    setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                                                        // This is for cashback level rules - would need different context
+                                                                                                                    });
+                                                                                                                    setIsCategoryDialogOpen(true);
+                                                                                                                }}
+                                                                                                                className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
+                                                                                                            >
+                                                                                                                <Plus className="mr-2 h-3 w-3" />
+                                                                                                                Add New Category
+                                                                                                            </CommandItem>
+                                                                                                        </div>
+                                                                                                    </Command>
+                                                                                                </PopoverContent>
+                                                                                            </Popover>
+                                                                                        </div>
+
+                                                                                        {/* 2. Rate Column */}
+                                                                                        <div>
+                                                                                            <SmartAmountInput
+                                                                                                value={rule.rate !== null ? rule.rate * 100 : undefined}
+                                                                                                onChange={(val) => {
+                                                                                                    const newLevels = [...levels];
+                                                                                                    // Method 3: If cleared (undefined), store null to inherit Default Rate
+                                                                                                    newLevels[lIdx].rules[rIdx].rate = (val !== undefined ? val / 100 : null) as any;
+                                                                                                    setLevels(newLevels);
+                                                                                                }}
+                                                                                                unit="%"
+                                                                                                hideLabel
+                                                                                                className="h-8 text-xs bg-white text-center placeholder:text-slate-300"
+                                                                                                placeholder={level.defaultRate ? `${level.defaultRate * 100}` : "0"}
+                                                                                            />
+                                                                                        </div>
+
+                                                                                        {/* 3. Max Reward Column */}
+                                                                                        <div>
+                                                                                            <SmartAmountInput
+                                                                                                value={rule.maxReward ?? undefined}
+                                                                                                onChange={(val) => {
+                                                                                                    const newLevels = [...levels];
+                                                                                                    newLevels[lIdx].rules[rIdx].maxReward = val ?? null;
+                                                                                                    setLevels(newLevels);
+                                                                                                }}
+                                                                                                hideLabel
+                                                                                                className="h-8 text-xs bg-white text-right"
+                                                                                                placeholder="Max (opt)"
+                                                                                            />
+                                                                                        </div>
+
+                                                                                        {/* 4. Delete Button */}
+                                                                                        <div className="flex sm:justify-center pt-0.5 gap-1">
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="icon"
+                                                                                                className="h-7 w-7 text-slate-400 hover:text-slate-600"
+                                                                                                onClick={() => {
+                                                                                                    const newLevels = [...levels];
+                                                                                                    const dupe = JSON.parse(JSON.stringify(rule));
+                                                                                                    dupe.id = Math.random().toString(36).substr(2, 9);
+                                                                                                    newLevels[lIdx].rules.splice(rIdx + 1, 0, dupe);
+                                                                                                    setLevels(newLevels);
+                                                                                                }}
+                                                                                                title="Clone Rule"
+                                                                                            >
+                                                                                                <Copy className="h-3.5 w-3.5" />
+                                                                                            </Button>
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant="ghost"
+                                                                                                size="icon"
+                                                                                                className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+                                                                                                onClick={() => {
+                                                                                                    const newLevels = [...levels];
+                                                                                                    newLevels[lIdx].rules = newLevels[lIdx].rules.filter((_: any, i: number) => i !== rIdx);
+                                                                                                    setLevels(newLevels);
+                                                                                                }}
+                                                                                                title="Delete Rule"
+                                                                                            >
+                                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Tags Row (Full Width Below) */}
+                                                                                    {rule.categoryIds.length > 0 && (
+                                                                                        <div className="flex flex-wrap gap-1 mt-2 border-t border-slate-100 pt-2">
+                                                                                            {rule.categoryIds.map((id: string) => {
+                                                                                                const cat = categories.find(c => c.id === id);
+                                                                                                return cat ? (
+                                                                                                    <TooltipProvider key={id}>
+                                                                                                        <Tooltip delayDuration={300}>
+                                                                                                            <TooltipTrigger asChild>
+                                                                                                                <div className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100 cursor-help max-w-full truncate h-5">
+                                                                                                                    {cat.image_url ? (
+                                                                                                                        <img src={cat.image_url} alt="" className="w-3 h-3 object-contain mr-1 flex-shrink-0" />
+                                                                                                                    ) : (
+                                                                                                                        <span className="mr-1 flex-shrink-0">{cat.icon || "🏷️"}</span>
+                                                                                                                    )}
+                                                                                                                    <span className="truncate">{cat.name}</span>
+                                                                                                                    {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                                        <span className="text-[9px] text-blue-400 font-normal ml-1">({cat.mcc_codes.join(', ')})</span>
+                                                                                                                    )}
+                                                                                                                    <button
+                                                                                                                        type="button"
+                                                                                                                        onClick={(e) => {
+                                                                                                                            e.stopPropagation(); // Prevent tooltip from interfering
+                                                                                                                            const newLevels = [...levels];
+                                                                                                                            newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
+                                                                                                                            setLevels(newLevels);
+                                                                                                                        }}
+                                                                                                                        className="ml-1 hover:text-rose-500 flex-shrink-0 w-4 h-4 flex items-center justify-center rounded-full hover:bg-blue-100"
+                                                                                                                    >
+                                                                                                                        &times;
+                                                                                                                    </button>
+                                                                                                                </div>
+                                                                                                            </TooltipTrigger>
+                                                                                                            <TooltipContent className="text-xs">
+                                                                                                                <p className="font-bold">{cat.name}</p>
+                                                                                                                {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                                                    <p className="text-slate-300 mt-1">MCC: {cat.mcc_codes.join(', ')}</p>
+                                                                                                                )}
+                                                                                                            </TooltipContent>
+                                                                                                        </Tooltip>
+                                                                                                    </TooltipProvider>
+                                                                                                ) : null;
+                                                                                            })}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="p-4 bg-slate-50 mt-6 rounded-lg border border-slate-200 flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-700">Account Status</p>
+                                    <p className="text-[10px] text-slate-500 font-medium">Toggle whether this account is currently active.</p>
+                                </div>
+                                <Button
+                                    variant={isActive ? "outline" : "secondary"}
+                                    size="sm"
+                                    onClick={() => {
+                                        if (isActive) {
+                                            setShowCloseConfirm(true);
+                                        } else {
+                                            setIsActive(true);
+                                        }
+                                    }}
+                                    className={cn(
+                                        "h-8 px-4 font-bold text-[10px] uppercase tracking-wider transition-all",
+                                        isActive ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" : "bg-slate-200 text-slate-600 border-transparent"
+                                    )}
+                                >
+                                    {isActive ? "Active" : "Closed"}
+                                </Button>
                             </div>
                         </div>
 
-                        <div className="p-4 bg-slate-50 mt-6 rounded-lg border border-slate-200 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-bold text-slate-700">Account Status</p>
-                                <p className="text-[10px] text-slate-500 font-medium">Toggle whether this account is currently active.</p>
-                            </div>
-                            <Button
-                                variant={isActive ? "outline" : "secondary"}
-                                size="sm"
-                                onClick={() => {
-                                    if (isActive) {
-                                        setShowCloseConfirm(true);
-                                    } else {
-                                        setIsActive(true);
+                        <ConfirmationModal
+                            isOpen={showCloseConfirm}
+                            onClose={() => setShowCloseConfirm(false)}
+                            onConfirm={async () => {
+                                setIsActive(false);
+                                // Save immediately if editing
+                                if (isEdit && account) {
+                                    setLoading(true);
+                                    try {
+                                        const success = await updateAccountConfig(account.id, { is_active: false });
+                                        if (success) {
+                                            toast.success("Account closed");
+                                            onOpenChange(false);
+                                            router.refresh();
+                                        }
+                                    } finally {
+                                        setLoading(false);
                                     }
-                                }}
-                                className={cn(
-                                    "h-8 px-4 font-bold text-[10px] uppercase tracking-wider transition-all",
-                                    isActive ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" : "bg-slate-200 text-slate-600 border-transparent"
-                                )}
-                            >
-                                {isActive ? "Active" : "Closed"}
-                            </Button>
-                        </div>
-                    </div>
-
-                    <ConfirmationModal
-                        isOpen={showCloseConfirm}
-                        onClose={() => setShowCloseConfirm(false)}
-                        onConfirm={async () => {
-                            setIsActive(false);
-                            // Save immediately if editing
-                            if (isEdit && account) {
-                                setLoading(true);
-                                try {
-                                    const success = await updateAccountConfig(account.id, { is_active: false });
-                                    if (success) {
-                                        toast.success("Account closed");
-                                        onOpenChange(false);
-                                        router.refresh();
-                                    }
-                                } finally {
-                                    setLoading(false);
                                 }
-                            }
-                        }}
-                        title="Close Account?"
-                        description="This will hide the account from active lists. You can still reactivate it later."
-                        confirmText="Yes, Close it"
-                        variant="destructive"
-                    />
+                            }}
+                            title="Close Account?"
+                            description="This will hide the account from active lists. You can still reactivate it later."
+                            confirmText="Yes, Close it"
+                            variant="destructive"
+                        />
 
-                    <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
-                        <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
-                            <div className="p-6 space-y-4">
-                                <SheetHeader className="space-y-2 text-left">
-                                    <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
-                                        <Trash2 className="h-5 w-5" />
-                                        Unsaved Changes
-                                    </SheetTitle>
-                                    <SheetDescription className="text-sm font-medium text-slate-500">
-                                        You have made changes to this account. Navigating away will discard these changes correctly.
-                                    </SheetDescription>
-                                </SheetHeader>
-                                <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setShowUnsavedConfirm(false)}
-                                        className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
-                                    >
-                                        Keep Editing
-                                    </Button>
-                                    <Button
-                                        variant="destructive"
-                                        onClick={confirmAction}
-                                        className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
-                                    >
-                                        Discard Changes
-                                    </Button>
-                                </SheetFooter>
-                            </div>
-                        </SheetContent>
-                    </Sheet>
+                        <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
+                            <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
+                                <div className="p-6 space-y-4">
+                                    <SheetHeader className="space-y-2 text-left">
+                                        <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
+                                            <Trash2 className="h-5 w-5" />
+                                            Unsaved Changes
+                                        </SheetTitle>
+                                        <SheetDescription className="text-sm font-medium text-slate-500">
+                                            You have made changes to this account. Navigating away will discard these changes correctly.
+                                        </SheetDescription>
+                                    </SheetHeader>
+                                    <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setShowUnsavedConfirm(false)}
+                                            className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
+                                        >
+                                            Keep Editing
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={confirmAction}
+                                            className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
+                                        >
+                                            Discard Changes
+                                        </Button>
+                                    </SheetFooter>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
 
                     <SheetFooter className="p-6 bg-white border-t border-slate-200 sm:justify-end gap-3">
                         <div className="flex flex-1 gap-3">
-                            {onBack && (
-                                <Button variant="outline" onClick={handleAttemptBack} className="h-10 px-4 font-bold text-blue-600 border-blue-200 hover:bg-blue-50">
-                                    <ChevronLeft className="h-4 w-4" />
-                                </Button>
-                            )}
                             <Button variant="ghost" onClick={handleAttemptClose} className="h-10 px-6 font-bold text-slate-500">
                                 Cancel
                             </Button>
@@ -1652,15 +1676,14 @@ export function AccountSlideV2({
                         </Button>
                     </SheetFooter>
                 </SheetContent>
-            </Sheet >
+            </Sheet>
 
             {/* Category Slide for creating new categories */}
-            < CategorySlideV2
+            <CategorySlide
                 open={isCategoryDialogOpen}
                 onOpenChange={setIsCategoryDialogOpen}
                 defaultType="expense"
-                onBack={() => setIsCategoryDialogOpen(false)
-                }
+                onBack={() => setIsCategoryDialogOpen(false)}
                 onSuccess={(newCategoryId) => {
                     if (newCategoryId && activeCategoryCallback) {
                         activeCategoryCallback(newCategoryId);

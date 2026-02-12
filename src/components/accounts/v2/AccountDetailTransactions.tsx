@@ -17,7 +17,7 @@ import { SingleTransactionFormValues } from '@/components/transaction/slide-v2/t
 import { DateRange } from 'react-day-picker'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, format } from 'date-fns'
-import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2 } from 'lucide-react'
+import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -48,7 +48,7 @@ interface ClearDropdownProps {
     selectedCycle: string | undefined
     date: Date
     dateRange: DateRange | undefined
-    dateMode: 'month' | 'range' | 'date'
+    dateMode: 'all' | 'date' | 'month' | 'range' | 'year'
     searchTerm: string
     onFilterChange: {
         setFilterType: (val: FilterType) => void
@@ -57,7 +57,7 @@ interface ClearDropdownProps {
         setSelectedCycle: (val: string | undefined) => void
         setDate: (val: Date) => void
         setDateRange: (val: DateRange | undefined) => void
-        setDateMode: (val: 'month' | 'range' | 'date') => void
+        setDateMode: (val: 'all' | 'date' | 'month' | 'range' | 'year') => void
         setSearchTerm: (val: string) => void
         setIsFilterActive: (val: boolean) => void
     }
@@ -144,6 +144,7 @@ interface AccountDetailTransactionsProps {
     shops: Shop[]
     selectedCycle?: string
     onCycleChange?: (cycle: string | undefined) => void
+    onSuccess?: () => void
 }
 
 export function AccountDetailTransactions({
@@ -154,13 +155,15 @@ export function AccountDetailTransactions({
     people,
     shops,
     selectedCycle: externalSelectedCycle,
-    onCycleChange
+    onCycleChange,
+    onSuccess
 }: AccountDetailTransactionsProps) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
 
     // Dialog State
     const [isAddSlideOpen, setIsAddSlideOpen] = useState(false)
+    const [addOperationMode, setAddOperationMode] = useState<'add' | 'duplicate'>('add')
     const [addInitialData, setAddInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>()
     const [isEditSlideOpen, setIsEditSlideOpen] = useState(false)
     const [editingTransaction, setEditingTransaction] = useState<TransactionWithDetails | null>(null)
@@ -176,7 +179,7 @@ export function AccountDetailTransactions({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date'>(account.type === 'credit_card' ? 'range' : 'month')
+    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year'>(account.type === 'credit_card' ? 'range' : 'month')
     const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>()
 
     // Use external state if provided, otherwise use internal
@@ -418,9 +421,10 @@ export function AccountDetailTransactions({
                     return isWithinInterval(txDate, { start: dateRange.from!, end: rangeEnd })
                 })
             }
-        } else if (account.type === 'credit_card' && currentCycleRef.current && !isFilterActive && selectedCycle !== 'all') {
-            // Default behavior for credit cards: always show current cycle
+        } else if (account.type === 'credit_card' && currentCycleRef.current && !isFilterActive && selectedCycle !== 'all' && statusFilter === 'active') {
+            // Default behavior for credit cards: always show current cycle for "active" view
             // BUT skip if user explicitly selected 'all' (even if filter not "active" in standard sense)
+            // AND skip if we are looking at "Void" or "Pending" tabs
             result = result.filter(t => {
                 const txCycle = t.persisted_cycle_tag || t.account_billing_cycle || ''
                 return txCycle === currentCycleRef.current
@@ -483,13 +487,17 @@ export function AccountDetailTransactions({
                 onOpenChange={setIsAddSlideOpen}
                 mode="single"
                 initialData={addInitialData}
+                operationMode={addOperationMode}
                 accounts={accounts}
                 categories={categories}
                 people={people}
                 shops={shops}
                 onSuccess={() => {
-                    setIsAddSlideOpen(false)
-                    router.refresh()
+                    startTransition(() => {
+                        setIsAddSlideOpen(false)
+                        router.refresh()
+                        if (onSuccess) onSuccess()
+                    })
                 }}
             />
 
@@ -505,9 +513,12 @@ export function AccountDetailTransactions({
                 people={people}
                 shops={shops}
                 onSuccess={() => {
-                    setIsEditSlideOpen(false)
-                    setEditingTransaction(null)
-                    router.refresh()
+                    startTransition(() => {
+                        setIsEditSlideOpen(false)
+                        setEditingTransaction(null)
+                        router.refresh()
+                        if (onSuccess) onSuccess()
+                    })
                 }}
             />
 
@@ -686,6 +697,7 @@ export function AccountDetailTransactions({
                         <AddTransactionDropdown
                             accountType={account.type}
                             onSelect={(type) => {
+                                setAddOperationMode('add')
                                 setAddInitialData({
                                     type: (type as 'expense' | 'income' | 'transfer' | 'debt' | 'repayment') ?? 'expense',
                                     source_account_id: account.id,
@@ -699,12 +711,12 @@ export function AccountDetailTransactions({
             </div>
 
             <div className="flex-1 overflow-hidden relative">
-                {/* Loading Overlay */}
+                {/* Internal Loading Indicator - Non-blocking floating */}
                 {isPending && (
-                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="h-8 w-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                            <span className="text-sm font-medium text-slate-600">Loading cycle data...</span>
+                    <div className="absolute bottom-4 right-4 z-[60] pointer-events-none animate-in fade-in slide-in-from-right-4">
+                        <div className="bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-xl flex items-center gap-2 border border-slate-700 shadow-lg">
+                            <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
+                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Processing</span>
                         </div>
                     </div>
                 )}
@@ -724,6 +736,16 @@ export function AccountDetailTransactions({
                         setEditingTransaction(txn)
                         setIsEditSlideOpen(true)
                     }}
+                    onDuplicate={(txn) => {
+                        setAddOperationMode('duplicate')
+                        setAddInitialData({
+                            ...txn,
+                            id: undefined, // New ID
+                            occurred_at: new Date(), // Reset to now
+                        } as any)
+                        setIsAddSlideOpen(true)
+                    }}
+                    onSuccess={onSuccess}
                 />
             </div>
 

@@ -32,9 +32,10 @@ type BasicInfoSectionProps = {
     people: Person[];
     onAddNewCategory?: () => void;
     operationMode?: 'add' | 'edit' | 'duplicate';
+    isLoadingCategories?: boolean;
 };
 
-export function BasicInfoSection({ shops, categories, people, onAddNewCategory, operationMode }: BasicInfoSectionProps) {
+export function BasicInfoSection({ shops, categories, people, onAddNewCategory, operationMode, isLoadingCategories }: BasicInfoSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const isShopHidden = ['income', 'repayment', 'transfer', 'credit_pay'].includes(transactionType);
@@ -90,6 +91,8 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
         icon: c.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={c.image_url} alt={c.name} className="w-5 h-5 object-contain rounded-md" />
+        ) : c.icon ? (
+            <span className="text-sm">{c.icon}</span>
         ) : (
             <Book className="w-4 h-4 text-slate-400" />
         )
@@ -274,6 +277,7 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
                                     className="w-full h-10 bg-white"
                                     onAddNew={onAddNewCategory}
                                     addLabel="Category"
+                                    isLoading={isLoadingCategories}
                                 />
                             </FormControl>
                             <FormMessage />

@@ -15,7 +15,8 @@ interface QuickFilterItem {
   id: string
   name: string
   image?: string | null
-  type?: 'person' | 'account'  // Optional type for image rounding
+  icon?: string | null
+  type?: 'person' | 'account' | 'category'
 }
 
 interface QuickFilterDropdownProps {
@@ -79,16 +80,18 @@ export function QuickFilterDropdown({
         >
           {selectedItem ? (
             <div className="flex items-center gap-2 truncate">
-              {selectedItem.image && (
+              {selectedItem.image ? (
                 <img
                   src={selectedItem.image}
                   alt={selectedItem.name}
                   className={cn(
                     "w-4 h-4 object-contain bg-white shrink-0",
-                    selectedItem.type === 'person' ? 'rounded-full' : 'rounded-sm'
+                    selectedItem.type === 'person' ? 'rounded-full' : 'rounded-none'
                   )}
                 />
-              )}
+              ) : selectedItem.icon ? (
+                <span className="text-sm shrink-0">{selectedItem.icon}</span>
+              ) : null}
               <span className="truncate">{selectedItem.name}</span>
             </div>
           ) : (
@@ -110,8 +113,8 @@ export function QuickFilterDropdown({
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="w-[240px] p-0" 
+      <PopoverContent
+        className="w-[240px] p-0"
         align="start"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={handleMouseEnter}
@@ -151,21 +154,23 @@ export function QuickFilterDropdown({
                   key={item.id}
                   onClick={() => handleSelect(item.id)}
                   className={cn(
-                      "w-full flex items-center justify-between px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors",
+                    "w-full flex items-center justify-between px-2 py-1.5 text-sm rounded-sm hover:bg-accent transition-colors",
                     value === item.id && "bg-accent"
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    {item.image && (
+                    {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
                         className={cn(
                           "w-5 h-5 object-contain bg-white",
-                          item.type === 'person' ? 'rounded-full' : 'rounded-sm'
+                          item.type === 'person' ? 'rounded-full' : 'rounded-none'
                         )}
                       />
-                    )}
+                    ) : item.icon ? (
+                      <span className="text-base shrink-0">{item.icon}</span>
+                    ) : null}
                     <span className="truncate">{item.name}</span>
                   </div>
                   {value === item.id && (

@@ -72,7 +72,12 @@ export function AccountDetailViewV2({
         let debtTotal = 0
         let expensesTotal = 0
         let cashbackTotal = 0
-        let yearExpensesTotal = 0; // For Annual Fee Waiver check
+        let yearExpensesTotal = 0;
+
+        let yearPureIncomeTotal = 0;
+        let yearPureExpenseTotal = 0;
+        let yearLentTotal = 0;
+        let yearRepaidTotal = 0;
 
         initialTransactions.forEach(tx => {
             const rawDate = tx?.occurred_at || tx?.date || tx?.created_at
@@ -80,6 +85,13 @@ export function AccountDetailViewV2({
             const amount = Math.abs(Number(tx?.amount || 0))
             const type = String(tx?.type || '').toLowerCase()
             const year = date?.getFullYear();
+
+            if (year === targetYear) {
+                if (type === 'debt') yearLentTotal += amount
+                if (type === 'repayment') yearRepaidTotal += amount
+                if (type === 'income') yearPureIncomeTotal += amount
+                if (type === 'expense') yearPureExpenseTotal += amount
+            }
 
             if (type === 'debt') {
                 debtTotal += amount
@@ -113,6 +125,10 @@ export function AccountDetailViewV2({
             expensesTotal,
             cashbackTotal,
             yearExpensesTotal,
+            yearPureIncomeTotal,
+            yearPureExpenseTotal,
+            yearLentTotal,
+            yearRepaidTotal,
             targetYear,
             pendingCount: pendingItems.length + pendingRefundCount
         }
@@ -142,7 +158,7 @@ export function AccountDetailViewV2({
         }
     }, [account.id, account.name, setCustomName]);
 
-    const fetchPendingData = useCallback(async () => {
+    const syncPendingStats = useCallback(async () => {
         setIsLoadingPending(true)
         try {
             const [batchRes, refundRes] = await Promise.all([
@@ -167,8 +183,21 @@ export function AccountDetailViewV2({
         }
     }, [account.id])
 
+    const handleGlobalRefresh = useCallback(() => {
+        startTransition(() => {
+            router.refresh()
+            syncPendingStats()
+        })
+    }, [router, syncPendingStats])
+
     useEffect(() => {
-        fetchPendingData()
+        syncPendingStats()
+
+        const handleRefresh = () => {
+            console.log('Refreshing account data via event')
+            handleGlobalRefresh()
+        }
+        window.addEventListener('refresh-account-data', handleRefresh)
 
         const supabase = createClient()
         const channel = supabase
@@ -178,13 +207,14 @@ export function AccountDetailViewV2({
                 schema: 'public',
                 table: 'batch_items',
                 filter: `target_account_id=eq.${account.id}`,
-            }, () => fetchPendingData())
+            }, () => syncPendingStats())
             .subscribe()
 
         return () => {
+            window.removeEventListener('refresh-account-data', handleRefresh)
             supabase.removeChannel(channel)
         }
-    }, [account.id, fetchPendingData])
+    }, [account.id, syncPendingStats])
 
     const handleConfirmPending = async () => {
         if (isConfirmingPending) return
@@ -247,7 +277,7 @@ export function AccountDetailViewV2({
     const pendingTotal = pendingBatchAmount + pendingRefundAmount
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-white pt-6">
+        <div className="flex flex-col h-full overflow-hidden bg-white pt-6 relative">
             {/* Header V2 */}
             <AccountDetailHeaderV2
                 account={account}
@@ -262,8 +292,22 @@ export function AccountDetailViewV2({
                 isLoadingPending={isLoadingPending}
             />
 
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto space-y-4">
+            {/* Content Area - Loading indicator moved here for "middle of table" feel */}
+            <div className="flex-1 overflow-y-auto space-y-4 relative">
+                {isPending && (
+                    <div className="absolute inset-0 z-[999] pointer-events-none flex items-center justify-center animate-in fade-in duration-500">
+                        <div className="bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.3)] border border-slate-700/50 flex items-center gap-3 animate-in zoom-in duration-300">
+                            <div className="relative flex items-center justify-center">
+                                <div className="h-5 w-5 border-2 border-slate-700 border-t-indigo-400 rounded-full animate-spin" />
+                                <div className="absolute inset-0 m-auto h-1 w-1 bg-indigo-400 rounded-full animate-pulse" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-black text-white uppercase tracking-tighter leading-none">Syncing Transactions</span>
+                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest animate-pulse mt-0.5">Updating Ledger</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <AccountDetailTransactions
                     account={account}
                     transactions={initialTransactions}
@@ -273,6 +317,7 @@ export function AccountDetailViewV2({
                     shops={shops}
                     selectedCycle={selectedCycle}
                     onCycleChange={setSelectedCycle}
+                    onSuccess={syncPendingStats}
                 />
             </div>
             <FlowLegend />
@@ -282,7 +327,7 @@ export function AccountDetailViewV2({
                 pendingItems={pendingItems}
                 pendingRefundCount={pendingRefundCount}
                 pendingRefundAmount={pendingRefundAmount}
-                onSuccess={() => fetchPendingData()}
+                onSuccess={() => syncPendingStats()}
             />
         </div>
     )

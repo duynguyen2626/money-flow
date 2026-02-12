@@ -32,7 +32,7 @@ interface AccountDetailFilterBarProps {
     // Date State
     date: Date
     dateRange: DateRange | undefined
-    dateMode: 'month' | 'range' | 'date'
+    dateMode: 'all' | 'date' | 'month' | 'range' | 'year'
     onDateChange: (date: Date) => void
     onRangeChange: (range: DateRange | undefined) => void
     onModeChange: (mode: 'all' | 'date' | 'month' | 'range' | 'year') => void

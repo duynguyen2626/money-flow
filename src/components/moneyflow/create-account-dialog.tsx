@@ -17,7 +17,7 @@ import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 import { InputWithClear } from '@/components/ui/input-with-clear'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
-import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
 import { cn } from '@/lib/utils'
 
@@ -1180,12 +1180,12 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
         cancelText="Keep Editing"
       />
 
-      <CategoryDialog
+      <CategorySlide
         open={isCategoryDialogOpen}
         onOpenChange={setIsCategoryDialogOpen}
         defaultType="expense"
         onSuccess={async (newCategoryId) => {
-          console.log('🟡 [DEBUG] CategoryDialog onSuccess called with ID:', newCategoryId)
+          console.log('🟡 [DEBUG] CategorySlide onSuccess called with ID:', newCategoryId)
           const supabase = createClient()
           const { data } = await supabase.from('categories').select('id, name, type, icon, image_url').order('name')
           if (data) setCategoryOptions(data as any)

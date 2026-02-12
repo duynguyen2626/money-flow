@@ -59,7 +59,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     getPeople(),
     getShops(),
     getAccountSpendingStats(id, new Date()),
-    loadTransactions({ accountId: id, context: 'account', limit: 2000 }), // Increased limit for V2
+    loadTransactions({ accountId: id, context: 'account', limit: 2000, includeVoided: true }), // Included voided for filtering
   ])
 
   // Calculate annual fee waiver stats manually for header display

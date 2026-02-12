@@ -287,7 +287,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                 <FormControl>
                                     <Combobox
                                         groups={accountGroups}
-                                        value={field.value}
+                                        value={field.value ?? undefined}
                                         onValueChange={field.onChange}
                                         placeholder="Select account"
                                         className="w-full h-10"
@@ -313,7 +313,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                     <FormControl>
                                         <Combobox
                                             groups={accountGroups}
-                                            value={field.value}
+                                            value={field.value ?? undefined}
                                             onValueChange={field.onChange}
                                             placeholder="Destination"
                                             className="w-full h-10"
@@ -342,7 +342,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                     <FormControl>
                                         <Combobox
                                             groups={peopleGroups}
-                                            value={field.value}
+                                            value={field.value ?? undefined}
                                             onValueChange={field.onChange}
                                             placeholder="Select person"
                                             className="w-full h-10"

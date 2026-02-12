@@ -25,7 +25,8 @@ interface CycleFilterDropdownProps {
   fullWidth?: boolean
 }
 
-export function CycleFilterDropdown({ cycles, value, onChange, onReset, disabled, fullWidth }: CycleFilterDropdownProps) {
+export function CycleFilterDropdown(props: CycleFilterDropdownProps) {
+  const { cycles, value, onChange, onReset, disabled, fullWidth } = props
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -76,8 +77,8 @@ export function CycleFilterDropdown({ cycles, value, onChange, onReset, disabled
                       <div
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (onReset) onReset()
-                          else onChange(undefined)
+                          if (props.onReset) props.onReset()
+                          else props.onChange(undefined)
                         }}
                         className="hover:bg-slate-100 rounded p-1 transition-colors cursor-pointer group/reset"
                       >
