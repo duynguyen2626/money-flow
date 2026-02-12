@@ -26,7 +26,21 @@ import {
     FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Select } from "@/components/ui/select"
+// import { Select } from "@/components/ui/select"
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList
+} from "@/components/ui/command"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import { Check, ChevronsUpDown, PlusCircle } from "lucide-react"
 
 import { Shop, Category } from "@/types/moneyflow.types"
 import { createShop, updateShop } from "@/services/shop.service"
@@ -44,6 +58,7 @@ interface ShopSlideProps {
     shop?: Shop | null
     categories: Category[]
     onSuccess?: (newShopId?: string) => void
+    onCreateCategory?: () => void
     onBack?: () => void
 }
 
@@ -53,6 +68,7 @@ export function ShopSlide({
     shop,
     categories,
     onSuccess,
+    onCreateCategory,
     onBack,
 }: ShopSlideProps) {
     const [isLoading, setIsLoading] = useState(false)
@@ -220,7 +236,7 @@ export function ShopSlide({
 
                                                 <div className="mt-4 flex justify-center bg-slate-50/50 p-4 rounded-xl border border-slate-200 border-dashed">
                                                     {field.value ? (
-                                                        <div className="relative h-20 w-20 rounded-full overflow-hidden border-4 border-white shadow-md ring-1 ring-slate-200">
+                                                        <div className="relative h-20 w-20 rounded-xl overflow-hidden border-4 border-white shadow-md ring-1 ring-slate-200">
                                                             <img
                                                                 src={field.value}
                                                                 alt="Shop Preview"
@@ -229,7 +245,7 @@ export function ShopSlide({
                                                             />
                                                         </div>
                                                     ) : (
-                                                        <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center text-slate-300 border-2 border-dashed border-slate-200">
+                                                        <div className="h-20 w-20 rounded-xl bg-slate-100 flex items-center justify-center text-slate-300 border-2 border-dashed border-slate-200">
                                                             <Store className="h-8 w-8 opacity-50" />
                                                         </div>
                                                     )}
@@ -251,24 +267,92 @@ export function ShopSlide({
                                         render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Default Category</FormLabel>
-                                                <Select
-                                                    value={field.value}
-                                                    onValueChange={field.onChange}
-                                                    items={[
-                                                        { value: "none", label: <span className="text-slate-500 italic">No default category</span> },
-                                                        ...categories.map((cat) => ({
-                                                            value: cat.id,
-                                                            label: (
-                                                                <div className="flex items-center gap-2">
-                                                                    <span>{cat.icon || "📁"}</span>
-                                                                    <span className="font-medium">{cat.name}</span>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <FormControl>
+                                                            <Button
+                                                                variant="outline"
+                                                                role="combobox"
+                                                                className={cn(
+                                                                    "w-full justify-between h-11 bg-slate-50 border-slate-200 font-medium hover:bg-slate-100",
+                                                                    !field.value && "text-slate-500"
+                                                                )}
+                                                            >
+                                                                {field.value && field.value !== "none" ? (
+                                                                    (() => {
+                                                                        const cat = categories.find((c) => c.id === field.value);
+                                                                        return cat ? (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span>{cat.icon || "📁"}</span>
+                                                                                <span className="font-medium">{cat.name}</span>
+                                                                            </div>
+                                                                        ) : "Select category";
+                                                                    })()
+                                                                ) : (
+                                                                    <span className="text-slate-500 italic">No default category</span>
+                                                                )}
+                                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                            </Button>
+                                                        </FormControl>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                                        <Command>
+                                                            <CommandInput placeholder="Search category..." />
+                                                            <CommandList>
+                                                                <CommandEmpty>No category found.</CommandEmpty>
+                                                                <CommandGroup>
+                                                                    <CommandItem
+                                                                        value="none"
+                                                                        onSelect={() => {
+                                                                            form.setValue("default_category_id", "none", { shouldDirty: true })
+                                                                        }}
+                                                                        className="text-slate-500 italic"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-4 w-4",
+                                                                                field.value === "none" ? "opacity-100" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        No default category
+                                                                    </CommandItem>
+                                                                    {categories.map((cat) => (
+                                                                        <CommandItem
+                                                                            key={cat.id}
+                                                                            value={cat.name}
+                                                                            onSelect={() => {
+                                                                                form.setValue("default_category_id", cat.id, { shouldDirty: true })
+                                                                            }}
+                                                                        >
+                                                                            <Check
+                                                                                className={cn(
+                                                                                    "mr-2 h-4 w-4",
+                                                                                    field.value === cat.id ? "opacity-100" : "opacity-0"
+                                                                                )}
+                                                                            />
+                                                                            <span className="mr-2">{cat.icon || "📁"}</span>
+                                                                            {cat.name}
+                                                                        </CommandItem>
+                                                                    ))}
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                            {onCreateCategory && (
+                                                                <div className="p-2 border-t border-slate-100 bg-slate-50/50">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                                        onClick={() => onCreateCategory()}
+                                                                    >
+                                                                        <PlusCircle className="mr-2 h-3.5 w-3.5" />
+                                                                        Create New Category
+                                                                    </Button>
                                                                 </div>
-                                                            ),
-                                                        }))
-                                                    ]}
-                                                    placeholder="Select a default category"
-                                                    className="h-11 bg-slate-50 border-slate-200 font-medium"
-                                                />
+                                                            )}
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
                                                 <SheetDescription className="text-[10px] text-slate-400 font-medium mt-1">
                                                     Automatically assign this category when creating transactions with this shop.
                                                 </SheetDescription>

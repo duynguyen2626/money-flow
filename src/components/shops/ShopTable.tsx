@@ -20,12 +20,22 @@ interface ShopTableProps {
     categories: Category[]
     onEdit: (shop: Shop) => void
     searchQuery: string
+    categoryFilter?: string
 }
 
-export function ShopTable({ shops, categories, onEdit, searchQuery }: ShopTableProps) {
-    const filteredShops = shops.filter(shop =>
-        shop.name.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+export function ShopTable({ shops, categories, onEdit, searchQuery, categoryFilter = "all" }: ShopTableProps) {
+    const filteredShops = shops.filter(shop => {
+        const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+        let matchesCategory = true
+        if (categoryFilter === "none") {
+            matchesCategory = !shop.default_category_id
+        } else if (categoryFilter !== "all") {
+            matchesCategory = shop.default_category_id === categoryFilter
+        }
+
+        return matchesSearch && matchesCategory
+    })
 
     return (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm w-full h-[calc(100vh-250px)] flex flex-col overflow-hidden">
@@ -52,7 +62,7 @@ export function ShopTable({ shops, categories, onEdit, searchQuery }: ShopTableP
                                     <TableRow key={shop.id} className="group hover:bg-slate-50/80 transition-colors border-slate-100">
                                         <TableCell className="px-4 py-3">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center bg-slate-100 border border-slate-200">
+                                                <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center bg-slate-100 border border-slate-200">
                                                     {shop.image_url ? (
                                                         <img src={shop.image_url} alt="" className="w-full h-full object-cover" />
                                                     ) : (

@@ -40,6 +40,7 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
 
     // Category specific filter
     const [categoryFilter, setCategoryFilter] = useState("all")
+    const [shopCategoryFilter, setShopCategoryFilter] = useState("all")
 
     const refreshShops = useCallback(async () => {
         const data = await getShops()
@@ -128,6 +129,21 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
                 </div>
             )}
 
+            {activeTab === "shops" && (
+                <div className="w-full md:w-48 shrink-0">
+                    <Select
+                        items={[
+                            { value: "all", label: "All Categories" },
+                            { value: "none", label: "Uncategorized" },
+                            ...categories.map(c => ({ value: c.id, label: c.name }))
+                        ]}
+                        value={shopCategoryFilter}
+                        onValueChange={(v) => setShopCategoryFilter(v || "all")}
+                        className="h-10 bg-slate-50 border-none font-bold text-[11px] uppercase tracking-wider"
+                    />
+                </div>
+            )}
+
             {/* Search Bar */}
             <div className="flex-1 relative w-full">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -191,6 +207,7 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
                                     setIsShopDialogOpen(true)
                                 }}
                                 searchQuery={searchQuery}
+                                categoryFilter={shopCategoryFilter}
                             />
                         </div>
                     )}
@@ -216,6 +233,14 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
                 categories={categories}
                 onSuccess={() => {
                     refreshShops();
+                }}
+                onCreateCategory={() => {
+                    // setIsShopDialogOpen(false); // Maybe keep it open?
+                    // If we keep it open, we need to handle z-index or verify stacking.
+                    // Let's close shop dialog for now to avoid complexity, or just open category dialog.
+                    // Opening category dialog on top is better UX if supported.
+                    setSelectedCategory(null)
+                    setIsCategoryDialogOpen(true)
                 }}
             />
         </div>

@@ -274,33 +274,47 @@ export function CategorySlide({
                                     )}
                                 />
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="icon"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Icon (Emoji)</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="🍔" {...field} value={field.value || ""} className="h-11 bg-white border-slate-200 text-lg" />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                                <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+                                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                                        <div className="h-4 w-4 rounded bg-slate-100 text-slate-500 flex items-center justify-center text-[10px]">✨</div>
+                                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">Appearance</h3>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="icon"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Icon (Emoji)</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="🍔" {...field} value={field.value || ""} className="h-11 bg-white border-slate-200 text-lg" />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="image_url"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Image URL</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="https://..." {...field} value={field.value || ""} className="h-11 bg-white border-slate-200 text-xs" />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
                                     <FormField
                                         control={form.control}
                                         name="image_url"
                                         render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Image URL</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="https://..." {...field} value={field.value || ""} className="h-11 bg-white border-slate-200 text-xs" />
-                                                </FormControl>
-                                                <FormMessage />
-                                                {field.value && (
-                                                    <div className="mt-3 flex justify-center bg-slate-50 p-2 rounded-xl border border-slate-100 border-dashed">
-                                                        <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100">
+                                            <FormItem className="space-y-0">
+                                                {field.value ? (
+                                                    <div className="mt-2 flex justify-center bg-slate-50 p-2 rounded-xl border border-slate-100 border-dashed">
+                                                        <div className="relative h-24 w-24 rounded-xl overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100">
 
                                                             <img
                                                                 src={field.value}
@@ -308,6 +322,12 @@ export function CategorySlide({
                                                                 className="h-full w-full object-cover"
                                                                 onError={(e) => e.currentTarget.style.display = 'none'}
                                                             />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-2 flex justify-center bg-slate-50 p-2 rounded-xl border border-slate-100 border-dashed">
+                                                        <div className="h-24 w-24 rounded-xl bg-slate-100 flex items-center justify-center text-slate-300 border-2 border-dashed border-slate-200">
+                                                            <div className="text-3xl grayscale opacity-50">{form.watch('icon') || '✨'}</div>
                                                         </div>
                                                     </div>
                                                 )}
