@@ -26,13 +26,7 @@ import {
     FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import { Select } from "@/components/ui/select"
 
 import { Shop, Category } from "@/types/moneyflow.types"
 import { createShop, updateShop } from "@/services/shop.service"
@@ -258,27 +252,23 @@ export function ShopSlide({
                                             <FormItem>
                                                 <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Default Category</FormLabel>
                                                 <Select
-                                                    onValueChange={field.onChange}
-                                                    defaultValue={field.value}
                                                     value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className="h-11 bg-slate-50 border-slate-200 font-medium">
-                                                            <SelectValue placeholder="Select a default category" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent className="max-h-[240px]">
-                                                        <SelectItem value="none" className="text-slate-500 italic">No default category</SelectItem>
-                                                        {categories.map((cat) => (
-                                                            <SelectItem key={cat.id} value={cat.id}>
-                                                                <span className="flex items-center gap-2">
+                                                    onValueChange={field.onChange}
+                                                    items={[
+                                                        { value: "none", label: <span className="text-slate-500 italic">No default category</span> },
+                                                        ...categories.map((cat) => ({
+                                                            value: cat.id,
+                                                            label: (
+                                                                <div className="flex items-center gap-2">
                                                                     <span>{cat.icon || "📁"}</span>
                                                                     <span className="font-medium">{cat.name}</span>
-                                                                </span>
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                                </div>
+                                                            ),
+                                                        }))
+                                                    ]}
+                                                    placeholder="Select a default category"
+                                                    className="h-11 bg-slate-50 border-slate-200 font-medium"
+                                                />
                                                 <SheetDescription className="text-[10px] text-slate-400 font-medium mt-1">
                                                     Automatically assign this category when creating transactions with this shop.
                                                 </SheetDescription>

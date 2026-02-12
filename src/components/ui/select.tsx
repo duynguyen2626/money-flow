@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 
 export type SelectItem = {
   value: string
-  label: string
+  label: React.ReactNode
 }
 
 type SelectProps = {
