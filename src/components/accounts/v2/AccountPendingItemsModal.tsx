@@ -79,11 +79,11 @@ export function AccountPendingItemsModal({
         setSelectedIds(newSet)
     }
 
-    const handleConfirmSelected = async () => {
+    const handleConfirmBatchItems = async () => {
         if (selectedIds.size === 0) return
 
         setIsConfirming(true)
-        const toastId = toast.loading(`Confirming ${selectedIds.size} items...`)
+        const toastId = toast.loading(`Creating ${selectedIds.size} Confirm TXNs...`)
 
         try {
             let successCount = 0
@@ -102,7 +102,7 @@ export function AccountPendingItemsModal({
             }
 
             if (successCount > 0) {
-                toast.success(`Successfully confirmed ${successCount} items`, { id: toastId })
+                toast.success(`Successfully confirmed ${successCount} transactions`, { id: toastId })
 
                 // Update local state by filtering out confirmed IDs
                 const remaining = localPendingItems.filter(item => !selectedIds.has(item.id))
@@ -113,7 +113,8 @@ export function AccountPendingItemsModal({
                     setIsOpen(false)
                 }
 
-                if (onSuccess) onSuccess()
+                if (onSuccess) await onSuccess()
+                window.dispatchEvent(new CustomEvent('refresh-account-data'))
                 router.refresh()
             } else {
                 toast.error('Failed to confirm selected items', { id: toastId })
@@ -126,10 +127,10 @@ export function AccountPendingItemsModal({
         }
     }
 
-    const handleConfirmItem = async (itemId: string, batchId: string) => {
+    const handleConfirmSingleItem = async (itemId: string, batchId: string) => {
         setIsConfirming(true)
         setSubmittingId(itemId)
-        const toastId = toast.loading('Confirming item...')
+        const toastId = toast.loading('Creating Confirm TXN...')
 
         try {
             const response = await fetch('/api/batch/confirm-item', {
@@ -139,7 +140,7 @@ export function AccountPendingItemsModal({
             })
 
             if (response.ok) {
-                toast.success('Successfully confirmed item', { id: toastId })
+                toast.success('Successfully created confirmation transaction', { id: toastId })
 
                 // Update local state
                 const remaining = localPendingItems.filter(item => item.id !== itemId)
@@ -152,10 +153,11 @@ export function AccountPendingItemsModal({
                     setIsOpen(false)
                 }
 
-                if (onSuccess) onSuccess()
+                if (onSuccess) await onSuccess()
+                window.dispatchEvent(new CustomEvent('refresh-account-data'))
                 router.refresh()
             } else {
-                toast.error('Failed to confirm item', { id: toastId })
+                toast.error('Failed to create confirmation transaction', { id: toastId })
             }
         } catch (error) {
             console.error('Error confirming item:', error)
@@ -179,7 +181,7 @@ export function AccountPendingItemsModal({
             })
 
             if (response.ok) {
-                toast.success('Item voided', { id: toastId })
+                toast.success('Item voided & reversed successfully', { id: toastId })
 
                 // Update local state
                 const remaining = localPendingItems.filter(item => item.id !== itemId)
@@ -192,7 +194,8 @@ export function AccountPendingItemsModal({
                     setIsOpen(false)
                 }
 
-                if (onSuccess) onSuccess()
+                if (onSuccess) await onSuccess()
+                window.dispatchEvent(new CustomEvent('refresh-account-data'))
                 router.refresh()
             } else {
                 toast.error('Failed to void item', { id: toastId })
@@ -201,13 +204,32 @@ export function AccountPendingItemsModal({
             console.error('Error voiding item:', error)
             toast.error('An error occurred', { id: toastId })
         } finally {
+            setSubmittingId(null) // Clear any submitting state just in case
             setVoidingId(null)
         }
     }
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl">
+            <DialogContent className="sm:max-w-[500px] p-0 border-none shadow-2xl">
+                {/* Global Loading Overlay for Modal */}
+                {(isConfirming || !!voidingId) && (
+                    <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-[100] flex items-center justify-center transition-all duration-300 animate-in fade-in">
+                        <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-white shadow-xl border border-slate-100 scale-in-95 animate-in">
+                            <div className="relative">
+                                <div className="h-12 w-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+                                <Loader2 className="absolute inset-0 m-auto h-5 w-5 text-indigo-600 animate-pulse" />
+                            </div>
+                            <div className="flex flex-col items-center gap-1">
+                                <span className="text-sm font-black text-slate-800 uppercase tracking-tight">
+                                    {voidingId ? 'Voiding Item...' : 'Confirming Selection...'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Updating Ledger</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <DialogHeader className="p-6 bg-slate-900 text-white">
                     <DialogTitle className="text-xl font-black flex items-center gap-2">
                         <History className="h-5 w-5 text-indigo-400" />
@@ -270,7 +292,7 @@ export function AccountPendingItemsModal({
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md border border-transparent hover:border-emerald-100"
-                                                    onClick={() => handleConfirmItem(item.id, item.batch_id)}
+                                                    onClick={() => handleConfirmSingleItem(item.id, item.batch_id)}
                                                     disabled={isConfirming}
                                                     title="Confirm this item only"
                                                 >
@@ -316,7 +338,7 @@ export function AccountPendingItemsModal({
                                     {pendingRefundCount} Pending Refunds
                                 </div>
                                 <div className="text-[11px] text-amber-700 font-medium">
-                                    You have items marked as "Waiting Refund" totaling <strong className="font-black">{formatMoneyVND(pendingRefundAmount)}</strong>
+                                    You have items marked as &quot;Waiting Refund&quot; totaling <strong className="font-black">{formatMoneyVND(pendingRefundAmount)}</strong>
                                 </div>
                             </div>
                             <Button
@@ -337,7 +359,7 @@ export function AccountPendingItemsModal({
                     </Button>
                     <Button
                         disabled={selectedIds.size === 0 || isConfirming}
-                        onClick={handleConfirmSelected}
+                        onClick={handleConfirmBatchItems}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-wider gap-2 px-6"
                     >
                         {isConfirming ? (

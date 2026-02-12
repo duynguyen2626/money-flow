@@ -96,7 +96,7 @@ interface TransactionHeaderProps {
   availableCategoryIds?: Set<string>
 
   // Categories
-  categories?: { id: string; name: string; image?: string | null }[]
+  categories?: { id: string; name: string; image?: string | null; icon?: string | null }[]
 }
 
 interface ClearDropdownButtonProps {
@@ -372,6 +372,7 @@ export function TransactionHeader({
           id: p.id,
           name: p.name,
           image: p.image_url,
+          type: 'person'
         }))}
         value={localPersonId}
         onValueChange={handleFilterChange(setLocalPersonId, onPersonChange)}
@@ -384,6 +385,7 @@ export function TransactionHeader({
           id: a.id,
           name: a.name,
           image: a.image_url,
+          type: 'account'
         }))}
         value={localAccountId}
         onValueChange={handleFilterChange(setLocalAccountId, onAccountChange)}
@@ -396,6 +398,8 @@ export function TransactionHeader({
           id: c.id,
           name: c.name,
           image: c.image,
+          icon: c.icon,
+          type: 'category'
         }))}
         value={localCategoryId}
         onValueChange={handleFilterChange(setLocalCategoryId, onCategoryChange)}
@@ -582,7 +586,7 @@ export function TransactionHeader({
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">People</label>
               <QuickFilterDropdown
-                items={filteredPeople.map(p => ({ id: p.id, name: p.name, image: p.image_url }))}
+                items={filteredPeople.map(p => ({ id: p.id, name: p.name, image: p.image_url, type: 'person' }))}
                 value={localPersonId}
                 onValueChange={setLocalPersonId}
                 placeholder="People"
@@ -594,7 +598,7 @@ export function TransactionHeader({
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Account</label>
               <QuickFilterDropdown
-                items={filteredAccounts.map(a => ({ id: a.id, name: a.name, image: a.image_url }))}
+                items={filteredAccounts.map(a => ({ id: a.id, name: a.name, image: a.image_url, type: 'account' }))}
                 value={localAccountId}
                 onValueChange={setLocalAccountId}
                 placeholder="Account"
@@ -606,7 +610,7 @@ export function TransactionHeader({
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Category</label>
               <QuickFilterDropdown
-                items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image }))}
+                items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image, icon: c.icon, type: 'category' }))}
                 value={localCategoryId}
                 onValueChange={setLocalCategoryId}
                 placeholder="Category"

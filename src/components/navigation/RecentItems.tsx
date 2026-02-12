@@ -72,12 +72,11 @@ export function RecentItems({ isCollapsed }: RecentItemsProps) {
                             )}
                         >
                             <div className={cn(
-                                "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden border transition-colors",
-                                item.type === 'person' ? "rounded-full" : "rounded-sm", // Standardization
-                                isActive ? "border-blue-200 bg-white" : "border-slate-100 bg-slate-50"
+                                "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-none transition-colors",
+                                isActive ? "bg-white" : "bg-slate-50"
                             )}>
                                 {item.image_url ? (
-                                    <img src={item.image_url} alt="" className="h-full w-full object-cover" />
+                                    <img src={item.image_url} alt="" className="h-full w-full object-contain" />
                                 ) : (
                                     <div className="text-slate-400">
                                         {icon}

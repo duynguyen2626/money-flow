@@ -170,6 +170,7 @@ interface UnifiedTransactionTableProps {
   loadingIds?: Set<string>
   setIsGlobalLoading?: (loading: boolean) => void
   setLoadingMessage?: (message: string) => void
+  onSuccess?: () => Promise<void> | void
 }
 
 export type UnifiedTransactionTableRef = {
@@ -211,6 +212,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   onFontSizeChange,
   onEdit: externalOnEdit,
   onDuplicate: externalOnDuplicate,
+  onSuccess,
   loadingIds,
   setIsGlobalLoading,
   setLoadingMessage,
@@ -729,24 +731,26 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     setIsVoiding(false)
   }
 
-  const handleRestore = (txn: TransactionWithDetails) => {
+  const handleRestore = async (txn: TransactionWithDetails) => {
     setIsRestoring(true)
-    void restoreTransaction(txn.id)
-      .then(ok => {
-        if (!ok) {
-          setVoidError('Unable to restore transaction. Please try again.')
-          return
-        }
-        setActionMenuOpen(null)
-        setVoidError(null)
-        setStatusOverrides(prev => ({ ...prev, [txn.id]: 'posted' }))
-        router.refresh()
-      })
-      .catch(err => {
-        console.error('Failed to restore transaction:', err)
+    try {
+      const ok = await restoreTransaction(txn.id)
+      if (!ok) {
         setVoidError('Unable to restore transaction. Please try again.')
-      })
-      .finally(() => setIsRestoring(false))
+        return
+      }
+      setActionMenuOpen(null)
+      setVoidError(null)
+      setStatusOverrides(prev => ({ ...prev, [txn.id]: 'posted' }))
+      if (onSuccess) await onSuccess()
+      window.dispatchEvent(new CustomEvent('refresh-account-data'))
+      router.refresh()
+    } catch (err) {
+      console.error('Failed to restore transaction:', err)
+      setVoidError('Unable to restore transaction. Please try again.')
+    } finally {
+      setIsRestoring(false)
+    }
   }
 
   const handleRefundFormSuccess = useCallback(() => {
@@ -754,31 +758,36 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     router.refresh()
   }, [router])
 
-  const handleVoidConfirm = () => {
+  const handleVoidConfirm = async () => {
     if (!confirmVoidTarget) return
     setVoidError(null)
     setIsVoiding(true)
-    void voidTransactionAction(confirmVoidTarget.id)
-      .then(ok => {
-        if (!ok) {
-          setVoidError('Unable to void transaction. Please try again.')
-          return
-        }
-        setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
-        closeVoidDialog()
-        router.refresh()
-      })
-      .catch(err => {
-        if (err.message && err.message.includes('void the confirmation transaction first')) {
-          toast.error("Please void the Confirmation Transaction (GD3) first.", {
-            description: "Linked confirmation exists."
-          });
-          closeVoidDialog();
-        } else {
-          setVoidError(err.message || 'Unable to void transaction. Please try again.')
-        }
-      })
-      .finally(() => setIsVoiding(false))
+    if (setIsGlobalLoading) setIsGlobalLoading(true)
+
+    try {
+      const ok = await voidTransactionAction(confirmVoidTarget.id)
+      if (!ok) {
+        setVoidError('Unable to void transaction. Please try again.')
+        return
+      }
+      setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
+      closeVoidDialog()
+      if (onSuccess) await onSuccess()
+      window.dispatchEvent(new CustomEvent('refresh-account-data'))
+      router.refresh()
+    } catch (err: any) {
+      if (err.message && err.message.includes('void the confirmation transaction first')) {
+        toast.error("Please void the Confirmation Transaction (GD3) first.", {
+          description: "Linked confirmation exists."
+        });
+        closeVoidDialog();
+      } else {
+        setVoidError(err.message || 'Unable to void transaction. Please try again.')
+      }
+    } finally {
+      setIsVoiding(false)
+      if (setIsGlobalLoading) setIsGlobalLoading(false)
+    }
   }
 
   const handleCancelOrderConfirm = (moneyReceived: boolean) => {
@@ -820,6 +829,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
           }
         }
 
+        if (onSuccess) await onSuccess()
+        window.dispatchEvent(new CustomEvent('refresh-account-data'))
         router.refresh()
         setConfirmCancelTarget(null)
       } catch (err: any) {
@@ -903,6 +914,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       const ok = await deleteTransaction(confirmDeletingTarget.id)
       if (ok) {
         setConfirmDeletingTarget(null)
+        if (onSuccess) await onSuccess()
+        window.dispatchEvent(new CustomEvent('refresh-account-data'))
         router.refresh()
       } else {
         setVoidError('Failed to delete transaction.')
@@ -957,6 +970,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       }
       setIsVoiding(false)
       updateSelection(new Set())
+      if (onSuccess) await onSuccess()
+      window.dispatchEvent(new CustomEvent('refresh-account-data'))
       router.refresh()
       if (errorCount > 0) {
         toast.error(`Failed to void ${errorCount} transactions.`)
@@ -979,6 +994,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       }
       setIsRestoring(false)
       updateSelection(new Set())
+      if (onSuccess) await onSuccess()
+      window.dispatchEvent(new CustomEvent('refresh-account-data'))
       router.refresh()
       if (errorCount > 0) {
         toast.error(`Failed to restore ${errorCount} transactions.`)
@@ -999,6 +1016,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       }
       setIsDeleting(false)
       updateSelection(new Set())
+      if (onSuccess) await onSuccess()
+      window.dispatchEvent(new CustomEvent('refresh-account-data'))
       router.refresh()
       if (errorCount > 0) {
         toast.error(`Failed to delete ${errorCount} transactions.`)
@@ -1363,7 +1382,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         <CustomTooltip content="Duplicate">
           <button
             className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-            onClick={(e) => { e.stopPropagation(); externalOnDuplicate?.(txn.id); }}
+            onClick={(e) => { e.stopPropagation(); externalOnDuplicate?.(txn); }}
           >
             <Files className="h-3.5 w-3.5" />
           </button>
@@ -1458,6 +1477,23 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         </div>
         {!isMobile && (
           <div className="hidden md:block flex-1 min-h-0 overflow-auto w-full h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+            {/* Table Loading Overlay */}
+            {(isVoiding || isRestoring || isDeleting) && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-[100] flex items-center justify-center transition-all duration-300 animate-in fade-in">
+                <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-white shadow-xl border border-slate-100 scale-in-95 animate-in">
+                  <div className="relative">
+                    <div className="h-12 w-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+                    <Loader2 className="absolute inset-0 m-auto h-5 w-5 text-indigo-600 animate-pulse" />
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-sm font-black text-slate-800 uppercase tracking-tight">
+                      {isVoiding ? 'Voiding Transaction...' : isRestoring ? 'Restoring Transaction...' : 'Deleting Permanently...'}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Processing Database</span>
+                  </div>
+                </div>
+              </div>
+            )}
             <table
               className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
               onMouseUp={handleCellMouseUp}
@@ -1855,8 +1891,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
                           const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
 
-                          // Fallback logic for repayment/service
-                          if (txn.type === 'repayment') {
+                          // Fallback logic for repayment/service/income
+                          if (txn.type === 'repayment' || txn.type === 'income') {
                             shopLogo = repaymentLogo ?? shopLogo ?? null;
                           }
 

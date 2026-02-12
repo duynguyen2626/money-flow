@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useForm, FormProvider } from "react-hook-form";
+import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { bulkCreateTransactions } from "@/actions/bulk-transaction-actions";
 import { logToServer, logErrorToServer } from "@/actions/log-actions";
 import { createTransaction, updateTransaction } from "@/services/transaction.service";
+import { getCategories } from "@/services/category.service";
 import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
 
@@ -41,7 +42,7 @@ import { Calendar } from "@/components/ui/calendar";
 
 // Dialogs
 import { CreateAccountDialog } from "@/components/moneyflow/create-account-dialog";
-import { CategoryDialog } from "@/components/moneyflow/category-dialog";
+import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { QuickPeopleSettingsDialog } from "@/components/moneyflow/quick-people-settings-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
@@ -72,6 +73,15 @@ export function TransactionSlideV2({
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [isPeopleDialogOpen, setIsPeopleDialogOpen] = useState(false);
 
+    // Category Auto-Refresh State
+    const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+    const [localCategories, setLocalCategories] = useState(categories);
+
+    // Sync localCategories with prop changes
+    useEffect(() => {
+        setLocalCategories(categories);
+    }, [categories]);
+
     // Unsaved Changes Dialog State
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
     const [pendingClose, setPendingClose] = useState(false);
@@ -98,7 +108,7 @@ export function TransactionSlideV2({
                 type: initialData.type || "expense",
                 category_id: initialData.category_id ?? null,
                 occurred_at: initialData.occurred_at || new Date(),
-                amount: initialData.amount ?? 0,
+                amount: Math.abs(initialData.amount ?? 0),
                 note: initialData.note ?? "",
                 source_account_id: initialData.source_account_id || accounts[0]?.id || "",
                 target_account_id: initialData.target_account_id ?? null,
@@ -204,6 +214,32 @@ export function TransactionSlideV2({
 
 
 
+    // Watch transaction type to sync with category creation
+    const txnType = useWatch({
+        control: singleForm.control,
+        name: "type",
+    });
+
+    const categoryDefaults = useMemo(() => {
+        // Map transaction type to category defaults
+        // Lend (debt) and Repay (repayment) suggest Internal kind
+        // Income/Expense suggest External kind
+        // Transfer/Credit Pay suggest Internal kind
+        switch (txnType) {
+            case "income":
+                return { type: "income" as const, kind: "external" as const };
+            case "repayment":
+                return { type: "income" as const, kind: "internal" as const };
+            case "debt":
+                return { type: "expense" as const, kind: "internal" as const };
+            case "transfer":
+            case "credit_pay":
+                return { type: "transfer" as const, kind: "internal" as const };
+            case "expense":
+            default:
+                return { type: "expense" as const, kind: "external" as const };
+        }
+    }, [txnType]);
 
     // Reset form when slide opens or initialData changes - optimized to prevent unnecessary resets
     useEffect(() => {
@@ -537,10 +573,11 @@ export function TransactionSlideV2({
                                     >
                                         <BasicInfoSection
                                             shops={shops}
-                                            categories={categories}
+                                            categories={localCategories}
                                             people={people}
                                             onAddNewCategory={() => setIsCategoryDialogOpen(true)}
                                             operationMode={operationMode}
+                                            isLoadingCategories={isLoadingCategories}
                                         />
                                         <AccountSelector
                                             accounts={accounts}
@@ -594,11 +631,32 @@ export function TransactionSlideV2({
                         trigger={null}
                     />
 
-                    <CategoryDialog
+                    <CategorySlide
                         open={isCategoryDialogOpen}
                         onOpenChange={setIsCategoryDialogOpen}
-                        onSuccess={() => {
+                        defaultType={categoryDefaults.type}
+                        defaultKind={categoryDefaults.kind}
+                        onBack={() => setIsCategoryDialogOpen(false)}
+                        onSuccess={async (newCategoryId) => {
                             setIsCategoryDialogOpen(false);
+                            if (newCategoryId) {
+                                setIsLoadingCategories(true);
+                                try {
+                                    // Fetch updated categories from Supabase
+                                    const updatedCategories = await getCategories();
+                                    setLocalCategories(updatedCategories);
+
+                                    // Auto-select the newly created category
+                                    singleForm.setValue('category_id', newCategoryId);
+
+                                    toast.success("Category created and selected");
+                                } catch (error) {
+                                    console.error("Failed to refresh categories:", error);
+                                    toast.error("Category created but failed to refresh list");
+                                } finally {
+                                    setIsLoadingCategories(false);
+                                }
+                            }
                         }}
                     />
 

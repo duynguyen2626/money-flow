@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, Lock, Plus, Eye } from 'lucide-react'
+import { Check, ChevronDown, Lock, Plus, Eye, Loader2 } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandGroup } from 'cmdk'
 
@@ -41,6 +41,7 @@ type ComboboxProps = {
     active: boolean
   }[]
   onSearchChange?: (value: string) => void
+  isLoading?: boolean
 }
 
 export function Combobox({
@@ -59,6 +60,7 @@ export function Combobox({
   onDetailClick,
   tabs,
   onSearchChange,
+  isLoading,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
@@ -125,6 +127,7 @@ export function Combobox({
               </span>
             </span>
             <span className="flex items-center gap-1 flex-shrink-0 ml-2">
+              {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
               {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
               <ChevronDown className="h-4 w-4 text-slate-500" />
             </span>

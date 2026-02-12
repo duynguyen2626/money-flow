@@ -30,8 +30,8 @@
 
 ### Current Phase
 - **Phase 14**: COMPLETED - People UI Refactor & Navigation Optimization
-- **Phase 15**: PLANNED - AI Intelligence & Voice (Gemini Integration)
-- See `.agent/HANDOVER_PHASE_14.md` for latest changes.
+- **Phase 15**: IN PROGRESS - Categories UI Optimization & Transaction Table Refinement
+- See `.agent/HANDOVER_CATEGORIES_UI.md` for latest changes.
 
 ---
 
@@ -112,8 +112,9 @@ money-flow-3/
 ## 🎨 UI Standards (STRICT)
 
 ### Avatars & Images
-- **Square Avatars**: Images in dropdowns/lists MUST use `rounded-none`
-- **No Cropped Images**: Documentation images must be full, uncropped
+- **Square Avatars**: Images in dropdowns/lists/sidebar MUST use `rounded-none`.
+- **No Cropped Images**: Documentation images must be full, uncropped.
+- **Logo Fallback**: Income transactions use Bank/Account logo as fallback if shop image is missing.
 
 ### Typography
 - **NO Monospace Fonts**: Never use `font-mono` for UI text (only code blocks)
@@ -212,8 +213,8 @@ Before starting work:
 
 ---
 
-**Last Updated**: 2026-02-01  
-**Version**: 1.0  
+**Last Updated**: 2026-02-12  
+**Version**: 1.1  
 **Maintained By**: Money Flow 3 Team
 
 ---

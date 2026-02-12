@@ -78,7 +78,7 @@ export function CustomDropdown({
     const renderOptionIcon = (opt: DropdownOption) => {
         if (opt.image_url) {
             return (
-                <div className="h-4 w-4 shrink-0 overflow-hidden rounded bg-slate-50 flex items-center justify-center border border-slate-100 mr-2">
+                <div className="h-4 w-4 shrink-0 overflow-hidden rounded-none bg-slate-50 flex items-center justify-center border border-slate-100 mr-2">
                     <img src={opt.image_url} alt="" className="h-full w-full object-contain" />
                 </div>
             )
