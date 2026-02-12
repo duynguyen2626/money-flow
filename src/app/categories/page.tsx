@@ -13,14 +13,15 @@ export const dynamic = 'force-dynamic'
 export default async function ClassificationsPage({
     searchParams,
 }: {
-    searchParams: { tab?: string }
+    searchParams: Promise<{ tab?: string }>
 }) {
+    const params = await searchParams
     const [categories, shops] = await Promise.all([
         getCategories(),
         getShops()
     ])
 
-    const tab = searchParams?.tab || "categories"
+    const tab = params?.tab || "categories"
 
     return (
         <ClassificationsManager

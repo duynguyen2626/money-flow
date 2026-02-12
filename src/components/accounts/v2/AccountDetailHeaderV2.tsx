@@ -457,8 +457,8 @@ export function AccountDetailHeaderV2({
 
                                             return (
                                                 <div className="flex items-center gap-2">
-                                                    {displayCats.map((cat, idx) => (
-                                                        <React.Fragment key={cat.id}>
+                                                    {Array.from(uniqueCatsMap.values()).slice(0, 2).map((cat, idx) => (
+                                                        <React.Fragment key={`${cat.id}-${idx}`}>
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-[10px] font-black uppercase tracking-tight truncate max-w-[120px]">{cat.name}</span>
                                                                 {cat.mcc_codes && cat.mcc_codes.length > 0 && (
@@ -471,7 +471,7 @@ export function AccountDetailHeaderV2({
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            {idx === 0 && displayCats.length > 1 && <span className="text-slate-200">|</span>}
+                                                            {idx === 0 && uniqueCatsMap.size > 1 && <span className="text-slate-200">|</span>}
                                                         </React.Fragment>
                                                     ))}
                                                     {remaining > 0 && (
