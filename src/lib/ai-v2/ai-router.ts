@@ -18,10 +18,10 @@ export class AIRouter {
     private readonly MAX_FAILURES_BEFORE_COOLDOWN = 3;
 
     constructor() {
-        this.providers = new Map([
-            ["groq", new GroqProvider()],
-            ["gemini", new GeminiProvider()],
-            ["fallback", new FallbackParser()]
+        this.providers = new Map<AIProvider, any>([
+            ["groq" as const, new GroqProvider()],
+            ["gemini" as const, new GeminiProvider()],
+            ["fallback" as const, new FallbackParser()]
         ]);
 
         this.failureCount = new Map();

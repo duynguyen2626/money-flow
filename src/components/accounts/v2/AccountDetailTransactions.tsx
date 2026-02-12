@@ -48,7 +48,7 @@ interface ClearDropdownProps {
     selectedCycle: string | undefined
     date: Date
     dateRange: DateRange | undefined
-    dateMode: 'month' | 'range' | 'date'
+    dateMode: 'all' | 'date' | 'month' | 'range' | 'year'
     searchTerm: string
     onFilterChange: {
         setFilterType: (val: FilterType) => void
@@ -57,7 +57,7 @@ interface ClearDropdownProps {
         setSelectedCycle: (val: string | undefined) => void
         setDate: (val: Date) => void
         setDateRange: (val: DateRange | undefined) => void
-        setDateMode: (val: 'month' | 'range' | 'date') => void
+        setDateMode: (val: 'all' | 'date' | 'month' | 'range' | 'year') => void
         setSearchTerm: (val: string) => void
         setIsFilterActive: (val: boolean) => void
     }
@@ -179,7 +179,7 @@ export function AccountDetailTransactions({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date'>(account.type === 'credit_card' ? 'range' : 'month')
+    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year'>(account.type === 'credit_card' ? 'range' : 'month')
     const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>()
 
     // Use external state if provided, otherwise use internal
