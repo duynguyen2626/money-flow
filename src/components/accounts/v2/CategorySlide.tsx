@@ -298,6 +298,19 @@ export function CategorySlide({
                                                     <Input placeholder="https://..." {...field} value={field.value || ""} className="h-11 bg-white border-slate-200 text-xs" />
                                                 </FormControl>
                                                 <FormMessage />
+                                                {field.value && (
+                                                    <div className="mt-3 flex justify-center bg-slate-50 p-2 rounded-xl border border-slate-100 border-dashed">
+                                                        <div className="relative h-24 w-24 rounded-full overflow-hidden border-2 border-white shadow-md ring-1 ring-slate-100">
+
+                                                            <img
+                                                                src={field.value}
+                                                                alt="Preview"
+                                                                className="h-full w-full object-cover"
+                                                                onError={(e) => e.currentTarget.style.display = 'none'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </FormItem>
                                         )}
                                     />
