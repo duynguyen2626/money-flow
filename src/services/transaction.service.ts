@@ -368,11 +368,22 @@ export async function mapTransactionRow(
         ? "income"
         : "expense";
 
-  // Calculate Account Billing Cycle
+  // Calculate Account Billing Cycle & Derived Tag
   let account_billing_cycle: string | null = null;
+  let derived_cycle_tag = row.persisted_cycle_tag;
+
   if (account && account.cashback_config) {
     try {
       const config = parseCashbackConfig(account.cashback_config, account.id);
+
+      // Calculate derived tag if missing
+      if (!derived_cycle_tag) {
+        derived_cycle_tag = getCashbackCycleTag(new Date(row.occurred_at), {
+          statementDay: config.statementDay,
+          cycleType: config.cycleType
+        });
+      }
+
       const range = getCashbackCycleRange(config, new Date(row.occurred_at));
       if (range) {
         const startDay = String(range.start.getDate()).padStart(2, '0');
@@ -425,6 +436,7 @@ export async function mapTransactionRow(
     final_price: row.final_price ?? null,
     history_count: row.transaction_history?.[0]?.count ?? 0,
     account_billing_cycle,
+    derived_cycle_tag,
     // Cashback Analysis Fields
     bank_back: row.cashback_entries?.reduce((sum, entry) => sum + (entry.amount || 0), 0) ?? 0,
     cashback_share_amount: (row.cashback_share_fixed ?? 0) + (Math.abs(row.amount) * (row.cashback_share_percent ?? 0)),

@@ -255,6 +255,7 @@ export type TransactionWithDetails = TransactionRow & {
   target_account_id?: string | null;
   history_count?: number;
   account_billing_cycle?: string | null;
+  derived_cycle_tag?: string | null;
   parent_transaction_id?: string | null;
 }
 

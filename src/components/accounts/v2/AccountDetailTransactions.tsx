@@ -396,7 +396,7 @@ export function AccountDetailTransactions({
             // Cycle filter (credit cards)
             if (selectedCycle && selectedCycle !== 'all') {
                 result = result.filter(t => {
-                    const txCycle = t.persisted_cycle_tag || t.account_billing_cycle || ''
+                    const txCycle = t.persisted_cycle_tag || t.derived_cycle_tag || ''
                     return txCycle === selectedCycle
                 })
             }
@@ -426,7 +426,7 @@ export function AccountDetailTransactions({
             // BUT skip if user explicitly selected 'all' (even if filter not "active" in standard sense)
             // AND skip if we are looking at "Void" or "Pending" tabs
             result = result.filter(t => {
-                const txCycle = t.persisted_cycle_tag || t.account_billing_cycle || ''
+                const txCycle = t.persisted_cycle_tag || t.derived_cycle_tag || ''
                 return txCycle === currentCycleRef.current
             })
         }

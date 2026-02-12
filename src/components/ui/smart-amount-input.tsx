@@ -120,10 +120,26 @@ export function SmartAmountInput({
 
         const raw = val.replace(/,/g, '')
 
-        // If it's a math expression, keep as is
+        // If it's a math expression, format numbers within it
         if (/[+\-*/]/.test(raw)) {
-            setInputValue(val)
-            return
+            // Split by operators including parentheses
+            const parts = raw.split(/([+\-*/()])/);
+            const formatted = parts.map(part => {
+                if (/^[0-9.]+$/.test(part)) {
+                    const [integer, decimal] = part.split('.');
+                    if (integer !== undefined) {
+                        const fmtInt = integer ? new Intl.NumberFormat('en-US').format(Number(integer)) : '';
+                        if (decimal !== undefined) {
+                            return `${fmtInt}.${decimal}`;
+                        }
+                        return fmtInt;
+                    }
+                }
+                return part;
+            }).join('');
+
+            setInputValue(formatted);
+            return;
         }
 
         // If it's a number, format it with commas
