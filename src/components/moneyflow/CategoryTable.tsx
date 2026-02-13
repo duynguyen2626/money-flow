@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import React, { useState } from 'react'
 import { Category } from "@/types/moneyflow.types"
 import {
@@ -51,10 +52,10 @@ export function CategoryTable({ categories, onEdit, activeTab, searchQuery }: Ca
                                 <span className="text-xl font-black text-slate-300 uppercase">{category.name[0]}</span>
                             )}
                         </div>
-                        <div className="flex flex-col min-w-0 gap-0.5">
-                            <span className="font-extrabold text-slate-900 text-base truncate">{category.name}</span>
+                        <Link href={`/categories/${category.id}`} className="flex flex-col min-w-0 gap-0.5 hover:opacity-80 transition-opacity">
+                            <span className="font-extrabold text-slate-900 text-base truncate hover:text-blue-600 transition-colors">{category.name}</span>
                             <span className="text-[10px] text-slate-400 font-bold font-mono uppercase tracking-wider truncate">{category.id.slice(0, 8)}</span>
-                        </div>
+                        </Link>
                     </div>
                 </TableCell>
                 <TableCell className="px-6 py-4">
