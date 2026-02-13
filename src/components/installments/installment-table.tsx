@@ -259,7 +259,7 @@ export function InstallmentTable({
                 ? (paymentDialogState.installment as any).original_transaction
                   ?.person_id
                 : undefined,
-          }}
+          } as any}
           onSuccess={() => {
             setPaymentDialogState((prev) => ({ ...prev, isOpen: false }))
           }}

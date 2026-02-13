@@ -1229,3 +1229,14 @@ export async function getSplitChildrenAction(parentId: string) {
 }
 
 
+
+export async function bulkMoveToCategory(transactionIds: string[], targetCategoryId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { bulkMoveToCategory: bulkMove } = await import('@/services/transaction.service');
+    const result = await bulkMove(transactionIds, targetCategoryId);
+    return result;
+  } catch (error: any) {
+    console.error('Bulk Move Action Error:', error);
+    return { success: false, error: error.message };
+  }
+}

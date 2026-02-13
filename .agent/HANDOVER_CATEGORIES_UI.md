@@ -46,3 +46,11 @@ Refining the `/categories` page for better data density, usability, and visual c
 
 **Date**: 2026-02-12
 **Status**: COMPLETED
+
+## TypeScript Fixes (2026-02-12)
+- Resolved critical TypeScript errors blocking build/push.
+- Fixed `AccountRowV2` date nullability.
+- Fixed `AccountDetailHeaderV2` summary calculation undefined checks.
+- Fixed `AccountDetailTransactions` useRef initialization.
+- Fixed `QuickAddChat` missing Preview Card import and step types.
+- Fixed `Categories Page` `notFound` import.

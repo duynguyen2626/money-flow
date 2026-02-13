@@ -171,6 +171,7 @@ interface UnifiedTransactionTableProps {
   setIsGlobalLoading?: (loading: boolean) => void
   setLoadingMessage?: (message: string) => void
   onSuccess?: () => Promise<void> | void
+  searchQuery?: string
 }
 
 export type UnifiedTransactionTableRef = {
@@ -216,6 +217,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   loadingIds,
   setIsGlobalLoading,
   setLoadingMessage,
+  searchQuery,
 }, ref) => {
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
@@ -329,6 +331,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     { key: "actual_cashback", label: "Actual Cashback", defaultWidth: 120, minWidth: 100 },
     { key: "est_share", label: "Est. Share", defaultWidth: 100, minWidth: 80 },
     { key: "net_profit", label: "Net Profit", defaultWidth: 100, minWidth: 80 },
+    { key: "page", label: "Page", defaultWidth: 80, minWidth: 60 },
     { key: "actions", label: "Action", defaultWidth: 100, minWidth: 60 },
   ]
   const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false)
@@ -361,6 +364,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       actual_cashback: false,
       est_share: false,
       net_profit: false,
+      page: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -1032,10 +1036,23 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     }
 
     const filtered = tableData.filter(txn => {
-      // 1. Account Filter (Handled by server usually, but safety check)
       if (context === 'account' && accountId) {
         // If necessary, check if txn belongs to account. 
         // Assuming tableData is correct from server/parent.
+      }
+
+      // Add Search Logic
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase()
+        const match =
+          (txn.shop_name?.toLowerCase() || '').includes(q) ||
+          (txn.note?.toLowerCase() || '').includes(q) ||
+          (txn.category_name?.toLowerCase() || '').includes(q) ||
+          ((txn.amount || '').toString().includes(q)) ||
+          ((txn.metadata as any)?.page?.toString()?.toLowerCase() || '').includes(q) ||
+          ((txn.metadata as any)?.original_description?.toLowerCase() || '').includes(q)
+
+        if (!match) return false
       }
 
       // 2. Tab Filter
@@ -1434,8 +1451,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
     return effectiveColumnOrder
       .map(key => defaultColumns.find(col => col.key === key))
-      .filter((col): col is ColumnConfig => !!col && visibleColumns[col.key] !== false)
-  }, [isMobile, effectiveColumnOrder, visibleColumns, mobileColumnOrder, defaultColumns])
+      .filter((col): col is ColumnConfig => !!col && visibleColumns[col.key] !== false && !hiddenColumns?.includes(col.key))
+  }, [isMobile, effectiveColumnOrder, visibleColumns, mobileColumnOrder, defaultColumns, hiddenColumns])
 
   if (tableData.length === 0 && activeTab === 'active') {
     return (
@@ -1680,30 +1697,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                     const renderCell = (key: ColumnKey) => {
                       const refundAccount = accounts.find(a => a.id === txn.account_id); // Lifted up for Category case availability
                       switch (key) {
-                        case "category": {
-                          const actualCategory = categories.find(c => c.id === txn.category_id);
-                          const displayCategory = actualCategory?.name || txn.category_name;
-                          const catImg = actualCategory?.image_url;
 
-                          // Full size image without crop/rounded if available
-                          return (
-                            <div className="flex items-center gap-2">
-                              <div className="h-8 w-8 flex items-center justify-center shrink-0">
-                                {catImg ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={catImg} alt="" className="h-full w-full object-contain" />
-                                ) : (
-                                  <div className="h-6 w-6 rounded-none bg-slate-100 flex items-center justify-center">
-                                    <span className="text-[10px]">🏷️</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="text-sm font-medium text-slate-700">{displayCategory || 'Uncategorized'}</span>
-                              </div>
-                            </div>
-                          )
-                        }
                         case "date": {
                           const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
                           const day = String(d.getDate()).padStart(2, '0')
@@ -1882,18 +1876,45 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               </span>
                             </CustomTooltip>
                           );
+
                         }
                         // Note: 'type' column was removed - it's now merged into the 'date' column
+
+                        case "page": {
+                          const page = (txn.metadata as any)?.page
+                          return (
+                            <span className="text-xs text-slate-500 font-mono">
+                              {page || '-'}
+                            </span>
+                          )
+                        }
 
                         case "shop": {
                           let shopLogo = txn.shop_image_url;
 
-                          const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
-                          const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
+                          // Check if Shop Image is MISSING. If so, attempt to use Target Bank Image for relevant types.
+                          if (!shopLogo) {
+                            if (txn.type === 'repayment' || txn.type === 'transfer') {
+                              // Target is Destination
+                              const destId = (txn as any).destination_account_id || (txn as any).target_account_id;
+                              const destAccount = accounts.find(a => a.id === destId);
+                              if (destAccount?.image_url) {
+                                shopLogo = destAccount.image_url;
+                              }
+                            } else if (txn.type === 'income') {
+                              // Target is Account (Receiver)
+                              const targetAccount = accounts.find(a => a.id === txn.account_id);
+                              if (targetAccount?.image_url) {
+                                shopLogo = targetAccount.image_url;
+                              }
+                            }
+                          }
 
-                          // Fallback logic for repayment/service/income
-                          if (txn.type === 'repayment' || txn.type === 'income') {
-                            shopLogo = repaymentLogo ?? shopLogo ?? null;
+                          // Original Fallback Logic (modified to respect new target logic if set)
+                          if (!shopLogo && (txn.type === 'repayment' || txn.type === 'income')) {
+                            const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
+                            const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
+                            shopLogo = repaymentLogo;
                           }
 
                           const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
@@ -3387,6 +3408,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               id: false,
               people: false,
               actions: true,
+              page: false,
+              actual_cashback: false,
+              est_share: false,
+              net_profit: false,
             };
             setVisibleColumns(defaultVis);
             localStorage.removeItem('mf_v3_col_vis');

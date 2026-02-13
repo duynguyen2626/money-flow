@@ -132,6 +132,10 @@ export function FilterableTransactions({
             id: false,
             people: false,
             actions: true,
+            page: false,
+            actual_cashback: false,
+            est_share: false,
+            net_profit: false,
         }
         return initial
     })

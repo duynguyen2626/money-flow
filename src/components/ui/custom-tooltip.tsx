@@ -34,6 +34,7 @@ interface CustomTooltipProps {
   content: React.ReactNode
   side?: "top" | "right" | "bottom" | "left"
   delayDuration?: number
+  disabled?: boolean
 }
 
 export function CustomTooltip({
@@ -41,12 +42,15 @@ export function CustomTooltip({
   content,
   side,
   delayDuration = 200,
+  disabled = false,
 }: CustomTooltipProps) {
   const [isMounted, setIsMounted] = React.useState(false)
 
   React.useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  if (disabled) return <>{children}</>
 
   return (
     <Tooltip delayDuration={delayDuration}>

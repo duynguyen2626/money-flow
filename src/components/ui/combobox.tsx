@@ -42,6 +42,8 @@ type ComboboxProps = {
   }[]
   onSearchChange?: (value: string) => void
   isLoading?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function Combobox({
@@ -61,8 +63,13 @@ export function Combobox({
   tabs,
   onSearchChange,
   isLoading,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
 }: ComboboxProps) {
-  const [open, setOpen] = React.useState(false)
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const setOpen = setControlledOpen !== undefined ? setControlledOpen : setInternalOpen
+
   const [mounted, setMounted] = React.useState(false)
   const flatItems = React.useMemo(
     () => items ?? groups?.flatMap(group => group.items) ?? [],

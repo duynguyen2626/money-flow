@@ -918,12 +918,12 @@ export function AccountDetailHeaderV2({
                                             <div className="mt-2 px-1">
                                                 <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
                                                     <span>Repayment Progress</span>
-                                                    <span>{summary?.yearLentTotal ? Math.round((summary.yearRepaidTotal / summary.yearLentTotal) * 100) : 0}%</span>
+                                                    <span>{summary?.yearLentTotal ? Math.round(((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100) : 0}%</span>
                                                 </div>
                                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                                                     <div
                                                         className="h-full bg-amber-500 transition-all duration-1000 ease-out"
-                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? (summary.yearRepaidTotal / summary.yearLentTotal) * 100 : 0))}%` }}
+                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}%` }}
                                                     />
                                                 </div>
                                             </div>
@@ -952,12 +952,12 @@ export function AccountDetailHeaderV2({
                                             <div className="pt-2 border-t border-white/5">
                                                 <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mb-2 uppercase">
                                                     <span>Progress to Settlement</span>
-                                                    <span className="text-white">{summary?.yearLentTotal ? Math.round((summary.yearRepaidTotal / summary.yearLentTotal) * 100) : 0}%</span>
+                                                    <span className="text-white">{summary?.yearLentTotal ? Math.round(((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100) : 0}%</span>
                                                 </div>
                                                 <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-gradient-to-r from-amber-600 to-amber-400"
-                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? (summary.yearRepaidTotal / summary.yearLentTotal) * 100 : 0))}%` }}
+                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}%` }}
                                                     />
                                                 </div>
                                             </div>

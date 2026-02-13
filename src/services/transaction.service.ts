@@ -429,7 +429,6 @@ export async function mapTransactionRow(
     created_by: row.created_by ?? null,
     cashback_share_percent: row.cashback_share_percent ?? null,
     cashback_share_fixed: row.cashback_share_fixed ?? null,
-    cashback_share_amount: row.cashback_share_amount ?? null,
     cashback_mode: row.cashback_mode ?? null,
     currency: row.currency ?? null,
 
@@ -534,11 +533,11 @@ export async function createTransaction(
     const supabase = createClient();
 
     // Auto-calculate cycle tag
-    const { data: accConfig } = await supabase
+    const { data: accConfig } = await (supabase
       .from('accounts')
       .select('cashback_config')
       .eq('id', normalized.account_id)
-      .single();
+      .single() as any);
 
     if (accConfig?.cashback_config) {
       const config = parseCashbackConfig(accConfig.cashback_config);
@@ -736,11 +735,11 @@ export async function updateTransaction(
   }
 
   // Auto-calculate cycle tag
-  const { data: accConfig } = await supabase
+  const { data: accConfig } = await (supabase
     .from('accounts')
     .select('cashback_config')
     .eq('id', normalized.account_id)
-    .single();
+    .single() as any);
 
   if (accConfig?.cashback_config) {
     const config = parseCashbackConfig(accConfig.cashback_config);
@@ -1983,4 +1982,46 @@ export async function loadAccountTransactionsV2(accountId: string, limit: number
     person_name: t.person?.name,
     displayType: t.type // Map if needed, but UI uses explicit check
   }));
+}
+
+export async function bulkMoveToCategory(transactionIds: string[], targetCategoryId: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = createClient();
+
+  // 1. Update transactions
+  const { data: updatedTxns, error } = await supabase
+    .from("transactions")
+    .update({ category_id: targetCategoryId } as any)
+    .in("id", transactionIds)
+    .select(
+      `
+      id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id,
+      target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag,
+      is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed,
+      cashback_share_amount, cashback_mode, currency, final_price
+      `
+    ) as any;
+
+  if (error) {
+    console.error("Failed to bulk move transactions:", error);
+    return { success: false, error: "Failed to update transactions" };
+  }
+
+  // 2. Trigger cashback recalculation for each transaction
+  // import { upsertTransactionCashback } from "./cashback.service";
+  // We need to fetch full details including category names for policy resolution if needed, 
+  // but upsertTransactionCashback fetches its own data from DB usually.
+  // However, the mapping might be needed.
+
+  if (updatedTxns) {
+    for (const txn of updatedTxns) {
+      try {
+        await upsertTransactionCashback(txn as any);
+      } catch (err) {
+        console.error(`Failed to trigger cashback upsert for ${txn.id}:`, err);
+      }
+    }
+  }
+
+  revalidatePath("/");
+  return { success: true };
 }

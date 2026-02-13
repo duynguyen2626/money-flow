@@ -15,6 +15,7 @@ export type ColumnKey =
   | "actual_cashback"
   | "est_share"
   | "net_profit"
+  | "page"
 
 export interface ColumnConfig {
   key: ColumnKey

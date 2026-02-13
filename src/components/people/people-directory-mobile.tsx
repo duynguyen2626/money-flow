@@ -7,10 +7,11 @@ import { cn } from '@/lib/utils'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import type { PeopleDirectoryItem } from '@/components/people/people-directory-data'
 import { isYYYYMM } from '@/lib/month-tag'
-import { EditPersonDialog } from '@/components/people/edit-person-dialog'
+import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import type { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 type PeopleDirectoryMobileProps = {
   items: PeopleDirectoryItem[]
@@ -58,6 +59,8 @@ export function PeopleDirectoryMobile({
   const [isSlideOpen, setIsSlideOpen] = useState(false)
   const [slideInitialData, setSlideInitialData] = useState<any>(undefined)
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
+  const [isEditSlideOpen, setIsEditSlideOpen] = useState(false)
+  const [personToEdit, setPersonToEdit] = useState<Person | null>(null)
 
   const handleAddClick = (item: PeopleDirectoryItem, type: 'debt' | 'repayment') => {
     setSlideInitialData({
@@ -152,19 +155,18 @@ export function PeopleDirectoryMobile({
                     {status.label}
                   </span>
                   <div onClick={(event) => event.stopPropagation()}>
-                    <EditPersonDialog
-                      person={item.person}
-                      subscriptions={subscriptions}
-                      trigger={
-                        <button
-                          type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:text-blue-600"
-                          aria-label="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      }
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPersonToEdit(item.person)
+                        setIsEditSlideOpen(true)
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-blue-300 hover:text-blue-600"
+                      aria-label="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -325,6 +327,12 @@ export function PeopleDirectoryMobile({
         onSuccess={() => {
           setIsSlideOpen(false)
         }}
+      />
+      <PeopleSlideV2
+        open={isEditSlideOpen}
+        onOpenChange={setIsEditSlideOpen}
+        person={personToEdit}
+        subscriptions={subscriptions}
       />
     </>
   )

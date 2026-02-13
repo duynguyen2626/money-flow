@@ -18,6 +18,8 @@ type SelectProps = {
   placeholder?: string
   disabled?: boolean
   className?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function Select({
@@ -27,8 +29,13 @@ export function Select({
   placeholder = 'Select an item',
   disabled = false,
   className,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
 }: SelectProps) {
-  const [open, setOpen] = React.useState(false)
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const setOpen = setControlledOpen !== undefined ? setControlledOpen : setInternalOpen
+
   const [isMounted, setIsMounted] = React.useState(false)
   const selectedItem = items.find(item => item.value === value)
 

@@ -16,7 +16,7 @@ type SheetSyncTransaction = {
   cashback_share_percent_input?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
-  type?: string
+  type?: string | null
   img_url?: string | null
 }
 

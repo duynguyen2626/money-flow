@@ -23,7 +23,7 @@ import {
 
 import { Account, Category, Person, Shop, Subscription, MonthlyDebtSummary } from '@/types/moneyflow.types'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
-import { EditPersonDialog } from '@/components/people/edit-person-dialog'
+import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import {
@@ -324,15 +324,6 @@ function PersonCardComponent({
                 </div>
 
                 {/* Hidden Modals/Dialogs kept for functionality */}
-                {showEditDialog && (
-                    <EditPersonDialog
-                        person={person}
-                        subscriptions={subscriptions}
-                        initiallyOpen={true}
-                        showTrigger={false}
-                        onClose={() => setShowEditDialog(false)}
-                    />
-                )}
 
                 <Dialog open={showDebtsModal} onOpenChange={setShowDebtsModal}>
                     <DialogContent className="max-w-md" onClick={stopPropagation}>
@@ -419,15 +410,12 @@ function PersonCardComponent({
                 </Dialog>
 
                 {/* Hidden Modals/Dialogs kept for functionality */}
-                {showEditDialog && (
-                    <EditPersonDialog
-                        person={person}
-                        subscriptions={subscriptions}
-                        initiallyOpen={true}
-                        showTrigger={false}
-                        onClose={() => setShowEditDialog(false)}
-                    />
-                )}
+                <PeopleSlideV2
+                    open={showEditDialog}
+                    onOpenChange={setShowEditDialog}
+                    person={person}
+                    subscriptions={subscriptions}
+                />
                 <TransactionSlideV2
                     open={isSlideOpen}
                     onOpenChange={setIsSlideOpen}

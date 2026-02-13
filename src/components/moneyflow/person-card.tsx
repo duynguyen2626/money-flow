@@ -25,7 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import { cn } from '@/lib/utils'
-import { EditPersonDialog } from '@/components/people/edit-person-dialog'
+import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { updatePersonAction } from '@/actions/people-actions'
 
@@ -57,6 +57,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 
 export function PersonCard({ person, subscriptions, variant = 'detailed', isSelected, onSelect, accounts = [], categories = [], shops = [] }: PersonCardProps) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
 
   const balance = person.balance ?? 0
   const isPositive = balance >= 0 // Positive means they owe me (Asset)
@@ -137,15 +138,12 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-32 p-1">
                   <div className="flex flex-col">
-                    <EditPersonDialog
-                      person={person}
-                      subscriptions={subscriptions}
-                      trigger={
-                        <button className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-left">
-                          Edit
-                        </button>
-                      }
-                    />
+                    <button
+                      onClick={() => setIsEditOpen(true)}
+                      className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-left"
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={() => setShowArchiveConfirm(true)}
                       className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 text-red-600 text-left"
@@ -323,15 +321,12 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
               </PopoverTrigger>
               <PopoverContent align="end" className="w-32 p-1">
                 <div className="flex flex-col">
-                  <EditPersonDialog
-                    person={person}
-                    subscriptions={subscriptions}
-                    trigger={
-                      <button className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-left">
-                        Edit
-                      </button>
-                    }
-                  />
+                  <button
+                    onClick={() => setIsEditOpen(true)}
+                    className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 text-left"
+                  >
+                    Edit
+                  </button>
                   <button
                     onClick={() => setShowArchiveConfirm(true)}
                     className="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 text-red-600 text-left"
@@ -439,6 +434,12 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
         onConfirm={handleArchive}
         confirmText="Archive"
         variant="destructive"
+      />
+      <PeopleSlideV2
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        person={person}
+        subscriptions={subscriptions}
       />
     </>
   )
