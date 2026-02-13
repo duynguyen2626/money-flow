@@ -78,7 +78,7 @@ export function DeleteClassificationDialog({
         setError(null)
 
         try {
-            const result = await onConfirm(currentId as any, targetId)
+            const result = await onConfirm(deleteId as any, targetId)
 
             if (result.success) {
                 toast.success(`Transactions moved and ${ids ? `${ids.length} items` : (entityType === 'category' ? 'category' : 'shop')} ${mode === 'archive' ? 'archived' : 'deleted'} successfully`)

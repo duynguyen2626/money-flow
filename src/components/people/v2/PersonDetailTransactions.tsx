@@ -182,7 +182,7 @@ export function PersonDetailTransactions({
                 shops={shops}
                 mode="single"
                 operationMode="edit"
-                editTransactionId={editingTxn?.id}
+                editingId={editingTxn?.id}
                 onSuccess={() => {
                     setEditingTxn(null);
                     router.refresh();

@@ -257,7 +257,7 @@ export async function deleteCategoriesBulk(ids: string[], targetId?: string): Pr
     return { success: false, error: 'Failed to check transactions' }
   }
 
-  const idsWithTransactions = Array.from(new Set(txns.map(t => t.category_id)))
+  const idsWithTransactions = Array.from(new Set((txns as any[]).map(t => t.category_id)))
 
   if (idsWithTransactions.length > 0 && !targetId) {
     return { success: false, hasTransactionsIds: idsWithTransactions, error: 'Some categories have associated transactions' }

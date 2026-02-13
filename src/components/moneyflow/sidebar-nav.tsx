@@ -24,7 +24,6 @@ import {
   CreditCard,
   ShoppingBag,
   Undo2,
-  Undo2,
   Contact,
   Combine,
 } from 'lucide-react'

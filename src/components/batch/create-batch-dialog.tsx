@@ -44,7 +44,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
     const [open, setOpen] = useState(false)
     const [monthMode, setMonthMode] = useState<'current' | 'last'>('current')
 
-    const form = useForm({
+    const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: '',
@@ -79,7 +79,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            await createBatchAction(values)
+            await createBatchAction(values as any)
             setOpen(false)
             form.reset()
         } catch (error) {
@@ -166,7 +166,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
                                             if (val === '') {
                                                 form.setValue('sheet_link', '')
                                             } else {
-                                                form.setValue('sheet_link', val)
+                                                form.setValue('sheet_link', val as string)
                                             }
                                         }}
                                         placeholder="Select saved webhook"
@@ -187,7 +187,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
                                             { value: 'MBB', label: 'MB Bank' }
                                         ]}
                                         value={field.value}
-                                        onValueChange={field.onChange}
+                                        onValueChange={(val) => field.onChange(val as any)}
                                         placeholder="Select bank type"
                                     />
                                     <FormMessage />

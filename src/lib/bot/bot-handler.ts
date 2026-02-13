@@ -11,6 +11,7 @@ import {
   loadBotContext,
   summarizeDraft,
   type BotWizardState,
+  type BotWizardStep,
 } from "@/lib/bot/quick-add";
 import {
   getQuickAddTemplate,
@@ -191,7 +192,7 @@ export async function handleBotMessage(params: {
       const baseDraft = buildDraftFromTemplate(payload);
 
       let nextState: BotWizardState = {
-        step: "review",
+        step: "review" as BotWizardStep,
         draft: baseDraft
       };
 
@@ -200,11 +201,11 @@ export async function handleBotMessage(params: {
         const { context, raw } = await loadBotContext(supabase);
         const { state: updatedState } = await advanceWizard({
           text: command.args,
-          state: { step: "input", draft: baseDraft },
+          state: { step: "input" as BotWizardStep, draft: baseDraft },
           context,
           rawContext: raw,
         });
-        if (updatedState) nextState = updatedState;
+        if (updatedState) nextState = updatedState as any;
       }
 
       await updateBotUserState({

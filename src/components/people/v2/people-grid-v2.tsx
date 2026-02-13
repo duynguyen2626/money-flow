@@ -100,7 +100,7 @@ function PersonCard({ person, onEdit, onLend, onRepay }: { person: Person; onEdi
                 <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Balance</span>
                     <Badge
-                        variant="soft"
+                        variant="secondary"
                         className={cn(
                             "tabular-nums text-sm font-bold px-2.5 py-1",
                             totalDebt > 0

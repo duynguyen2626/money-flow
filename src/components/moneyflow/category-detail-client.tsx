@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useTransition, useEffect } from "react"
+import { useState, useMemo, Suspense, useTransition, useEffect } from "react"
 import Link from "next/link"
 import { useBreadcrumbs } from "@/context/breadcrumb-context"
 import { usePathname } from "next/navigation"

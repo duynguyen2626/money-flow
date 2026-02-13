@@ -66,6 +66,7 @@ export function ClassificationsManager({ initialShops, initialCategories, accoun
     const [catSearch, setCatSearch] = useState("")
     const [shopSearch, setShopSearch] = useState("")
     const [archiveSearch, setArchiveSearch] = useState("")
+    const [archiveFilter, setArchiveFilter] = useState<"all" | "categories" | "shops">("all")
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -188,7 +189,7 @@ export function ClassificationsManager({ initialShops, initialCategories, accoun
         if (success) {
             toast.success(`Successfully ${isArchiving ? 'archived' : 'unarchived'} ${ids.length} items`)
             setSelectedIds(new Set())
-            loadData()
+            await Promise.all([refreshCategories(), refreshShops()])
         } else {
             toast.error("Failed to update items")
         }
@@ -202,7 +203,8 @@ export function ClassificationsManager({ initialShops, initialCategories, accoun
             open: true,
             entity: null,
             ids: ids,
-            type: (activeTab === "categories" || (activeTab === "archives" && archiveFilter === "categories")) ? 'category' : 'shop'
+            type: (activeTab === "categories" || (activeTab === "archives" && archiveFilter === "categories")) ? 'category' : 'shop',
+            mode: 'delete'
         })
     }
 
@@ -309,7 +311,7 @@ export function ClassificationsManager({ initialShops, initialCategories, accoun
                             <Select
                                 items={years.map(y => ({ value: y, label: y }))}
                                 value={selectedYear}
-                                onValueChange={(v) => setSelectedYear(v)}
+                                onValueChange={(v) => setSelectedYear(v || "")}
                                 className="h-9 bg-slate-50 border-slate-200 font-bold text-[11px]"
                             />
                         </div>
@@ -630,7 +632,7 @@ export function ClassificationsManager({ initialShops, initialCategories, accoun
                 mode={deleteDialog.mode}
                 candidates={deleteDialog.type === 'category'
                     ? categories.filter(c => {
-                        const typeToMatch = deleteDialog.entity?.type || categories.find(cat => deleteDialog.ids?.includes(cat.id))?.type
+                        const typeToMatch = (deleteDialog.entity as Category)?.type || categories.find(cat => deleteDialog.ids?.includes(cat.id))?.type
                         return c.type === typeToMatch && !c.is_archived
                     })
                     : shops.filter(s => !s.is_archived)

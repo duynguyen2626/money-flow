@@ -794,19 +794,19 @@ export async function getRecentAccountsByTransactions(limit: number = 5): Promis
   if (error || !txns) return []
 
   // Get unique account IDs in order of last transaction
-  const accountIds = Array.from(new Set(txns.map(t => t.account_id).filter((id): id is string => !!id))).slice(0, limit)
+  const accountIds = Array.from(new Set((txns as any[]).map(t => t.account_id).filter((id): id is string => !!id))).slice(0, limit)
   if (accountIds.length === 0) return []
 
   // Fetch account details
-  const { data: accounts, error: aError } = await supabase
+  const { data: accounts, error: aError } = await (supabase
     .from('accounts')
     .select('id, name, type, image_url')
-    .in('id', accountIds)
+    .in('id', accountIds) as any)
 
   if (aError || !accounts) return []
 
   // Return matched accounts in correct order
   return accountIds
-    .map(id => accounts.find(a => a.id === id))
+    .map(id => (accounts as any[]).find(a => a.id === id))
     .filter(Boolean) as Account[]
 }

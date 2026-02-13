@@ -364,6 +364,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       actual_cashback: false,
       est_share: false,
       net_profit: false,
+      page: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -3407,6 +3408,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               id: false,
               people: false,
               actions: true,
+              page: false,
+              actual_cashback: false,
+              est_share: false,
+              net_profit: false,
             };
             setVisibleColumns(defaultVis);
             localStorage.removeItem('mf_v3_col_vis');
