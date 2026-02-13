@@ -487,7 +487,7 @@ function renderCell(
                                         );
                                     }
 
-                                    const dayDate = startOfDay(dueDate);
+                                    const dayDate = startOfDay(dueDate!);
                                     const isDueToday = isToday(dayDate);
                                     const isDueTomorrow = isTomorrow(dayDate);
 

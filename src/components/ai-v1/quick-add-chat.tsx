@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import type { ComboboxGroup } from "@/components/ui/combobox";
 import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
-import { TransactionPreviewCard } from "./transaction-preview-card";
+// import { TransactionPreviewCard } from "./transaction-preview-card";
 import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
 import { generateTag } from "@/lib/tag";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,8 @@ type WizardStep =
   | "transfer_destination"
   | "split_confirm"
   | "preview"
-  | "edit_details";
+  | "edit_details"
+  | "review";
 
 // Local ChatMessage type removed (using imported one from ai.types)
 
@@ -404,6 +405,8 @@ const stepPrompts: Record<WizardStep, string> = {
   transfer_destination: "Which account should receive the transfer?",
   split_confirm: "Should this be a split bill?",
   review: "Review your details before confirming.",
+  preview: "Previewing transaction.",
+  edit_details: "Editing details.",
 };
 
 const quickTypeOptions: Array<{ label: string; intent: ParseTransactionIntent }> =
@@ -1568,11 +1571,11 @@ export function QuickAddChat({
     }
 
     const type: TransactionFormValues["type"] =
-      draft.intent === "lend"
+      (draft.intent === "lend" || (draft.intent as any) === "loan"
         ? "debt"
         : draft.intent === "repay"
           ? "repayment"
-          : draft.intent;
+          : draft.intent) as any;
 
     let personIds = draft.people.map((person) => person.id);
     const groupId = draft.group?.id ?? null;
@@ -1668,11 +1671,11 @@ export function QuickAddChat({
     const occurredAt = draft.occurredAt ?? new Date();
     const tag = generateTag(occurredAt);
     const type: TransactionFormValues["type"] =
-      draft.intent === "lend"
+      (draft.intent === "lend" || (draft.intent as any) === "loan"
         ? "debt"
         : draft.intent === "repay"
           ? "repayment"
-          : draft.intent;
+          : draft.intent) as any;
     const cashbackMode =
       draft.cashbackMode ??
       resolveCashbackMode(
@@ -2903,7 +2906,7 @@ export function QuickAddChat({
         }}
         mode="single"
         operationMode="add"
-        initialData={reviewValues ?? undefined}
+        initialData={(reviewValues as any) ?? undefined}
         accounts={accounts}
         categories={categories}
         people={people}

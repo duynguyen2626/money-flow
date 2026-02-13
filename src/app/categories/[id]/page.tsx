@@ -1,4 +1,5 @@
 import { getCategoryById, getCategories } from "@/services/category.service"
+import { notFound } from "next/navigation"
 import { getShops } from "@/services/shop.service"
 import { getAccounts } from "@/services/account.service"
 import { getPeople } from "@/services/people.service"

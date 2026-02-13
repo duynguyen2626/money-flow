@@ -188,7 +188,7 @@ export function AccountSlideV2({
 
                 // Determine if cashback is enabled based on loaded configuration
                 const hasCashbackData = !!config.defaultRate || (config.levels && config.levels.length > 0);
-                setIsCashbackEnabled(hasCashbackData);
+                setIsCashbackEnabled(!!hasCashbackData);
 
                 // Normalizing logic for simple mode to match how valid levels look
                 const loadedLevels = (config.levels || []).map(lvl => ({

@@ -171,7 +171,7 @@ export function AccountDetailTransactions({
     const [clearType, setClearType] = useState<'filter' | 'all'>('filter')
 
     const hasAutoSelectedCycle = useRef(false)
-    const currentCycleRef = useRef<string | undefined>()
+    const currentCycleRef = useRef<string | undefined>(undefined)
 
     // Filter State
     const [searchTerm, setSearchTerm] = useState('')
