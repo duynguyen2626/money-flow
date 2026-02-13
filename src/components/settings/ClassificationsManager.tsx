@@ -38,9 +38,9 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
     const [searchQuery, setSearchQuery] = useState("")
     const [isLoading, setIsLoading] = useState(false)
 
-    // Category specific filter
     const [categoryFilter, setCategoryFilter] = useState("all")
     const [shopCategoryFilter, setShopCategoryFilter] = useState("all")
+    const [isCreatingCategoryFromShop, setIsCreatingCategoryFromShop] = useState(false)
 
     const refreshShops = useCallback(async () => {
         const data = await getShops()
@@ -217,13 +217,26 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
             {/* Slides */}
             <CategorySlide
                 open={isCategoryDialogOpen}
-                onOpenChange={setIsCategoryDialogOpen}
+                onOpenChange={(open) => {
+                    setIsCategoryDialogOpen(open)
+                    // If closing and we were creating from shop, this flag isn't strictly needed if we just stack,
+                    // but good for cleanup.
+                    if (!open) setIsCreatingCategoryFromShop(false)
+                }}
                 category={selectedCategory}
                 defaultType={categoryFilter === "all" || categoryFilter === "transfer" ? "expense" : categoryFilter as any}
-                onSuccess={() => {
+                onSuccess={(newCatId) => {
                     refreshCategories();
                     setIsCategoryDialogOpen(false);
+                    // If we are in "stack" mode, we might want to auto-select the new category in the underlying ShopSlide.
+                    // But we can't easily reach into ShopSlide form.
+                    // Unless we pass a callback to ShopSlide?
+                    // ShopSlide is active.
                 }}
+                onBack={isCreatingCategoryFromShop ? () => {
+                    setIsCategoryDialogOpen(false)
+                } : undefined}
+                zIndex={70}
             />
 
             <ShopSlide
@@ -235,10 +248,8 @@ export function ClassificationsManager({ initialShops, initialCategories, defaul
                     refreshShops();
                 }}
                 onCreateCategory={() => {
-                    // setIsShopDialogOpen(false); // Maybe keep it open?
-                    // If we keep it open, we need to handle z-index or verify stacking.
-                    // Let's close shop dialog for now to avoid complexity, or just open category dialog.
-                    // Opening category dialog on top is better UX if supported.
+                    setIsCreatingCategoryFromShop(true)
+                    // setIsShopDialogOpen(false) // KEEP OPEN
                     setSelectedCategory(null)
                     setIsCategoryDialogOpen(true)
                 }}

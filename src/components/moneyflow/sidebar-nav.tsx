@@ -24,7 +24,9 @@ import {
   CreditCard,
   ShoppingBag,
   Undo2,
+  Undo2,
   Contact,
+  Combine,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
@@ -60,12 +62,9 @@ export function SidebarNav({ className }: SidebarNavProps) {
     { title: "Cashback", href: "/cashback", icon: PieChart },
     { title: "Installments", href: "/installments", icon: Hourglass }, // Updated Icon
     {
-      title: "Categories",
+      title: "Classifications",
       href: "/categories",
-      icon: Tags, // Updated Icon
-      subItems: [
-        { title: "Shops", href: "/shops", icon: ShoppingBag } // Moved Shop here
-      ]
+      icon: Combine, // Updated Icon
     },
     { title: "People", href: "/people", icon: Users },
     { title: "People", href: "/people", icon: Contact },

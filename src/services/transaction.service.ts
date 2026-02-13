@@ -449,6 +449,7 @@ export async function loadTransactions(options: {
   accountId?: string;
   personId?: string;
   personIds?: string[];
+  categoryId?: string;
   shopId?: string;
   installmentPlanId?: string;
   limit?: number;
@@ -484,6 +485,10 @@ export async function loadTransactions(options: {
 
   if (options.shopId) {
     query = query.eq("shop_id", options.shopId);
+  }
+
+  if (options.categoryId) {
+    query = query.eq("category_id", options.categoryId);
   }
 
   if (options.installmentPlanId) {

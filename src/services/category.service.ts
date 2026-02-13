@@ -100,3 +100,33 @@ export async function updateCategory(id: string, updates: Partial<Category>): Pr
 
   return data as Category
 }
+
+export async function getCategoryById(id: string): Promise<Category | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code !== 'PGRST116') { // not found
+      console.error('Error fetching category:', error)
+    }
+    return null
+  }
+
+  const item = data as any
+
+  return {
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    parent_id: item.parent_id ?? undefined,
+    icon: item.icon,
+    image_url: item.image_url,
+    kind: item.kind,
+    mcc_codes: item.mcc_codes,
+  }
+}

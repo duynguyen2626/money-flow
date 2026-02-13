@@ -90,9 +90,9 @@ export function ShopTable({ shops, categories, onEdit, searchQuery, categoryFilt
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => onEdit(shop)}
-                                                className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all rounded-lg"
+                                                className="h-9 w-9 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all shadow-sm border border-transparent hover:border-blue-100"
                                             >
-                                                <Edit2 className="h-4 w-4" />
+                                                <Edit2 className="h-4.5 w-4.5" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>

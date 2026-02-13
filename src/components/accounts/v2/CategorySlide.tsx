@@ -47,6 +47,7 @@ interface CategorySlideProps {
     defaultKind?: "internal" | "external"
     onSuccess?: (newCategoryId?: string) => void
     onBack?: () => void
+    zIndex?: number
 }
 
 export function CategorySlide({
@@ -57,6 +58,7 @@ export function CategorySlide({
     defaultKind,
     onSuccess,
     onBack,
+    zIndex = 60,
 }: CategorySlideProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
@@ -183,7 +185,7 @@ export function CategorySlide({
                 <SheetContent
                     side="right"
                     className="sm:max-w-[480px] p-0 flex flex-col h-full bg-slate-50 border-l border-slate-200"
-                    zIndex={60}
+                    zIndex={zIndex}
                 >
                     <SheetHeader className="px-6 py-6 bg-white border-b sticky top-0 z-10">
                         <div className="flex items-center gap-2">
