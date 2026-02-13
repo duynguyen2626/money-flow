@@ -429,7 +429,6 @@ export async function mapTransactionRow(
     created_by: row.created_by ?? null,
     cashback_share_percent: row.cashback_share_percent ?? null,
     cashback_share_fixed: row.cashback_share_fixed ?? null,
-    cashback_share_amount: row.cashback_share_amount ?? null,
     cashback_mode: row.cashback_mode ?? null,
     currency: row.currency ?? null,
 
@@ -534,11 +533,11 @@ export async function createTransaction(
     const supabase = createClient();
 
     // Auto-calculate cycle tag
-    const { data: accConfig } = await supabase
+    const { data: accConfig } = await (supabase
       .from('accounts')
       .select('cashback_config')
       .eq('id', normalized.account_id)
-      .single();
+      .single() as any);
 
     if (accConfig?.cashback_config) {
       const config = parseCashbackConfig(accConfig.cashback_config);
@@ -736,11 +735,11 @@ export async function updateTransaction(
   }
 
   // Auto-calculate cycle tag
-  const { data: accConfig } = await supabase
+  const { data: accConfig } = await (supabase
     .from('accounts')
     .select('cashback_config')
     .eq('id', normalized.account_id)
-    .single();
+    .single() as any);
 
   if (accConfig?.cashback_config) {
     const config = parseCashbackConfig(accConfig.cashback_config);
@@ -1999,8 +1998,8 @@ export async function bulkMoveToCategory(transactionIds: string[], targetCategor
       target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag,
       is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed,
       cashback_share_amount, cashback_mode, currency, final_price
-     `
-    );
+      `
+    ) as any;
 
   if (error) {
     console.error("Failed to bulk move transactions:", error);

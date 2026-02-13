@@ -180,7 +180,7 @@ export async function deleteShopsBulk(ids: string[], targetId?: string): Promise
     return { success: false, error: 'Failed to check transactions' }
   }
 
-  const idsWithTransactions = Array.from(new Set(txns.map(t => t.shop_id).filter(Boolean))) as string[]
+  const idsWithTransactions = Array.from(new Set((txns as any[]).map(t => t.shop_id).filter(Boolean))) as string[]
 
   if (idsWithTransactions.length > 0 && !targetId) {
     return { success: false, hasTransactionsIds: idsWithTransactions, error: 'Some shops have associated transactions' }
