@@ -17,6 +17,7 @@ import { parseMetadata } from '@/lib/transaction-mapper';
 import {
   parseCashbackConfig,
   getCashbackCycleRange,
+  getCashbackCycleTag,
 } from "@/lib/cashback";
 
 type TransactionStatus =
@@ -515,6 +516,21 @@ export async function createTransaction(
     const normalized = await normalizeInput(input);
     const supabase = createClient();
 
+    // Auto-calculate cycle tag
+    const { data: accConfig } = await supabase
+      .from('accounts')
+      .select('cashback_config')
+      .eq('id', normalized.account_id)
+      .single();
+
+    if (accConfig?.cashback_config) {
+      const config = parseCashbackConfig(accConfig.cashback_config);
+      const cycleTag = getCashbackCycleTag(new Date(normalized.occurred_at), config);
+      if (cycleTag) {
+        normalized.persisted_cycle_tag = cycleTag;
+      }
+    }
+
     const { data, error } = await supabase
       .from("transactions")
       .insert(normalized as any)
@@ -700,6 +716,21 @@ export async function updateTransaction(
   if (!normalized) {
     console.error("Invalid input for transaction update");
     return false;
+  }
+
+  // Auto-calculate cycle tag
+  const { data: accConfig } = await supabase
+    .from('accounts')
+    .select('cashback_config')
+    .eq('id', normalized.account_id)
+    .single();
+
+  if (accConfig?.cashback_config) {
+    const config = parseCashbackConfig(accConfig.cashback_config);
+    const cycleTag = getCashbackCycleTag(new Date(normalized.occurred_at), config);
+    if (cycleTag) {
+      normalized.persisted_cycle_tag = cycleTag;
+    }
   }
 
   // LOG HISTORY BEFORE UPDATE
