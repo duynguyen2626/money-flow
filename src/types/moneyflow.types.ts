@@ -14,6 +14,7 @@ export type Category = {
   image_url?: string | null
   mcc_codes?: string[] | null
   kind?: 'internal' | 'external' | null
+  is_archived?: boolean | null
 }
 
 export type Shop = {
@@ -21,6 +22,7 @@ export type Shop = {
   name: string
   image_url?: string | null
   default_category_id?: string | null
+  is_archived?: boolean | null
 }
 
 export type AccountStats = {

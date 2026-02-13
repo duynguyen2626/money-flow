@@ -1,5 +1,7 @@
 import { getCategories } from "@/services/category.service"
 import { getShops } from "@/services/shop.service"
+import { getAccounts } from "@/services/account.service"
+import { getPeople } from "@/services/people.service"
 import { ClassificationsManager } from "@/components/settings/ClassificationsManager"
 import { Metadata } from 'next'
 
@@ -16,9 +18,11 @@ export default async function ClassificationsPage({
     searchParams: Promise<{ tab?: string }>
 }) {
     const params = await searchParams
-    const [categories, shops] = await Promise.all([
+    const [categories, shops, accounts, people] = await Promise.all([
         getCategories(),
-        getShops()
+        getShops(),
+        getAccounts(),
+        getPeople()
     ])
 
     const tab = params?.tab || "categories"
@@ -27,6 +31,8 @@ export default async function ClassificationsPage({
         <ClassificationsManager
             initialCategories={categories}
             initialShops={shops}
+            accounts={accounts}
+            people={people}
             defaultTab={tab}
         />
     )
