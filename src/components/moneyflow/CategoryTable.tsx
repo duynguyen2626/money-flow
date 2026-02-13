@@ -30,6 +30,7 @@ interface CategoryTableProps {
     selectedIds?: Set<string>
     onSelect?: (id: string) => void
     onSelectAll?: (ids: string[]) => void
+    className?: string
 }
 
 type SortKey = 'name' | 'type' | 'total';
@@ -46,7 +47,8 @@ export function CategoryTable({
     onDelete,
     selectedIds = new Set(),
     onSelect,
-    onSelectAll
+    onSelectAll,
+    className
 }: CategoryTableProps) {
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'total', direction: 'desc' });
 
@@ -105,6 +107,8 @@ export function CategoryTable({
     const renderRows = (cats: Category[]) => {
         return cats.map((category) => {
             const stat = stats[category.id] || { total: 0, count: 0 };
+            const canDelete = stat.count === 0;
+
             return (
                 <TableRow key={category.id} className={cn(
                     "group hover:bg-slate-50/80 transition-colors border-slate-100",
@@ -180,23 +184,32 @@ export function CategoryTable({
                         </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
-                        <div className="flex flex-col">
+                        <span className={cn(
+                            "text-sm font-black tracking-tight tabular-nums",
+                            stat.total === 0 ? "text-slate-400" :
+                                category.type === 'expense' ? "text-rose-600" :
+                                    category.type === 'income' ? "text-emerald-600" :
+                                        "text-blue-600"
+                        )}>
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.abs(stat.total))}
+                        </span>
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                        <div className="flex items-center gap-1">
                             <span className={cn(
-                                "text-sm font-black tracking-tight tabular-nums",
-                                stat.total > 0 ? "text-slate-900" : "text-slate-400"
+                                "text-xs font-bold",
+                                stat.count > 0 ? "text-slate-600" : "text-slate-300"
                             )}>
-                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(stat.total)}
+                                {stat.count}
                             </span>
-                            {stat.count > 0 && (
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{stat.count} txns</span>
-                            )}
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">txns</span>
                         </div>
                     </TableCell>
                     <TableCell className="px-6 py-4">
                         <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                             {category.mcc_codes && category.mcc_codes.length > 0 ? (
                                 category.mcc_codes.map(code => (
-                                    <Badge key={code} variant="outline" className="text-[10px] font-mono px-1.5 py-0 bg-slate-50 border-slate-200 text-slate-500 font-bold hover:bg-slate-100 transition-colors">
+                                    <Badge key={code} variant="outline" className="text-[13px] font-mono px-1.5 py-0 bg-slate-50 border-slate-200 text-slate-500 font-bold hover:bg-slate-100 transition-colors">
                                         {code}
                                     </Badge>
                                 ))
@@ -230,12 +243,20 @@ export function CategoryTable({
                                             <ArchiveRestore className="h-4 w-4" />
                                         </Button>
                                     </CustomTooltip>
-                                    <CustomTooltip content="Delete Category">
+                                    <CustomTooltip content={canDelete ? "Delete Category" : "Cannot delete category with transactions"}>
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => onDelete?.(category)}
-                                            className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all shadow-sm border border-transparent hover:border-rose-100 rounded-lg"
+                                            onClick={() => {
+                                                if (canDelete) onDelete?.(category);
+                                                else toast.error("Cannot delete category with existing transactions");
+                                            }}
+                                            className={cn(
+                                                "h-8 w-8 transition-all shadow-sm border border-transparent rounded-lg",
+                                                canDelete
+                                                    ? "text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100"
+                                                    : "text-slate-200 cursor-not-allowed hover:bg-transparent"
+                                            )}
                                         >
                                             <X className="h-4 w-4" />
                                         </Button>
@@ -268,7 +289,7 @@ export function CategoryTable({
     }
 
     return (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm w-full h-[calc(100vh-140px)] flex flex-col overflow-hidden">
+        <div className={cn("rounded-xl border border-slate-200 bg-white shadow-sm w-full flex flex-col overflow-hidden", className || "h-full")}>
             <div className="overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                 <Table className="relative w-full border-collapse">
                     <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-md shadow-sm">
@@ -283,15 +304,16 @@ export function CategoryTable({
                                     />
                                 </div>
                             </TableHead>
-                            <TableHead className="w-[300px] h-10 px-4 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('name')}>
+                            <TableHead className="min-w-[200px] h-10 px-4 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('name')}>
                                 <div className="flex items-center">Category <SortIcon colKey="name" /></div>
                             </TableHead>
-                            <TableHead className="w-[150px] h-10 px-6 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('type')}>
+                            <TableHead className="w-[120px] h-10 px-6 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('type')}>
                                 <div className="flex items-center">Type <SortIcon colKey="type" /></div>
                             </TableHead>
-                            <TableHead className="w-[200px] h-10 px-6 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('total')}>
+                            <TableHead className="w-[150px] h-10 px-6 cursor-pointer group select-none hover:text-slate-800 transition-colors" onClick={() => handleSort('total')}>
                                 <div className="flex items-center">Total ({selectedYear}) <SortIcon colKey="total" /></div>
                             </TableHead>
+                            <TableHead className="w-[100px] h-10 px-6">Txns</TableHead>
                             <TableHead className="h-10 px-6">MCC Codes</TableHead>
                             <TableHead className="w-[120px] text-right h-10 px-6">Action</TableHead>
                         </TableRow>
@@ -299,7 +321,7 @@ export function CategoryTable({
                     <TableBody>
                         {filteredCategories.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-48 text-center text-slate-400 text-sm font-medium italic">
+                                <TableCell colSpan={7} className="h-48 text-center text-slate-400 text-sm font-medium italic">
                                     No categories found matching your criteria.
                                 </TableCell>
                             </TableRow>
@@ -308,7 +330,7 @@ export function CategoryTable({
                                 {internalCategories.length > 0 && (
                                     <>
                                         <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 pointer-events-none">
-                                            <TableCell colSpan={5} className="px-6 py-2.5">
+                                            <TableCell colSpan={7} className="px-6 py-2.5">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
                                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600/70">Internal Categories</span>
@@ -323,7 +345,7 @@ export function CategoryTable({
                                 {externalCategories.length > 0 && (
                                     <>
                                         <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 pointer-events-none">
-                                            <TableCell colSpan={5} className="px-6 py-2.5 pt-6">
+                                            <TableCell colSpan={7} className="px-6 py-2.5 pt-6">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500/70">External Categories</span>

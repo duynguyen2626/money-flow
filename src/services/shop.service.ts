@@ -101,6 +101,7 @@ export async function toggleShopArchive(id: string, isArchived: boolean): Promis
     console.error('Error toggling shop archive:', error)
     return false
   }
+  revalidatePath('/categories')
   return true
 }
 
@@ -163,6 +164,7 @@ export async function toggleShopsArchiveBulk(ids: string[], isArchived: boolean)
     console.error('Error toggling shops archive bulk:', error)
     return false
   }
+  revalidatePath('/categories')
   return true
 }
 
@@ -254,4 +256,35 @@ export async function archiveShop(id: string, targetId?: string): Promise<{ succ
 
   revalidatePath('/categories')
   return { success: true }
+}
+
+export async function getShopStats(year: number) {
+  const supabase = createClient()
+  const startDate = `${year}-01-01T00:00:00.000Z`
+  const endDate = `${year}-12-31T23:59:59.999Z`
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('shop_id, amount')
+    .neq('status', 'void')
+    .gte('occurred_at', startDate)
+    .lte('occurred_at', endDate)
+
+  if (error) {
+    console.error('Error fetching shop stats:', error)
+    return {}
+  }
+
+  const stats: Record<string, { total: number; count: number }> = {}
+
+  data.forEach((txn: any) => {
+    if (!txn.shop_id) return
+    if (!stats[txn.shop_id]) {
+      stats[txn.shop_id] = { total: 0, count: 0 }
+    }
+    stats[txn.shop_id].total += txn.amount || 0
+    stats[txn.shop_id].count += 1
+  })
+
+  return stats
 }

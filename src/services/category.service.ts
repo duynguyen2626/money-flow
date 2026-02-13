@@ -240,6 +240,7 @@ export async function toggleCategoriesArchiveBulk(ids: string[], isArchived: boo
     console.error('Error toggling categories archive bulk:', error)
     return false
   }
+  revalidatePath('/categories')
   return true
 }
 
