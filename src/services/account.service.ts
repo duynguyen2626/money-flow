@@ -237,7 +237,8 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     virtual_profit,
     annual_fee_waiver_target,
     annual_fee_waiver_progress,
-    annual_fee_waiver_met
+    annual_fee_waiver_met,
+    max_budget: cycle?.max_budget ?? config.maxAmount ?? null
   }
 }
 
@@ -540,7 +541,6 @@ export async function updateAccountConfig(
       .from('accounts')
       .select('cashback_config, cashback_config_version')
       .eq('id', accountId)
-      .eq('id', accountId)
       .single() as any
 
     const oldConfigStr = JSON.stringify(oldAccount?.cashback_config)
@@ -599,9 +599,9 @@ export async function updateAccountConfig(
     return true
   }
 
-  const { error } = await (supabase
+  const { error } = await supabase
     .from('accounts')
-    .update as any)(payload)
+    .update(payload)
     .eq('id', accountId)
 
   if (error) {
@@ -609,6 +609,8 @@ export async function updateAccountConfig(
     return false
   }
 
+  revalidatePath('/accounts')
+  revalidatePath(`/accounts/${accountId}`)
   return true
 }
 

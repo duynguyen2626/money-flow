@@ -1,56 +1,43 @@
-# Handover: Phase 14 to Phase 15
+# Handover: Phase 15 - Cashback Logic & UI Optimization
 
-## 🏁 Phase 14 Summary
-**Objective:** Refactor People UI, Add Category Filters, Research Navigation & Chatbot.
-**Status:** ✅ Completed
+## 🏁 Phase 15 Status Update
+**Objective:** Categories UI Optimization, Transaction Table Refinement, and Cashback Logic stabilization.
+**Status:** 🏗️ In Progress (Cashback Logic Fixed, Refactor Plan Ready)
 
-### Key Achievements
-1.  **People UI Refactor (V2)**
-    *   **New Directory Grid**: Added toggleable Grid/List views for the People directory.
-    *   **New Detail Page**: Completely rebuilt `people/[id]` with V2 components.
-    *   **Features Preserved**: Debt timeline, Split bill manager, Google Sheets integration.
-    *   **Enhancements**: Edit transactions directly from history, better stats header.
+### ✅ Completed in this session
+1.  **Resolved Cashback Logic Bugs**
+    *   **VCB Signature Fix**: Fixed "Restricted Mode" collision. Cards with a base rate (e.g., 0.5%) + special rules (e.g., 10%) are no longer forced into restricted mode, preserving the catch-all rate.
+    *   **Infinite Budget Handling**: Fixed a Javascript bug where `null` limits were treated as `0` rewards. Used `Infinity` for unlimited caps.
+    *   **"OVER BUDGET" Clarity**: Added explicit checks to ensure "OVER BUDGET" labels only appear for cards with an actual exhausted cap.
+2.  **Account Management Polish**
+    *   **Save Reliability**: Fixed a bug in `AccountSlideV2` where editing rates in simple restricted mode used stale state.
+    *   **Real-time Updates**: Added `revalidatePath` to `account.service.ts` to ensure UI reflects database changes immediately.
+3.  **Documentation & Planning**
+    *   **Refactor Roadmap**: Created `.agent/CASHBACK_REFACTOR_PLAN.md` to guide the upcoming database migration and UI redesign.
+    *   **Sample Data**: Documented VCB Signature and VPBank Lady configurations for testing.
 
-2.  **Category Filter**
-    *   Added standard Category dropdown to `/transactions` page.
-    *   Integrated with `UnifiedTransactionTable`.
+## 🏗️ Upcoming Objectives
 
-3.  **Research & Planning**
-    *   **Navigation**: Decided to move Breadcrumbs & Enhanced Sidebar implementation to Phase 15.
-    *   **Chatbot**: Documented existing `QuickAddChat` logic and planned LLM upgrades for Phase 15.
+### 1. Cashback System Refactor (Priority: High)
+*   **Database Migration**: Move `cb_base_rate`, `cb_type`, and `cb_max_budget` out of JSON into separate columns.
+*   **UI Redesign**: Simplify `AccountSlideV2` with distinct "Simple" vs "Tiered" modes and friendly tooltips (Tiếng Việt).
+*   **Validation**: Ensure VPBank Lady's multi-tier logic is robust.
 
----
+### 2. Enhanced Account Ownership
+*   **Ownership Flag**: Distinguish between "My Accounts" vs "Family Accounts".
+*   **Consolidated Net Worth**: Update calculations to separate personal versus shared liabilities.
 
-## 🏗️ Phase 15 Objectives (Planned)
+## 📂 Key Files Changed
+*   `src/components/transaction/slide-v2/single-mode/cashback-section.tsx` (Logic & UI fixes)
+*   `src/components/accounts/v2/AccountSlideV2.tsx` (Save bug fix & Restricted mode detection)
+*   `src/services/account.service.ts` (DB update simplification & Revalidation)
+*   `src/lib/cashback.ts` (Bug fix in config parsing)
 
-### 1. Navigation Architecture (Priority: High)
-*   **Breadcrumbs**: Implement global breadcrumb navigation.
-*   **Enhanced Sidebar**: Add "Recent Pages" section and collapsible state.
-*   **Mobile Nav**: Implement Bottom Tab Bar for top-level access.
-
-### 2. Chatbot Upgrade (Priority: High)
-*   **LLM Integration**: Connect `QuickAddChat` to Gemini/OpenAI API.
-*   **Natural Language Parsing**: Replace regex-based parsing with AI intent extraction.
-*   **Voice Input**: Add Web Speech API support.
-
-### 3. Polish & Optimization
-*   **People V2**: Monitor feedback on the new grid view.
-*   **Performance**: Optimize `UnifiedTransactionTable` for large datasets.
-
----
-
-## 📂 Key Files Changed in Phase 14
-*   `src/app/people/[id]/page.tsx`
-*   `src/components/people/v2/PersonDetailViewV2.tsx`
-*   `src/components/people/v2/PersonDetailHeaderV2.tsx`
-*   `src/components/people/v2/PersonDetailTransactions.tsx`
-*   `src/components/people/v2/PeopleGridV2.tsx`
-*   `src/components/people/v2/people-directory-v2.tsx` (Grid toggle logic)
-*   `src/components/transactions-v2/header/TransactionHeader.tsx` (Category filter)
+## 📝 Instructions for Next Session
+1.  **Read Plan**: START with `.agent/CASHBACK_REFACTOR_PLAN.md`.
+2.  **Branching**: Create `feat/cashback-system-refactor` before modifying the database schema.
+3.  **Prompt**: Use the prompts provided in the chat history to initialize the agent context.
 
 ---
-
-## 📝 Next Steps for User
-1.  **Review**: Check the new People views in the app.
-2.  **Merge**: Merge `feat/phase-14-people-ui-refactor` to main.
-3.  **Start Phase 15**: Begin work on Navigation or Chatbot upgrade.
+**Date**: 2026-02-14
+**Updated by**: Antigravity

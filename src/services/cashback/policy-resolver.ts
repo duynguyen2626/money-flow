@@ -82,100 +82,81 @@ export function resolveCashbackPolicy(params: {
         }
     }
 
-    // 2. Select Level by spent_amount (Highest qualifying level wins)
-    // Sort levels by minTotalSpend DESC
-    if (program.levels && program.levels.length > 0) {
-        // Create a copy to sort without mutating original
-        const sortedLevels = [...program.levels].sort((a, b) => b.minTotalSpend - a.minTotalSpend)
-        const applicableLevel = sortedLevels.find(lvl => cycleTotals.spent >= lvl.minTotalSpend)
+    // 2. Aggregate all qualified levels based on spend (highest first)
+    const sortedLevels = program.levels ? [...program.levels].sort((a, b) => b.minTotalSpend - a.minTotalSpend) : []
+    const qualifiedLevels = sortedLevels.filter(lvl => cycleTotals.spent >= lvl.minTotalSpend)
 
-        if (applicableLevel) {
-            // Found a level. Set it as the new baseline (Level Default).
-            // Level default overrides Program default.
-            const levelDefaultRate = applicableLevel.defaultRate ?? program.defaultRate
-            finalRate = levelDefaultRate
+    let matchedRule: (CashbackCategoryRule & { level: CashbackLevel }) | undefined = undefined
 
-            source = {
-                policySource: 'level_default',
-                reason: `Level matched: ${applicableLevel.name}`,
-                rate: finalRate,
-                levelId: applicableLevel.id,
-                levelName: applicableLevel.name,
-                levelMinSpend: applicableLevel.minTotalSpend,
-                ruleType: 'level_default',
-                priority: 10 // Higher than program default (0)
-            }
-
-            // 3. Match Category Rule within the Active Level
-            // Rules are specific to the ACTIVE level only.
-            if (categoryId && applicableLevel.rules && applicableLevel.rules.length > 0) {
-                // Find all rules that match this category
-                const matchingRules = applicableLevel.rules.filter(rule =>
+    // 3. Find the best matching Category Rule across ALL qualified levels
+    // We prioritize rules in HIGHER levels, but search them all.
+    if (categoryId && qualifiedLevels.length > 0) {
+        for (const lvl of qualifiedLevels) {
+            if (lvl.rules && lvl.rules.length > 0) {
+                const matchingRules = lvl.rules.filter(rule =>
                     rule.categoryIds.includes(categoryId)
                 )
 
                 if (matchingRules.length > 0) {
-                    // Sort matching rules for determinism:
-                    // 1. Specificity (Ascending size of categoryIds) -> Fewer categories = More specific rule = Higher Win
-                    // 2. Priority/Index (Ascending original index) -> Earlier rule = Higher Win (Implicit priority)
-
-                    // We need original index. `applicableLevel.rules` is the source of truth for order.
+                    // Sort matching rules within THIS level by specificity
                     const rulesWithIndex = matchingRules.map(r => ({
                         ...r,
-                        originalIndex: applicableLevel.rules!.indexOf(r)
+                        originalIndex: lvl.rules!.indexOf(r)
                     }))
 
                     rulesWithIndex.sort((a, b) => {
-                        // 1. Specificity: Smaller count first
                         const specDiff = a.categoryIds.length - b.categoryIds.length
                         if (specDiff !== 0) return specDiff
-
-                        // 2. Priority: Lower index first
                         return a.originalIndex - b.originalIndex
                     })
 
-                    const matchedRule = rulesWithIndex[0] // Best match wins
-
-                    finalRate = matchedRule.rate
-                    finalMaxReward = matchedRule.maxReward ?? undefined
-                    const reasonLabel = categoryName
-                        ? `${categoryName} rule (${applicableLevel.name})`
-                        : `Category rule matched for level ${applicableLevel.name}`
-
-                    source = {
-                        policySource: 'category_rule',
-                        reason: reasonLabel,
-                        rate: finalRate,
-                        levelId: applicableLevel.id,
-                        levelName: applicableLevel.name,
-                        levelMinSpend: applicableLevel.minTotalSpend,
-                        categoryId: categoryId,
-                        ruleId: matchedRule.id,
-                        ruleMaxReward: matchedRule.maxReward,
-                        ruleType: 'category',
-                        // Priority Calculation:
-                        // Base 20 (Category Rule) + (1000 - Index) to ensure earlier rules are "higher" value if we visualized value?
-                        // Wait, implicit priority means EARLIER index is BETTER.
-                        // Let's just store a number that represents "winningness" is hard.
-                        // Let's store 20. The Determinism is in the LOGIC above, not just this number.
-                        // But to be helpful, let's distinguish them.
-                        priority: 20
-                    }
-                } else {
-                    // No rule matched within the level -> fall back to program default (not level default)
-                    finalRate = program.defaultRate
-                    finalMaxReward = undefined
-                    source = {
-                        policySource: 'program_default',
-                        reason: categoryName
-                            ? `No rule for ${categoryName}, use program default`
-                            : 'No rule matched, use program default',
-                        rate: finalRate,
-                        ruleType: 'program_default',
-                        priority: 0
-                    }
+                    // We found our candidate in the highest qualifying level that actually has a rule
+                    matchedRule = { ...rulesWithIndex[0], level: lvl }
+                    break // Stop searching lower levels as we found a match in high tier
                 }
             }
+        }
+    }
+
+    // 4. Determine final policy
+    const applicableLevel = qualifiedLevels[0] // The actual tier user is in based on spend
+
+    if (matchedRule) {
+        // High Tier found a rule (either directly or inherited)
+        finalRate = matchedRule.rate
+        finalMaxReward = matchedRule.maxReward ?? undefined
+
+        const reasonLabel = categoryName
+            ? `${categoryName} rule (${matchedRule.level.name})`
+            : `Category rule matched for level ${matchedRule.level.name}`
+
+        source = {
+            policySource: 'category_rule',
+            reason: reasonLabel,
+            rate: finalRate,
+            levelId: matchedRule.level.id,
+            levelName: matchedRule.level.name,
+            levelMinSpend: matchedRule.level.minTotalSpend,
+            categoryId: categoryId || undefined,
+            ruleId: matchedRule.id,
+            ruleMaxReward: matchedRule.maxReward,
+            ruleType: 'category',
+            priority: 20
+        }
+    } else if (applicableLevel) {
+        // No category rule found anywhere -> Tier Default
+        const levelDefaultRate = applicableLevel.defaultRate ?? program.defaultRate
+        finalRate = levelDefaultRate
+
+        source = {
+            policySource: 'level_default',
+            reason: `Level matched: ${applicableLevel.name}`,
+            rate: finalRate,
+            levelId: applicableLevel.id,
+            levelName: applicableLevel.name,
+            levelMinSpend: applicableLevel.minTotalSpend,
+            ruleType: 'level_default',
+            priority: 10
         }
     }
 
