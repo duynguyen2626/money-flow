@@ -31,9 +31,19 @@ type CreateAccountParams = {
   securedByAccountId?: string | null
   imageUrl?: string | null
   annualFee?: number | null
+  annualFeeWaiverTarget?: number | null
   parentAccountId?: string | null
   accountNumber?: string | null
   receiverName?: string | null
+  // New Cashback Columns
+  cb_type?: 'none' | 'simple' | 'tiered'
+  cb_base_rate?: number
+  cb_max_budget?: number | null
+  cb_is_unlimited?: boolean
+  cb_is_unlimited?: boolean
+  cb_rules_json?: Json | null
+  statementDay?: number | null
+  dueDate?: number | null
 }
 
 export async function createAccount(params: CreateAccountParams) {
@@ -53,9 +63,17 @@ export async function createAccount(params: CreateAccountParams) {
     securedByAccountId,
     imageUrl,
     annualFee,
+    annualFeeWaiverTarget,
     parentAccountId,
     accountNumber,
-    receiverName
+    receiverName,
+    cb_type,
+    cb_base_rate,
+    cb_max_budget,
+    cb_is_unlimited,
+    cb_rules_json,
+    statementDay,
+    dueDate
   } = params
 
   // Insert into DB
@@ -70,10 +88,18 @@ export async function createAccount(params: CreateAccountParams) {
       secured_by_account_id: securedByAccountId,
       image_url: imageUrl,
       annual_fee: annualFee,
+      annual_fee_waiver_target: annualFeeWaiverTarget,
       parent_account_id: parentAccountId,
       account_number: accountNumber,
       receiver_name: receiverName,
-      current_balance: 0 // Default starting balance
+      current_balance: 0, // Default starting balance
+      cb_type,
+      cb_base_rate,
+      cb_max_budget,
+      cb_is_unlimited,
+      cb_rules_json,
+      statement_day: statementDay,
+      due_date: dueDate
     })
 
   if (error) {
@@ -119,6 +145,14 @@ export async function updateAccountConfigAction(params: {
   parentAccountId?: string | null
   accountNumber?: string | null
   receiverName?: string | null
+  // New Cashback Columns
+  cb_type?: 'none' | 'simple' | 'tiered'
+  cb_base_rate?: number | null
+  cb_max_budget?: number | null
+  cb_is_unlimited?: boolean
+  cb_rules_json?: Json | null
+  statementDay?: number | null
+  dueDate?: number | null
 }) {
   const { updateAccountConfig } = await import('@/services/account.service')
 
@@ -134,7 +168,15 @@ export async function updateAccountConfigAction(params: {
     image_url: params.imageUrl,
     parent_account_id: params.parentAccountId,
     account_number: params.accountNumber,
-    receiver_name: params.receiverName
+    receiver_name: params.receiverName,
+    // New Cashback Columns
+    cb_type: params.cb_type,
+    cb_base_rate: params.cb_base_rate ?? undefined,
+    cb_max_budget: params.cb_max_budget,
+    cb_is_unlimited: params.cb_is_unlimited,
+    cb_rules_json: params.cb_rules_json,
+    statement_day: params.statementDay,
+    due_date: params.dueDate
   })
 
   if (success) {

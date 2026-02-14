@@ -285,6 +285,26 @@ export function TransactionSlideV2({
         return () => subscription.unsubscribe();
     }, [open, defaultFormValues, singleForm, onHasChanges]);
 
+    // Watch for cashback auto-expand and debt auto-giveaway
+    const sourceAccId = useWatch({ control: singleForm.control, name: "source_account_id" });
+    const currentTxnType = useWatch({ control: singleForm.control, name: "type" });
+
+    useEffect(() => {
+        if (!open || operationMode === 'edit') return;
+
+        const acc = accounts.find(a => a.id === sourceAccId);
+        const hasCashback = acc && (acc as any).cb_type !== 'none';
+
+        if (hasCashback) {
+            singleForm.setValue('ui_is_cashback_expanded', true);
+
+            // If it's debt (External Debt tab), auto Give Away
+            if (currentTxnType === 'debt') {
+                singleForm.setValue('cashback_mode', 'real_percent');
+            }
+        }
+    }, [sourceAccId, currentTxnType, open, operationMode, accounts, singleForm]);
+
     // Fetch data if editingId provided but no initialData
     useEffect(() => {
         if (open && editingId && !initialData) {

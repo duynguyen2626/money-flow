@@ -198,13 +198,13 @@ function LevelItem({
                       type="number"
                       step="0.1"
                       className="w-full rounded-lg border-slate-200 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                      value={parseFloat(((rule.rate ?? 0) * 100).toFixed(6))}
+                      value={rule.rate > 0 ? parseFloat(((rule.rate ?? 0) * 100).toFixed(6)) : ''}
                       onChange={e => {
                         const val = parseFloat(e.target.value)
                         updateRule(rIndex, { rate: isNaN(val) ? 0 : val / 100 })
                       }}
                       onFocus={e => e.target.select()}
-                      placeholder="e.g. 15"
+                      placeholder={`${parseFloat(((level.defaultRate ?? 0) * 100).toFixed(2))}% (Inherited)`}
                     />
                     <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                   </div>
@@ -227,6 +227,11 @@ function LevelItem({
               {rule.categoryIds.length === 0 && (
                 <p className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 italic">
                   Hint: Select categories this rule applies to.
+                </p>
+              )}
+              {rule.rate === 0 && (
+                <p className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200 italic">
+                  💡 Inheriting {parseFloat(((level.defaultRate ?? 0) * 100).toFixed(2))}% from level.
                 </p>
               )}
             </div>
@@ -645,6 +650,12 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
         parentAccountId: parentAccountId || null,
         accountNumber: accountNumber.trim() || null,
         receiverName: receiverName.trim() || null,
+        // New Cashback Columns
+        cb_type: isCreditCard ? (showAdvancedCashback ? 'tiered' : (rateValue > 0 ? 'simple' : 'none')) : 'none',
+        cb_base_rate: rateValue / 100,
+        cb_max_budget: parseOptionalNumber(maxAmount),
+        cb_is_unlimited: parseOptionalNumber(maxAmount) === null,
+        cb_rules_json: showAdvancedCashback ? levels : null,
       })
 
       if (error) {
