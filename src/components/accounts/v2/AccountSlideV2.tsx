@@ -430,7 +430,18 @@ export function AccountSlideV2({
                     }));
 
                     setLevels(loadedLevels);
-                    setIsAdvancedCashback(loadedLevels.length > 1 || (loadedLevels.length === 1 && loadedLevels[0].rules.length > 1));
+
+                    // Advanced mode detection: 
+                    // - Multiple levels, OR
+                    // - Multiple rules in any level, OR
+                    // - Any level has category-specific rules (rules with categoryIds)
+                    const hasMultipleLevels = loadedLevels.length > 1;
+                    const hasMultipleRules = loadedLevels.some((lvl: any) => lvl.rules.length > 1);
+                    const hasCategoryRules = loadedLevels.some((lvl: any) =>
+                        lvl.rules.some((rule: any) => rule.categoryIds && rule.categoryIds.length > 0)
+                    );
+
+                    setIsAdvancedCashback(hasMultipleLevels || hasMultipleRules || hasCategoryRules);
                     setIsCashbackEnabled(cb.defaultRate > 0 || loadedLevels.length > 0);
 
                     // Check if it's a simple restricted config
@@ -1690,6 +1701,8 @@ export function AccountSlideV2({
                     }
                     setIsCategoryDialogOpen(false);
                     toast.success("Category created successfully");
+                    // Refresh to update categories prop from parent
+                    router.refresh();
                 }}
             />
         </>

@@ -92,40 +92,20 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
 
         form.setValue('cashback_mode', newMode);
 
-        // Auto-fill rate if switching to percent modes
-        if ((newMode === 'percent' || newMode === 'real_percent') && sourceAccountId && accounts) {
-            const acc = accounts.find(a => a.id === sourceAccountId);
-            if (acc?.cashback_config) {
-                const config = normalizeCashbackConfig(acc.cashback_config as any);
+        // Auto-fill rate if switching to percent modes - use policy resolver for accuracy
+        if ((newMode === 'percent' || newMode === 'real_percent') && policy) {
+            // Use the resolved policy rate which already considers category rules
+            const policyRate = policy.rate;
 
-                // Extract the best rate from the config
-                let bestRate = (config as any).program?.defaultRate ?? (config as any).rate ?? 0;
+            console.log('[CashbackSection] Auto-fill rate from policy:', {
+                mode: newMode,
+                policyRate,
+                policySource: policy.metadata.policySource
+            });
 
-                // Check levels for higher rates in category rules
-                if ((config as any).program?.levels && (config as any).program.levels.length > 0) {
-                    for (const level of (config as any).program.levels) {
-                        // Check level's default rate
-                        if (level.defaultRate !== null && level.defaultRate !== undefined && level.defaultRate > bestRate) {
-                            bestRate = level.defaultRate;
-                        }
-                        // Check category-specific rules
-                        if (level.rules && level.rules.length > 0) {
-                            for (const rule of level.rules) {
-                                if (rule.rate > bestRate) {
-                                    bestRate = rule.rate;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                console.log('[CashbackSection] Auto-fill rate:', { account: acc.name, bestRate, config });
-
-                if (bestRate > 0) {
-                    // Convert decimal (0.2) to percentage (20) for UI display
-                    // The form will convert back to decimal on submit
-                    form.setValue('cashback_share_percent', bestRate * 100);
-                }
+            if (policyRate > 0) {
+                // Convert decimal (0.1) to percentage (10) for UI display
+                form.setValue('cashback_share_percent', policyRate * 100);
             }
         }
     };
