@@ -173,11 +173,11 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
             {isExpanded && (
                 <div className="px-3 pb-3 pt-3">
                     <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 h-10 bg-transparent p-0 mb-4 gap-2">
+                        <TabsList className="grid w-full grid-cols-3 h-auto bg-transparent p-0 mb-4 gap-2 border-none shadow-none rounded-none">
                             <TabsTrigger
                                 value="claim"
                                 className={cn(
-                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "text-xs border border-slate-200 rounded-lg transition-all h-10",
                                     "data-[state=active]:border-emerald-300 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm",
                                     "hover:border-slate-300 hover:bg-slate-50"
                                 )}
@@ -188,11 +188,10 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                             <TabsTrigger
                                 value="giveaway"
                                 className={cn(
-                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "text-xs border border-slate-200 rounded-lg transition-all h-10",
                                     "data-[state=active]:border-amber-300 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-700 data-[state=active]:shadow-sm",
                                     "hover:border-slate-300 hover:bg-slate-50"
                                 )}
-                                disabled={!personId}
                             >
                                 <Gift className="h-3.5 w-3.5 mr-1.5" />
                                 Give Away
@@ -200,11 +199,10 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                             <TabsTrigger
                                 value="voluntary"
                                 className={cn(
-                                    "text-xs border border-slate-200 rounded-lg transition-all",
+                                    "text-xs border border-slate-200 rounded-lg transition-all h-10",
                                     "data-[state=active]:border-rose-300 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm",
                                     "hover:border-slate-300 hover:bg-slate-50"
                                 )}
-                                disabled={!personId}
                             >
                                 <Heart className="h-3.5 w-3.5 mr-1.5" />
                                 Voluntary
@@ -412,18 +410,36 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Bank Rate:</span>
-                                    <span className="font-medium bg-slate-100 px-1 rounded">
+                                    <span className="font-medium bg-slate-100 px-1 rounded flex items-center gap-1">
                                         {(policy?.rate ? policy.rate * 100 : 0).toFixed(1)}%
+                                        <span className="text-[10px] opacity-70">
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(Math.abs(amount) * (policy?.rate ?? 0)))})
+                                        </span>
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-slate-500">Your Share:</span>
-                                    <span className="font-medium bg-slate-50 px-1 rounded">
-                                        {(sharePercent ?? (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                    <span className="text-slate-500 font-bold">Your Share:</span>
+                                    <span className="font-black bg-indigo-50 text-indigo-700 px-1 rounded flex items-center gap-1">
+                                        {(sharePercent ?? (policy?.rate ? (policy.rate * 100) : 0)).toFixed(1)}%
+                                        <span className="text-[10px] opacity-70">
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(Math.abs(amount) * ((sharePercent ?? (policy?.rate ? policy.rate * 100 : 0)) / 100)))})
+                                        </span>
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-xs pt-1 border-t border-slate-50 mt-1">
+                                    <span className="text-slate-500">Profit:</span>
+                                    <span className="font-medium text-emerald-600 flex items-center gap-1">
+                                        {((policy?.rate ? policy.rate * 100 : 0) - (sharePercent ?? (policy?.rate ? policy.rate * 100 : 0))).toFixed(1)}%
+                                        <span className="text-[10px] opacity-70">
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(
+                                                (Math.abs(amount) * (policy?.rate ?? 0)) -
+                                                (Math.abs(amount) * ((sharePercent ?? (policy?.rate ? policy.rate * 100 : 0)) / 100))
+                                            ))})
+                                        </span>
                                     </span>
                                 </div>
                                 {activeAccount?.stats?.remains_cap !== undefined && activeAccount.stats.remains_cap !== null && (
-                                    <div className="flex justify-between text-xs pt-1">
+                                    <div className="flex justify-between text-xs pt-2">
                                         <span className="text-amber-600 font-medium">Budget Left:</span>
                                         <span className="text-amber-600 font-bold">
                                             {new Intl.NumberFormat('vi-VN').format(activeAccount.stats.remains_cap)}
