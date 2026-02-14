@@ -75,6 +75,14 @@ export type Account = {
   total_out?: number;
   annual_fee?: number | null;
   annual_fee_waiver_target?: number | null;
+  // Refactor: Cashback Column-based fields
+  cb_type?: 'none' | 'simple' | 'tiered';
+  cb_base_rate?: number;
+  cb_max_budget?: number | null;
+  cb_is_unlimited?: boolean;
+  cb_rules_json?: Json | null;
+  statement_day?: number | null;
+  due_date?: number | null;
   stats?: AccountStats | null;
   relationships?: AccountRelationships | null;
   credit_card_info?: {

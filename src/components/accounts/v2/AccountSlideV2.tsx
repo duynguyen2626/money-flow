@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, startTransition } from "react";
 import {
     Sheet,
     SheetContent,
@@ -17,6 +17,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2 } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
+import { createAccount } from "@/actions/account-actions";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -92,6 +93,7 @@ export function AccountSlideV2({
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [activeCategoryCallback, setActiveCategoryCallback] = useState<((categoryId: string) => void) | null>(null);
     const [isCashbackEnabled, setIsCashbackEnabled] = useState(false);
+    const [cbType, setCbType] = useState<'none' | 'simple' | 'tiered'>('none');
 
     // Form state
     const [name, setName] = useState("");
@@ -115,13 +117,14 @@ export function AccountSlideV2({
         categoryIds: string[];
         rate: number;
         maxReward: number | null;
+        description?: string;
     }
 
     interface LevelState {
         id: string;
         name: string;
         minTotalSpend: number;
-        defaultRate: number;
+        defaultRate: number | null;
         rules: RuleState[];
     }
 
@@ -142,73 +145,142 @@ export function AccountSlideV2({
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [pendingAction, setPendingAction] = useState<'close' | 'back' | null>(null);
 
+    // Initial load helper
+    const loadFromAccount = (acc: Account) => {
+        setName(acc.name || "");
+        setType(acc.type || 'bank');
+        setAccountNumber(acc.account_number || "");
+        setCreditLimit(acc.credit_limit || 0);
+        setIsActive(acc.is_active !== false);
+        setImageUrl(acc.image_url || "");
+
+        // MF5.4: Use updated normalizeCashbackConfig with full account object
+        const cb = normalizeCashbackConfig(acc.cashback_config, acc) as any;
+        setCycleType(cb.cycleType || 'calendar_month');
+        // Prioritize explicit columns, fallback to legacy config logic
+        setStatementDay(acc.statement_day ?? cb.statementDay ?? null);
+        setDueDate(acc.due_date ?? cb.dueDate ?? null);
+        setMinSpendTarget(cb.minSpendTarget ?? undefined);
+        setDefaultRate(cb.defaultRate || 0);
+        setMaxCashback(cb.maxBudget ?? undefined);
+
+        // New fields
+        setAnnualFee(acc.annual_fee || 0);
+        setAnnualFeeWaiverTarget(acc.annual_fee_waiver_target || 0);
+        setReceiverName(acc.receiver_name || "");
+        setParentAccountId(acc.parent_account_id || null);
+        setStartDate((acc as any).start_date);
+
+        // Determine main type
+        if (acc.type === 'bank') setActiveMainType('bank');
+        else if (acc.type === 'credit_card') setActiveMainType('credit');
+        else if (['savings', 'investment'].includes(acc.type)) setActiveMainType('savings');
+        else setActiveMainType('others');
+
+        const secured = acc.secured_by_account_id || "none";
+        setSecuredById(secured);
+        setIsCollateralLinked(secured !== "none");
+
+        // Explicit cb_type from DB or derived
+        const rawCbType = acc.cb_type || (acc.cashback_config ? 'simple' : 'none');
+
+        const loadedLevels = (cb.levels || []).map((lvl: any) => ({
+            id: lvl.id || Math.random().toString(36).substr(2, 9),
+            name: lvl.name || "",
+            minTotalSpend: lvl.minTotalSpend || 0,
+            defaultRate: lvl.defaultRate || 0,
+            rules: (lvl.rules || []).map((r: any) => ({
+                id: r.id || Math.random().toString(36).substr(2, 9),
+                categoryIds: r.categoryIds || [],
+                rate: r.rate || 0,
+                maxReward: r.maxReward || null,
+                description: r.description
+            }))
+        }));
+
+        setLevels(loadedLevels);
+
+        // Advanced mode detection
+        const hasMultipleLevels = loadedLevels.length > 1;
+        const hasMultipleRules = loadedLevels.some((lvl: any) => lvl.rules.length > 1);
+        const hasCategoryRules = loadedLevels.some((lvl: any) =>
+            lvl.rules.some((rule: any) => rule.categoryIds && rule.categoryIds.length > 0)
+        );
+
+        // Check if it's a simple restricted config (Restricted = 1 Level with 1 Rule)
+        let isActuallyRestricted = false;
+        if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
+            if (cb.defaultRate === 0 && loadedLevels[0].rules[0].categoryIds.length > 0) {
+                isActuallyRestricted = true;
+            }
+        }
+
+        setIsCategoryRestricted(isActuallyRestricted);
+
+        if (isActuallyRestricted) {
+            setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
+            setDefaultRate(loadedLevels[0].rules[0].rate);
+        } else {
+            setRestrictedCategoryIds([]);
+            setDefaultRate(cb.defaultRate || 0);
+        }
+
+        const isActuallyAdvanced = (rawCbType === 'tiered' || hasMultipleLevels || hasMultipleRules || (hasCategoryRules && !isActuallyRestricted)) && !isActuallyRestricted;
+
+        setIsAdvancedCashback(isActuallyAdvanced);
+        setIsCashbackEnabled(rawCbType !== 'none');
+        // Force cb_type to tiered if isActuallyAdvanced is true, otherwise respect existing simple/none
+        setCbType(isActuallyAdvanced ? 'tiered' : (rawCbType !== 'none' ? 'simple' : 'none'));
+
+        // If we loaded data but levels is empty, ensure at least one level
+        if (isActuallyAdvanced && loadedLevels.length === 0) {
+            setLevels([{
+                id: Math.random().toString(36).substr(2, 9),
+                name: "Level 1",
+                minTotalSpend: 0,
+                defaultRate: cb.defaultRate || 0,
+                rules: []
+            }]);
+        }
+    };
+
     // Initial load
     useEffect(() => {
-        if (open) {
-            const loadedState = "";
-            if (account) {
-                const config = normalizeCashbackConfig(account.cashback_config);
+        if (open && account) {
+            loadFromAccount(account);
 
-                // Initial load
-                const stateObj = {
-                    name: account.name,
-                    type: account.type,
-                    accountNumber: account.account_number || "",
-                    creditLimit: account.credit_limit || 0,
-                    isActive: account.is_active !== false,
-                    imageUrl: account.image_url || "",
-                    annualFee: account.annual_fee || 0,
-                    annualFeeWaiverTarget: account.annual_fee_waiver_target || 0,
-                    receiverName: account.receiver_name || "",
-                    parentAccountId: account.parent_account_id || null,
-                    securedById: account.secured_by_account_id || "none",
-                    isCollateralLinked: !!account.secured_by_account_id,
-                    // Cashback config
-                    cycleType: config.cycleType || 'calendar_month',
-                    statementDay: config.statementDay || null,
-                    dueDate: config.dueDate || null,
-                    minSpendTarget: config.minSpendTarget || null,
-                    defaultRate: config.defaultRate || 0,
-                    maxCashback: config.maxBudget || null,
-                    levels: (config.levels || []).map(lvl => ({
-                        id: lvl.id,
-                        name: lvl.name || "",
-                        minTotalSpend: lvl.minTotalSpend || 0,
-                        defaultRate: lvl.defaultRate || 0,
-                        rules: (lvl.rules || []).map(r => ({
-                            id: r.id,
-                            categoryIds: [...(r.categoryIds || [])].sort(),
-                            rate: r.rate || 0,
-                            maxReward: r.maxReward || null
-                        }))
-                    })),
-                    // Derived simple mode state for check
-                    isCategoryRestricted: false,
-                };
-
-                // Determine if cashback is enabled based on loaded configuration
-                const hasCashbackData = !!config.defaultRate || (config.levels && config.levels.length > 0);
-                setIsCashbackEnabled(!!hasCashbackData);
-
-                // Normalizing logic for simple mode to match how valid levels look
-                const loadedLevels = (config.levels || []).map(lvl => ({
-                    id: lvl.id,
-                    name: lvl.name || "",
-                    minTotalSpend: lvl.minTotalSpend || 0,
-                    defaultRate: lvl.defaultRate || 0,
-                    rules: (lvl.rules || []).map(r => ({
-                        id: r.id,
-                        categoryIds: r.categoryIds || [],
-                        rate: r.rate || 0,
-                        maxReward: r.maxReward || null
-                    }))
-                }));
-
-                // To properly check dirty, we need to capture the exact state we are setting.
-                // Let's rely on the useEffect below that sets the individual states, and capture them *after* set. 
-                // However, React batching makes that hard.
-                // Alternative: Construct the "current" object on every render and compare with "initial".
-            }
+            // Re-fetch to ensure fresh data
+            import('@/services/account.service').then(({ getAccountDetails }) => {
+                getAccountDetails(account.id).then(fresh => {
+                    if (fresh) loadFromAccount(fresh);
+                });
+            });
+        } else if (open && !account) {
+            // New account default state
+            setName("");
+            setType('bank');
+            setAccountNumber("");
+            setCreditLimit(0);
+            setIsActive(true);
+            setImageUrl("");
+            setCycleType('calendar_month');
+            setStatementDay(null);
+            setDueDate(null);
+            setMinSpendTarget(undefined);
+            setDefaultRate(0);
+            setMaxCashback(undefined);
+            setAnnualFee(0);
+            setReceiverName("");
+            setSecuredById("none");
+            setIsCollateralLinked(false);
+            setParentAccountId(null);
+            setActiveMainType('bank');
+            setLevels([]);
+            setIsAdvancedCashback(false);
+            setIsCashbackEnabled(false);
+            setCbType('none');
+            setIsCategoryRestricted(false);
+            setRestrictedCategoryIds([]);
         }
     }, [open, account]);
 
@@ -222,7 +294,8 @@ export function AccountSlideV2({
             rules: lvl.rules.map(r => ({
                 categoryIds: [...r.categoryIds].sort(),
                 rate: r.rate,
-                maxReward: r.maxReward
+                maxReward: r.maxReward,
+                description: r.description
             }))
         }));
 
@@ -239,7 +312,8 @@ export function AccountSlideV2({
                 rules: [{
                     categoryIds: [...restrictedCategoryIds].sort(),
                     rate: defaultRate,
-                    maxReward: null
+                    maxReward: null,
+                    description: undefined
                 }]
             }];
         } else if (isCategoryRestricted && restrictedCategoryIds.length === 0) {
@@ -276,25 +350,8 @@ export function AccountSlideV2({
     // Set initial state once when opening
     useEffect(() => {
         if (open && account) {
-            const cb = (account.cashback_config as any)?.program || {};
-            const loadedLevels = (cb.levels || []).map((lvl: any) => ({
-                name: lvl.name || "",
-                minTotalSpend: lvl.minTotalSpend || 0,
-                defaultRate: lvl.defaultRate || 0,
-                rules: (lvl.rules || []).map((r: any) => ({
-                    categoryIds: [...(r.categoryIds || [])].sort(),
-                    rate: r.rate || 0,
-                    maxReward: r.maxReward || null
-                }))
-            }));
+            const cb = normalizeCashbackConfig(account.cashback_config, account);
 
-            // Re-derive the logic for isCategoryRestricted to match what we did in the initialization effect
-            const effectiveInitLevels = loadedLevels;
-            if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
-                // This was detected as restricted mode
-            }
-
-            // Correction: The `currentState` logic generates the payload. We should generate the `initialState` payload similarly from the `account` prop.
             const initLevels = (cb.levels || []).map((lvl: any) => ({
                 name: lvl.name || "",
                 minTotalSpend: lvl.minTotalSpend || 0,
@@ -319,9 +376,9 @@ export function AccountSlideV2({
                 parentAccountId: account.parent_account_id || null,
                 securedById: account.secured_by_account_id || "none",
                 cycleType: cb.cycleType || 'calendar_month',
-                statementDay: cb.statementDay || null,
-                dueDate: cb.dueDate || null,
-                minSpendTarget: cb.minSpendTarget || null,
+                statementDay: cb.statementDay,
+                dueDate: cb.dueDate,
+                minSpendTarget: cb.minSpendTarget,
                 defaultRate: cb.defaultRate || 0,
                 maxCashback: cb.maxBudget || null,
                 levels: initLevels
@@ -518,65 +575,183 @@ export function AccountSlideV2({
         setLoading(true);
         try {
             if (isEdit && account) {
-                const success = await updateAccountConfig(account.id, {
+                // Determine cb_type
+                let effectiveCbType: 'none' | 'simple' | 'tiered' = 'none';
+                if (isCashbackEnabled) {
+                    effectiveCbType = (isAdvancedCashback || isCategoryRestricted) ? 'tiered' : 'simple';
+                }
+
+                // Map levels
+                let finalLevels: any[] = [];
+                if (effectiveCbType === 'tiered') {
+                    if (isCategoryRestricted) {
+                        finalLevels = [{
+                            id: 'lvl_1',
+                            name: 'Default',
+                            minTotalSpend: 0,
+                            defaultRate: 0,
+                            rules: [{
+                                id: 'rule_1',
+                                categoryIds: restrictedCategoryIds,
+                                rate: defaultRate,
+                                maxReward: null,
+                                description: undefined
+                            }]
+                        }];
+                    } else {
+                        finalLevels = levels.map(lvl => ({
+                            id: lvl.id,
+                            name: lvl.name,
+                            minTotalSpend: lvl.minTotalSpend,
+                            defaultRate: lvl.defaultRate,
+                            rules: lvl.rules.map(r => ({
+                                id: r.id,
+                                categoryIds: r.categoryIds,
+                                rate: r.rate,
+                                maxReward: r.maxReward,
+                                description: r.description
+                            }))
+                        }));
+                    }
+                }
+
+                console.log('[AccountSlideV2] Calling updateAccountConfigAction...', { id: account.id, effectiveCbType });
+                const { updateAccountConfigAction } = await import('@/actions/account-actions');
+                const success = await updateAccountConfigAction({
+                    id: account.id,
                     name,
                     type,
-                    account_number: accountNumber,
-                    credit_limit: creditLimit,
-                    is_active: isActive,
-                    image_url: imageUrl,
-                    annual_fee: annualFee,
-                    annual_fee_waiver_target: annualFeeWaiverTarget,
-                    receiver_name: receiverName,
-                    parent_account_id: parentAccountId,
-                    cashback_config: isCashbackEnabled ? {
+                    accountNumber: accountNumber,
+                    creditLimit: creditLimit,
+                    isActive: isActive,
+                    imageUrl: imageUrl,
+                    annualFee: annualFee,
+                    annualFeeWaiverTarget: annualFeeWaiverTarget,
+                    receiverName: receiverName,
+                    parentAccountId: parentAccountId,
+
+                    // New Column-based fields
+                    cb_type: effectiveCbType,
+                    cb_base_rate: isCategoryRestricted ? 0 : defaultRate,
+                    cb_max_budget: maxCashback || 0,
+                    cb_is_unlimited: !maxCashback,
+                    cb_rules_json: effectiveCbType === 'tiered' ? finalLevels : null,
+
+                    // Keep legacy config for safety during transition
+                    cashbackConfig: isCashbackEnabled ? {
                         program: {
                             cycleType,
                             statementDay,
                             dueDate,
                             minSpendTarget,
-                            defaultRate: isCategoryRestricted ? 0 : defaultRate, // If restricted, base is 0
+                            defaultRate: isCategoryRestricted ? 0 : defaultRate,
                             maxBudget: maxCashback,
-                            levels: (isAdvancedCashback && !isCategoryRestricted) ? levels.map(lvl => ({
-                                id: lvl.id,
-                                name: lvl.name,
-                                minTotalSpend: lvl.minTotalSpend,
-                                defaultRate: lvl.defaultRate,
-                                rules: lvl.rules.map(r => ({
-                                    id: r.id,
-                                    categoryIds: r.categoryIds,
-                                    rate: r.rate,
-                                    maxReward: r.maxReward
-                                }))
-                            })) : (isCategoryRestricted && restrictedCategoryIds.length > 0 ? [{
-                                id: 'lvl_1',
-                                name: 'Default',
-                                minTotalSpend: 0,
-                                defaultRate: 0,
-                                rules: [{
-                                    id: 'rule_1',
-                                    categoryIds: restrictedCategoryIds,
-                                    rate: defaultRate,
-                                    maxReward: null
-                                }]
-                            }] : [])
+                            levels: finalLevels
                         }
                     } : null
                 });
+
                 if (success) {
+                    console.log('[AccountSlideV2] Update success');
                     toast.success("Account updated successfully");
                     onOpenChange(false);
-                    router.refresh();
+                    startTransition(() => {
+                        router.refresh();
+                    });
                 } else {
+                    console.error('[AccountSlideV2] Update failed');
                     toast.error("Failed to update account");
                 }
             } else {
-                // Implementation for create would go here
-                toast.info("Account creation via Slide is coming soon. Using existing dialog for now.");
+                // Determine cb_type
+                let effectiveCbType: 'none' | 'simple' | 'tiered' = 'none';
+                if (isCashbackEnabled) {
+                    effectiveCbType = (isAdvancedCashback || isCategoryRestricted) ? 'tiered' : 'simple';
+                }
+
+                // Map levels
+                let finalLevels: any[] = [];
+                if (effectiveCbType === 'tiered') {
+                    if (isCategoryRestricted) {
+                        finalLevels = [{
+                            id: 'lvl_1',
+                            name: 'Default',
+                            minTotalSpend: 0,
+                            defaultRate: 0,
+                            rules: [{
+                                id: 'rule_1',
+                                categoryIds: restrictedCategoryIds,
+                                rate: defaultRate,
+                                maxReward: null,
+                                description: undefined
+                            }]
+                        }];
+                    } else {
+                        finalLevels = levels.map(lvl => ({
+                            id: lvl.id,
+                            name: lvl.name,
+                            minTotalSpend: lvl.minTotalSpend,
+                            defaultRate: lvl.defaultRate,
+                            rules: lvl.rules.map(r => ({
+                                id: r.id,
+                                categoryIds: r.categoryIds,
+                                rate: r.rate,
+                                maxReward: r.maxReward,
+                                description: r.description
+                            }))
+                        }));
+                    }
+                }
+
+                // Implementation for create
+                console.log('[AccountSlideV2] Creating account...', { name, effectiveCbType });
+                const result = await createAccount({
+                    name,
+                    type,
+                    accountNumber: accountNumber,
+                    creditLimit: creditLimit,
+                    imageUrl: imageUrl,
+                    annualFee: annualFee,
+                    annualFeeWaiverTarget: annualFeeWaiverTarget,
+                    receiverName: receiverName,
+                    parentAccountId: parentAccountId,
+
+                    // New Column-based fields
+                    cb_type: effectiveCbType,
+                    cb_base_rate: isCategoryRestricted ? 0 : defaultRate,
+                    cb_max_budget: maxCashback || 0,
+                    cb_is_unlimited: !maxCashback,
+                    cb_rules_json: effectiveCbType === 'tiered' ? finalLevels : null,
+
+                    // Legacy config
+                    cashbackConfig: isCashbackEnabled ? {
+                        program: {
+                            cycleType,
+                            statementDay,
+                            dueDate,
+                            minSpendTarget,
+                            defaultRate: isCategoryRestricted ? 0 : defaultRate,
+                            maxBudget: maxCashback,
+                            levels: finalLevels
+                        }
+                    } : null
+                });
+
+                if (result.error) {
+                    console.error('[AccountSlideV2] Create failed', result.error);
+                    toast.error(`Failed to create account: ${result.error.message}`);
+                } else {
+                    console.log('[AccountSlideV2] Create success');
+                    toast.success("Account created successfully");
+                    onOpenChange(false);
+                    startTransition(() => {
+                        router.refresh();
+                    });
+                }
             }
         } catch (error) {
-            console.error(error);
-            toast.error("An error occurred");
+            console.error('[AccountSlideV2] Handle save error', error);
+            toast.error("An error occurred during save");
         } finally {
             setLoading(false);
         }
@@ -1049,21 +1224,42 @@ export function AccountSlideV2({
                                                 <div className="bg-amber-100 p-1.5 rounded-full">
                                                     <Coins className="h-3.5 w-3.5 text-amber-600" />
                                                 </div>
-                                                <h3 className="text-sm font-bold text-slate-800">Cashback Policy</h3>
+                                                <h3 className="text-sm font-bold text-slate-800">Chính sách Hoàn tiền</h3>
                                                 <Switch
                                                     checked={isCashbackEnabled}
-                                                    onCheckedChange={setIsCashbackEnabled}
+                                                    onCheckedChange={(checked) => {
+                                                        setIsCashbackEnabled(checked);
+                                                        if (checked && cbType === 'none') setCbType('simple');
+                                                    }}
                                                     className="scale-75"
                                                 />
                                             </div>
                                             {isCashbackEnabled && (
-                                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-1">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Advanced?</span>
-                                                    <Switch
-                                                        checked={isAdvancedCashback}
-                                                        onCheckedChange={setIsAdvancedCashback}
-                                                        className="scale-[0.6]"
-                                                    />
+                                                <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsAdvancedCashback(false);
+                                                            setCbType('simple');
+                                                        }}
+                                                        className={cn(
+                                                            "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
+                                                            !isAdvancedCashback ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                                        )}
+                                                    >
+                                                        Cố định (Simple)
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsAdvancedCashback(true);
+                                                            setCbType('tiered');
+                                                        }}
+                                                        className={cn(
+                                                            "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
+                                                            isAdvancedCashback ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                                        )}
+                                                    >
+                                                        Phân bậc (Tiered)
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
@@ -1073,66 +1269,32 @@ export function AccountSlideV2({
                                                 <div className="p-4 space-y-4 animate-in fade-in slide-in-from-top-1">
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Cycle</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Chu kỳ hoàn tiền</Label>
+                                                                <CustomTooltip content="Chọn cách tính chu kỳ hoàn tiền: Theo tháng dương lịch hoặc theo ngày sao kê của thẻ.">
+                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                </CustomTooltip>
+                                                            </div>
                                                             <Select
                                                                 value={cycleType ?? 'calendar_month'}
                                                                 onValueChange={(v) => {
                                                                     setCycleType(v as any);
-                                                                    if (v === 'calendar_month') {
-                                                                        setStatementDay(1);
-                                                                    }
+                                                                    // We no longer force statementDay to 1 here, as statementDay is now independent
                                                                 }}
                                                                 items={[
-                                                                    { value: "calendar_month", label: "Calendar Month" },
-                                                                    { value: "statement_cycle", label: "Statement Cycle" },
+                                                                    { value: "calendar_month", label: "Tháng dương lịch" },
+                                                                    { value: "statement_cycle", label: "Chu kỳ sao kê" },
                                                                 ]}
                                                                 className="h-9 font-bold bg-slate-50"
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Date</Label>
-                                                            <DayOfMonthPicker
-                                                                value={cycleType === 'calendar_month' ? 1 : statementDay}
-                                                                onChange={setStatementDay}
-                                                                disabled={cycleType === 'calendar_month'}
-                                                                className="h-9"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
-                                                            <SmartAmountInput
-                                                                value={defaultRate * 100}
-                                                                onChange={(val) => setDefaultRate((val ?? 0) / 100)}
-                                                                unit="%"
-                                                                hideLabel
-                                                                className="h-9 font-bold"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Max Budget</Label>
-                                                            <SmartAmountInput
-                                                                value={maxCashback}
-                                                                onChange={setMaxCashback}
-                                                                hideLabel
-                                                                className="h-9 font-bold"
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Due Day</Label>
-                                                            <DayOfMonthPicker
-                                                                value={dueDate}
-                                                                onChange={setDueDate}
-                                                                className="h-9"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tiêu tối thiểu</Label>
+                                                                <CustomTooltip content="Chi tiêu tối thiểu trong kỳ để bắt đầu được tính hoàn tiền (ví dụ: VIB Travel Elite yêu cầu 5tr).">
+                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                </CustomTooltip>
+                                                            </div>
                                                             <SmartAmountInput
                                                                 value={minSpendTarget}
                                                                 onChange={setMinSpendTarget}
@@ -1143,135 +1305,173 @@ export function AccountSlideV2({
                                                     </div>
 
                                                     <div className="grid grid-cols-2 gap-4">
-                                                        <div className="space-y-3">
-                                                            <div className="space-y-1.5 text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <Label className="text-[10px] font-black uppercase tracking-wider">Category Restriction</Label>
-                                                                    <Switch
-                                                                        checked={isCategoryRestricted}
-                                                                        onCheckedChange={setIsCategoryRestricted}
-                                                                        className="scale-[0.7] data-[state=checked]:bg-rose-500"
-                                                                    />
-                                                                </div>
-                                                                {isCategoryRestricted && (
-                                                                    <Popover>
-                                                                        <PopoverTrigger asChild>
-                                                                            <Button variant="outline" size="sm" className="w-full h-8 px-2 text-[10px] font-bold justify-between bg-white border-rose-200 text-rose-700 hover:bg-rose-50 animate-in fade-in zoom-in-95">
-                                                                                <span className="truncate">
-                                                                                    {restrictedCategoryIds.length === 0 ? "Pick Categories..." : `${restrictedCategoryIds.length} Selected`}
-                                                                                </span>
-                                                                                <Plus className="h-3 w-3 opacity-50" />
-                                                                            </Button>
-                                                                        </PopoverTrigger>
-                                                                        <PopoverContent className="w-64 p-0" align="start">
-                                                                            <Command>
-                                                                                <CommandInput placeholder="Search category..." className="h-8 text-[11px]" />
-                                                                                <CommandList className="max-h-48">
-                                                                                    <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
-                                                                                    <CommandGroup>
-                                                                                        {categories.map((cat) => (
-                                                                                            <CommandItem
-                                                                                                key={cat.id}
-                                                                                                value={cat.name}
-                                                                                                onSelect={() => {
-                                                                                                    if (restrictedCategoryIds.includes(cat.id)) {
-                                                                                                        setRestrictedCategoryIds(restrictedCategoryIds.filter(id => id !== cat.id));
-                                                                                                    } else {
-                                                                                                        setRestrictedCategoryIds([...restrictedCategoryIds, cat.id]);
-                                                                                                    }
-                                                                                                }}
-                                                                                                className="text-[11px]"
-                                                                                            >
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                    <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                                        {cat.image_url ? (
-                                                                                                            <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                                        ) : (
-                                                                                                            <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                    <span className="truncate">{cat.name}</span>
-                                                                                                </div>
-                                                                                                <Check className={cn("ml-auto h-3 w-3", restrictedCategoryIds.includes(cat.id) ? "opacity-100" : "opacity-0")} />
-                                                                                            </CommandItem>
-                                                                                        ))}
-                                                                                    </CommandGroup>
-                                                                                </CommandList>
-                                                                                <div className="p-1 border-t border-slate-100 bg-slate-50">
-                                                                                    <CommandItem
-                                                                                        onSelect={() => {
-                                                                                            setActiveCategoryCallback(() => (categoryId: string) => {
-                                                                                                setRestrictedCategoryIds([...restrictedCategoryIds, categoryId]);
-                                                                                            });
-                                                                                            setIsCategoryDialogOpen(true);
-                                                                                        }}
-                                                                                        className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
-                                                                                    >
-                                                                                        <Plus className="mr-2 h-3 w-3" />
-                                                                                        Add New Category
-                                                                                    </CommandItem>
-                                                                                </div>
-                                                                            </Command>
-                                                                        </PopoverContent>
-                                                                    </Popover>
-                                                                )}
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tỷ lệ cơ bản (%)</Label>
+                                                                <CustomTooltip content="Tỷ lệ hoàn tiền mặc định cho mọi giao dịch.">
+                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                </CustomTooltip>
                                                             </div>
+                                                            <SmartAmountInput
+                                                                value={defaultRate * 100}
+                                                                onChange={(val) => setDefaultRate((val ?? 0) / 100)}
+                                                                unit="%"
+                                                                hideLabel
+                                                                className="h-9 font-bold"
+                                                            />
                                                         </div>
-                                                        <div className="flex items-center gap-1 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                                            <Info className="h-3 w-3 text-blue-500 shrink-0" />
-                                                            <p className="text-[9px] text-blue-700 font-medium leading-tight">
-                                                                {isCategoryRestricted
-                                                                    ? "Rates will only apply to these categories. Everything else 0%."
-                                                                    : "Default rate applies to all spending."}
-                                                            </p>
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Hạn mức tối đa</Label>
+                                                                <CustomTooltip content="Số tiền hoàn tối đa mỗi tháng (thường từ 300k - 1tr tùy thẻ).">
+                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                </CustomTooltip>
+                                                            </div>
+                                                            <SmartAmountInput
+                                                                value={maxCashback}
+                                                                onChange={setMaxCashback}
+                                                                hideLabel
+                                                                placeholder="Vô hạn (0)"
+                                                                className="h-9 font-bold"
+                                                            />
                                                         </div>
                                                     </div>
+
+                                                    {/* Category Restriction Section (Only for simple mode or simple tiered) */}
+                                                    {!isAdvancedCashback && (
+                                                        <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-3">
+                                                            <div className="space-y-3">
+                                                                <div className="space-y-1.5 text-rose-600 bg-rose-50/50 p-2 rounded-lg border border-rose-100">
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Label className="text-[10px] font-black uppercase tracking-wider">Giới hạn danh mục</Label>
+                                                                            <CustomTooltip content="CHỈ hoàn tiền cho các danh mục được chọn. Các danh mục khác sẽ nhận 0%.">
+                                                                                <Info className="h-3 w-3 text-rose-300 cursor-help" />
+                                                                            </CustomTooltip>
+                                                                        </div>
+                                                                        <Switch
+                                                                            checked={isCategoryRestricted}
+                                                                            onCheckedChange={setIsCategoryRestricted}
+                                                                            className="scale-[0.7] data-[state=checked]:bg-rose-500"
+                                                                        />
+                                                                    </div>
+                                                                    {isCategoryRestricted && (
+                                                                        <Popover>
+                                                                            <PopoverTrigger asChild>
+                                                                                <Button variant="outline" size="sm" className="w-full h-8 px-2 text-[10px] font-bold justify-between bg-white border-rose-200 text-rose-700 hover:bg-rose-50 animate-in fade-in zoom-in-95">
+                                                                                    <span className="truncate">
+                                                                                        {restrictedCategoryIds.length === 0 ? "Chọn danh mục..." : `${restrictedCategoryIds.length} Đã chọn`}
+                                                                                    </span>
+                                                                                    <Plus className="h-3 w-3 opacity-50" />
+                                                                                </Button>
+                                                                            </PopoverTrigger>
+                                                                            <PopoverContent className="w-64 p-0" align="start">
+                                                                                <Command>
+                                                                                    <CommandInput placeholder="Tìm danh mục..." className="h-8 text-[11px]" />
+                                                                                    <CommandList className="max-h-48">
+                                                                                        <CommandEmpty className="text-xs py-2 px-4">Không tìm thấy.</CommandEmpty>
+                                                                                        <CommandGroup>
+                                                                                            {categories?.map((cat) => (
+                                                                                                <CommandItem
+                                                                                                    key={cat.id}
+                                                                                                    value={cat.name}
+                                                                                                    onSelect={() => {
+                                                                                                        if (restrictedCategoryIds.includes(cat.id)) {
+                                                                                                            setRestrictedCategoryIds(restrictedCategoryIds.filter(id => id !== cat.id));
+                                                                                                        } else {
+                                                                                                            setRestrictedCategoryIds([...restrictedCategoryIds, cat.id]);
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    className="text-[11px]"
+                                                                                                >
+                                                                                                    <div className="flex items-center gap-2 w-full">
+                                                                                                        <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                                            {cat.image_url ? (
+                                                                                                                <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                                            ) : (
+                                                                                                                <span className="text-[8px] font-bold text-slate-500">{cat.name?.[0] || "?"}</span>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                        <span className="truncate flex-1 text-left">{cat.name}</span>
+                                                                                                        {restrictedCategoryIds.includes(cat.id) && (
+                                                                                                            <Check className="ml-auto h-3 w-3 opacity-100" />
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </CommandItem>
+                                                                                            ))}
+                                                                                        </CommandGroup>
+                                                                                        <div className="p-1 border-t border-slate-100 bg-slate-50">
+                                                                                            <CommandItem
+                                                                                                onSelect={() => {
+                                                                                                    setActiveCategoryCallback(() => (categoryId: string) => {
+                                                                                                        setRestrictedCategoryIds([...restrictedCategoryIds, categoryId]);
+                                                                                                    });
+                                                                                                    setIsCategoryDialogOpen(true);
+                                                                                                }}
+                                                                                                className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white w-full"
+                                                                                            >
+                                                                                                <Plus className="mr-2 h-3 w-3" />
+                                                                                                Thêm Danh mục mới
+                                                                                            </CommandItem>
+                                                                                        </div>
+                                                                                    </CommandList>
+                                                                                </Command>
+                                                                            </PopoverContent>
+                                                                        </Popover>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 bg-blue-50/50 p-2 rounded-lg border border-blue-100 max-h-[64px]">
+                                                                <Info className="h-3 w-3 text-blue-500 shrink-0" />
+                                                                <p className="text-[9px] text-blue-700 font-medium leading-tight">
+                                                                    {isCategoryRestricted
+                                                                        ? "Chỉ hoàn tiền cho các danh mục này. Các chi tiêu khác là 0%."
+                                                                        : "Áp dụng tỷ lệ cơ bản cho mọi giao dịch."}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
+
+                                                {/* Advanced Mode: Tiered Levels */}
                                                 {isAdvancedCashback && (
                                                     <div className="bg-slate-50 border-t border-slate-100">
                                                         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                                                             <div className="flex items-center gap-2">
-                                                                <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Cashback Levels</Label>
-                                                                <TooltipProvider>
-                                                                    <Tooltip>
-                                                                        <TooltipTrigger asChild>
-                                                                            <Info className="h-3 w-3 text-slate-400 cursor-help" />
-                                                                        </TooltipTrigger>
-                                                                        <TooltipContent>Define multi-tier cashback rules based on total spend.</TooltipContent>
-                                                                    </Tooltip>
-                                                                </TooltipProvider>
+                                                                <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Cơ chế Phân bậc (Levels)</Label>
+                                                                <CustomTooltip content="Thiết lập các mốc chi tiêu (ví dụ: Tiêu mốc 1 hoàn 0.1%, tiêu mốc 2 hoàn 10% giáo dục).">
+                                                                    <Info className="h-3 w-3 text-slate-400 cursor-help" />
+                                                                </CustomTooltip>
                                                             </div>
                                                             <Button
                                                                 type="button"
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 onClick={() => {
-                                                                    const newLevels = [...levels];
-                                                                    newLevels.push({
+                                                                    setLevels([...levels, {
                                                                         id: Math.random().toString(36).substr(2, 9),
-                                                                        name: `Level ${levels.length + 1}`,
+                                                                        name: `Bậc ${levels.length + 1}`,
                                                                         minTotalSpend: 0,
                                                                         defaultRate: 0,
                                                                         rules: []
-                                                                    });
-                                                                    setLevels(newLevels);
+                                                                    }]);
                                                                 }}
                                                                 className="h-7 px-3 text-[10px] bg-white border border-slate-200 hover:bg-slate-100 text-blue-600 font-bold uppercase tracking-wider shadow-sm"
                                                             >
-                                                                <Plus className="h-3 w-3 mr-1" /> Add Level
+                                                                <Plus className="h-3 w-3 mr-1" /> Thêm Bậc
                                                             </Button>
                                                         </div>
 
-                                                        <div className="divide-y divide-slate-100">
+                                                        <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
                                                             {levels.length === 0 && (
-                                                                <div className="text-center py-8 text-xs text-slate-400 italic">No levels defined. Add a level to start.</div>
+                                                                <div className="text-center py-8 text-xs text-slate-400 italic">Chưa có mốc chi tiêu nào. Click Thêm Bậc để bắt đầu.</div>
                                                             )}
                                                             {levels.map((level, lIdx) => (
-                                                                <div key={level.id} className="p-4 space-y-4 bg-white/50">
+                                                                <div key={level.id} className="p-4 space-y-4 bg-white/50 hover:bg-white transition-colors">
                                                                     <div className="flex items-center gap-3">
-                                                                        <div className="flex-1 space-y-1.5">
+                                                                        <div className="flex-1 space-y-1.5 font-bold">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <span className="text-[10px] font-black text-slate-400 uppercase">Level {lIdx + 1}</span>
+                                                                                <span className="text-[10px] font-black text-slate-400 uppercase">Bậc {lIdx + 1}</span>
                                                                                 <Input
                                                                                     value={level.name}
                                                                                     onChange={(e) => {
@@ -1279,26 +1479,12 @@ export function AccountSlideV2({
                                                                                         newLevels[lIdx].name = e.target.value;
                                                                                         setLevels(newLevels);
                                                                                     }}
-                                                                                    placeholder="e.g. Premium Tier"
+                                                                                    placeholder="Tên mốc (VD: Mốc tiêu chuẩn)"
                                                                                     className="h-8 text-sm font-bold bg-white"
                                                                                 />
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-1">
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 text-slate-400 hover:text-slate-600"
-                                                                                onClick={() => {
-                                                                                    const newLevels = [...levels];
-                                                                                    const dupe = JSON.parse(JSON.stringify(level));
-                                                                                    dupe.id = Math.random().toString(36).substr(2, 9);
-                                                                                    newLevels.splice(lIdx + 1, 0, dupe);
-                                                                                    setLevels(newLevels);
-                                                                                }}
-                                                                            >
-                                                                                <RotateCcw className="h-4 w-4" />
-                                                                            </Button>
                                                                             <Button
                                                                                 variant="ghost"
                                                                                 size="icon"
@@ -1310,11 +1496,13 @@ export function AccountSlideV2({
                                                                         </div>
                                                                     </div>
 
-                                                                    <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                    <div className="grid grid-cols-2 gap-3 mb-2">
                                                                         <div className="space-y-1.5">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Total Spend</Label>
-                                                                                <Info className="h-3 w-3 text-slate-300" />
+                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tiêu tối thiểu</Label>
+                                                                                <CustomTooltip content="Số tiền tổng chi tiêu trong tháng để kích hoạt bậc này.">
+                                                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                                                </CustomTooltip>
                                                                             </div>
                                                                             <SmartAmountInput
                                                                                 value={level.minTotalSpend}
@@ -1324,18 +1512,18 @@ export function AccountSlideV2({
                                                                                     setLevels(newLevels);
                                                                                 }}
                                                                                 hideLabel
-                                                                                className="h-9 bg-white"
+                                                                                className="h-9 bg-white font-bold"
                                                                             />
                                                                         </div>
                                                                         <div className="space-y-1.5">
                                                                             <div className="flex items-center gap-1.5">
-                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
-                                                                                <CustomTooltip content="This rate applies to all categories NOT listed in the specific rules below.">
+                                                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Tỷ lệ cơ bản Bậc (%)</Label>
+                                                                                <CustomTooltip content="Tỷ lệ hoàn cho mọi chi tiêu khi đạt mốc này (nếu không khớp danh mục đặc biệt).">
                                                                                     <Info className="h-3 w-3 text-slate-300 cursor-help" />
                                                                                 </CustomTooltip>
                                                                             </div>
                                                                             <SmartAmountInput
-                                                                                value={level.defaultRate * 100}
+                                                                                value={(level.defaultRate || 0) * 100}
                                                                                 onChange={(val) => {
                                                                                     const newLevels = [...levels];
                                                                                     newLevels[lIdx].defaultRate = (val ?? 0) / 100;
@@ -1343,15 +1531,14 @@ export function AccountSlideV2({
                                                                                 }}
                                                                                 unit="%"
                                                                                 hideLabel
-                                                                                placeholder="e.g. 0.1"
-                                                                                className="h-9 bg-white"
+                                                                                className="h-9 bg-white font-bold"
                                                                             />
                                                                         </div>
                                                                     </div>
 
-                                                                    <div className="space-y-2">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Category Rules</Label>
+                                                                    <div className="space-y-2 mt-4">
+                                                                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                                                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Quy tắc Danh mục Đặc biệt</Label>
                                                                             <Button
                                                                                 type="button"
                                                                                 variant="ghost"
@@ -1368,169 +1555,106 @@ export function AccountSlideV2({
                                                                                 }}
                                                                                 className="h-6 px-2 text-[9px] text-blue-600 font-bold bg-white border border-slate-100 hover:bg-slate-50"
                                                                             >
-                                                                                <Plus className="h-3 w-3 mr-1" /> Add Rule
+                                                                                <Plus className="h-3 w-3 mr-1" /> Thêm Quy tắc
                                                                             </Button>
                                                                         </div>
 
                                                                         <div className="space-y-2">
-                                                                            {level.rules.length > 0 && (
-                                                                                <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 px-2 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                                                                                    <div>Category</div>
-                                                                                    <div className="text-center">Rate</div>
-                                                                                    <div className="text-right">Max Reward</div>
-                                                                                    <div className="text-center">Action</div>
-                                                                                </div>
+                                                                            {level.rules.length === 0 && (
+                                                                                <p className="text-[10px] text-slate-400 italic py-2">Chưa có quy tắc danh mục đặc biệt nào.</p>
                                                                             )}
                                                                             {level.rules.map((rule: any, rIdx: number) => (
-                                                                                <div key={rule.id} className="bg-slate-50 p-2 rounded-lg border border-slate-200 group">
-                                                                                    {/* Desktop/Tablet: Single Row Grid */}
-                                                                                    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1fr_1fr_80px] gap-4 sm:items-start">
-
-                                                                                        {/* 1. Categories Column */}
-                                                                                        <div className="space-y-1 min-w-0">
-                                                                                            <Popover>
-                                                                                                <PopoverTrigger asChild>
-                                                                                                    <Button
-                                                                                                        variant="outline"
-                                                                                                        className="w-full h-8 justify-between text-xs bg-white border-slate-200 font-medium px-2"
-                                                                                                    >
-                                                                                                        <span className="truncate">
-                                                                                                            {(() => {
-                                                                                                                const validCount = rule.categoryIds.filter((id: string) => categories.some(c => c.id === id)).length;
-                                                                                                                return validCount === 0
-                                                                                                                    ? "Select categories..."
-                                                                                                                    : `${validCount} categories`;
-                                                                                                            })()}
-                                                                                                        </span>
-                                                                                                        <ChevronsUpDown className="h-3 w-3 opacity-50 flex-shrink-0 ml-1" />
-                                                                                                    </Button>
-                                                                                                </PopoverTrigger>
-                                                                                                <PopoverContent className="w-64 p-0" align="start">
-                                                                                                    <Command>
-                                                                                                        <CommandInput placeholder="Search category..." className="h-8 text-xs" />
-                                                                                                        <CommandList className="max-h-48">
-                                                                                                            <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
-                                                                                                            <CommandGroup>
-                                                                                                                {categories.map((cat: any) => (
-                                                                                                                    <CommandItem
-                                                                                                                        key={cat.id}
-                                                                                                                        value={cat.name}
-                                                                                                                        onSelect={() => {
-                                                                                                                            const newLevels = [...levels];
-                                                                                                                            const currentIds = newLevels[lIdx].rules[rIdx].categoryIds;
-                                                                                                                            if (currentIds.includes(cat.id)) {
-                                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds = currentIds.filter(id => id !== cat.id);
-                                                                                                                            } else {
-                                                                                                                                newLevels[lIdx].rules[rIdx].categoryIds.push(cat.id);
-                                                                                                                            }
-                                                                                                                            setLevels(newLevels);
-                                                                                                                        }}
-                                                                                                                        className="text-xs"
-                                                                                                                    >
-                                                                                                                        <div className="flex items-center gap-2 w-full">
-                                                                                                                            <div className={cn(
-                                                                                                                                "w-3.5 h-3.5 border rounded flex items-center justify-center transition-colors",
-                                                                                                                                rule.categoryIds.includes(cat.id) ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200"
-                                                                                                                            )}>
-                                                                                                                                <Check className="h-2.5 w-2.5" />
-                                                                                                                            </div>
-                                                                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                                                                {cat.image_url ? (
-                                                                                                                                    <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                                                                ) : (
-                                                                                                                                    <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>
-                                                                                                                                )}
-                                                                                                                            </div>
-                                                                                                                            <span>{cat.name}</span>
+                                                                                <div key={rule.id} className="bg-slate-100/50 p-2 rounded-lg border border-slate-200 group relative">
+                                                                                    <div className="flex flex-col sm:grid sm:grid-cols-[1.5fr_1fr_1.2fr_40px] gap-3">
+                                                                                        {/* 1. Categories */}
+                                                                                        <Popover>
+                                                                                            <PopoverTrigger asChild>
+                                                                                                <Button variant="outline" className="h-9 justify-between text-xs bg-white font-medium px-2">
+                                                                                                    <span className="truncate">
+                                                                                                        {rule.categoryIds.length === 0 ? "Chọn Danh mục..." : `${rule.categoryIds.length} DM`}
+                                                                                                    </span>
+                                                                                                    <ChevronsUpDown className="h-3 w-3 opacity-50 ml-1" />
+                                                                                                </Button>
+                                                                                            </PopoverTrigger>
+                                                                                            <PopoverContent className="w-64 p-0" align="start">
+                                                                                                <Command>
+                                                                                                    <CommandInput placeholder="Tìm kiếm..." className="h-8 text-xs" />
+                                                                                                    <CommandList className="max-h-48">
+                                                                                                        <CommandGroup>
+                                                                                                            {categories.map((cat: any) => (
+                                                                                                                <CommandItem
+                                                                                                                    key={cat.id}
+                                                                                                                    value={cat.name}
+                                                                                                                    onSelect={() => {
+                                                                                                                        const newLevels = [...levels];
+                                                                                                                        const ids = newLevels[lIdx].rules[rIdx].categoryIds;
+                                                                                                                        newLevels[lIdx].rules[rIdx].categoryIds = ids.includes(cat.id) ? ids.filter(i => i !== cat.id) : [...ids, cat.id];
+                                                                                                                        setLevels(newLevels);
+                                                                                                                    }}
+                                                                                                                    className="text-xs"
+                                                                                                                >
+                                                                                                                    <div className="flex items-center gap-2 w-full">
+                                                                                                                        <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center">
+                                                                                                                            {cat.image_url ? <img src={cat.image_url} alt="" className="w-full h-full object-cover" /> : <span className="text-[8px] font-bold text-slate-500">{cat.name[0]}</span>}
                                                                                                                         </div>
-                                                                                                                    </CommandItem>
-                                                                                                                ))}
-                                                                                                            </CommandGroup>
-                                                                                                        </CommandList>
-                                                                                                        <div className="p-1 border-t border-slate-100 bg-slate-50">
-                                                                                                            <CommandItem
-                                                                                                                onSelect={() => {
-                                                                                                                    setActiveCategoryCallback(() => (categoryId: string) => {
-                                                                                                                        // This is for cashback level rules - would need different context
-                                                                                                                    });
-                                                                                                                    setIsCategoryDialogOpen(true);
-                                                                                                                }}
-                                                                                                                className="text-blue-600 font-bold text-[11px] justify-center cursor-pointer hover:bg-white"
-                                                                                                            >
-                                                                                                                <Plus className="mr-2 h-3 w-3" />
-                                                                                                                Add New Category
-                                                                                                            </CommandItem>
-                                                                                                        </div>
-                                                                                                    </Command>
-                                                                                                </PopoverContent>
-                                                                                            </Popover>
-                                                                                        </div>
+                                                                                                                        <span>{cat.name}</span>
+                                                                                                                    </div>
+                                                                                                                    <Check className={cn("ml-auto h-3 w-3", rule.categoryIds.includes(cat.id) ? "opacity-100" : "opacity-0")} />
+                                                                                                                </CommandItem>
+                                                                                                            ))}
+                                                                                                        </CommandGroup>
+                                                                                                    </CommandList>
+                                                                                                </Command>
+                                                                                            </PopoverContent>
+                                                                                        </Popover>
 
-                                                                                        {/* 2. Rate Column */}
-                                                                                        <div>
+                                                                                        {/* 2. Rate */}
+                                                                                        <div className="flex flex-col">
                                                                                             <SmartAmountInput
-                                                                                                value={rule.rate !== null ? rule.rate * 100 : undefined}
+                                                                                                value={rule.rate > 0 ? (rule.rate || 0) * 100 : undefined}
                                                                                                 onChange={(val) => {
                                                                                                     const newLevels = [...levels];
-                                                                                                    // Method 3: If cleared (undefined), store null to inherit Default Rate
-                                                                                                    newLevels[lIdx].rules[rIdx].rate = (val !== undefined ? val / 100 : null) as any;
+                                                                                                    newLevels[lIdx].rules[rIdx].rate = (val ?? 0) / 100;
                                                                                                     setLevels(newLevels);
                                                                                                 }}
                                                                                                 unit="%"
                                                                                                 hideLabel
-                                                                                                className="h-8 text-xs bg-white text-center placeholder:text-slate-300"
-                                                                                                placeholder={level.defaultRate ? `${level.defaultRate * 100}` : "0"}
+                                                                                                className="h-9 text-xs bg-white text-center font-bold"
+                                                                                                placeholder={`${((level.defaultRate || 0) * 100).toFixed(2)}%`}
                                                                                             />
+                                                                                            {rule.rate === 0 && (
+                                                                                                <p className="text-[9px] text-slate-400 font-medium italic mt-1 ml-1 animate-in fade-in slide-in-from-top-1">
+                                                                                                    Inherited
+                                                                                                </p>
+                                                                                            )}
                                                                                         </div>
 
-                                                                                        {/* 3. Max Reward Column */}
-                                                                                        <div>
-                                                                                            <SmartAmountInput
-                                                                                                value={rule.maxReward ?? undefined}
-                                                                                                onChange={(val) => {
-                                                                                                    const newLevels = [...levels];
-                                                                                                    newLevels[lIdx].rules[rIdx].maxReward = val ?? null;
-                                                                                                    setLevels(newLevels);
-                                                                                                }}
-                                                                                                hideLabel
-                                                                                                className="h-8 text-xs bg-white text-right"
-                                                                                                placeholder="Max (opt)"
-                                                                                            />
-                                                                                        </div>
+                                                                                        {/* 3. Max Reward */}
+                                                                                        <SmartAmountInput
+                                                                                            value={rule.maxReward ?? undefined}
+                                                                                            onChange={(val) => {
+                                                                                                const newLevels = [...levels];
+                                                                                                newLevels[lIdx].rules[rIdx].maxReward = val ?? null;
+                                                                                                setLevels(newLevels);
+                                                                                            }}
+                                                                                            hideLabel
+                                                                                            className="h-9 text-xs bg-white text-right font-bold"
+                                                                                            placeholder="Thưởng tối đa"
+                                                                                        />
 
-                                                                                        {/* 4. Delete Button */}
-                                                                                        <div className="flex sm:justify-center pt-0.5 gap-1">
-                                                                                            <Button
-                                                                                                type="button"
-                                                                                                variant="ghost"
-                                                                                                size="icon"
-                                                                                                className="h-7 w-7 text-slate-400 hover:text-slate-600"
-                                                                                                onClick={() => {
-                                                                                                    const newLevels = [...levels];
-                                                                                                    const dupe = JSON.parse(JSON.stringify(rule));
-                                                                                                    dupe.id = Math.random().toString(36).substr(2, 9);
-                                                                                                    newLevels[lIdx].rules.splice(rIdx + 1, 0, dupe);
-                                                                                                    setLevels(newLevels);
-                                                                                                }}
-                                                                                                title="Clone Rule"
-                                                                                            >
-                                                                                                <Copy className="h-3.5 w-3.5" />
-                                                                                            </Button>
-                                                                                            <Button
-                                                                                                type="button"
-                                                                                                variant="ghost"
-                                                                                                size="icon"
-                                                                                                className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-50"
-                                                                                                onClick={() => {
-                                                                                                    const newLevels = [...levels];
-                                                                                                    newLevels[lIdx].rules = newLevels[lIdx].rules.filter((_: any, i: number) => i !== rIdx);
-                                                                                                    setLevels(newLevels);
-                                                                                                }}
-                                                                                                title="Delete Rule"
-                                                                                            >
-                                                                                                <Trash2 className="h-3.5 w-3.5" />
-                                                                                            </Button>
-                                                                                        </div>
+                                                                                        {/* 4. Delete */}
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="icon"
+                                                                                            className="h-9 w-9 text-slate-300 hover:text-rose-500"
+                                                                                            onClick={() => {
+                                                                                                const newLevels = [...levels];
+                                                                                                newLevels[lIdx].rules.splice(rIdx, 1);
+                                                                                                setLevels(newLevels);
+                                                                                            }}
+                                                                                        >
+                                                                                            <Trash2 className="h-4 w-4" />
+                                                                                        </Button>
                                                                                     </div>
 
                                                                                     {/* Tags Row (Full Width Below) */}
@@ -1593,7 +1717,47 @@ export function AccountSlideV2({
                                 </div>
                             )}
 
-                            <div className="p-4 bg-slate-50 mt-6 rounded-lg border border-slate-200 flex items-center justify-between">
+                            {/* Credit Card Settings (Statement & Due Date) - Always visible for credit cards */}
+                            {activeMainType === 'credit' && (
+                                <div className="p-4 bg-slate-50 border-y border-slate-100 space-y-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="bg-indigo-100 p-1 rounded-md">
+                                            <CreditCard className="h-4 w-4 text-indigo-600" />
+                                        </div>
+                                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Cấu hình thẻ tín dụng</h3>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Ngày sao kê</Label>
+                                                <CustomTooltip content="Ngày ngân hàng chốt sao kê hàng tháng.">
+                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                </CustomTooltip>
+                                            </div>
+                                            <DayOfMonthPicker
+                                                value={statementDay}
+                                                onChange={setStatementDay}
+                                                className="h-9"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Hạn thanh toán</Label>
+                                                <CustomTooltip content="Ngày hạn chót thanh toán dư nợ.">
+                                                    <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                </CustomTooltip>
+                                            </div>
+                                            <DayOfMonthPicker
+                                                value={dueDate}
+                                                onChange={setDueDate}
+                                                className="h-9"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="p-4 bg-white border-y border-slate-100 flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-slate-700">Account Status</p>
                                     <p className="text-[10px] text-slate-500 font-medium">Toggle whether this account is currently active.</p>

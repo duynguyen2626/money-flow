@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { Account, AccountRelationships, AccountStats, TransactionWithDetails, AccountRow } from '@/types/moneyflow.types'
 import {
   parseCashbackConfig,
+  normalizeCashbackConfig,
   getCashbackCycleRange,
   calculateBankCashback,
   formatIsoCycleTag,
@@ -19,12 +20,12 @@ import { Database, Json } from '@/types/database.types'
 
 
 
-function normalizeCashbackConfig(value: Json | null): Json | null {
+function parseJsonSafe(value: Json | null): Json | null {
   if (typeof value === 'string') {
     try {
       return JSON.parse(value)
     } catch (parseError) {
-      console.error('Failed to parse cashback_config string:', parseError)
+      console.error('Failed to parse JSON string:', parseError)
       return null
     }
   }
@@ -74,10 +75,11 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     shared_cashback: null
   }
 
-  // Only calculate full stats for accounts with cashback config
-  if (!account.cashback_config) return baseStats
+  // Only calculate full stats for accounts with cashback config or type
+  const hasConfig = account.cashback_config || (account as any).cb_type !== 'none';
+  if (!hasConfig) return baseStats
 
-  const config = parseCashbackConfig(account.cashback_config, account.id)
+  const config = normalizeCashbackConfig(account.cashback_config, account)
   if (!config) return baseStats
 
   const now = new Date()
@@ -155,15 +157,15 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       const consumed = real_awarded + virtual_profit
       remains_cap = Math.max(0, maxBudget - consumed)
     }
-  } else if (config.maxAmount) {
+  } else if (config.maxBudget) {
     const consumed = real_awarded + virtual_profit
-    remains_cap = Math.max(0, config.maxAmount - consumed)
+    remains_cap = Math.max(0, config.maxBudget - consumed)
   }
 
   // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
   // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
 
-  const min_spend = cycle ? (cycle.min_spend_target ?? null) : config.minSpend
+  const min_spend = cycle ? (cycle.min_spend_target ?? null) : config.minSpendTarget
   const missing_for_min = (min_spend !== null) ? Math.max(0, min_spend - spent_this_cycle) : null
   const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend)
 
@@ -211,7 +213,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
   if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
     // Get waiver target from account config, or use minSpendTarget as fallback
-    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpend ?? null
+    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpendTarget ?? null
 
     if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
       // Calculate annual spend (not just current cycle)
@@ -238,7 +240,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     annual_fee_waiver_target,
     annual_fee_waiver_progress,
     annual_fee_waiver_met,
-    max_budget: cycle?.max_budget ?? config.maxAmount ?? null
+    max_budget: cycle?.max_budget ?? config.maxBudget ?? null
   }
 }
 
@@ -249,7 +251,7 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
 
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target')
+    .select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json, statement_day, due_date')
   // Remove default sorting to handle custom sort logic
 
   if (error) {
@@ -323,6 +325,13 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
       receiver_name: item.receiver_name ?? null,
       parent_account_id: item.parent_account_id ?? null,
       secured_by_account_id: item.secured_by_account_id ?? null,
+      cb_type: (item as any).cb_type ?? 'none',
+      cb_base_rate: (item as any).cb_base_rate ?? 0,
+      cb_max_budget: (item as any).cb_max_budget ?? null,
+      cb_is_unlimited: (item as any).cb_is_unlimited ?? false,
+      cb_rules_json: parseJsonSafe((item as any).cb_rules_json),
+      statement_day: (item as any).statement_day ?? null,
+      due_date: (item as any).due_date ?? null,
       cashback_config: normalizeCashbackConfig(item.cashback_config),
       is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
       image_url: typeof item.image_url === 'string' ? item.image_url : null,
@@ -334,8 +343,8 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
         const config = normalizeCashbackConfig(item.cashback_config) as any
         if (!config) return undefined
         return {
-          statement_day: config.statementDay ?? config.statement_day,
-          payment_due_day: config.paymentDueDay ?? config.payment_due_day ?? config.dueDate
+          statement_day: (item as any).statement_day ?? config.statementDay ?? config.statement_day,
+          payment_due_day: (item as any).due_date ?? config.paymentDueDay ?? config.payment_due_day ?? config.dueDate
         }
       })(),
     })
@@ -434,6 +443,14 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     total_out: row.total_out ?? 0,
     annual_fee: row.annual_fee ?? null,
     annual_fee_waiver_target: row.annual_fee_waiver_target ?? null,
+    // New Cashback Columns
+    cb_type: row.cb_type ?? 'none',
+    cb_base_rate: row.cb_base_rate ?? 0,
+    cb_max_budget: row.cb_max_budget ?? null,
+    cb_is_unlimited: row.cb_is_unlimited ?? false,
+    cb_rules_json: parseJsonSafe(row.cb_rules_json),
+    statement_day: row.statement_day ?? null,
+    due_date: row.due_date ?? null
   }
 }
 
@@ -518,6 +535,14 @@ export async function updateAccountConfig(
     parent_account_id?: string | null
     account_number?: string | null
     receiver_name?: string | null
+    // New Cashback Columns
+    cb_type?: 'none' | 'simple' | 'tiered'
+    cb_base_rate?: number
+    cb_max_budget?: number | null
+    cb_is_unlimited?: boolean
+    cb_rules_json?: Json | null
+    statement_day?: number | null
+    due_date?: number | null
   }
 ): Promise<boolean> {
   // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
@@ -527,72 +552,67 @@ export async function updateAccountConfig(
 
   const payload: any = {}
 
-  if (typeof data.name === 'string') {
-    payload.name = data.name
-  }
+  // 1. Basic Fields
+  if (typeof data.name === 'string') payload.name = data.name
+  if (typeof data.credit_limit !== 'undefined') payload.credit_limit = data.credit_limit
+  if (typeof data.type === 'string') payload.type = data.type
+  if ('secured_by_account_id' in data) payload.secured_by_account_id = data.secured_by_account_id ?? null
+  if (typeof data.is_active === 'boolean') payload.is_active = data.is_active
+  if ('annual_fee' in data) payload.annual_fee = data.annual_fee ?? null
+  if ('annual_fee_waiver_target' in data) payload.annual_fee_waiver_target = data.annual_fee_waiver_target ?? null
+  if ('parent_account_id' in data) payload.parent_account_id = data.parent_account_id ?? null
+  if (typeof data.image_url === 'string') payload.image_url = data.image_url
+  if ('account_number' in data) payload.account_number = data.account_number ?? null
+  if ('receiver_name' in data) payload.receiver_name = data.receiver_name ?? null
+  if ('statement_day' in data) payload.statement_day = data.statement_day ?? null
+  if ('due_date' in data) payload.due_date = data.due_date ?? null
 
-  if (typeof data.credit_limit !== 'undefined') {
-    payload.credit_limit = data.credit_limit
-  }
+  // 2. New Cashback Columns
+  if (data.cb_type) payload.cb_type = data.cb_type
+  if (typeof data.cb_base_rate === 'number') payload.cb_base_rate = data.cb_base_rate
+  if ('cb_max_budget' in data) payload.cb_max_budget = data.cb_max_budget
+  if (typeof data.cb_is_unlimited === 'boolean') payload.cb_is_unlimited = data.cb_is_unlimited
+  if ('cb_rules_json' in data) payload.cb_rules_json = data.cb_rules_json
 
-  // MF5.4.2: Detect changes to cashback_config to increment version and trigger recompute
-  if (typeof data.cashback_config !== 'undefined') {
+  // 3. MF5.4.2: Detect changes to cashback_config or new columns to increment version
+  const hasCashbackData = typeof data.cashback_config !== 'undefined' ||
+    data.cb_type ||
+    typeof data.cb_base_rate === 'number' ||
+    'cb_rules_json' in data;
+
+  if (hasCashbackData) {
     const { data: oldAccount } = await supabase
       .from('accounts')
-      .select('cashback_config, cashback_config_version')
+      .select('cashback_config, cashback_config_version, cb_type, cb_base_rate, cb_rules_json')
       .eq('id', accountId)
       .single() as any
 
-    const oldConfigStr = JSON.stringify(oldAccount?.cashback_config)
-    const newConfigStr = JSON.stringify(data.cashback_config)
+    const oldConfigStr = JSON.stringify({
+      c: oldAccount?.cashback_config,
+      t: oldAccount?.cb_type,
+      r: oldAccount?.cb_base_rate,
+      j: oldAccount?.cb_rules_json
+    })
+
+    const newConfigStr = JSON.stringify({
+      c: data.cashback_config ?? oldAccount?.cashback_config,
+      t: data.cb_type ?? oldAccount?.cb_type,
+      r: data.cb_base_rate ?? oldAccount?.cb_base_rate,
+      j: data.cb_rules_json ?? oldAccount?.cb_rules_json
+    })
 
     if (oldConfigStr !== newConfigStr) {
       const nextVersion = (Number(oldAccount?.cashback_config_version) || 1) + 1
       payload.cashback_config_version = nextVersion
-      payload.cashback_config = data.cashback_config
+      if (typeof data.cashback_config !== 'undefined') {
+        payload.cashback_config = data.cashback_config
+      }
 
-      console.log(`[updateAccountConfig] Config changed for ${accountId}. Incrementing version to ${nextVersion}`)
+      console.log(`[updateAccountConfig] Cashback config changed for ${accountId}. Incrementing version to ${nextVersion}`)
 
       // Trigger recompute if version changed (async)
-      // We look back 3 months by default for safety on config change
       import('@/services/cashback.service').then(m => m.recomputeAccountCashback(accountId, 3))
     }
-  }
-
-  if (typeof data.type === 'string') {
-    payload.type = data.type
-  }
-
-  if ('secured_by_account_id' in data) {
-    payload.secured_by_account_id = data.secured_by_account_id ?? null
-  }
-
-  if (typeof data.is_active === 'boolean') {
-    payload.is_active = data.is_active
-  }
-
-  if ('annual_fee' in data) {
-    payload.annual_fee = data.annual_fee ?? null
-  }
-
-  if ('annual_fee_waiver_target' in data) {
-    payload.annual_fee_waiver_target = data.annual_fee_waiver_target ?? null
-  }
-
-  if ('parent_account_id' in data) {
-    payload.parent_account_id = data.parent_account_id ?? null
-  }
-
-  if (typeof data.image_url === 'string') {
-    payload.image_url = data.image_url
-  }
-
-  if ('account_number' in data) {
-    payload.account_number = data.account_number ?? null
-  }
-
-  if ('receiver_name' in data) {
-    payload.receiver_name = data.receiver_name ?? null
   }
 
   if (Object.keys(payload).length === 0) {
