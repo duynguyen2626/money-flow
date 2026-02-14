@@ -45,6 +45,7 @@ export type AccountStats = {
   annual_fee_waiver_target?: number | null
   annual_fee_waiver_progress?: number
   annual_fee_waiver_met?: boolean
+  max_budget?: number | null
 }
 
 export type AccountRelationships = {

@@ -77,7 +77,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
   if (raw.program && typeof raw.program === 'object') {
     const p = raw.program as any;
     program = {
-      defaultRate: Number(p.defaultRate ?? p.rate ?? 0),
+      defaultRate: Number(p.defaultRate ?? p.rate ?? raw.rate ?? 0),
       maxBudget: Number(p.maxBudget ?? p.maxAmount ?? 0) || null,
       cycleType: (p.cycleType === 'statement_cycle' ? 'statement_cycle' : 'calendar_month') as CashbackCycleType,
       statementDay: Number(p.statementDay) || null,

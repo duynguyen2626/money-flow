@@ -41,17 +41,22 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
     const shareFixed = useWatch({ control: form.control, name: "cashback_share_fixed" });
     const categoryId = useWatch({ control: form.control, name: "category_id" });
 
-    const policy = useMemo(() => {
+    const activeAccount = useMemo(() => {
         if (!sourceAccountId || !accounts) return null;
-        const acc = accounts.find(a => a.id === sourceAccountId);
-        if (!acc) return null;
+        return accounts.find(a => a.id === sourceAccountId) || null;
+    }, [sourceAccountId, accounts]);
 
-        const category = categories.find(c => c.id === categoryId);
-        const cycleSpent = acc.stats?.spent_this_cycle || 0;
+    const category = useMemo(() => {
+        return categories.find(c => c.id === categoryId);
+    }, [categories, categoryId]);
+
+    const policy = useMemo(() => {
+        if (!activeAccount) return null;
+        const cycleSpent = activeAccount.stats?.spent_this_cycle || 0;
         const projectedSpent = cycleSpent + Math.abs(amount);
 
         return resolveCashbackPolicy({
-            account: acc as any,
+            account: activeAccount as any,
             categoryId,
             amount: Math.abs(amount),
             cycleTotals: {
@@ -59,12 +64,38 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
             },
             categoryName: category?.name
         });
-    }, [sourceAccountId, accounts, categoryId, amount, categories]);
+    }, [activeAccount, categoryId, amount, category]);
 
-    const activeAccount = useMemo(() => {
-        if (!sourceAccountId || !accounts) return null;
-        return accounts.find(a => a.id === sourceAccountId) || null;
-    }, [sourceAccountId, accounts]);
+    const { actualBankReward, bankRewardRaw, bankRewardCapped, remainsCap } = useMemo(() => {
+        const rate = policy?.rate ?? 0;
+        const raw = Math.abs(amount) * rate;
+        const capped = policy?.maxReward !== undefined && policy.maxReward !== null ? Math.min(raw, policy.maxReward) : raw;
+
+        // MF5.4.3: Use Infinity for Unlimited to avoid Math.min(capped, null) returning 0
+        const rawRemains = activeAccount?.stats?.remains_cap;
+        const remains = (rawRemains === null || rawRemains === undefined) ? Infinity : rawRemains;
+
+        return {
+            bankRewardRaw: raw,
+            bankRewardCapped: capped,
+            remainsCap: rawRemains, // Keep raw version for UI checks
+            actualBankReward: Math.min(capped, remains)
+        };
+    }, [amount, policy, activeAccount]);
+
+    const totalSharedVal = useMemo(() => {
+        return (Math.abs(amount) * ((sharePercent || 0) / 100)) + (shareFixed || 0);
+    }, [amount, sharePercent, shareFixed]);
+
+    const isOverCap = useMemo(() => {
+        return totalSharedVal > (actualBankReward + 0.5) && cashbackMode.includes('real');
+    }, [totalSharedVal, actualBankReward, cashbackMode]);
+
+    const effectiveDisplayPercent = useMemo(() => {
+        const val = (Math.abs(amount) > 0 ? (totalSharedVal / Math.abs(amount)) * 100 : 0);
+        if (val > 0) return val.toFixed(1);
+        return (policy?.rate ? policy.rate * 100 : 0).toFixed(1);
+    }, [amount, totalSharedVal, policy]);
 
     // Calculate Cycle
     let cycleInfo = null;
@@ -197,37 +228,56 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                         control={form.control}
                                         name="cashback_share_percent"
                                         render={({ field }) => {
-                                            const bankRewardRaw = Math.abs(amount) * (policy?.rate ?? 0);
-                                            const bankRewardCapped = policy?.maxReward ? Math.min(bankRewardRaw, policy.maxReward) : bankRewardRaw;
-                                            const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
-                                            const availableMax = Math.min(bankRewardCapped, remainsCap);
-
                                             // The user share could be partially from fixed amount
                                             const currentFixed = form.getValues('cashback_share_fixed') || 0;
-                                            const remainingForPercent = Math.max(0, availableMax - currentFixed);
+                                            const remainingForPercent = Math.max(0, actualBankReward - currentFixed);
                                             const maxAllowedPercent = (Math.abs(amount) > 0) ? (remainingForPercent / Math.abs(amount)) * 100 : 0;
 
                                             const isOverPolicy = field.value && field.value > (policy?.rate ? policy.rate * 100 : 0);
-                                            const projectedReward = Math.abs(amount) * ((field.value || 0) / 100);
-                                            const isOverCap = projectedReward > remainsCap;
+                                            const totalShared = (Math.abs(amount) * ((field.value || 0) / 100)) + currentFixed;
+                                            const isOverCap = totalShared > (actualBankReward + 0.5);
+                                            // Linkage logic: adjust other field if total exceeds reward
+                                            const syncFields = (newPercent?: number, newFixed?: number) => {
+                                                if (!cashbackMode.includes('real')) return;
+
+                                                const p = newPercent ?? field.value ?? 0;
+                                                const f = newFixed ?? form.getValues('cashback_share_fixed') ?? 0;
+                                                const total = (Math.abs(amount) * (p / 100)) + f;
+
+                                                if (total > actualBankReward + 0.1) {
+                                                    if (newPercent !== undefined) {
+                                                        // Percent changed -> adjust fixed
+                                                        const pVal = Math.abs(amount) * (p / 100);
+                                                        const allowedFixed = Math.max(0, actualBankReward - pVal);
+                                                        form.setValue('cashback_share_fixed', Math.round(allowedFixed));
+                                                    } else if (newFixed !== undefined) {
+                                                        // Fixed changed -> adjust percent
+                                                        const allowedRewardForPercent = Math.max(0, actualBankReward - f);
+                                                        const allowedPercent = (Math.abs(amount) > 0) ? (allowedRewardForPercent / Math.abs(amount)) * 100 : 0;
+                                                        form.setValue('cashback_share_percent', Number(allowedPercent.toFixed(2)));
+                                                    }
+                                                }
+                                            };
 
                                             return (
                                                 <FormItem>
-                                                    <FormLabel className="flex justify-between text-xs font-semibold text-slate-500">
-                                                        % Rate
+                                                    <div className="flex justify-between items-center mb-1.5">
+                                                        <FormLabel className="text-xs font-semibold text-slate-500">% Rate</FormLabel>
                                                         <span className="text-[10px] opacity-70">
                                                             Up to {maxAllowedPercent.toFixed(1)}%
                                                         </span>
-                                                    </FormLabel>
+                                                    </div>
                                                     <div className="relative">
                                                         <SmartAmountInput
                                                             value={field.value ?? 0}
                                                             onChange={(val) => {
-                                                                const safeVal = Math.min(val ?? 0, maxAllowedPercent);
-                                                                field.onChange(safeVal);
+                                                                const newVal = val ?? 0;
+                                                                field.onChange(newVal);
                                                                 // Auto-switch mode based on interaction
                                                                 if (currentTab === 'claim') form.setValue('cashback_mode', 'percent');
                                                                 if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_percent');
+
+                                                                syncFields(newVal, undefined);
                                                             }}
                                                             placeholder="0"
                                                             unit="%"
@@ -259,26 +309,29 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                                         </div>
                                                     )}
 
-                                                    {/* Budget Warning */}
-                                                    {(!!isOverCap && cashbackMode.includes('real') && !!personId) && (
-                                                        <div className="mt-1 p-1.5 rounded bg-rose-50 border border-rose-100">
-                                                            <div className="flex items-start gap-1.5 text-rose-700 text-[10px] leading-tight">
-                                                                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                                                                <div>
-                                                                    <p className="font-bold">Budget Overflow!</p>
-                                                                    <p className="opacity-80">Reward ({new Intl.NumberFormat('vi-VN').format(projectedReward)}) exceeds remaining cap ({new Intl.NumberFormat('vi-VN').format(remainsCap)}).</p>
-                                                                    <Button
-                                                                        variant="link"
-                                                                        className="h-auto p-0 text-[10px] font-black underline h-auto mt-1"
-                                                                        onClick={() => {
-                                                                            form.setValue('cashback_mode', 'voluntary');
-                                                                            form.setValue('cashback_share_fixed', projectedReward);
-                                                                            form.setValue('cashback_share_percent', undefined);
-                                                                        }}
-                                                                    >
-                                                                        Switch to Voluntary Mode
-                                                                    </Button>
+                                                    {/* Compact Budget Warning */}
+                                                    {isOverCap && cashbackMode.includes('real') && !!personId && (
+                                                        <div className="mt-1 px-2 py-1.5 rounded-md bg-rose-50 border border-rose-200 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="flex items-center gap-1.5 text-rose-700 text-[10px] leading-none">
+                                                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-500" />
+                                                                    <span className="font-bold">Budget Overflow!</span>
+                                                                    <span className="opacity-70 font-medium">
+                                                                        Limit: {new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))}
+                                                                    </span>
                                                                 </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-6 px-1.5 text-[9px] font-black underline uppercase text-rose-700 hover:text-rose-800 hover:bg-rose-100/50"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        form.setValue('cashback_mode', 'voluntary');
+                                                                        // Keep the values but switch mode
+                                                                    }}
+                                                                >
+                                                                    Voluntary?
+                                                                </Button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -295,8 +348,24 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             const bankRewardRaw = Math.abs(amount) * bankRate;
                                             const bankRewardCapped = policy?.maxReward ? Math.min(bankRewardRaw, policy.maxReward) : bankRewardRaw;
 
-                                            const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
-                                            const availableMax = Math.min(bankRewardCapped, remainsCap);
+                                            // The user share could be partially from percent
+                                            const currentPercent = form.getValues('cashback_share_percent') || 0;
+                                            const percentValue = Math.abs(amount) * (currentPercent / 100);
+                                            const remainingForFixed = Math.max(0, actualBankReward - percentValue);
+                                            const availableMax = remainingForFixed;
+
+                                            // Local linkage logic for Amount field
+                                            const syncFromFixed = (newFixed: number) => {
+                                                if (!cashbackMode.includes('real')) return;
+                                                const currentPercent = form.getValues('cashback_share_percent') || 0;
+                                                const total = (Math.abs(amount) * (currentPercent / 100)) + newFixed;
+
+                                                if (total > actualBankReward + 0.1) {
+                                                    const allowedRewardForPercent = Math.max(0, actualBankReward - newFixed);
+                                                    const allowedPercent = (Math.abs(amount) > 0) ? (allowedRewardForPercent / Math.abs(amount)) * 100 : 0;
+                                                    form.setValue('cashback_share_percent', Number(allowedPercent.toFixed(2)));
+                                                }
+                                            };
 
                                             return (
                                                 <FormItem>
@@ -309,18 +378,15 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                                     <SmartAmountInput
                                                         value={field.value ?? 0}
                                                         onChange={(val) => {
-                                                            // Calculate max allowed fixed given the current percent share
-                                                            const currentPercent = form.getValues('cashback_share_percent') || 0;
-                                                            const percentValue = Math.abs(amount) * (currentPercent / 100);
-                                                            const remainingForFixed = Math.max(0, availableMax - percentValue);
-
-                                                            const safeVal = Math.min((val || 0), remainingForFixed);
-                                                            field.onChange(safeVal);
+                                                            const newVal = val ?? 0;
+                                                            field.onChange(newVal);
                                                             // Auto-switch mode based on interaction
-                                                            if (safeVal > 0) {
+                                                            if (newVal > 0) {
                                                                 if (currentTab === 'claim') form.setValue('cashback_mode', 'fixed');
                                                                 if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_fixed');
                                                             }
+
+                                                            syncFromFixed(newVal);
                                                         }}
                                                         placeholder="0"
                                                         hideLabel={true}
@@ -333,6 +399,32 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             );
                                         }}
                                     />
+                                </div>
+                            )}
+
+                            {/* Global Budget Over-limit Warning - Centralized */}
+                            {isOverCap && (
+                                <div className="mx-0 py-2 px-3 rounded-lg bg-rose-50 border border-rose-200 shadow-sm animate-in fade-in zoom-in duration-300">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 text-rose-700 text-xs">
+                                            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                                            <div>
+                                                <p className="font-black leading-none">Budget Overflow!</p>
+                                                <p className="text-[10px] opacity-80 mt-1">Sharing more than effective reward ({new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))})</p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-[10px] font-black px-2 border-rose-200 text-rose-700 hover:bg-rose-100 uppercase"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                form.setValue('cashback_mode', 'voluntary');
+                                            }}
+                                        >
+                                            Switch to Voluntary
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
 
@@ -385,14 +477,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                             <div className="flex items-center justify-between p-2 bg-slate-100 rounded-md text-sm">
                                 <span className="text-slate-500 font-medium">Projected Reward (Bank):</span>
                                 <span className="font-bold text-slate-700">
-                                    {(() => {
-                                        const rate = policy?.rate ?? 0;
-                                        const raw = Math.abs(amount) * rate;
-                                        const capped = policy?.maxReward ? Math.min(raw, policy.maxReward) : raw;
-                                        const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
-                                        const final = Math.min(capped, remainsCap);
-                                        return new Intl.NumberFormat('vi-VN').format(Math.round(final));
-                                    })()}
+                                    {new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))}
                                 </span>
                             </div>
 
@@ -425,52 +510,34 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                     <span className="font-medium bg-slate-100 px-1 rounded flex items-center gap-1">
                                         {(policy?.rate ? policy.rate * 100 : 0).toFixed(1)}%
                                         <span className="text-[10px] opacity-70">
-                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(Math.abs(amount) * (policy?.rate ?? 0)))})
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))})
                                         </span>
+                                        {bankRewardRaw > actualBankReward && (
+                                            <span className="text-[9px] text-amber-600 font-black ml-0.5">
+                                                ({(remainsCap !== null && remainsCap !== undefined && remainsCap <= 0) ? 'OVER BUDGET' : 'CAPPED'})
+                                            </span>
+                                        )}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500 font-bold">Your Share:</span>
                                     <span className="font-black bg-indigo-50 text-indigo-700 px-1 rounded flex items-center gap-1">
-                                        {(() => {
-                                            const totalSharedVal = (Math.abs(amount) * ((sharePercent || 0) / 100)) + (shareFixed || 0);
-                                            const effectiveSharePercent = Math.abs(amount) > 0 ? (totalSharedVal / Math.abs(amount)) * 100 : 0;
-                                            return effectiveSharePercent.toFixed(1);
-                                        })()}%
+                                        {effectiveDisplayPercent}%
                                         <span className="text-[10px] opacity-70">
-                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(
-                                                (Math.abs(amount) * ((sharePercent || 0) / 100)) + (shareFixed || 0)
-                                            ))})
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(totalSharedVal))})
                                         </span>
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-xs pt-1 border-t border-slate-50 mt-1">
                                     <span className="text-slate-500">Profit:</span>
-                                    <span className="font-medium text-emerald-600 flex items-center gap-1">
+                                    <span className="font-black text-emerald-600 flex items-center gap-1">
                                         {(() => {
-                                            const bankRate = policy?.rate ?? 0;
-                                            const bankRewardRaw = Math.abs(amount) * bankRate;
-                                            const bankRewardCapped = policy?.maxReward ? Math.min(bankRewardRaw, policy.maxReward) : bankRewardRaw;
-                                            const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
-                                            const actualBankReward = Math.min(bankRewardCapped, remainsCap);
-
-                                            const totalSharedVal = (Math.abs(amount) * ((sharePercent || 0) / 100)) + (shareFixed || 0);
                                             const profitVal = Math.max(0, actualBankReward - totalSharedVal);
                                             const profitPercent = Math.abs(amount) > 0 ? (profitVal / Math.abs(amount)) * 100 : 0;
-
                                             return profitPercent.toFixed(1);
                                         })()}%
                                         <span className="text-[10px] opacity-70">
-                                            ({(() => {
-                                                const bankRate = policy?.rate ?? 0;
-                                                const bankRewardRaw = Math.abs(amount) * bankRate;
-                                                const bankRewardCapped = policy?.maxReward ? Math.min(bankRewardRaw, policy.maxReward) : bankRewardRaw;
-                                                const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
-                                                const actualBankReward = Math.min(bankRewardCapped, remainsCap);
-
-                                                const totalSharedVal = (Math.abs(amount) * ((sharePercent || 0) / 100)) + (shareFixed || 0);
-                                                return new Intl.NumberFormat('vi-VN').format(Math.round(Math.max(0, actualBankReward - totalSharedVal)));
-                                            })()})
+                                            ({new Intl.NumberFormat('vi-VN').format(Math.round(Math.max(0, actualBankReward - totalSharedVal)))} )
                                         </span>
                                     </span>
                                 </div>
@@ -493,19 +560,42 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 <div className="grid grid-cols-2 gap-y-1 text-xs">
                                     <span className="text-slate-500">Summary:</span>
                                     <span className="text-right font-medium">
-                                        {cashbackMode === 'none_back' ? 'None' : (cashbackMode.includes('real') ? 'Real' : 'Virtual')} • {(sharePercent || (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                        {cashbackMode === 'none_back' ? 'None' : (cashbackMode.includes('real') ? 'Real' : 'Virtual')} • {(() => {
+                                            if (Number(effectiveDisplayPercent) > 0) return effectiveDisplayPercent;
+                                            // Handle case where share is 0 but we want to show card potential or effective award
+                                            if (actualBankReward > 0 && Math.abs(amount) > 0) {
+                                                return ((actualBankReward / Math.abs(amount)) * 100).toFixed(1);
+                                            }
+                                            return (policy?.rate ? policy.rate * 100 : 0).toFixed(1);
+                                        })()}%
                                     </span>
 
                                     <span className="text-slate-500">Source:</span>
-                                    <span className="text-right font-medium">
+                                    <span className="text-right font-medium text-indigo-600">
                                         {(() => {
                                             const source = policy?.metadata.policySource;
                                             if (source === 'category_rule') return 'Specific Category Rule';
                                             if (source === 'level_default') return 'Tier Achievement';
                                             if (source === 'program_default') return 'Standard Program';
                                             if (source === 'legacy') return 'Global Settings';
-                                            return source || 'N/A';
+                                            return 'Auto Math';
                                         })()}
+                                    </span>
+
+                                    {policy?.maxReward !== undefined && policy.maxReward !== null && (
+                                        <>
+                                            <span className="text-slate-500">Rule Cap:</span>
+                                            <span className="text-right font-medium text-amber-600">
+                                                {new Intl.NumberFormat('vi-VN').format(policy.maxReward)}
+                                            </span>
+                                        </>
+                                    )}
+
+                                    <span className="text-slate-500">Cycle Cap:</span>
+                                    <span className="text-right font-medium text-slate-700">
+                                        {activeAccount?.stats?.max_budget
+                                            ? new Intl.NumberFormat('vi-VN').format(activeAccount.stats.max_budget)
+                                            : 'Unlimited'}
                                     </span>
 
                                     <span className="text-slate-500">Criteria:</span>

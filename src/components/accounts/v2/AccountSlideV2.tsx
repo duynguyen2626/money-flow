@@ -445,13 +445,18 @@ export function AccountSlideV2({
                     setIsCashbackEnabled(cb.defaultRate > 0 || loadedLevels.length > 0);
 
                     // Check if it's a simple restricted config
-                    if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1) {
+                    // MF5.4.3: Only trigger restricted mode if the overall default rate is 0.
+                    // If defaultRate > 0, it means it's a tiered card (e.g. VCB Signature 0.5% base + 10% Edu)
+                    if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1 && cb.defaultRate === 0) {
                         setIsCategoryRestricted(true);
                         setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
                         setDefaultRate(loadedLevels[0].rules[0].rate);
                     } else {
+                        // If it's not restricted mode, they see Base Rate = cb.defaultRate.
+                        // To see categories, they MUST use Advanced mode.
                         setIsCategoryRestricted(false);
                         setRestrictedCategoryIds([]);
+                        setDefaultRate(cb.defaultRate || 0);
                     }
                 };
 
@@ -532,7 +537,7 @@ export function AccountSlideV2({
                             minSpendTarget,
                             defaultRate: isCategoryRestricted ? 0 : defaultRate, // If restricted, base is 0
                             maxBudget: maxCashback,
-                            levels: isAdvancedCashback ? levels.map(lvl => ({
+                            levels: (isAdvancedCashback && !isCategoryRestricted) ? levels.map(lvl => ({
                                 id: lvl.id,
                                 name: lvl.name,
                                 minTotalSpend: lvl.minTotalSpend,

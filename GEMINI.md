@@ -30,8 +30,8 @@
 
 ### Current Phase
 - **Phase 14**: COMPLETED - People UI Refactor & Navigation Optimization
-- **Phase 15**: IN PROGRESS - Categories UI Optimization & Transaction Table Refinement
-- See `.agent/HANDOVER_CATEGORIES_UI.md` for latest changes.
+- **Phase 15**: IN PROGRESS - Categories UI Optimization & Cashback Logic Refinement
+- See `.agent/HANDOVER_CATEGORIES_UI.md` and `.agent/CASHBACK_REFACTOR_PLAN.md` for latest changes.
 
 ---
 
