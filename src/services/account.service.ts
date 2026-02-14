@@ -157,91 +157,93 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       const consumed = real_awarded + virtual_profit
       remains_cap = Math.max(0, maxBudget - consumed)
     }
-  } else if (config.maxAmount) {
-    const consumed = real_awarded + virtual_profit
-    remains_cap = Math.max(0, config.maxAmount - consumed)
+    remains_cap = Math.max(0, maxBudget - consumed)
+  }
+} else if (config.maxBudget) {
+  const consumed = real_awarded + virtual_profit
+  remains_cap = Math.max(0, config.maxBudget - consumed)
+}
+
+// 3. Fallback / Validation if cycle missing (e.g. no txns yet)
+// If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
+
+const min_spend = cycle ? (cycle.min_spend_target ?? null) : config.minSpend
+const missing_for_min = (min_spend !== null) ? Math.max(0, min_spend - spent_this_cycle) : null
+const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend)
+
+let cycle_range = (start && end) ? `${fmtDate(start)} - ${fmtDate(end)}` : null
+
+// Smart Cycle Detection - Format as DD-MM to DD-MM
+const isFullMonth = start.getDate() === 1 &&
+  (new Date(end.getTime() + 86400000).getDate() === 1)
+
+if (config.cycleType === 'calendar_month' || isFullMonth) {
+  // Full month: show first day to last day of month
+  const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+  cycle_range = `01-${String(start.getMonth() + 1).padStart(2, '0')} to ${String(lastDay).padStart(2, '0')}-${String(start.getMonth() + 1).padStart(2, '0')}`
+} else {
+  // Custom cycle: DD-MM to DD-MM
+  const startDay = String(start.getDate()).padStart(2, '0')
+  const startMonth = String(start.getMonth() + 1).padStart(2, '0')
+  const endDay = String(end.getDate()).padStart(2, '0')
+  const endMonth = String(end.getMonth() + 1).padStart(2, '0')
+  cycle_range = `${startDay}-${startMonth} to ${endDay}-${endMonth}`
+}
+
+// 4. Due Date Display
+let due_date_display: string | null = null
+let due_date: string | null = null
+
+if (config.dueDate) {
+  const currentDay = now.getDate()
+  let targetMonth = now.getMonth()
+  const targetYear = now.getFullYear()
+
+  if (currentDay > config.dueDate) {
+    targetMonth += 1
   }
 
-  // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
-  // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
+  const targetDate = new Date(targetYear, targetMonth, config.dueDate)
+  due_date_display = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(targetDate)
+  due_date = targetDate.toISOString()
+}
 
-  const min_spend = cycle ? (cycle.min_spend_target ?? null) : config.minSpend
-  const missing_for_min = (min_spend !== null) ? Math.max(0, min_spend - spent_this_cycle) : null
-  const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend)
+// 5. Annual Fee Waiver Calculation
+let annual_fee_waiver_target: number | null = null
+let annual_fee_waiver_progress = 0
+let annual_fee_waiver_met = false
 
-  let cycle_range = (start && end) ? `${fmtDate(start)} - ${fmtDate(end)}` : null
+if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
+  // Get waiver target from account config, or use minSpendTarget as fallback
+  annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpendTarget ?? null
 
-  // Smart Cycle Detection - Format as DD-MM to DD-MM
-  const isFullMonth = start.getDate() === 1 &&
-    (new Date(end.getTime() + 86400000).getDate() === 1)
-
-  if (config.cycleType === 'calendar_month' || isFullMonth) {
-    // Full month: show first day to last day of month
-    const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
-    cycle_range = `01-${String(start.getMonth() + 1).padStart(2, '0')} to ${String(lastDay).padStart(2, '0')}-${String(start.getMonth() + 1).padStart(2, '0')}`
-  } else {
-    // Custom cycle: DD-MM to DD-MM
-    const startDay = String(start.getDate()).padStart(2, '0')
-    const startMonth = String(start.getMonth() + 1).padStart(2, '0')
-    const endDay = String(end.getDate()).padStart(2, '0')
-    const endMonth = String(end.getMonth() + 1).padStart(2, '0')
-    cycle_range = `${startDay}-${startMonth} to ${endDay}-${endMonth}`
+  if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
+    // Calculate annual spend (not just current cycle)
+    // For now, use spent_this_cycle as proxy; in production, aggregate full year
+    const annualSpend = spent_this_cycle // TODO: Implement full year aggregation
+    annual_fee_waiver_progress = Math.min(100, (annualSpend / annual_fee_waiver_target) * 100)
+    annual_fee_waiver_met = annualSpend >= annual_fee_waiver_target
   }
+}
 
-  // 4. Due Date Display
-  let due_date_display: string | null = null
-  let due_date: string | null = null
-
-  if (config.dueDate) {
-    const currentDay = now.getDate()
-    let targetMonth = now.getMonth()
-    const targetYear = now.getFullYear()
-
-    if (currentDay > config.dueDate) {
-      targetMonth += 1
-    }
-
-    const targetDate = new Date(targetYear, targetMonth, config.dueDate)
-    due_date_display = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(targetDate)
-    due_date = targetDate.toISOString()
-  }
-
-  // 5. Annual Fee Waiver Calculation
-  let annual_fee_waiver_target: number | null = null
-  let annual_fee_waiver_progress = 0
-  let annual_fee_waiver_met = false
-
-  if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
-    // Get waiver target from account config, or use minSpendTarget as fallback
-    annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpend ?? null
-
-    if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
-      // Calculate annual spend (not just current cycle)
-      // For now, use spent_this_cycle as proxy; in production, aggregate full year
-      const annualSpend = spent_this_cycle // TODO: Implement full year aggregation
-      annual_fee_waiver_progress = Math.min(100, (annualSpend / annual_fee_waiver_target) * 100)
-      annual_fee_waiver_met = annualSpend >= annual_fee_waiver_target
-    }
-  }
-
-  return {
-    ...baseStats,
-    spent_this_cycle,
-    min_spend,
-    missing_for_min,
-    is_qualified,
-    cycle_range,
-    due_date_display,
-    due_date,
-    remains_cap,
-    shared_cashback: real_awarded,
-    real_awarded,
-    virtual_profit,
-    annual_fee_waiver_target,
-    annual_fee_waiver_progress,
-    annual_fee_waiver_met,
-    max_budget: cycle?.max_budget ?? config.maxAmount ?? null
-  }
+return {
+  ...baseStats,
+  spent_this_cycle,
+  min_spend,
+  missing_for_min,
+  is_qualified,
+  cycle_range,
+  due_date_display,
+  due_date,
+  remains_cap,
+  shared_cashback: real_awarded,
+  real_awarded,
+  virtual_profit,
+  annual_fee_waiver_target,
+  annual_fee_waiver_progress,
+  annual_fee_waiver_met,
+  max_budget: cycle?.max_budget ?? config.maxBudget ?? null
+}
 }
 
 

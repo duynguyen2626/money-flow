@@ -301,11 +301,11 @@ export function parseCashbackConfig(raw: unknown, accountId: string = 'unknown')
 }
 
 export function getCashbackCycleRange(
-  config: ParsedCashbackConfig,
+  config: { cycleType: CashbackCycleType; statementDay: number | null },
   referenceDate = new Date()
 ): CycleRange | null {
   if (!config.cycleType) {
-    return null;
+    return null
   }
 
   const startOfCalendar = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
