@@ -40,7 +40,6 @@ type CreateAccountParams = {
   cb_base_rate?: number
   cb_max_budget?: number | null
   cb_is_unlimited?: boolean
-  cb_is_unlimited?: boolean
   cb_rules_json?: Json | null
   statementDay?: number | null
   dueDate?: number | null

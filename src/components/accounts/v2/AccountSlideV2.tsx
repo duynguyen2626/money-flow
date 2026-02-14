@@ -312,7 +312,8 @@ export function AccountSlideV2({
                 rules: [{
                     categoryIds: [...restrictedCategoryIds].sort(),
                     rate: defaultRate,
-                    maxReward: null
+                    maxReward: null,
+                    description: undefined
                 }]
             }];
         } else if (isCategoryRestricted && restrictedCategoryIds.length === 0) {
@@ -593,7 +594,8 @@ export function AccountSlideV2({
                                 id: 'rule_1',
                                 categoryIds: restrictedCategoryIds,
                                 rate: defaultRate,
-                                maxReward: null
+                                maxReward: null,
+                                description: undefined
                             }]
                         }];
                     } else {
@@ -680,7 +682,8 @@ export function AccountSlideV2({
                                 id: 'rule_1',
                                 categoryIds: restrictedCategoryIds,
                                 rate: defaultRate,
-                                maxReward: null
+                                maxReward: null,
+                                description: undefined
                             }]
                         }];
                     } else {
