@@ -581,7 +581,7 @@ export function AccountSlideV2({
                 }
 
                 // Map levels
-                let finalLevels = [];
+                let finalLevels: any[] = [];
                 if (effectiveCbType === 'tiered') {
                     if (isCategoryRestricted) {
                         finalLevels = [{
@@ -668,7 +668,7 @@ export function AccountSlideV2({
                 }
 
                 // Map levels
-                let finalLevels = [];
+                let finalLevels: any[] = [];
                 if (effectiveCbType === 'tiered') {
                     if (isCategoryRestricted) {
                         finalLevels = [{

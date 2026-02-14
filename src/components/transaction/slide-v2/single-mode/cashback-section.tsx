@@ -331,7 +331,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-indigo-500 flex items-center justify-center">
                                     <span className="text-[10px] font-black text-slate-600">
                                         {activeAccount?.stats?.max_budget && remainsCap !== null ?
-                                            Math.max(0, Math.min(100, Math.round((remainsCap / activeAccount.stats.max_budget) * 100))) :
+                                            Math.max(0, Math.min(100, Math.round(((remainsCap ?? 0) / (activeAccount.stats?.max_budget || 1)) * 100))) :
                                             100}%
                                     </span>
                                 </div>
