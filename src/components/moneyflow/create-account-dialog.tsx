@@ -482,6 +482,21 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     [creditCardAccounts]
   )
 
+  // Build existing suggestions for Account Number and Receiver Name
+  const existingAccountNumbers = useMemo(() => {
+    const nums = creditCardAccounts
+      .filter(acc => acc.account_number)
+      .map(acc => acc.account_number!)
+    return Array.from(new Set(nums))
+  }, [creditCardAccounts])
+
+  const existingReceiverNames = useMemo(() => {
+    const names = creditCardAccounts
+      .filter(acc => acc.receiver_name)
+      .map(acc => acc.receiver_name!)
+    return Array.from(new Set(names))
+  }, [creditCardAccounts])
+
   const isDirty = useMemo(() => {
     return name !== '' ||
       accountType !== 'credit_card' ||
@@ -926,22 +941,36 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                           <div className="space-y-4">
                             <div className="space-y-1">
                               <label className="text-sm font-medium text-slate-600">Bank Number</label>
-                              <InputWithClear
+                              <input
+                                list="bank-numbers-datalist"
+                                type="text"
                                 value={accountNumber}
                                 onChange={e => setAccountNumber(e.target.value)}
-                                onClear={() => setAccountNumber('')}
                                 placeholder="Account number"
+                                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
+                              <datalist id="bank-numbers-datalist">
+                                {existingAccountNumbers.map((num) => (
+                                  <option key={num} value={num} />
+                                ))}
+                              </datalist>
                             </div>
 
                             <div className="space-y-1">
                               <label className="text-sm font-medium text-slate-600">Receiver Name</label>
-                              <InputWithClear
+                              <input
+                                list="receiver-names-datalist"
+                                type="text"
                                 value={receiverName}
                                 onChange={e => setReceiverName(e.target.value)}
-                                onClear={() => setReceiverName('')}
                                 placeholder="NGUYEN THANH NAM"
+                                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                               />
+                              <datalist id="receiver-names-datalist">
+                                {existingReceiverNames.map((name) => (
+                                  <option key={name} value={name} />
+                                ))}
+                              </datalist>
                             </div>
                           </div>
                         </div>

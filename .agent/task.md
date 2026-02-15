@@ -185,3 +185,16 @@
    [x] Restore Context Hiding logic (UnifiedTransactionsTable) for Details pages.
    [x] Fix table build error (missing closing tags).
    [x] Update Flow Legend (FROM = Orange, TO = Sky).
+
+  Phase 16 - Cashback Reboot & Logic Stabilization
+   Mục tiêu:
+    Re-implement Cashback Section trong Transaction Slide V2 và sửa lỗi hiển thị Analytics.
+   Tasks:
+    [ ] Research branch `fix/cashback-ui-and-logic-v2` để lấy logic display chuẩn.
+    [ ] Xây dựng lại CashbackSection: dynamic theo amount, cycle, account, và category.
+    [ ] Refactor Account Detail Header metrics:
+        - `Cycle Net` → `Estimate Claim` (Dự thu trong kỳ).
+        - `Yearly Real` → `Actual Reward` (Tiền thực nhận).
+    [ ] Fix logic Exclusions: Loại bỏ các Category "Create..." và Note "Rollover..." khỏi Spent/Earned.
+    [ ] Đảm bảo đồng nhất logic tính toán giữa Table (View) và Slide (Edit).
+    [ ] Xử lý triệt để bài toán % vs decimal (0.5% = 0.005).

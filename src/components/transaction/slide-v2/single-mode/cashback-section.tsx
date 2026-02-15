@@ -32,6 +32,19 @@ type CashbackSectionProps = {
     categories?: Category[];
 };
 
+// Helper: Convert rate to percentage form (0-100) for form display
+// If rate > 1, assume it's already percentage; if < 1, multiply by 100
+const normalizeRateToPercentage = (rate: number): number => {
+    if (rate > 1) return rate; // Already percentage (e.g., 0.5 should be treated as 0.5%)
+    return rate * 100; // Convert decimal to percentage
+};
+
+// Helper: Convert percentage form back to decimal for DB storage
+const normalizeRateToDecimal = (percentage: number): number => {
+    if (percentage > 1) return percentage / 100; // Already percentage form, convert to decimal
+    return percentage; // Already decimal
+};
+
 export function CashbackSection({ accounts, categories = [] }: CashbackSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const isExpanded = useWatch({ control: form.control, name: "ui_is_cashback_expanded" });
@@ -108,7 +121,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
     useEffect(() => {
         if (isExpanded && policy && !form.getValues('cashback_share_percent') && !form.getValues('cashback_share_fixed')) {
             if (policy.rate > 0) {
-                form.setValue('cashback_share_percent', Number((policy.rate * 100).toFixed(2)));
+                form.setValue('cashback_share_percent', Number(normalizeRateToPercentage(policy.rate).toFixed(2)));
             }
         }
     }, [isExpanded, policy, form]);
@@ -124,7 +137,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
 
         // Auto-fill if empty
         if (policy && !form.getValues('cashback_share_percent') && !form.getValues('cashback_share_fixed')) {
-            form.setValue('cashback_share_percent', Number((policy.rate * 100).toFixed(2)));
+            form.setValue('cashback_share_percent', Number(normalizeRateToPercentage(policy.rate).toFixed(2)));
         }
     };
 
@@ -248,13 +261,13 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                                         <div className="flex flex-col gap-1 mt-1">
                                                             <div className="flex items-center gap-1.5 text-rose-600 font-bold text-[10px] leading-tight flex-wrap">
                                                                 <AlertTriangle className="w-3 h-3 shrink-0" />
-                                                                <span>Higher than card rate ({(policy.rate * 100).toFixed(1)}%)</span>
+                                                                <span>Higher than card rate ({normalizeRateToPercentage(policy.rate).toFixed(1)}%)</span>
                                                                 <Button
                                                                     variant="ghost"
                                                                     className="h-auto p-0 text-[10px] font-black underline uppercase text-rose-700 hover:text-rose-800 hover:bg-transparent"
                                                                     onClick={(e) => {
                                                                         e.preventDefault();
-                                                                        field.onChange(policy.rate * 100);
+                                                                        field.onChange(normalizeRateToPercentage(policy.rate));
                                                                     }}
                                                                 >
                                                                     <RotateCcw className="w-2.5 h-2.5 mr-1" /> Reset
@@ -391,13 +404,13 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Bank Rate:</span>
                                     <span className="font-medium bg-slate-100 px-1 rounded">
-                                        {(policy?.rate ? policy.rate * 100 : 0).toFixed(1)}%
+                                        {(policy?.rate ? normalizeRateToPercentage(policy.rate) : 0).toFixed(1)}%
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Your Share:</span>
                                     <span className="font-medium bg-slate-50 px-1 rounded">
-                                        {(sharePercent ?? (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                        {(sharePercent ?? (policy?.rate ? normalizeRateToPercentage(policy.rate) : 0)).toFixed(1)}%
                                     </span>
                                 </div>
                             </div>
