@@ -413,7 +413,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <Breadcrumbs />
-        <div className="mx-auto w-full max-w-[1920px] flex-1 min-h-0 bg-white">
+        <div className="w-full flex-1 min-h-0 bg-white">
           {children}
         </div>
         <GlobalAI />

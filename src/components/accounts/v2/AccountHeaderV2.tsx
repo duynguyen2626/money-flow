@@ -1,9 +1,8 @@
-import { Search, Plus, Landmark, LayoutGrid, List, Filter } from "lucide-react";
+import { Search, Plus, Landmark, LayoutGrid, List, Filter, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Category } from "@/types/moneyflow.types";
-import { Select, SelectItem } from "@/components/ui/select";
 
 interface AccountHeaderProps {
     searchQuery: string;
@@ -80,28 +79,22 @@ export function AccountHeaderV2({
 
             {/* Right Group: Search and Action */}
             <div className="flex items-center gap-3">
-                {/* Category Filter */}
-                {categories.length > 0 && onCategoryChange && (
-                    <Select
-                        items={[
-                            { value: 'all', label: 'All Categories' },
-                            ...categories.map((cat) => ({ value: cat.id, label: cat.name }))
-                        ]}
-                        value={selectedCategory || 'all'}
-                        onValueChange={(val) => onCategoryChange(val === 'all' ? undefined : val)}
-                        placeholder="Category"
-                        className="h-9 w-36 text-xs"
-                    />
-                )}
-
-                <div className="relative w-48 lg:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <div className="relative w-48 lg:w-64 group">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                     <Input
                         placeholder="Search accounts..."
-                        className="pl-9 h-9 bg-slate-50/50 border-slate-200 focus:bg-white transition-all rounded-lg font-medium shadow-sm hover:border-slate-300 text-xs"
+                        className="pl-9 pr-8 h-9 bg-slate-50/50 border-slate-200 focus:bg-white transition-all rounded-lg font-medium shadow-sm hover:border-slate-300 text-xs"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
                     />
+                    {searchQuery && (
+                        <button
+                            onClick={() => onSearchChange("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 text-slate-400 transition-colors"
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    )}
                 </div>
 
                 <div className="h-6 w-px bg-slate-200 mx-1 hidden lg:block" />

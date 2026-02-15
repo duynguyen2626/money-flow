@@ -175,28 +175,45 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
   // If account is provided with new cb_ columns, use them first
   if (account && account.cb_type && account.cb_type !== 'none') {
     return {
-      defaultRate: Number(account.cb_base_rate ?? program?.defaultRate ?? 0),
+      defaultRate: Number(account.cb_base_rate ?? program?.defaultRate ?? 0) / 100,
       maxBudget: account.cb_is_unlimited ? null : Number(account.cb_max_budget ?? program?.maxBudget ?? 0),
       // Cycle info is still in JSON for now
       cycleType: program?.cycleType || 'calendar_month',
       statementDay: program?.statementDay ?? null,
       minSpendTarget: program?.minSpendTarget ?? null,
       dueDate: program?.dueDate ?? null,
-      levels: account.cb_type === 'tiered' && Array.isArray(account.cb_rules_json)
-        ? (account.cb_rules_json as any[]).map((lvl: any) => ({
-          id: lvl.id || Math.random().toString(36).substr(2, 9),
-          name: lvl.name || "",
-          minTotalSpend: Number(lvl.minTotalSpend ?? 0),
-          defaultRate: lvl.defaultRate !== undefined ? Number(lvl.defaultRate) : null,
-          rules: (lvl.rules || []).map((r: any) => ({
-            id: r.id || Math.random().toString(36).substr(2, 9),
-            categoryIds: r.categoryIds || [],
-            rate: Number(r.rate ?? 0),
-            maxReward: r.maxReward !== undefined ? Number(r.maxReward) : null,
-            description: r.description
-          }))
-        }))
-        : (account.cb_type === 'simple' ? [] : (program?.levels || []))
+      levels: (() => {
+        if (account.cb_type === 'tiered' && Array.isArray(account.cb_rules_json)) {
+          return (account.cb_rules_json as any[]).map((lvl: any) => ({
+            id: lvl.id || Math.random().toString(36).substr(2, 9),
+            name: lvl.name || "",
+            minTotalSpend: Number(lvl.minTotalSpend ?? 0),
+            defaultRate: lvl.defaultRate !== undefined ? Number(lvl.defaultRate) / 100 : null,
+            rules: (lvl.rules || []).map((r: any) => ({
+              id: r.id || Math.random().toString(36).substr(2, 9),
+              categoryIds: r.categoryIds || r.cat_ids || [],
+              rate: Number(r.rate ?? 0) / 100,
+              maxReward: (r.maxReward !== undefined ? r.maxReward : (r.max !== undefined ? r.max : null)),
+              description: r.description
+            }))
+          }));
+        } else if (account.cb_type === 'simple' && Array.isArray(account.cb_rules_json)) {
+          return [{
+            id: 'simple_level',
+            name: 'General',
+            minTotalSpend: 0,
+            defaultRate: Number(account.cb_base_rate ?? 0) / 100,
+            rules: (account.cb_rules_json as any[]).map((r: any) => ({
+              id: r.id || Math.random().toString(36).substr(2, 9),
+              categoryIds: r.categoryIds || r.cat_ids || [],
+              rate: Number(r.rate ?? 0) / 100,
+              maxReward: (r.maxReward !== undefined ? r.maxReward : (r.max !== undefined ? r.max : null)),
+              description: r.description
+            }))
+          }];
+        }
+        return program?.levels || [];
+      })()
     };
   }
 

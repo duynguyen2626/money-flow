@@ -36,7 +36,7 @@ export function resolveCashbackPolicy(params: {
 
     // PRIORITY 1: New Column-based Config
     if (account.cb_type && account.cb_type !== 'none') {
-        const baseRate = Number(account.cb_base_rate ?? 0);
+        const baseRate = Number(account.cb_base_rate ?? 0) / 100;
         const maxBudget = account.cb_is_unlimited ? undefined : (account.cb_max_budget ?? undefined);
 
         let finalRate = baseRate;
@@ -57,7 +57,7 @@ export function resolveCashbackPolicy(params: {
             if (categoryId && qualifiedLevels.length > 0) {
                 for (const lvl of qualifiedLevels) {
                     const rules = Array.isArray(lvl.rules) ? lvl.rules : [];
-                    const found = rules.find((r: any) => r.categoryIds?.includes(categoryId));
+                    const found = rules.find((r: any) => r.categoryIds?.includes(categoryId) || r.cat_ids?.includes(categoryId));
                     if (found) {
                         matchedRule = { ...found, level: lvl };
                         break;
@@ -66,8 +66,8 @@ export function resolveCashbackPolicy(params: {
             }
 
             if (matchedRule) {
-                finalRate = Number(matchedRule.rate ?? 0);
-                finalMaxReward = matchedRule.maxReward ?? undefined;
+                finalRate = Number(matchedRule.rate ?? 0) / 100;
+                finalMaxReward = matchedRule.maxReward ?? matchedRule.max ?? undefined;
                 source = {
                     policySource: 'category_rule',
                     reason: categoryName ? `${categoryName} rule` : 'Category rule matched',
@@ -77,13 +77,13 @@ export function resolveCashbackPolicy(params: {
                     levelMinSpend: matchedRule.level.minTotalSpend,
                     categoryId: categoryId || undefined,
                     ruleId: matchedRule.id,
-                    ruleMaxReward: matchedRule.maxReward,
+                    ruleMaxReward: finalMaxReward,
                     ruleType: 'category',
                     priority: 20
                 };
             } else if (qualifiedLevels.length > 0) {
                 const topLevel = qualifiedLevels[0];
-                finalRate = topLevel.defaultRate !== undefined && topLevel.defaultRate !== null ? Number(topLevel.defaultRate) : baseRate;
+                finalRate = topLevel.defaultRate !== undefined && topLevel.defaultRate !== null ? Number(topLevel.defaultRate) / 100 : baseRate;
                 source = {
                     policySource: 'level_default',
                     reason: `Level matched: ${topLevel.name}`,
@@ -93,6 +93,24 @@ export function resolveCashbackPolicy(params: {
                     levelMinSpend: topLevel.minTotalSpend,
                     ruleType: 'level_default',
                     priority: 10
+                };
+            }
+        } else if (account.cb_type === 'simple' && Array.isArray(account.cb_rules_json)) {
+            const rules = account.cb_rules_json as any[];
+            const matchedRule = categoryId ? rules.find((r: any) => r.categoryIds?.includes(categoryId) || r.cat_ids?.includes(categoryId)) : null;
+
+            if (matchedRule) {
+                finalRate = Number(matchedRule.rate ?? 0) / 100;
+                finalMaxReward = matchedRule.maxReward ?? matchedRule.max ?? undefined;
+                source = {
+                    policySource: 'category_rule',
+                    reason: categoryName ? `${categoryName} rule` : 'Category rule matched',
+                    rate: finalRate,
+                    categoryId: categoryId || undefined,
+                    ruleId: matchedRule.id,
+                    ruleMaxReward: finalMaxReward,
+                    ruleType: 'category',
+                    priority: 20
                 };
             }
         }

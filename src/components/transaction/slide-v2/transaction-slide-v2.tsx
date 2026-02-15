@@ -120,6 +120,7 @@ export function TransactionSlideV2({
                 cashback_share_fixed: initialData.cashback_share_fixed ?? null,
                 ui_is_cashback_expanded: initialData.ui_is_cashback_expanded ?? false,
                 metadata: initialData.metadata ?? null,
+                service_fee: initialData.service_fee ?? (initialData.metadata?.service_fee ? Number(initialData.metadata.service_fee) : null),
             };
             console.log("   ✅ Using initialData values:", values);
             return values;
@@ -141,6 +142,7 @@ export function TransactionSlideV2({
             cashback_share_percent: null,
             cashback_share_fixed: null,
             metadata: null,
+            service_fee: null,
         };
     }, [initialData, accounts]);
 
@@ -275,6 +277,7 @@ export function TransactionSlideV2({
                 currentValues.cashback_mode !== defaultFormValues.cashback_mode ||
                 currentValues.cashback_share_percent !== defaultFormValues.cashback_share_percent ||
                 currentValues.cashback_share_fixed !== defaultFormValues.cashback_share_fixed ||
+                currentValues.service_fee !== defaultFormValues.service_fee ||
                 currentValues.occurred_at?.getTime() !== defaultFormValues.occurred_at?.getTime();
 
             setHasChanges(hasActualChanges);
@@ -328,6 +331,7 @@ export function TransactionSlideV2({
                             cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : undefined,
                             cashback_share_fixed: txn.cashback_share_fixed || undefined,
                             ui_is_cashback_expanded: !!txn.cashback_mode && txn.cashback_mode !== 'none_back',
+                            service_fee: txn.metadata?.service_fee ? Number(txn.metadata.service_fee) : null,
                         };
                         singleForm.reset(formVal);
                     } else {
@@ -369,8 +373,15 @@ export function TransactionSlideV2({
             // Convert UI percentage (20) to DB decimal (0.2)
             cashback_share_percent: data.cashback_share_percent ? data.cashback_share_percent / 100 : null,
             cashback_share_fixed: data.cashback_share_fixed,
-            metadata: data.metadata,
+            metadata: {
+                ...data.metadata,
+                service_fee: data.service_fee || undefined
+            },
         };
+        // Total amount = Base amount + Service Fee
+        if (data.service_fee) {
+            payload.amount = data.amount + data.service_fee;
+        }
 
         // UX: Close immediately if handler provided
         if (onSubmissionStart) {
@@ -477,8 +488,8 @@ export function TransactionSlideV2({
                 <SheetContent
                     showClose={false}
                     className={cn(
-                        "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100]",
-                        mode === 'single' ? "sm:max-w-[500px]" : "sm:max-w-[1000px]"
+                        "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100] max-w-screen",
+                        mode === 'single' ? "sm:max-w-[550px]" : "sm:max-w-[1000px]"
                     )}
                     side="right"
                     onInteractOutside={(e) => {

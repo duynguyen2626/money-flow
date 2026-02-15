@@ -25,6 +25,7 @@ import { SingleTransactionFormValues } from "../types";
 import { Shop, Category, Person } from "@/types/moneyflow.types";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { Combobox } from "@/components/ui/combobox";
+import { formatShortVietnameseCurrency } from "@/lib/number-to-text";
 
 type BasicInfoSectionProps = {
     shops: Shop[];
@@ -39,6 +40,8 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const isShopHidden = ['income', 'repayment', 'transfer', 'credit_pay'].includes(transactionType);
+    const amount = useWatch({ control: form.control, name: "amount" });
+    const serviceFee = useWatch({ control: form.control, name: "service_fee" });
 
     // Sync Tag with Date
     const occurredAt = useWatch({ control: form.control, name: "occurred_at" });
@@ -240,24 +243,93 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
             </div>
 
             {/* ROW 2: Amount (Prominent) */}
-            <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormControl>
-                            <SmartAmountInput
-                                value={field.value}
-                                onChange={field.onChange}
-                                hideLabel={true}
-                                className="text-2xl font-bold"
-                                placeholder="0"
-                            />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
+            <div className="space-y-1.5">
+                <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                        <FormItem className="space-y-1">
+                            <FormControl>
+                                <SmartAmountInput
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    hideLabel={true}
+                                    className="text-2xl font-bold h-12"
+                                    placeholder="0"
+                                />
+                            </FormControl>
+                            {field.value ? (
+                                <p className="text-[10px] font-bold text-rose-600 px-1 italic">
+                                    {formatShortVietnameseCurrency(field.value)}
+                                </p>
+                            ) : null}
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+
+                {/* Service Fee (Optional) */}
+                <FormField
+                    control={form.control}
+                    name="service_fee"
+                    render={({ field }) => {
+                        const fee = field.value || 0;
+                        const hasFee = fee > 0;
+                        const totalAmount = (amount || 0) + fee;
+
+                        return (
+                            <FormItem className="space-y-0">
+                                <div className="flex items-center justify-between gap-3 bg-indigo-50/30 rounded-lg px-4 py-3 border border-dashed border-indigo-200 shadow-sm">
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-[10px] font-black text-indigo-700 shadow-sm">FEE</div>
+                                            <span className="text-xs font-black text-indigo-900/70 uppercase tracking-wider">Service Fee</span>
+                                        </div>
+                                        {hasFee && (
+                                            <p className="text-[10px] font-bold text-rose-600 px-1 italic leading-none mt-1">
+                                                {formatShortVietnameseCurrency(fee)}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <FormControl>
+                                            <SmartAmountInput
+                                                value={field.value || undefined}
+                                                onChange={field.onChange}
+                                                hideLabel={true}
+                                                placeholder="0"
+                                                className="w-28 h-9 text-sm font-black text-right"
+                                                compact={true}
+                                                hideCurrencyText={true}
+                                                hideCalculator={true}
+                                            />
+                                        </FormControl>
+                                        {hasFee && (
+                                            <div className="flex items-center gap-2 pl-3 border-l-2 border-slate-200/50">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">Total</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-lg font-black text-slate-900 tabular-nums leading-none">
+                                                            {new Intl.NumberFormat('vi-VN').format(totalAmount)}
+                                                        </span>
+                                                        <div className="p-0.5 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 shadow-sm">
+                                                            <Check className="w-2.5 h-2.5" />
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-rose-600 italic leading-none mt-0.5">
+                                                        {formatShortVietnameseCurrency(totalAmount)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                        );
+                    }}
+                />
+            </div>
 
             {/* ROW 3: Category & Shop */}
             <div className={cn("grid gap-3", isShopHidden ? "grid-cols-1" : "grid-cols-2")}>

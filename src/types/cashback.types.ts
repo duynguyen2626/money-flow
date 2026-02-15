@@ -162,3 +162,29 @@ export type MonthDetailModalProps = {
   year: number
   initialTab?: string // 'spend' | 'share'
 }
+
+/**
+ * REBOOTED CASHBACK CONFIGURATION (PHASE 16)
+ */
+
+export interface CashbackCategoryRule {
+  cat_ids: string[];
+  rate: number;
+  max: number | null;
+}
+
+export interface SimpleCashbackConfig {
+  rules: CashbackCategoryRule[];
+}
+
+export interface CashbackTier {
+  min_spend: number;
+  policies: CashbackCategoryRule[];
+}
+
+export interface TieredCashbackConfig {
+  base_rate: number;
+  tiers: CashbackTier[];
+}
+
+export type CashbackRulesJson = CashbackCategoryRule[] | TieredCashbackConfig;

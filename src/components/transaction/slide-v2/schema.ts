@@ -7,6 +7,7 @@ export const singleTransactionSchema = z.object({
         invalid_type_error: "Invalid date format",
     }),
     amount: z.coerce.number().min(0, "Amount must be positive"),
+    service_fee: z.coerce.number().min(0).optional().nullable(),
     note: z.string().optional().nullable(),
     type: z.enum(["expense", "income", "debt", "transfer", "repayment", "credit_pay"]),
 
