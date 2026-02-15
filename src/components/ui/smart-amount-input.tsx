@@ -18,6 +18,9 @@ interface SmartAmountInputProps {
     unit?: string
     hideCurrencyText?: boolean
     hideLabel?: boolean
+    hideCalculator?: boolean
+    compact?: boolean
+    hideClearButton?: boolean
 }
 
 export function SmartAmountInput({
@@ -30,7 +33,10 @@ export function SmartAmountInput({
     label = 'Amount',
     unit,
     hideCurrencyText,
-    hideLabel
+    hideLabel,
+    hideCalculator,
+    compact,
+    hideClearButton
 }: SmartAmountInputProps) {
     const [inputValue, setInputValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
@@ -142,6 +148,12 @@ export function SmartAmountInput({
             return;
         }
 
+        if (unit === '%' && !isNaN(Number(raw)) && Number(raw) > 100) {
+            setInputValue('100');
+            onChange(100);
+            return;
+        }
+
         // If it's a number, format it with commas
         if (raw && !isNaN(Number(raw))) {
             const num = parseFloat(raw)
@@ -212,19 +224,6 @@ export function SmartAmountInput({
             )}
 
             <div className="relative group">
-                {/* Clear Button - MOVED TO LEFT to avoid overlapping with right-aligned badges */}
-                {inputValue && !disabled && (
-                    <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()} // Prevent blur
-                        onClick={handleClear}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 z-20"
-                        tabIndex={-1}
-                    >
-                        <X className="h-3.5 w-3.5" />
-                    </button>
-                )}
-
                 <Input
                     ref={inputRef}
                     value={inputValue}
@@ -235,52 +234,35 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "text-sm font-medium tracking-wide h-full py-0 flex items-center pr-20 box-border",
-                        inputValue && !disabled ? "pl-8" : "pl-3", // Add padding-left if clear button is visible
-                        mathError ? "border-red-300 focus-visible:ring-red-200" : "",
+                        "text-sm font-black tracking-wide h-full py-0 flex items-center box-border bg-white border border-slate-200 text-slate-950 opacity-100",
+                        (inputValue && !disabled && !hideClearButton) || !hideCalculator
+                            ? (compact ? "pr-8" : "pr-24")
+                            : (compact ? "pr-3" : "pr-3"),
+                        "pl-3 text-xs", // Reset left padding, clear button moved to right
+                        mathError ? "border-red-300 focus-visible:ring-red-200" : "focus:border-blue-400 focus:ring-1 focus:ring-blue-100",
                         className
                     )}
                 />
 
-                {/* Result Badge inside Input - Right Aligned */}
-                {textParts.length > 0 && !/[+\-*/]/.test(inputValue) && !isFocused && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center bg-white pl-2 shadow-[-10px_0_10px_-5px_rgba(255,255,255,1)] max-w-[60%] justify-end z-10">
-                        {textParts.length > 2 ? (
-                            <div className="pointer-events-auto">
-                                <CustomTooltip content={textParts.map(p => `${p.value} ${p.unit}`).join(' ')}>
-                                    <div className="text-xs text-right whitespace-nowrap bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1 cursor-help">
-                                        {textParts.slice(0, 2).map((part, i) => (
-                                            <React.Fragment key={i}>
-                                                <span className="font-bold text-blue-600 max-w-[60px] truncate inline-block align-bottom">{part.value}</span>
-                                                <span className="text-red-600 font-bold">{part.unit}</span>
-                                            </React.Fragment>
-                                        ))}
-                                        <span className="text-slate-500 font-bold">...</span>
-                                    </div>
-                                </CustomTooltip>
-                            </div>
-                        ) : (
-                            <div className="text-xs text-right whitespace-nowrap bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1">
-                                {textParts.map((part, i) => (
-                                    <React.Fragment key={i}>
-                                        <span className="font-bold text-blue-600">{part.value}</span>
-                                        <span className="text-red-600 font-bold">{part.unit}</span>
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
+                    {/* Clear Button - Now on Right */}
+                    {inputValue && !disabled && !hideClearButton && (
+                        <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()} // Prevent blur
+                            onClick={handleClear}
+                            className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                            tabIndex={-1}
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
 
-                {(isFocused || /[+\-*/]/.test(inputValue)) && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                        <Calculator className="h-4 w-4" />
-                    </div>
-                )}
 
-                {/* Suggestions Dropdown */}
-                {isFocused && suggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-slate-200 overflow-hidden">
+                {/* Suggestions Dropdown - Disabled for % */}
+                {isFocused && unit !== '%' && suggestions.length > 0 && (
+                    <div className="absolute z-[9999] w-full mt-1 bg-white rounded-md shadow-2xl border-2 border-slate-200 overflow-hidden ring-4 ring-slate-100/50">
                         {suggestions.map(s => (
                             <button
                                 key={s}

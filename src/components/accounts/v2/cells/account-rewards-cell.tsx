@@ -17,7 +17,7 @@ type AccountRewardsCellProps = {
 export function AccountRewardsCell({ account, categories, onOpenTransactions }: AccountRewardsCellProps) {
     if (account.type !== 'credit_card') return <span className="text-slate-300">—</span>;
 
-    const config = normalizeCashbackConfig(account.cashback_config);
+    const config = normalizeCashbackConfig(account.cashback_config, account);
     const stats = account.stats;
 
     // Derived Stats
@@ -85,24 +85,39 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                         {lvl.rules?.map((r, rIdx) => {
                                             const catNames = r.categoryIds.map(id => categories?.find(c => c.id === id)?.name || id).join(', ');
                                             return (
-                                                <div key={r.id || rIdx} className="flex justify-between items-start text-[10px] leading-tight">
-                                                    <span className="text-slate-500 font-medium max-w-[140px] truncate" title={catNames}>{catNames || "All Categories"}</span>
+                                                <div key={r.id || rIdx} className="flex justify-between items-start text-[10px] leading-tight group/rule">
+                                                    <span className="text-slate-500 font-medium max-w-[140px] truncate group-hover/rule:text-slate-900 transition-colors" title={catNames}>{catNames || "All Categories"}</span>
                                                     <div className="flex flex-col items-end shrink-0 ml-2">
                                                         <span className="font-black text-emerald-600">{(r.rate * 100).toFixed(1)}%</span>
-                                                        {r.maxReward && <span className="text-[8px] text-slate-400">Cap {new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(r.maxReward)}</span>}
+                                                        {r.maxReward ? (
+                                                            <span className="text-[8px] text-slate-400">Cap {new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(r.maxReward)}</span>
+                                                        ) : (
+                                                            <span className="text-[8px] text-slate-400 opacity-60">Unlimited</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             );
                                         })}
                                         {lvl.defaultRate !== null && lvl.defaultRate !== undefined && (
-                                            <div className="flex justify-between items-center text-[10px] opacity-70 italic border-t border-dashed border-slate-200 pt-1 mt-1">
-                                                <span className="text-slate-500">Other spend:</span>
-                                                <span className="font-bold">{(lvl.defaultRate * 100).toFixed(1)}%</span>
+                                            <div className="flex justify-between items-center text-[10px] bg-sky-50/50 p-1.5 rounded-md border border-sky-100/50 mt-1">
+                                                <span className="text-sky-700 font-bold flex items-center gap-1.5">
+                                                    <span className="text-xs">🌍</span> General Spend
+                                                </span>
+                                                <span className="font-black text-sky-800">{(lvl.defaultRate * 100).toFixed(1)}%</span>
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             ))}
+                            {/* Program Base Rate if tiered doesn't cover all levels */}
+                            {config.defaultRate > 0 && !config.levels?.some(l => l.minTotalSpend === 0) && (
+                                <div className="pt-2 border-t border-slate-100">
+                                    <div className="flex justify-between items-center text-[10px] bg-slate-50 p-1.5 rounded-md">
+                                        <span className="text-slate-500 font-bold">Standard Rate</span>
+                                        <span className="font-black text-slate-700">{(config.defaultRate * 100).toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </PopoverContent>
@@ -189,7 +204,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
         const availableSpend = (isCapped && currentRate > 0 && remainingReward !== null) ? Math.floor(remainingReward / currentRate) : null;
 
         const statusLabel = !isMet
-            ? `Needs ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`
+            ? (isCapped ? `Available ${new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(availableSpend || 0)}` : `Needs ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`)
             : (isCapped
                 ? (remainingReward !== null && remainingReward <= 0
                     ? 'Cap Reached'
@@ -331,9 +346,9 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                                         </div>
                                                     )}
                                                     {lvl.defaultRate !== null && lvl.defaultRate !== undefined && (
-                                                        <div className="flex justify-between items-center text-[9px] italic bg-white/30 px-1.5 py-0.5 rounded mt-0.5">
-                                                            <span className="text-slate-500">Other spend:</span>
-                                                            <span className="font-bold text-slate-600">{(lvl.defaultRate * 100).toFixed(1)}%</span>
+                                                        <div className="flex justify-between items-center text-[9px] bg-sky-50 px-1.5 py-1 rounded mt-1">
+                                                            <span className="text-sky-700 font-bold">🌍 General Spend:</span>
+                                                            <span className="font-black text-sky-800">{(lvl.defaultRate * 100).toFixed(1)}%</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -380,10 +395,10 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                             </div>
                                         </div>
                                         <div className="flex items-start justify-between text-xs">
-                                            <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">🌱</span>Default 0.3%*</span>
+                                            <span className="text-sky-700 flex items-center gap-1.5 font-bold"><span className="text-base">🌍</span>General {currentRate > 0 ? `(${(currentRate * 100).toFixed(1)}%)` : ''}</span>
                                             <div className="text-right">
-                                                <div className="text-sky-700 font-black">{new Intl.NumberFormat('vi-VN').format(defaultEarning)}</div>
-                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(defaultEarning)}</div>
+                                                <div className="text-sky-700 font-black">{new Intl.NumberFormat('vi-VN').format(currentSpent * currentRate)}</div>
+                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(currentSpent * currentRate)}</div>
                                             </div>
                                         </div>
                                         {virtualProfit > 0 && (
@@ -392,15 +407,6 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                                 <div className="text-right">
                                                     <div className="text-amber-600 font-black">{new Intl.NumberFormat('vi-VN').format(virtualProfit)}</div>
                                                     <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(virtualProfit)}</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {projectedAwarded > realAwarded && (
-                                            <div className="flex items-start justify-between text-xs">
-                                                <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">🔮</span>Est. Award</span>
-                                                <div className="text-right">
-                                                    <div className="text-sky-600 font-black">{new Intl.NumberFormat('vi-VN').format(projectedAwarded)}</div>
-                                                    <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(projectedAwarded)}</div>
                                                 </div>
                                             </div>
                                         )}
@@ -476,7 +482,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
 
                                     {/* Center/Right: Percentage if capped, or just nothing */}
                                     {maxBudgetVal > 0 && (
-                                        <span className="text-[10px] font-bold pointer-events-none leading-none text-slate-600">
+                                        <span className="text-[9px] font-black pointer-events-none leading-none text-slate-600 pr-1">
                                             {Math.round((earnedSoFar / maxBudgetVal) * 100)}%
                                         </span>
                                     )}
@@ -497,9 +503,10 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                             <span className="text-right text-slate-700 font-bold">{new Intl.NumberFormat('vi-VN').format(maxBudgetVal)}</span>
                                         </>
                                     )}
-                                    <span className="text-slate-500">Default 0.3%*</span>
-                                    <span className="text-right text-sky-700 font-bold">{new Intl.NumberFormat('vi-VN').format(currentSpent * (config.defaultRate || 0))}</span>
+                                    <span className="text-slate-500">Default {(currentRate * 100).toFixed(1)}%*</span>
+                                    <span className="text-right text-sky-700 font-bold">{new Intl.NumberFormat('vi-VN').format(currentSpent * currentRate)}</span>
                                 </div>
+                                <div className="text-[9px] text-slate-400 italic">Rules (Education/Healthcare) are applied separately.</div>
                                 <div className="text-[9px] text-slate-400">*Default uses program base rate when no rule matches.</div>
                             </div>
                         </TooltipContent>

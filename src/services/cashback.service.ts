@@ -433,7 +433,11 @@ export async function removeTransactionCashback(transactionId: string) {
  */
 export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string): Promise<AccountSpendingStats | null> {
   const supabase = createClient();
-  const { data: account } = await (supabase.from('accounts').select('cashback_config, type').eq('id', accountId).single() as any);
+  const { data: account } = await (supabase
+    .from('accounts')
+    .select('cashback_config, type, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json')
+    .eq('id', accountId)
+    .single() as any);
   if (!account || account.type !== 'credit_card') return null;
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
@@ -584,7 +588,10 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     date.setMonth(date.getMonth() + monthOffset);
   }
 
-  let query = supabase.from('accounts').select('id, name, type, cashback_config, image_url').in('type', ['credit_card', 'debt']);
+  let query = supabase
+    .from('accounts')
+    .select('id, name, type, cashback_config, image_url, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json')
+    .in('type', ['credit_card', 'debt']);
   if (accountIds && accountIds.length > 0) {
     query = query.in('id', accountIds);
   }

@@ -4,7 +4,6 @@ import { useMemo, useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import {
     Percent,
-    Info,
     AlertTriangle,
     RotateCcw,
     DollarSign,
@@ -13,7 +12,10 @@ import {
     ChevronDown,
     ChevronUp,
     CheckCircle2,
-    Wallet
+    Wallet,
+    Info,
+    Sparkles,
+    RefreshCcw
 } from "lucide-react";
 import { SingleTransactionFormValues } from "../types";
 import { toast } from "sonner";
@@ -32,6 +34,7 @@ import { Account, Category } from "@/types/moneyflow.types";
 import { calculateStatementCycle } from "@/lib/cycle-utils";
 import { format } from "date-fns";
 import { resolveCashbackPolicy } from "@/services/cashback/policy-resolver";
+import { formatShortVietnameseCurrency } from "@/lib/number-to-text";
 
 type CashbackSectionProps = {
     accounts?: Account[];
@@ -189,198 +192,25 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
 
             {isExpanded && (
                 <div className="p-4 space-y-5 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {/* MODE SELECTOR */}
-                    <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 h-10 bg-slate-100/50 p-1 rounded-lg gap-1 border-none shadow-none">
-                            <TabsTrigger value="claim" className="text-xs font-bold rounded-md data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm border-none">
-                                <DollarSign className="w-3 h-3 mr-1" /> Claim
-                            </TabsTrigger>
-                            <TabsTrigger value="giveaway" className="text-xs font-bold rounded-md data-[state=active]:bg-white data-[state=active]:text-amber-600 data-[state=active]:shadow-sm border-none">
-                                <Gift className="w-3 h-3 mr-1" /> Give Away
-                            </TabsTrigger>
-                            <TabsTrigger value="voluntary" className="text-xs font-bold rounded-md data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm border-none">
-                                <Heart className="w-3 h-3 mr-1" /> Voluntary
-                            </TabsTrigger>
-                        </TabsList>
-
-                        <div className="mt-5 space-y-4">
-                            {/* INPUT SECTION */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="cashback_share_percent"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <div className="flex justify-between items-center mb-1.5">
-                                                <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">% Rate</FormLabel>
-                                                {policy?.rate !== undefined && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => field.onChange(policy.rate * 100)}
-                                                        className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-black hover:bg-indigo-100 transition-colors"
-                                                    >
-                                                        {(policy.rate * 100).toFixed(1)}%
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <SmartAmountInput
-                                                value={field.value ?? 0}
-                                                onChange={(val) => {
-                                                    field.onChange(val);
-                                                    if (currentTab === 'claim') form.setValue('cashback_mode', 'percent');
-                                                    if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_percent');
-                                                }}
-                                                unit="%"
-                                                placeholder="0.0"
-                                                hideLabel={true}
-                                                className="h-11 rounded-lg border-slate-200 focus:border-indigo-500 shadow-sm"
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                <FormField
-                                    control={form.control}
-                                    name="cashback_share_fixed"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <div className="flex justify-between items-center mb-1.5">
-                                                <FormLabel className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">Fixed Amount</FormLabel>
-                                                {actualBankReward > 0 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => field.onChange(Math.round(actualBankReward))}
-                                                        className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-black hover:bg-slate-200 transition-colors"
-                                                    >
-                                                        Max
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <SmartAmountInput
-                                                value={field.value ?? 0}
-                                                onChange={(val) => {
-                                                    field.onChange(val);
-                                                    if (val && val > 0) {
-                                                        if (currentTab === 'claim') form.setValue('cashback_mode', 'fixed');
-                                                        if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_fixed');
-                                                    }
-                                                }}
-                                                placeholder="0"
-                                                hideLabel={true}
-                                                className="h-11 rounded-lg border-slate-200 focus:border-indigo-500 shadow-sm"
-                                            />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-
-                            {/* DYNAMIC ALERT BANNER */}
-                            {isOverCap && (
-                                <div className="bg-rose-50 border-2 border-rose-100 rounded-xl p-3 flex flex-col gap-2.5 animate-in zoom-in-95 duration-200">
-                                    <div className="flex items-center gap-2.5 text-rose-700">
-                                        <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-                                            <AlertTriangle className="w-4 h-4" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="text-xs font-black uppercase tracking-tight">Budget Overflow!</h4>
-                                            <p className="text-[10px] font-medium opacity-80 leading-tight">Your share exceeds current bank limit ({new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))})</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="flex-1 h-8 text-[10px] font-black uppercase text-rose-700 hover:bg-rose-100 border border-rose-200"
-                                            onClick={(e) => { e.preventDefault(); form.setValue('cashback_mode', 'voluntary'); }}
-                                        >
-                                            Switch to Voluntary
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-8 w-8 p-0 text-rose-700 hover:bg-rose-100 border border-rose-200"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                form.setValue('cashback_share_percent', Number((policy?.rate ? policy.rate * 100 : 0).toFixed(2)));
-                                                form.setValue('cashback_share_fixed', null);
-                                            }}
-                                            title="Correct to match card limit"
-                                        >
-                                            <RotateCcw className="w-3 h-3" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* SMART BUDGET SUMMARY CARD */}
-                            <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5 text-slate-500">
-                                        <Wallet className="w-3.5 h-3.5" />
-                                        <span className="text-[11px] font-bold uppercase tracking-wider">Remaining Loop</span>
-                                    </div>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-xl font-black text-slate-900">
-                                            {remainsCap !== null && remainsCap !== undefined
-                                                ? new Intl.NumberFormat('vi-VN').format(Math.round(remainsCap))
-                                                : "∞"}
-                                        </span>
-                                        <span className="text-xs font-bold text-slate-400">/{activeAccount?.stats?.max_budget ? new Intl.NumberFormat('vi-VN').format(Math.round(activeAccount.stats.max_budget)) : "N/A"}</span>
-                                    </div>
-                                </div>
-                                <div className="w-12 h-12 rounded-full border-4 border-slate-100 border-t-indigo-500 flex items-center justify-center">
-                                    <span className="text-[10px] font-black text-slate-600">
-                                        {activeAccount?.stats?.max_budget && remainsCap !== null ?
-                                            Math.max(0, Math.min(100, Math.round(((remainsCap ?? 0) / (activeAccount.stats?.max_budget || 1)) * 100))) :
-                                            100}%
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* POLICY DASHBOARD GRID */}
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="p-3 bg-white border border-slate-100 rounded-lg flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Matched Policy</span>
-                                    <span className="text-xs font-black text-indigo-600 truncate">
-                                        {policy?.metadata.policySource === 'category_rule' ? 'Category Specific' :
-                                            policy?.metadata.policySource === 'level_default' ? `Tier: ${policy.metadata.levelName}` :
-                                                'Standard Card'}
-                                    </span>
-                                </div>
-                                <div className="p-3 bg-white border border-slate-100 rounded-lg flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Bank Reward</span>
-                                    <span className="text-xs font-black text-emerald-600 truncate">
-                                        {new Intl.NumberFormat('vi-VN').format(Math.round(actualBankReward))}
-                                        <span className="text-[9px] opacity-70 ml-1">({(policy?.rate ? policy.rate * 100 : 0).toFixed(1)}%)</span>
-                                    </span>
-                                </div>
-                                <div className="p-3 bg-white border border-slate-100 rounded-lg flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Effective Profit</span>
-                                    <span className="text-xs font-black text-slate-700 truncate">
-                                        {(() => {
-                                            const profitVal = Math.max(0, actualBankReward - totalSharedVal);
-                                            return new Intl.NumberFormat('vi-VN').format(Math.round(profitVal));
-                                        })()}
-                                    </span>
-                                </div>
-                                <div className="p-3 bg-white border border-slate-100 rounded-lg flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confidence</span>
-                                    <span className="text-xs font-black text-slate-700 flex items-center gap-1">
-                                        <CheckCircle2 className="w-3 h-3 text-indigo-500" />
-                                        98%
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* DETAILED REASON (Criteria) */}
-                            {policy?.metadata.reason && (
-                                <div className="flex items-center gap-2 p-3 bg-indigo-50/30 rounded-lg border border-indigo-50 text-[10px] text-indigo-600/80 italic font-medium">
-                                    <Info className="w-3 h-3 shrink-0" />
-                                    <span>Applied: {policy.metadata.reason}</span>
-                                </div>
-                            )}
+                    {/* PLACEHOLDER FOR RE-IMPLEMENTATION */}
+                    <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl space-y-4">
+                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                            <RefreshCcw className="w-8 h-8 text-indigo-400 animate-spin-slow" />
                         </div>
-                    </Tabs>
+                        <div className="text-center space-y-1">
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Reward Engine Refactor</h3>
+                            <p className="text-xs text-slate-400 font-medium max-w-[200px] mx-auto leading-relaxed">
+                                Strategy matching & manual overrides will be re-implemented by the next agent phase.
+                            </p>
+                        </div>
+                        <div className="flex gap-2 w-full mt-2">
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div className="h-full w-1/3 bg-indigo-500 rounded-full" />
+                            </div>
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full" />
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full" />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

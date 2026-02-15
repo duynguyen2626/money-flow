@@ -54,7 +54,19 @@ Batches: When processing batches, check for duplicates using transaction_date, a
 
 Installments: Installments are linked to transaction_lines. Do not double-count parent and installments in totals.
 
-6. Mandatory Quality Gates (Vibe Coding Strict)
+9. Cashback Logic (CRITICAL - Phase 16 Reboot)
+   - **Status**: Transaction Slide Cashback Section is currently a placeholder.
+   - **Logic**: 
+     - MUST be dynamic: reactive to amount, category, account, and cycle.
+     - Rate Handling: Internal storage is decimal (0.005), UI display is percentage (0.5%).
+     - Exclusions: Income, Transfers, and "Create Initial" notes MUST NOT earn cashback.
+   - **Research**: Use branch `fix/categories-ui-optimization` as documentation for display logic.
+
+10. Mandatory Quality Gates (Vibe Coding Strict)
+   
+   - **Build**: `npm run build` must pass before any handover.
+   - **Documentation**: Any significant logic change (like the cashback placeholder) must be documented in a Phase-specific Handover file in `.agent/`.
+   - **Branching**: Do not merge or reboot cashback without referencing the `fix/categories-ui-optimization` branch logic.
    
    CI/CD: GitHub Actions will block any PR/push that fails lint or build.
    

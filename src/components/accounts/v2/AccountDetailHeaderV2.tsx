@@ -189,7 +189,7 @@ export function AccountDetailHeaderV2({
 
     const rewardsCount = React.useMemo(() => {
         try {
-            const program = normalizeCashbackConfig(account.cashback_config);
+            const program = normalizeCashbackConfig(account.cashback_config, account);
             const counts = (program.levels || []).reduce((acc: number, lvl: any) => acc + (lvl.rules?.length || 0), 0);
             if (counts > 0) return counts;
             if (program.defaultRate > 0) return 1;
@@ -339,6 +339,15 @@ export function AccountDetailHeaderV2({
                                     <Hash className="h-3 w-3 text-slate-400 shrink-0" />
                                     {account.account_number || '•••• •••• ••••'}
                                 </span>
+                                {account.secured_by_account_id && (
+                                    <>
+                                        <span className="text-slate-200">|</span>
+                                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 border border-amber-100 rounded-full">
+                                            <Zap className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                                            <span className="text-[9px] font-black text-amber-700 uppercase tracking-tighter">Collateral Linked</span>
+                                        </div>
+                                    </>
+                                )}
                                 <span className="text-slate-200">|</span>
                                 {(() => {
                                     const now = startOfDay(new Date());
@@ -427,7 +436,7 @@ export function AccountDetailHeaderV2({
                                     <Zap className="h-3 w-3 fill-amber-400 text-amber-500 group-hover/badge:animate-pulse" />
                                     {(() => {
                                         try {
-                                            const program = normalizeCashbackConfig(account.cashback_config);
+                                            const program = normalizeCashbackConfig(account.cashback_config, account);
                                             const rules: any[] = [];
                                             (program.levels || []).forEach((lvl: any) => {
                                                 (lvl.rules || []).forEach((r: any) => {
@@ -493,7 +502,7 @@ export function AccountDetailHeaderV2({
                                     </div>
                                     {/* Calculate count again for header */}
                                     {(() => {
-                                        const program = normalizeCashbackConfig(account.cashback_config);
+                                        const program = normalizeCashbackConfig(account.cashback_config, account);
                                         const rules = (program.levels || []).flatMap((l: any) => l.rules || []);
                                         return <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-bold text-white uppercase">{rules.length} Rules</span>
                                     })()}
@@ -502,15 +511,11 @@ export function AccountDetailHeaderV2({
                                 <div className="bg-white max-h-[300px] overflow-y-auto">
                                     {(() => {
                                         try {
-                                            const program = normalizeCashbackConfig(account.cashback_config);
-                                            const rules: any[] = [];
-                                            (program.levels || []).forEach((lvl: any) => {
-                                                (lvl.rules || []).forEach((r: any) => {
-                                                    rules.push({ ...r, levelName: lvl.name });
-                                                });
-                                            });
+                                            const config = normalizeCashbackConfig(account.cashback_config, account);
+                                            const levels = config.levels || [];
+                                            const rules: any[] = levels.flatMap((lvl: any) => lvl.rules || []);
 
-                                            if (rules.length === 0 && program.defaultRate > 0) {
+                                            if (rules.length === 0 && config.defaultRate > 0) {
                                                 return (
                                                     <div className="p-4 flex items-center gap-3">
                                                         <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -521,7 +526,7 @@ export function AccountDetailHeaderV2({
                                                             <div className="text-xs text-slate-500">All Purchases</div>
                                                         </div>
                                                         <div className="ml-auto text-xl font-black text-emerald-600">
-                                                            {(program.defaultRate * 100).toFixed(1)}%
+                                                            {(config.defaultRate * 100).toFixed(1)}%
                                                         </div>
                                                     </div>
                                                 )
@@ -1012,7 +1017,7 @@ export function AccountDetailHeaderV2({
                                         {/* Row 1: Metrics (H-61px to match Health alignment) */}
                                         <div className="grid grid-cols-4 gap-4 w-full h-[61px] items-start pt-1">
                                             {(() => {
-                                                const yearlyRealValue = (summary?.cashbackTotal || 0) - (dynamicCashbackStats.sharedAmount || 0);
+                                                const yearlyRealValue = summary?.cashbackTotal || 0;
 
                                                 return (
                                                     <>

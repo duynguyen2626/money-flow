@@ -43,7 +43,11 @@ import {
   Wrench,
   Pencil,
   Settings2,
+  Zap,
+  FileSpreadsheet,
+  Users2
 } from "lucide-react"
+import { normalizeCashbackConfig } from "@/lib/cashback"
 import { ColumnCustomizer } from "./column-customizer"
 
 import { buildEditInitialValues, parseMetadata } from '@/lib/transaction-mapper';
@@ -527,7 +531,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
             else if (['income', 'repayment'].includes(txn.type)) val = finalDisp
             else val = (originalAmount ?? 0) < 0 ? -finalDisp : finalDisp
           } else {
-            // Force sign based on type 
+            // Force sign based on type
             const absVal = Math.abs(originalAmount ?? 0)
             if (['expense', 'debt', 'transfer'].includes(txn.type)) val = -absVal
             else if (['income', 'repayment'].includes(txn.type)) val = absVal
@@ -1037,7 +1041,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
     const filtered = tableData.filter(txn => {
       if (context === 'account' && accountId) {
-        // If necessary, check if txn belongs to account. 
+        // If necessary, check if txn belongs to account.
         // Assuming tableData is correct from server/parent.
       }
 
@@ -1743,17 +1747,27 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           const val = txn.bank_back ?? 0;
                           const amountAbs = Math.abs(txn.amount);
 
+                          // EXCLUSION LOGIC:
+                          // 1. Income transactions NEVER earn cashback (spending earns back)
+                          // 2. Transfers usually don't earn cashback
+                          // 3. System/Initial transactions
+                          const isIncome = txn.type === 'income';
+                          const isTransfer = txn.type === 'transfer';
+                          const isCreateInitial = txn.note?.toLowerCase().includes('create initial') ||
+                            txn.note?.toLowerCase().includes('số dư đầu') ||
+                            txn.note?.toLowerCase().includes('opening balance');
+
+                          if (isIncome || isTransfer || isCreateInitial) {
+                            return <span className="text-slate-300">-</span>;
+                          }
+
                           // Default cashback logic if actual is 0/missing
                           if (!val && amountAbs > 0) {
                             const account = accounts.find(a => a.id === txn.account_id);
                             if (account?.cashback_config) {
                               try {
-                                const config = typeof account.cashback_config === 'string'
-                                  ? JSON.parse(account.cashback_config)
-                                  : account.cashback_config;
-
-                                // Look for defaultRate in program or root
-                                const defaultRate = config?.program?.defaultRate ?? config?.defaultRate ?? 0;
+                                const config = normalizeCashbackConfig(account.cashback_config, account);
+                                const defaultRate = config.defaultRate ?? 0;
 
                                 if (defaultRate > 0) {
                                   const projected = amountAbs * defaultRate;
@@ -1763,10 +1777,10 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                       <div className="text-xs space-y-1">
                                         <div className="font-bold">Projected Cashback (Pending)</div>
                                         <div className="text-slate-400 font-mono">
-                                          {numberFormatter.format(amountAbs)} × {(defaultRate * 100).toFixed(1)}% = {numberFormatter.format(projected)}
+                                          {numberFormatter.format(amountAbs)} × {(defaultRate * 100).toFixed(2)}% = {numberFormatter.format(projected)}
                                         </div>
                                         <div className="text-[10px] italic border-t pt-1 mt-1 text-slate-500">
-                                          Using bank's default rate: {(defaultRate * 100).toFixed(1)}%
+                                          Using bank's current/default rate: {(defaultRate * 100).toFixed(2)}%
                                         </div>
                                       </div>
                                     }>
@@ -2357,9 +2371,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                 </CustomTooltip>
 
                                 <div className="flex flex-col min-w-0 flex-1">
-                                  {/* Details Row: Note or Shop Name */}
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold text-slate-900 truncate" title={shopName}>{shopName}</span>
+                                  <div className="flex flex-col mb-0.5">
+                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter leading-none">{displayCategory}</span>
+                                    <span className="text-sm font-bold text-slate-900 truncate" title={shopName}>{shopName}</span>
                                   </div>
                                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                     {isMobile && mobileDateLabel && (

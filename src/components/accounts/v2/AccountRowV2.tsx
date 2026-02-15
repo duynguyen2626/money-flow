@@ -24,6 +24,7 @@ import {
     Info,
     Zap,
 } from "lucide-react";
+import { normalizeCashbackConfig } from "@/lib/cashback";
 
 import { cn, formatCompactMoney, formatMoneyVND } from '@/lib/utils';
 import {
@@ -329,54 +330,56 @@ function renderCell(
                                     )}
                                 </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                            <div className="flex flex-nowrap items-center gap-1.5 justify-end whitespace-nowrap">
                                 {/* 1. Cashback Category Badges (Moved to first) */}
                                 {(() => {
                                     if (!account.cashback_config) return null;
                                     try {
-                                        const config = typeof account.cashback_config === 'string'
-                                            ? JSON.parse(account.cashback_config)
-                                            : account.cashback_config;
+                                        const config = normalizeCashbackConfig(account.cashback_config, account);
+                                        const levels = config.levels || [];
+                                        const firstLevel = levels[0];
+                                        const rules = firstLevel?.rules || [];
+                                        const defaultRate = firstLevel?.defaultRate ?? config.defaultRate ?? 0;
 
-                                        let rules = (config.levels?.[0]?.rules) || [];
-                                        if (!Array.isArray(rules) || rules.length === 0) {
-                                            rules = config.rules || [];
-                                        }
-                                        if (!Array.isArray(rules) || rules.length === 0) {
-                                            rules = (config.program?.levels?.[0]?.rules) || [];
-                                        }
-                                        if (!Array.isArray(rules) || rules.length === 0) return null;
+                                        const hasRules = Array.isArray(rules) && rules.length > 0;
+                                        if (!hasRules && defaultRate === 0) return null;
 
                                         const catIds = new Set<string>();
-                                        rules.forEach((r: any) => {
-                                            if (Array.isArray(r.categoryIds)) r.categoryIds.forEach((id: string) => catIds.add(id));
-                                            if (r.categoryId) catIds.add(r.categoryId);
-                                            if (Array.isArray(r.category_ids)) r.category_ids.forEach((id: string) => catIds.add(id));
-                                        });
-
-                                        if (catIds.size === 0) return null;
+                                        if (hasRules) {
+                                            rules.forEach((r: any) => {
+                                                if (Array.isArray(r.categoryIds)) r.categoryIds.forEach((id: string) => catIds.add(id));
+                                                if (r.categoryId) catIds.add(r.categoryId);
+                                                if (Array.isArray(r.category_ids)) r.category_ids.forEach((id: string) => catIds.add(id));
+                                            });
+                                        }
 
                                         const allCatIds = Array.from(catIds);
                                         const mainCatId = allCatIds[0];
                                         const mainCat = categories?.find(c => c.id === mainCatId);
                                         const remainingCount = allCatIds.length - 1;
 
+                                        const badgeLabel = hasRules
+                                            ? (mainCat ? mainCat.name : "Rules")
+                                            : "All Categories";
+
+                                        const badgeRate = hasRules && rules[0]?.rate !== undefined
+                                            ? rules[0].rate
+                                            : defaultRate;
+
                                         return (
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 font-sans">
                                                 <TooltipProvider>
                                                     <Tooltip delayDuration={300}>
                                                         <TooltipTrigger asChild>
                                                             <div className="flex items-center gap-1.5 bg-indigo-50/50 border border-indigo-100/50 rounded-md px-2 py-0.5 hover:bg-indigo-100/50 transition-all cursor-help group/rewards shadow-sm">
                                                                 <Zap className="w-3 h-3 text-indigo-500 animate-pulse" />
-                                                                {mainCat && (
-                                                                    <span className="flex items-center gap-1 text-[10px] font-black text-indigo-700 uppercase tracking-tight">
-                                                                        {mainCat.icon && <span className="text-[10px]">{mainCat.icon}</span>}
-                                                                        <span className="truncate max-w-[80px]">{mainCat.name}</span>
-                                                                    </span>
-                                                                )}
+                                                                <div className="flex items-center gap-1 text-[10px] font-black text-indigo-700 uppercase tracking-tight">
+                                                                    <span className="truncate max-w-[80px]">{badgeLabel}</span>
+                                                                    <span className="text-indigo-400 font-bold ml-0.5">{(badgeRate * 100).toFixed(1)}%</span>
+                                                                </div>
                                                                 {remainingCount > 0 && (
                                                                     <span className="text-[9px] font-black text-indigo-400 border-l border-indigo-200/50 pl-1.5 ml-0.5">
-                                                                        +{remainingCount} more
+                                                                        +{remainingCount}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -388,40 +391,49 @@ function renderCell(
                                                                         <Zap className="w-4 h-4 text-white fill-white/20" />
                                                                         <span className="text-[11px] font-black text-white uppercase tracking-widest">Rewards Program</span>
                                                                     </div>
-                                                                    <span className="text-[10px] font-bold text-indigo-100 bg-white/10 px-2 py-0.5 rounded-full">{allCatIds.length} categories</span>
+                                                                    <span className="text-[10px] font-bold text-indigo-100 bg-white/10 px-2 py-0.5 rounded-full">
+                                                                        {hasRules ? `${allCatIds.length} categories` : "Flat Rate"}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="p-3 space-y-1">
-                                                                    {allCatIds.map(cid => {
-                                                                        const cat = categories?.find(c => c.id === cid);
-                                                                        if (!cat) return null;
-                                                                        return (
-                                                                            <div key={cid} className="flex items-center justify-between gap-4 group/cat py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 px-1 rounded-lg transition-colors">
-                                                                                <div className="flex items-center gap-2 shrink-0">
-                                                                                    <span className="text-base leading-none drop-shadow-sm">{cat.icon || '🎯'}</span>
-                                                                                    <span className="text-[12px] font-black text-slate-800 uppercase tracking-tight">{cat.name}</span>
-                                                                                </div>
-                                                                                {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                    <div className="flex flex-wrap gap-1.5 justify-end">
-                                                                                        {cat.mcc_codes.map(mcc => (
-                                                                                            <code key={mcc} className="px-2 py-1 bg-indigo-50 rounded-md text-[11px] font-black text-indigo-600 border border-indigo-100 shadow-sm">
-                                                                                                {mcc}
-                                                                                            </code>
-                                                                                        ))}
+                                                                    {hasRules ? (
+                                                                        allCatIds.map(cid => {
+                                                                            const cat = categories?.find(c => c.id === cid);
+                                                                            if (!cat) return null;
+                                                                            return (
+                                                                                <div key={cid} className="flex items-center justify-between gap-4 group/cat py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 px-1 rounded-lg transition-colors">
+                                                                                    <div className="flex items-center gap-2 shrink-0">
+                                                                                        <span className="text-base leading-none drop-shadow-sm">{cat.icon || '🎯'}</span>
+                                                                                        <span className="text-[12px] font-black text-slate-800 uppercase tracking-tight">{cat.name}</span>
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
-                                                                        )
-                                                                    })}
+                                                                                    <div className="flex flex-col items-end">
+                                                                                        <span className="text-[11px] font-black text-emerald-600">{(rules.find((r: any) => r.categoryIds?.includes(cid))?.rate * 100 || 0).toFixed(1)}%</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        })
+                                                                    ) : (
+                                                                        <div className="py-2 flex items-center justify-between">
+                                                                            <span className="text-[12px] font-black text-slate-800 uppercase tracking-tight">General Spend</span>
+                                                                            <span className="text-[11px] font-black text-emerald-600">{(defaultRate * 100).toFixed(1)}%</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
-                                                                <div className="bg-slate-50 border-t border-slate-100 px-3 py-2">
-                                                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter text-center italic">Detailed MCC matching is required for cashback eligibility</p>
+                                                                {hasRules && defaultRate > 0 && (
+                                                                    <div className="bg-slate-50/80 border-t border-slate-100 px-3 py-2 flex justify-between items-center">
+                                                                        <span className="text-[9px] font-bold text-slate-500 uppercase">Other spend</span>
+                                                                        <span className="text-[9px] font-black text-slate-700">{(defaultRate * 100).toFixed(1)}%</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="bg-slate-50 border-t border-slate-100 px-3 py-1.5">
+                                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter text-center italic">Detailed MCC matching is required for cashback eligibility</p>
                                                                 </div>
                                                             </div>
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
                                             </div>
-                                        )
+                                        );
                                     } catch (e) {
                                         return null;
                                     }
@@ -871,7 +883,7 @@ function renderCell(
 
             return (
                 <TooltipProvider>
-                    <div className="action-cell flex items-center gap-1 justify-end">
+                    <div className="action-cell flex flex-nowrap items-center gap-1 justify-end whitespace-nowrap">
                         <Tooltip delayDuration={300}>
                             <TooltipTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-9 w-9 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={(e) => { e.stopPropagation(); onLend(account); }}>
