@@ -19,7 +19,7 @@ export interface AccountColumnConfig {
 
 const defaultAccountColumns: AccountColumnConfig[] = [
     { key: 'account', label: 'Account Name', defaultWidth: 250, minWidth: 200, frozen: true },
-    { key: 'role', label: 'Role & Ownership', defaultWidth: 320, minWidth: 280 },
+    { key: 'role', label: 'Role & Ownership', defaultWidth: 200, minWidth: 180 },
     { key: 'limit', label: 'Limit', defaultWidth: 120, minWidth: 100 },
     { key: 'rewards', label: 'Rewards', defaultWidth: 150, minWidth: 130 },
     { key: 'due', label: 'Due', defaultWidth: 140, minWidth: 120 },

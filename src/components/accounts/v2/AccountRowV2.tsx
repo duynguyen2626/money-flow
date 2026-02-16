@@ -265,33 +265,40 @@ function renderCell(
     };
 
     const renderOwnershipBadge = (type: 'me' | 'relative' | 'other', personId?: string | null) => {
-        const base = "h-7 px-3 text-[10px] font-black uppercase tracking-wider rounded-md border flex items-center justify-center gap-2 w-[140px] shadow-sm transition-all overflow-hidden whitespace-nowrap";
+        const base = "w-7 h-7 flex items-center justify-center rounded-md border shadow-sm transition-all shrink-0 cursor-help";
+        let content;
+        let tooltipLabel = "Other";
+
         if (!type || type === 'me') {
-            return (
-                <span className={cn(base, "bg-amber-400 text-amber-950 border-amber-500")}>
-                    <Crown className="w-3.5 h-3.5 fill-current" />
-                    Mine
-                </span>
-            );
-        }
-        if (type === 'relative') {
+            content = <span className={cn(base, "bg-amber-400 text-amber-950 border-amber-500")}><Crown className="w-3.5 h-3.5 fill-current" /></span>;
+            tooltipLabel = "Mine";
+        } else if (type === 'relative') {
             const p = people?.find(p => p.id === personId);
-            return (
-                <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200 justify-start")}>
+            tooltipLabel = p?.name || "Relative";
+            content = (
+                <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200 overflow-hidden")}>
                     {p?.image_url ? (
-                        <img src={p.image_url} className="w-4 h-4 rounded-none object-contain flex-shrink-0" alt="" />
+                        <img src={p.image_url} className="w-full h-full rounded-none object-cover" alt="" />
                     ) : (
-                        <Users className="w-3.5 h-3.5 flex-shrink-0" />
+                        <Users className="w-3.5 h-3.5" />
                     )}
-                    <span className="truncate">{p ? p.name : 'Relative'}</span>
                 </span>
             );
+        } else {
+            content = <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200")}><Building2 className="w-3.5 h-3.5" /></span>;
         }
+
         return (
-            <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200")}>
-                <Building2 className="w-3.5 h-3.5" />
-                Other
-            </span>
+            <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                        {content}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p className="text-[10px] font-bold uppercase tracking-wider">{tooltipLabel}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         );
     };
 
@@ -524,11 +531,8 @@ function renderCell(
         }
         case 'role': {
             return (
-                <div className="flex flex-row gap-3 items-center justify-center min-w-[280px]">
-                    {/* Ownership Badge (Left) */}
-                    {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
-
-                    {/* Role Badge (Right) */}
+                <div className="flex flex-row gap-2 items-center justify-center min-w-[180px]">
+                    {/* Role Badge (Left) */}
                     {account.relationships?.is_parent ? (
                         <TooltipProvider>
                             <Tooltip delayDuration={300}>
@@ -565,6 +569,9 @@ function renderCell(
                     ) : (
                         renderRoleBadge('standalone')
                     )}
+
+                    {/* Ownership Badge (Right) */}
+                    {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
                 </div>
             )
         }
