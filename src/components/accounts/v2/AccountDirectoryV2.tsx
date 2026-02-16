@@ -272,6 +272,7 @@ export function AccountDirectoryV2({
                         onTransfer={handleTransfer}
                         allAccounts={initialAccounts}
                         categories={categories}
+                        people={people}
                     />
                 ) : (
                     <AccountGridView

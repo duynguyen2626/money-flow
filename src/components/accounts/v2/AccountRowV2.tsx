@@ -294,8 +294,27 @@ function renderCell(
                     <TooltipTrigger asChild>
                         {content}
                     </TooltipTrigger>
-                    <TooltipContent>
-                        <p className="text-[10px] font-bold uppercase tracking-wider">{tooltipLabel}</p>
+                    <TooltipContent className="p-2 shadow-xl border-slate-200 rounded-xl">
+                        {type === 'relative' ? (() => {
+                            const p = people?.find(p => p.id === personId);
+                            return (
+                                <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-none overflow-hidden bg-slate-100 border border-slate-200">
+                                        {p?.image_url ? (
+                                            <img src={p.image_url} className="w-full h-full object-contain" alt="" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold uppercase tracking-tighter text-[10px]">No Img</div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <p className="text-[10px] font-black uppercase text-amber-600 tracking-wider">RELATIVE OWNER</p>
+                                        <p className="text-[12px] font-bold text-slate-900 leading-tight">{p?.name || 'Unknown'}</p>
+                                    </div>
+                                </div>
+                            );
+                        })() : (
+                            <p className="text-[10px] font-black uppercase tracking-widest px-1">{tooltipLabel}</p>
+                        )}
                     </TooltipContent>
                 </Tooltip>
             </TooltipProvider>

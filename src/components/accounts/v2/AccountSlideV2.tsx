@@ -1203,9 +1203,9 @@ export function AccountSlideV2({
                                                                     const sel = allAccounts.find(a => a.id === parentAccountId);
                                                                     return sel ? (
                                                                         <>
-                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center">
+                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
                                                                                 {sel.image_url ? (
-                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-contain" />
                                                                                 ) : (
                                                                                     <span className="text-[8px] font-bold text-slate-500">{sel.name[0]}</span>
                                                                                 )}
@@ -1270,11 +1270,11 @@ export function AccountSlideV2({
                                                                             className="text-[11px]"
                                                                         >
                                                                             <div className="flex items-center gap-2">
-                                                                                <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                                                                <div className="w-6 h-6 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
                                                                                     {a.image_url ? (
-                                                                                        <img src={a.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                        <img src={a.image_url} alt="" className="w-full h-full object-contain" />
                                                                                     ) : (
-                                                                                        <span className="text-[8px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                        <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
                                                                                     )}
                                                                                 </div>
                                                                                 <span className="truncate">{a.name}</span>
