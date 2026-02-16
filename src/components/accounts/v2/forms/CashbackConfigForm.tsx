@@ -440,7 +440,7 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
     categories: Category[],
     onUpdate: (rule: CashbackCategoryRule) => void,
     onDelete: () => void,
-    onOpenCategoryCreator?: () => void
+    onOpenCategoryCreator?: (callback?: (newCategoryId: string) => void) => void
 }) {
     const [open, setOpen] = useState(false)
 
@@ -491,7 +491,7 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                                     size="sm"
                                     onClick={() => {
                                         setOpen(false)
-                                        onOpenCategoryCreator?.((newId) => {
+                                        onOpenCategoryCreator?.((newId: string) => {
                                             const currentIds = rule.cat_ids || []
                                             if (!currentIds.includes(newId)) {
                                                 onUpdate({ ...rule, cat_ids: [...currentIds, newId] })
