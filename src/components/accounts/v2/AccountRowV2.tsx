@@ -27,6 +27,7 @@ import {
     Building2,
     User,
     CircleDashed,
+    Crown,
 } from "lucide-react";
 import { normalizeCashbackConfig } from "@/lib/cashback";
 
@@ -255,20 +256,20 @@ function renderCell(
     const renderRoleBadge = (role: 'parent' | 'child' | 'standalone') => {
         const base = "h-7 px-3 text-[10px] font-black uppercase tracking-wider rounded-md border flex items-center justify-center gap-2 w-[110px] shadow-sm transition-all";
         if (role === 'parent') {
-            return <span className={cn(base, "bg-amber-100 text-amber-900 border-amber-300")}><ArrowRightLeft className="w-3.5 h-3.5" />Parent</span>;
+            return <span className={cn(base, "bg-blue-600 text-white border-blue-700")}><User className="w-3.5 h-3.5 fill-current" />Parent</span>;
         }
         if (role === 'child') {
-            return <span className={cn(base, "bg-indigo-50 text-indigo-700 border-indigo-200")}><Network className="w-3.5 h-3.5" />Child</span>;
+            return <span className={cn(base, "bg-blue-100 text-blue-700 border-blue-300")}><User className="w-3.5 h-3.5 opacity-80" />Child</span>;
         }
-        return <span className={cn(base, "bg-slate-50 text-slate-500 border-slate-200 shadow-none")}><CircleDashed className="w-3.5 h-3.5 opacity-50" />Solo</span>;
+        return <span className={cn(base, "bg-blue-50 text-blue-500 border-blue-200 shadow-none")}><User className="w-3.5 h-3.5 opacity-50" />Solo</span>;
     };
 
     const renderOwnershipBadge = (type: 'me' | 'relative' | 'other', personId?: string | null) => {
         const base = "h-7 px-3 text-[10px] font-black uppercase tracking-wider rounded-md border flex items-center justify-center gap-2 w-[140px] shadow-sm transition-all overflow-hidden whitespace-nowrap";
         if (!type || type === 'me') {
             return (
-                <span className={cn(base, "bg-sky-50 text-sky-700 border-sky-200")}>
-                    <User className="w-3.5 h-3.5" />
+                <span className={cn(base, "bg-amber-400 text-amber-950 border-amber-500")}>
+                    <Crown className="w-3.5 h-3.5 fill-current" />
                     Mine
                 </span>
             );
@@ -287,7 +288,7 @@ function renderCell(
             );
         }
         return (
-            <span className={cn(base, "bg-rose-50 text-rose-700 border-rose-200")}>
+            <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200")}>
                 <Building2 className="w-3.5 h-3.5" />
                 Other
             </span>
@@ -523,8 +524,11 @@ function renderCell(
         }
         case 'role': {
             return (
-                <div className="flex flex-col gap-2 items-center justify-center min-w-[150px]">
-                    {/* Role Badge */}
+                <div className="flex flex-row gap-3 items-center justify-center min-w-[280px]">
+                    {/* Ownership Badge (Left) */}
+                    {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
+
+                    {/* Role Badge (Right) */}
                     {account.relationships?.is_parent ? (
                         <TooltipProvider>
                             <Tooltip delayDuration={300}>
@@ -561,9 +565,6 @@ function renderCell(
                     ) : (
                         renderRoleBadge('standalone')
                     )}
-
-                    {/* Ownership Badge */}
-                    {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
                 </div>
             )
         }
