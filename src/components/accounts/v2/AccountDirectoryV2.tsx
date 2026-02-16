@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
-import { AccountHeaderV2 } from "./AccountHeaderV2";
+import { AccountHeaderV2, AdvancedFilters } from "./AccountHeaderV2";
 import { AccountTableV2 } from "./AccountTableV2";
 import { AccountGridView } from "./AccountGridView";
 import { AccountSlideV2 } from "./AccountSlideV2";
@@ -40,7 +40,14 @@ export function AccountDirectoryV2({
     console.log('AccountDirectoryV2: initialAccounts count', initialAccounts?.length);
     console.log('AccountDirectoryV2: sample account', initialAccounts?.find(a => a.name === 'Exim Violet'));
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeFilter, setActiveFilter] = useState<'accounts_cards' | 'credit' | 'savings' | 'debt'>('accounts_cards');
+    const [activeFilter, setActiveFilter] = useState<'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed'>('accounts_cards');
+    const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
+        family: false,
+        dueSoon: false,
+        needsSpendMore: false,
+        multiRuleCb: false,
+        holderOthers: false
+    });
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -58,7 +65,7 @@ export function AccountDirectoryV2({
     const filteredAccounts = useMemo(() => {
         let result = initialAccounts;
 
-        // Filter Logic
+        // --- Main Filter Logic ---
         if (activeFilter === 'accounts_cards') {
             result = result.filter(a => ['bank', 'ewallet', 'cash', 'credit_card'].includes(a.type) && a.is_active !== false);
         } else if (activeFilter === 'credit') {
@@ -67,9 +74,47 @@ export function AccountDirectoryV2({
             result = result.filter(a => a.type === 'savings' && a.is_active !== false);
         } else if (activeFilter === 'debt') {
             result = result.filter(a => a.type === 'debt' && a.is_active !== false);
+        } else if (activeFilter === 'closed') {
+            result = result.filter(a => a.is_active === false);
         }
 
-        // Search Filter
+        // --- Advanced Filter Logic ---
+        if (advancedFilters.family) {
+            result = result.filter(a => (a.relationships?.is_parent || a.parent_account_id));
+        }
+
+        if (advancedFilters.dueSoon) {
+            const today = new Date();
+            const fiveDaysFromNow = new Date();
+            fiveDaysFromNow.setDate(today.getDate() + 5);
+
+            result = result.filter(a => {
+                if (!a.stats?.due_date) return false;
+                const dueDate = new Date(a.stats.due_date);
+                return dueDate >= today && dueDate <= fiveDaysFromNow;
+            });
+        }
+
+        if (advancedFilters.needsSpendMore) {
+            result = result.filter(a => {
+                const spent = a.stats?.spent_this_cycle || 0;
+                const target = a.cb_min_spend || a.stats?.min_spend || 0;
+                return target > 0 && spent < target;
+            });
+        }
+
+        if (advancedFilters.multiRuleCb) {
+            result = result.filter(a => {
+                const rules = a.cb_rules_json ? (Array.isArray(a.cb_rules_json) ? a.cb_rules_json : (a.cb_rules_json as any).tiers?.flatMap((t: any) => t.rules || [])) : [];
+                return (rules?.length || 0) > 1;
+            });
+        }
+
+        if (advancedFilters.holderOthers) {
+            result = result.filter(a => a.holder_type && a.holder_type !== 'me');
+        }
+
+        // --- Search Filter ---
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             result = result.filter(a =>
@@ -81,12 +126,25 @@ export function AccountDirectoryV2({
         }
 
         return result;
-    }, [initialAccounts, searchQuery, activeFilter]);
+    }, [initialAccounts, searchQuery, activeFilter, advancedFilters]);
 
     // Derived stats for header
     const activeCount = initialAccounts.filter(a => a.is_active !== false && a.type !== 'debt').length;
     const debtCount = initialAccounts.filter(a => a.type === 'debt' && a.is_active !== false).length;
     const closedCount = initialAccounts.filter(a => a.is_active === false).length;
+
+    const othersStats = useMemo(() => {
+        const otherAccounts = initialAccounts.filter(a => a.holder_type && a.holder_type !== 'me' && a.is_active !== false);
+        const limit = otherAccounts.reduce((sum, a) => {
+            if (a.parent_account_id) return sum;
+            return sum + (a.credit_limit || 0);
+        }, 0);
+        const debt = otherAccounts.reduce((sum, a) => {
+            if (a.type === 'credit_card') return sum + Math.abs(a.current_balance || 0);
+            return sum + (a.current_balance < 0 ? Math.abs(a.current_balance) : 0);
+        }, 0);
+        return { limit, debt };
+    }, [initialAccounts]);
 
     // --- Account Handlers ---
     const handleAddAccount = () => {
@@ -198,6 +256,9 @@ export function AccountDirectoryV2({
                 categories={categories}
                 selectedCategory={selectedCategory}
                 onCategoryChange={handleCategoryChange}
+                advancedFilters={advancedFilters}
+                onAdvancedFiltersChange={setAdvancedFilters}
+                othersStats={othersStats}
             />
 
             <div className="flex-1 overflow-auto px-6 py-4">
@@ -211,6 +272,7 @@ export function AccountDirectoryV2({
                         onTransfer={handleTransfer}
                         allAccounts={initialAccounts}
                         categories={categories}
+                        people={people}
                     />
                 ) : (
                     <AccountGridView

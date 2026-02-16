@@ -80,11 +80,23 @@ export function AccountDetailViewV2({
         let yearRepaidTotal = 0;
 
         initialTransactions.forEach(tx => {
+            // MF16: Strict Exclusion Logic
+            const status = String(tx?.status || '').toLowerCase()
+            if (status === 'void') return
+
             const rawDate = tx?.occurred_at || tx?.date || tx?.created_at
             const date = rawDate ? new Date(rawDate) : null
             const amount = Math.abs(Number(tx?.amount || 0))
             const type = String(tx?.type || '').toLowerCase()
             const year = date?.getFullYear();
+
+            const note = String(tx?.notes || tx?.note || '').toLowerCase()
+            const isInitial = note.includes('create initial') ||
+                note.includes('số dư đầu') ||
+                note.includes('opening balance') ||
+                note.includes('rollover')
+
+            if (isInitial) return;
 
             if (year === targetYear) {
                 if (type === 'debt') yearLentTotal += amount

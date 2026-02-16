@@ -30,8 +30,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          zIndex: 9999,
         } as React.CSSProperties
       }
+      position="top-right"
+      expand={true}
+      richColors
       {...props}
     />
   )

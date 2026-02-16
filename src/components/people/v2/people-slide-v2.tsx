@@ -19,6 +19,7 @@ interface PeopleSlideV2Props {
     onOpenChange: (open: boolean) => void;
     person?: Person | null;
     subscriptions: Subscription[];
+    onSuccess?: (result: { success: boolean, profileId?: string, debtAccountId?: string, person?: any }) => void;
 }
 
 export function PeopleSlideV2({
@@ -26,13 +27,18 @@ export function PeopleSlideV2({
     onOpenChange,
     person,
     subscriptions,
+    onSuccess,
 }: PeopleSlideV2Props) {
     const router = useRouter();
     const isEdit = !!person;
 
-    const handleSuccess = () => {
+    const handleSuccess = (result?: any) => {
         onOpenChange(false);
-        router.refresh();
+        if (onSuccess) {
+            onSuccess(result);
+        } else {
+            router.refresh();
+        }
     };
 
     const handleApply = async (values: {
@@ -45,8 +51,9 @@ export function PeopleSlideV2({
         is_archived?: boolean
         is_group?: boolean
     }) => {
+        let result;
         if (isEdit && person) {
-            await updatePersonAction(person.id, {
+            result = await updatePersonAction(person.id, {
                 name: values.name,
                 image_url: values.image_url,
                 sheet_link: values.sheet_link,
@@ -56,8 +63,9 @@ export function PeopleSlideV2({
                 is_archived: values.is_archived,
                 is_group: values.is_group,
             });
+            handleSuccess({ success: !!result });
         } else {
-            await createPersonAction({
+            const res = await createPersonAction({
                 name: values.name,
                 image_url: values.image_url,
                 sheet_link: values.sheet_link,
@@ -67,8 +75,8 @@ export function PeopleSlideV2({
                 is_archived: values.is_archived,
                 is_group: values.is_group,
             });
+            handleSuccess({ ...res, person: { id: res.profileId, name: values.name, image_url: values.image_url } });
         }
-        handleSuccess();
     };
 
     return (

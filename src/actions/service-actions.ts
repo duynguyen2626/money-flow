@@ -200,3 +200,8 @@ export async function recallServiceDistributionAction(monthTag: string) {
     return { success: false, error: error.message }
   }
 }
+
+export async function getServicesAction() {
+  const { getServices } = await import('@/services/service-manager')
+  return await getServices()
+}

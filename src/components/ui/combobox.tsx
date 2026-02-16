@@ -135,23 +135,37 @@ export function Combobox({
             </span>
             <span className="flex items-center gap-1 flex-shrink-0 ml-2">
               {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
+              {selectedItem && !disabled && (
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onValueChange(undefined);
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-full text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5 rotate-45" />
+                </span>
+              )}
               {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
-              <ChevronDown className="h-4 w-4 text-slate-500" />
+              {!disabled && <ChevronDown className="h-4 w-4 text-slate-500" />}
             </span>
           </button>
 
           {onDetailClick && selectedItem && !disabled && (
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={-1}
               onClick={(e) => {
                 e.stopPropagation()
                 onDetailClick()
               }}
-              className="absolute right-8 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-blue-600 transition-colors z-10"
+              className="absolute right-8 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-blue-600 transition-colors z-10 cursor-pointer"
               title="View Details"
             >
               <Eye className="h-4 w-4" />
-            </button>
+            </div>
           )}
         </div>
       </PopoverPrimitive.Trigger>

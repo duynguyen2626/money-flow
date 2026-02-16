@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
-import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
+import { CashbackCard, AccountSpendingStats, CashbackTransaction, RuleProgress } from '@/types/cashback.types';
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange, getCashbackCycleTag, formatIsoCycleTag, formatLegacyCycleTag, parseCycleTag } from '@/lib/cashback';
 import { normalizePolicyMetadata } from '@/lib/cashback-policy';
 import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
@@ -116,6 +116,24 @@ export async function upsertTransactionCashback(
     .filter(Boolean)));
 
   if (!['expense', 'debt'].includes(transaction.type ?? '')) {
+    if (existingEntries && existingEntries.length > 0) {
+      await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
+      for (const cycleId of existingCycleIds) {
+        await recomputeCashbackCycle(cycleId);
+      }
+    }
+    return;
+  }
+
+  // MF16: Strict Note-based Exclusion for Cashback
+  const note = String(transaction.note || '').toLowerCase();
+  const isExcluded = note.includes('create initial') ||
+    note.includes('số dư đầu') ||
+    note.includes('opening balance') ||
+    note.includes('rollover') ||
+    String(transaction.status).toLowerCase() === 'void';
+
+  if (isExcluded) {
     if (existingEntries && existingEntries.length > 0) {
       await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
       for (const cycleId of existingCycleIds) {
@@ -324,21 +342,32 @@ export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: S
     .single() as any;
 
   const config = parseCashbackConfig(account?.cashback_config, (cycle as any).account_id);
-  const maxBudget = config.maxAmount ?? 0;
-  const minSpendTarget = config.minSpend ?? 0;
+  const maxBudget = config.maxAmount ?? null;
+  const minSpendTarget = config.minSpend ?? null;
 
   // 2. Aggregate Spent Amount from Transactions
   // MF5.3.3 FIX: Include ONLY expense and debt (abs). Exclude transfer, repayment, lending.
-  const { data: txns } = await supabase
+  const { data: rawTxns } = await supabase
     .from('transactions')
-    .select('amount, type')
+    .select('amount, type, note')
     .eq('account_id', (cycle as any).account_id)
     .eq('persisted_cycle_tag', (cycle as any).cycle_tag)
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
-  const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
-  const isMinSpendMet = spentAmount >= minSpendTarget;
+  // MF16: Filter out Initial/Rollover transactions in recompute
+  const txns = (rawTxns as any[] ?? []).filter(t => {
+    const note = String(t.note || '').toLowerCase();
+    return !(
+      note.includes('create initial') ||
+      note.includes('số dư đầu') ||
+      note.includes('opening balance') ||
+      note.includes('rollover')
+    );
+  });
+
+  const spentAmount = txns.reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
+  const isMinSpendMet = minSpendTarget !== null ? spentAmount >= minSpendTarget : true;
 
   // 3. Aggregate Cashback Entries
   const { data: entries } = await supabase
@@ -364,14 +393,14 @@ export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: S
   });
 
   // 4. Logic Application
-  const capAfterReal = Math.max(0, maxBudget - realTotal);
+  const capAfterReal = maxBudget !== null ? Math.max(0, maxBudget - realTotal) : Infinity;
   const virtualEffective = Math.min(virtualTotalRaw, capAfterReal);
   const virtualOverflow = Math.max(0, virtualTotalRaw - virtualEffective);
-  const realOverflow = Math.max(0, realTotal - maxBudget);
+  const realOverflow = maxBudget !== null ? Math.max(0, realTotal - maxBudget) : 0;
   const overflowLoss = voluntaryTotal + virtualOverflow + realOverflow;
-  const realEffective = Math.min(realTotal, maxBudget);
+  const realEffective = maxBudget !== null ? Math.min(realTotal, maxBudget) : realTotal;
 
-  const isExhausted = realTotal >= maxBudget || (realTotal + virtualEffective) >= maxBudget;
+  const isExhausted = maxBudget !== null && (realTotal >= maxBudget || (realTotal + virtualEffective) >= maxBudget);
 
   // 5. Update Cycle
   await supabase.from('cashback_cycles').update({
@@ -481,12 +510,12 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   // MF6.1 FIX: Helper to aggregate cycle stats in real-time for accuracy
   // 1. Calculate Spent Amount & Eligible Transactions
-  const { data: txns } = await supabase
+  const { data: rawTxns } = await supabase
     .from('transactions')
     .select(`
       id, amount, type, occurred_at, note,
       cashback_share_percent, cashback_share_fixed,
-      category:categories(id, name, icon),
+      category:categories(id, name, icon, kind),
       shop:shops(name, image_url)
     `)
     .eq('account_id', accountId)
@@ -494,7 +523,21 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
-  const currentSpend = (txns ?? []).reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
+  // MF16: Aggregate only non-initial/rollover/internal transactions
+  const txns = (rawTxns as any[] ?? []).filter(t => {
+    const note = String(t.note || '').toLowerCase();
+    const isInitial = note.includes('create initial') ||
+      note.includes('số dư đầu') ||
+      note.includes('opening balance') ||
+      note.includes('rollover');
+
+    const categoryKind = t.category?.kind;
+    const isInternal = categoryKind === 'internal';
+
+    return !isInitial && !isInternal;
+  });
+
+  const currentSpend = txns.reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
   const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
 
@@ -538,12 +581,89 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     }
   }
 
+  // MF16: Rule Performance Breakdown
+  const activeRules: RuleProgress[] = [];
+  const rules = account.cb_type === 'tiered'
+    ? (account.cb_rules_json?.tiers || account.cb_rules_json || [])
+    : (account.cb_rules_json || []);
+
+  // Identify tiers vs rules
+  const allSubRules: { name: string, rate: number, max: number | null, cat_ids: string[], ruleId?: string }[] = [];
+  if (account.cb_type === 'tiered' && account.cb_rules_json?.tiers) {
+    // Show next tier or current tier?
+    // User expects to see the premium rules even if not qualified yet.
+    account.cb_rules_json.tiers.forEach((tier: any) => {
+      tier.policies?.forEach((p: any) => {
+        allSubRules.push({
+          name: `${tier.name}: ${p.rate}% Bonus`,
+          rate: p.rate,
+          max: p.max,
+          cat_ids: p.cat_ids || p.categoryIds || [],
+          ruleId: `tier-${tier.min_spend}-${p.rate}`
+        });
+      });
+    });
+  } else if (Array.isArray(rules)) {
+    rules.forEach((r: any, idx: number) => {
+      allSubRules.push({
+        name: r.name || `Rule ${idx + 1}`,
+        rate: r.rate,
+        max: r.max || r.maxReward,
+        cat_ids: r.cat_ids || r.categoryIds || [],
+        ruleId: r.id || `rule-${idx}`
+      });
+    });
+  }
+
+  // MF16 FIX: Fetch category names for rule labels
+  const allCatIds = Array.from(new Set(allSubRules.flatMap(r => r.cat_ids)));
+  const { data: catNames } = (allCatIds.length > 0
+    ? await supabase.from('categories').select('id, name').in('id', allCatIds)
+    : { data: [] }) as { data: { id: string, name: string }[] | null };
+  const catMap = Object.fromEntries((catNames || []).map(c => [c.id, c.name]));
+
+  // Calculate execution for each subRule
+  allSubRules.forEach(rule => {
+    const matchingTxns = txns.filter(t => rule.cat_ids.includes(t.category?.id));
+    const spent = matchingTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    let earned = matchingTxns.reduce((sum, t) => {
+      const bankBack = Math.abs(t.amount) * (rule.rate / 100);
+      return sum + (rule.max ? Math.min(bankBack, rule.max) : bankBack);
+    }, 0);
+
+    // Apply rule cap if exists (though usually it's per transaction or per cycle)
+    if (rule.max) earned = Math.min(earned, rule.max);
+
+    // Build descriptive name if generic
+    let displayName = rule.name;
+    if (displayName.startsWith('Rule') || displayName.includes('% Bonus')) {
+      const catLabels = rule.cat_ids.map(id => catMap[id]).filter(Boolean);
+      if (catLabels.length > 0) {
+        displayName = `${rule.rate}% ${catLabels.slice(0, 2).join('/')}${catLabels.length > 2 ? '...' : ''}`;
+      }
+    }
+
+    activeRules.push({
+      ruleId: rule.ruleId || 'unknown',
+      name: displayName,
+      rate: rule.rate,
+      spent,
+      earned,
+      max: rule.max,
+      isMain: rule.rate > (account.cb_base_rate || 0)
+    });
+  });
+
+  // Sort: Main (higher rate) first
+  activeRules.sort((a, b) => (b.isMain ? 1 : 0) - (a.isMain ? 1 : 0) || b.rate - a.rate);
+
   // Handle Cap Capping
-  if (cycleMaxBudget !== null && cycleMaxBudget > 0) {
+  const isUnlimited = account.cb_is_unlimited === true || account.cb_type === 'none';
+
+  if (!isUnlimited && cycleMaxBudget !== null && cycleMaxBudget > 0) {
     // If we exceed max budget, the overflow is loss
     const rawTotal = earnedSoFarFromTxns;
     earnedSoFarFromTxns = Math.min(rawTotal, cycleMaxBudget);
-    // Any earning beyond cap is effectively not earned
   }
 
   // Values for UI
@@ -551,7 +671,8 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const sharedAmount = sharedSoFarFromTxns;
   const netProfit = earnedSoFar - sharedAmount;
 
-  const remainingBudget = cycleMaxBudget !== null ? Math.max(0, cycleMaxBudget - earnedSoFar) : null;
+  const isUnlimitedBudget = account.cb_is_unlimited === true;
+  const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
   const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
 
   return {
@@ -569,6 +690,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     matchReason: normalizePolicyMetadata(policy.metadata)?.policySource,
     policyMetadata: normalizePolicyMetadata(policy.metadata) ?? undefined,
     is_min_spend_met: isMinSpendMet,
+    activeRules,
     cycle: cycleRange ? {
       tag: cycleTag,
       label: config.cycleType === 'statement_cycle'

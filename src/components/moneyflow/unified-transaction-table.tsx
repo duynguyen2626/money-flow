@@ -45,7 +45,9 @@ import {
   Settings2,
   Zap,
   FileSpreadsheet,
-  Users2
+  Users2,
+  ShoppingBag,
+  Book
 } from "lucide-react"
 import { normalizeCashbackConfig } from "@/lib/cashback"
 import { ColumnCustomizer } from "./column-customizer"
@@ -96,6 +98,8 @@ import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback'
 import { formatCycleTag } from '@/lib/cycle-utils'
 import { normalizeMonthTag } from '@/lib/month-tag'
+import { resolveCashbackPolicy } from "@/services/cashback/policy-resolver"
+
 import { ConfirmRefundDialogV2 } from "./confirm-refund-dialog-v2"
 
 import { RequestRefundDialog } from "./request-refund-dialog"
@@ -332,9 +336,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
-    { key: "actual_cashback", label: "Actual Cashback", defaultWidth: 120, minWidth: 100 },
-    { key: "est_share", label: "Est. Share", defaultWidth: 100, minWidth: 80 },
-    { key: "net_profit", label: "Net Profit", defaultWidth: 100, minWidth: 80 },
+    { key: "actual_cashback", label: "Est. Cashback", defaultWidth: 120, minWidth: 100 },
+    { key: "est_share", label: "Cashback Shared", defaultWidth: 100, minWidth: 80 },
+    { key: "net_profit", label: "Profit", defaultWidth: 100, minWidth: 80 },
     { key: "page", label: "Page", defaultWidth: 80, minWidth: 60 },
     { key: "actions", label: "Action", defaultWidth: 100, minWidth: 60 },
   ]
@@ -1744,78 +1748,92 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           )
                         }
                         case "actual_cashback": {
-                          const val = txn.bank_back ?? 0;
                           const amountAbs = Math.abs(txn.amount);
 
                           // EXCLUSION LOGIC:
-                          // 1. Income transactions NEVER earn cashback (spending earns back)
-                          // 2. Transfers usually don't earn cashback
-                          // 3. System/Initial transactions
+                          const status = String(txn?.status || '').toLowerCase();
+                          if (status === 'void') return <span className="text-slate-300">-</span>;
+
                           const isIncome = txn.type === 'income';
                           const isTransfer = txn.type === 'transfer';
-                          const isCreateInitial = txn.note?.toLowerCase().includes('create initial') ||
-                            txn.note?.toLowerCase().includes('số dư đầu') ||
-                            txn.note?.toLowerCase().includes('opening balance');
+                          const isRepayment = txn.type === 'repayment';
+                          const note = String(txn?.note || '').toLowerCase();
+                          const isCreateInitial = note.includes('create initial') ||
+                            note.includes('số dư đầu') ||
+                            note.includes('opening balance') ||
+                            note.includes('rollover');
 
-                          if (isIncome || isTransfer || isCreateInitial) {
+                          if (isIncome || isTransfer || isRepayment || isCreateInitial) {
                             return <span className="text-slate-300">-</span>;
                           }
 
-                          // Default cashback logic if actual is 0/missing
-                          if (!val && amountAbs > 0) {
-                            const account = accounts.find(a => a.id === txn.account_id);
-                            if (account?.cashback_config) {
-                              try {
-                                const config = normalizeCashbackConfig(account.cashback_config, account);
-                                const defaultRate = config.defaultRate ?? 0;
+                          const account = accounts.find(a => a.id === txn.account_id);
+                          if (!account || account.type !== 'credit_card') return <span className="text-slate-300">-</span>;
 
-                                if (defaultRate > 0) {
-                                  const projected = amountAbs * defaultRate;
+                          const policy = resolveCashbackPolicy({
+                            account: account as any,
+                            categoryId: txn.category_id,
+                            amount: amountAbs,
+                            categoryName: txn.category_name,
+                            cycleTotals: { spent: 0 }
+                          });
 
-                                  return (
-                                    <CustomTooltip content={
-                                      <div className="text-xs space-y-1">
-                                        <div className="font-bold">Projected Cashback (Pending)</div>
-                                        <div className="text-slate-400 font-mono">
-                                          {numberFormatter.format(amountAbs)} × {(defaultRate * 100).toFixed(2)}% = {numberFormatter.format(projected)}
-                                        </div>
-                                        <div className="text-[10px] italic border-t pt-1 mt-1 text-slate-500">
-                                          Using bank's current/default rate: {(defaultRate * 100).toFixed(2)}%
-                                        </div>
-                                      </div>
-                                    }>
-                                      <span className="text-slate-400 font-medium cursor-help border-b border-dotted border-slate-300">
-                                        {numberFormatter.format(projected)}
-                                      </span>
-                                    </CustomTooltip>
-                                  );
-                                }
-                              } catch (e) {
-                                // ignore parse error
-                              }
-                            }
-                          }
+                          const policyRate = policy?.rate ?? 0;
+                          const baseVal = amountAbs * policyRate;
+                          const val = (policy?.maxReward !== undefined && policy.maxReward !== null)
+                            ? Math.min(baseVal, policy.maxReward)
+                            : baseVal;
 
                           if (val === 0) return <span className="text-slate-300">-</span>;
 
                           const effectiveRate = amountAbs > 0 ? (val / amountAbs) : 0;
+                          const isCapped = policy?.maxReward !== undefined && policy.maxReward !== null && baseVal > policy.maxReward;
 
                           return (
                             <CustomTooltip content={
-                              <div className="text-xs space-y-1">
-                                <div className="font-bold">Bank Cashback (Actual)</div>
-                                <div className="text-slate-400 font-mono">
-                                  {numberFormatter.format(amountAbs)} × {(effectiveRate * 100).toFixed(effectiveRate * 100 % 1 === 0 ? 0 : 2)}% = {numberFormatter.format(val)}
+                              <div className="text-xs space-y-1.5">
+                                <div className="font-bold">Est. Cashback (Calculated)</div>
+                                <div className="text-slate-400">
+                                  {numberFormatter.format(amountAbs)} × {(policyRate * 100).toFixed(policyRate * 100 % 1 === 0 ? 0 : 2)}% = {numberFormatter.format(baseVal)}
                                 </div>
+                                {isCapped && (
+                                  <div className="text-rose-400 font-bold border-t border-white/10 pt-1">
+                                    Config card max = {numberFormatter.format(policy.maxReward || 0)}
+                                  </div>
+                                )}
+                                {policy?.metadata?.reason && (
+                                  <div className="text-[10px] italic border-t border-white/5 pt-1 mt-1 text-slate-500">
+                                    Rule: {policy.metadata.reason}
+                                  </div>
+                                )}
                               </div>
                             }>
-                              <span className="text-emerald-600 font-medium cursor-help border-b border-dotted border-emerald-200">
+                              <span className={cn(
+                                "font-medium cursor-help border-b border-dotted",
+                                isCapped ? "text-amber-600 border-amber-200" : "text-emerald-600 border-emerald-200"
+                              )}>
                                 {numberFormatter.format(val)}
                               </span>
                             </CustomTooltip>
                           );
                         }
                         case "est_share": {
+                          // EXCLUSION LOGIC:
+                          const status = String(txn?.status || '').toLowerCase();
+                          if (status === 'void') return <span className="text-slate-300">-</span>;
+
+                          const isIncome = txn.type === 'income';
+                          const isTransfer = txn.type === 'transfer';
+                          const note = String(txn?.note || '').toLowerCase();
+                          const isCreateInitial = note.includes('create initial') ||
+                            note.includes('số dư đầu') ||
+                            note.includes('opening balance') ||
+                            note.includes('rollover');
+
+                          if (isIncome || isTransfer || isCreateInitial) {
+                            return <span className="text-slate-300">-</span>;
+                          }
+
                           const val = txn.cashback_share_amount ?? 0;
                           if (val === 0) return <span className="text-slate-300">-</span>;
 
@@ -1827,7 +1845,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             <CustomTooltip content={
                               <div className="text-xs space-y-1">
                                 <div className="font-bold text-orange-400">Cashback Shared</div>
-                                <div className="text-slate-400 font-mono">
+                                <div className="text-slate-400">
                                   {shareRate > 0 && (
                                     <span>{numberFormatter.format(amountAbs)} × {(shareRate * 100).toFixed(shareRate * 100 % 1 === 0 ? 0 : 2)}%</span>
                                   )}
@@ -1846,25 +1864,40 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           );
                         }
                         case "net_profit": {
-                          let bankBack = txn.bank_back ?? 0;
-                          let isProjected = false;
-                          const amountAbs = Math.abs(txn.amount);
+                          // EXCLUSION LOGIC:
+                          const status = String(txn?.status || '').toLowerCase();
+                          if (status === 'void') return <span className="text-slate-300">-</span>;
 
-                          if (!bankBack && amountAbs > 0) {
-                            const account = accounts.find(a => a.id === txn.account_id);
-                            if (account?.cashback_config) {
-                              try {
-                                const config = typeof account.cashback_config === 'string'
-                                  ? JSON.parse(account.cashback_config)
-                                  : account.cashback_config;
-                                const defaultRate = config?.program?.defaultRate ?? config?.defaultRate ?? 0;
-                                if (defaultRate > 0) {
-                                  bankBack = amountAbs * defaultRate;
-                                  isProjected = true;
-                                }
-                              } catch (e) { }
-                            }
+                          const isIncome = txn.type === 'income';
+                          const isTransfer = txn.type === 'transfer';
+                          const isRepayment = txn.type === 'repayment';
+                          const note = String(txn?.note || '').toLowerCase();
+                          const isCreateInitial = note.includes('create initial') ||
+                            note.includes('số dư đầu') ||
+                            note.includes('opening balance') ||
+                            note.includes('rollover');
+
+                          if (isIncome || isTransfer || isRepayment || isCreateInitial) {
+                            return <span className="text-slate-300">-</span>;
                           }
+
+                          const amountAbs = Math.abs(txn.amount);
+                          const account = accounts.find(a => a.id === txn.account_id);
+
+                          // Use same re-calculation logic as actual_cashback
+                          const policy = account?.type === 'credit_card' ? resolveCashbackPolicy({
+                            account: account as any,
+                            categoryId: txn.category_id,
+                            amount: amountAbs,
+                            categoryName: txn.category_name,
+                            cycleTotals: { spent: 0 }
+                          }) : null;
+
+                          const policyRate = policy?.rate ?? 0;
+                          const baseBankBack = amountAbs * policyRate;
+                          const bankBack = (policy?.maxReward !== undefined && policy.maxReward !== null)
+                            ? Math.min(baseBankBack, policy.maxReward)
+                            : baseBankBack;
 
                           const share = txn.cashback_share_amount ?? 0;
                           const profit = bankBack - share;
@@ -1874,17 +1907,15 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           return (
                             <CustomTooltip content={
                               <div className="text-xs space-y-1">
-                                <div className="font-bold text-indigo-400">Net Profit Calculation</div>
-                                <div className="text-slate-400 font-mono">
-                                  {numberFormatter.format(bankBack)} {isProjected ? '(est)' : '(bank)'} - {numberFormatter.format(share)} (share) = <span className={profit > 0 ? "text-emerald-400" : "text-rose-400"}>{numberFormatter.format(profit)}</span>
+                                <div className="font-bold text-indigo-400">Profit Calculation</div>
+                                <div className="text-slate-400">
+                                  {numberFormatter.format(bankBack)} (est) - {numberFormatter.format(share)} (share) = <span className={profit > 0 ? "text-emerald-400" : "text-rose-400"}>{numberFormatter.format(profit)}</span>
                                 </div>
-                                {isProjected && <div className="mt-1 text-[10px] text-slate-500 italic border-t pt-1">* Using projection for Bank Cashback</div>}
                               </div>
                             }>
                               <span className={cn(
                                 profit > 0 ? "text-emerald-700 font-black" : profit < 0 ? "text-rose-500 font-bold" : "text-slate-500",
-                                "cursor-help border-b border-dotted border-slate-300",
-                                isProjected && "opacity-70"
+                                "cursor-help border-b border-dotted border-slate-300"
                               )}>
                                 {numberFormatter.format(profit)}
                               </span>
@@ -1897,7 +1928,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                         case "page": {
                           const page = (txn.metadata as any)?.page
                           return (
-                            <span className="text-xs text-slate-500 font-mono">
+                            <span className="text-xs text-slate-500 font-bold">
                               {page || '-'}
                             </span>
                           )
@@ -2184,7 +2215,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                                   {debts.map((d, i) => (
                                                     <div key={i} className="flex justify-between gap-4 text-xs">
                                                       <span>{d.tag || 'Unknown Period'}:</span>
-                                                      <span className="font-mono">{numberFormatter.format(d.amount)}</span>
+                                                      <span className="font-bold">{numberFormatter.format(d.amount)}</span>
                                                     </div>
                                                   ))}
                                                 </div>
@@ -2292,112 +2323,44 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           )
                         }
                         case "category": {
-                          // 1. Determine Type Badge
-                          let typeLabel = "EXPENSE"; // Default
-                          let typeColor = "bg-red-100 text-red-700 border-red-200";
-                          let typeTextColor = "text-red-700"; // For Name Sync
-                          let typeIcon = <Minus className="h-3 w-3" />;
-
-                          if (txn.type === 'repayment') {
-                            typeLabel = "PAID";
-                            typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                            typeTextColor = "text-emerald-700";
-                            typeIcon = <Check className="h-3 w-3" />;
-                          } else if (txn.type === 'debt') {
-                            typeLabel = "LEND";
-                            typeColor = "bg-orange-100 text-orange-700 border-orange-200";
-                            typeTextColor = "text-orange-700";
-                            typeIcon = <ArrowUpRight className="h-3 w-3 shrink-0" />;
-                          } else if (txn.type === 'transfer') {
-                            typeLabel = "TF";
-                            typeColor = "bg-sky-100 text-sky-700 border-sky-200";
-                            typeTextColor = "text-sky-700";
-                            typeIcon = <ArrowRightLeft className="h-3 w-3" />;
-                            // Smart Context for Transfer
-                            if (contextId) {
-                              if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
-                              else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
-                            }
-                          } else if (txn.type === 'income') {
-                            typeLabel = "IN";
-                            typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                            typeTextColor = "text-emerald-700";
-                            typeIcon = <Plus className="h-3 w-3" />;
-                          } else if (txn.type === 'expense') {
-                            typeLabel = "OUT";
-                            typeIcon = <Minus className="h-3 w-3" />;
-                          }
-
-                          // Wrapper for Type Icon with border as requested for alignment check
-                          const borderedTypeIcon = (
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-slate-100 bg-white shadow-sm">
-                              {typeIcon}
-                            </div>
-                          )
-
-                          // 2. Resolve Actual Category Data
                           const actualCategory = categories.find(c => c.id === txn.category_id) || null;
+                          const displayCategory = actualCategory?.name || txn.category_name || "Uncategorized";
 
-                          const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
-                          const metadataImage = (txn.metadata as any)?.image_url ?? null;
-                          const shopImage = txn.shop_image_url ?? null;
                           const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
                           const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
-                          const displayImage = metadataImage || shopImage || categoryImage;
-                          const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
-                          const mobileDateLabel = isMobile && occurredDate
-                            ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                            : null;
 
-                          const shopName = txn.shop_name || "Unknown";
+                          // Internal vs External Logic
+                          const isInternal = actualCategory?.kind === 'internal';
+                          const kindLabel = isInternal ? 'internal' : 'external';
+                          const KindIcon = isInternal ? User : Users2;
 
                           return (
-                            <div className="flex w-full flex-col gap-1">
-                              <div className="flex w-full items-center gap-2 min-w-0">
-                                {/* 1. Category Icon (Visual) - Keep visual but remove text badge */}
-                                <CustomTooltip content={displayCategory}>
-                                  <div className="shrink-0 cursor-help">
-                                    {displayImage ? (
-                                      <div className="flex h-8 w-8 items-center justify-center">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
-                                      </div>
-                                    ) : (
-                                      <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-none text-sm border border-slate-200">
-                                        {categoryIcon}
-                                      </div>
-                                    )}
-                                  </div>
-                                </CustomTooltip>
-
-                                <div className="flex flex-col min-w-0 flex-1">
-                                  <div className="flex flex-col mb-0.5">
-                                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tighter leading-none">{displayCategory}</span>
-                                    <span className="text-sm font-bold text-slate-900 truncate" title={shopName}>{shopName}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                                    {isMobile && mobileDateLabel && (
-                                      <span className="text-[10px] text-slate-400 font-mono mr-1">{mobileDateLabel}</span>
-                                    )}
-                                    {/* Only show Note text if exists */}
-                                    {txn.note && <span className="truncate max-w-[200px] italic">{txn.note}</span>}
-                                  </div>
-                                </div>
-
-
+                            <div className="flex items-center gap-2 min-w-0">
+                              {/* Icon Container (Square as per rules) */}
+                              <div className="shrink-0 h-8 w-8 rounded-none border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden shadow-sm">
+                                {categoryImage ? (
+                                  <img src={categoryImage} alt={displayCategory} className="h-full w-full object-contain" />
+                                ) : categoryIcon ? (
+                                  <span className="text-sm">{categoryIcon}</span>
+                                ) : (
+                                  <Book className="h-4 w-4 text-slate-400" />
+                                )}
                               </div>
 
-
-
-                              {
-                                isMobile && mobileDateLabel && (
-                                  <div className="flex w-full justify-start">
-                                    <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
-                                  </div>
-                                )
-                              }
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-sm font-bold text-slate-900 truncate leading-tight" title={displayCategory}>
+                                  {displayCategory}
+                                </span>
+                                <div className={cn(
+                                  "flex items-center gap-1 text-[10px] font-black uppercase tracking-widest leading-none mt-0.5",
+                                  isInternal ? "text-indigo-600" : "text-slate-500"
+                                )}>
+                                  <KindIcon className="h-2.5 w-2.5" />
+                                  <span>{kindLabel}</span>
+                                </div>
+                              </div>
                             </div>
-                          )
+                          );
                         }
                         case "account": {
                           // FLOW COLUMN WITH CYCLE BADGES
@@ -2762,23 +2725,23 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                               <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
                               <div className="flex justify-between gap-4">
                                 <span>Original Amount:</span>
-                                <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
+                                <span className="font-bold">{numberFormatter.format(Math.abs(originalAmount))}</span>
                               </div>
                               {percentDisp > 0 && (
                                 <div className="flex justify-between gap-4 text-emerald-600">
                                   <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
-                                  <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
+                                  <span className="font-bold">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
                                 </div>
                               )}
                               {fixedDisp > 0 && (
                                 <div className="flex justify-between gap-4 text-emerald-600">
                                   <span>Fixed Discount:</span>
-                                  <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
+                                  <span className="font-bold">-{numberFormatter.format(fixedDisp)}</span>
                                 </div>
                               )}
                               <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
                                 <span>Final Price:</span>
-                                <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
+                                <span className="font-bold">{numberFormatter.format(finalDisp)}</span>
                               </div>
                             </div>
                           ) : null;

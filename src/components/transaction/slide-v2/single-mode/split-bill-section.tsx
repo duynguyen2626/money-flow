@@ -25,6 +25,7 @@ import { Person } from "@/types/moneyflow.types";
 import { cn } from "@/lib/utils";
 import { PersonAvatar } from "@/components/ui/person-avatar";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 type SplitBillSectionProps = {
     people: Person[];
@@ -46,8 +47,10 @@ export function SplitBillSection({ people }: SplitBillSectionProps) {
     const totalSplit = participants.reduce((sum, p) => sum + (p.amount || 0), 0);
     const remainder = (amount || 0) - totalSplit;
 
-    // Limit visibility to Expense and Debt
-    const shouldShow = ['expense', 'debt'].includes(transactionType);
+    const personId = useWatch({ control: form.control, name: "person_id" });
+
+    // Always show if a person is involved, or for Expense/Debt
+    const shouldShow = !!personId || ['expense', 'debt'].includes(transactionType);
 
     // Remove auto-open effect that prevents closing
     // useEffect(() => { ... }) - REMOVED
@@ -90,21 +93,33 @@ export function SplitBillSection({ people }: SplitBillSectionProps) {
                     <Users className="w-4 h-4 text-slate-500" />
                     <Label className="text-sm font-medium text-slate-700">Split Bill</Label>
                 </div>
-                <Switch
-                    checked={isOpen}
-                    onCheckedChange={(checked) => {
-                        setIsOpen(checked);
-                        if (checked) {
-                            if (fields.length === 0) append({ person_id: "", amount: 0 });
-                        } else {
-                            // Optional: Clear participants when toggling off?
-                            // For now, let's keep data but UI closes. 
-                            // If user explicitly turns off, we might want to clear to avoid accidental processing.
-                            form.setValue("participants", []);
+                <div
+                    className="relative cursor-pointer"
+                    onClick={(e) => {
+                        if (!amount && !isOpen) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toast.error("Please input amount to split with people", {
+                                position: "top-right",
+                                className: "bg-rose-500 text-white font-black text-[10px] uppercase tracking-widest border-none shadow-xl",
+                            });
                         }
                     }}
-                    disabled={!amount && !isOpen} // Disable enabling if no amount? User said "chỉ cho split khi đã nhập amount"
-                />
+                >
+                    <Switch
+                        checked={isOpen}
+                        onCheckedChange={(checked) => {
+                            setIsOpen(checked);
+                            if (checked) {
+                                if (fields.length === 0) append({ person_id: "", amount: 0 });
+                            } else {
+                                form.setValue("participants", []);
+                            }
+                        }}
+                        disabled={!amount && !isOpen}
+                        className={cn(!amount && !isOpen && "pointer-events-none")}
+                    />
+                </div>
             </div>
 
             <Collapsible open={isOpen} onOpenChange={setIsOpen}>

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react';
-import { Account, Category } from "@/types/moneyflow.types";
+import { Account, Category, Person } from "@/types/moneyflow.types";
 import { useAccountColumnPreferences } from "@/hooks/useAccountColumnPreferences";
 import { useAccountExpandableRows } from "@/hooks/useAccountExpandableRows";
 import { AccountRowV2 } from "./AccountRowV2";
@@ -20,6 +20,7 @@ interface AccountTableV2Props {
     onPay: (account: Account) => void;
     onTransfer: (account: Account) => void;
     categories?: Category[];
+    people?: Person[];
 }
 
 export function AccountTableV2({
@@ -31,6 +32,7 @@ export function AccountTableV2({
     onPay,
     onTransfer,
     categories,
+    people,
 }: AccountTableV2Props) {
     const {
         getVisibleColumns,
@@ -241,6 +243,7 @@ export function AccountTableV2({
                                                         onPay={onPay}
                                                         onTransfer={onTransfer}
                                                         categories={categories}
+                                                        people={people}
                                                     />
                                                 );
                                             })}

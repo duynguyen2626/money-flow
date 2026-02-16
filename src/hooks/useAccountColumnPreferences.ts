@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 export type AccountColumnKey =
     | 'account'
+    | 'role'
     | 'limit'
     | 'rewards' // Merged 'spent' and 'cashback_advanced'
     | 'due'
@@ -18,6 +19,7 @@ export interface AccountColumnConfig {
 
 const defaultAccountColumns: AccountColumnConfig[] = [
     { key: 'account', label: 'Account Name', defaultWidth: 250, minWidth: 200, frozen: true },
+    { key: 'role', label: 'Role & Ownership', defaultWidth: 200, minWidth: 180 },
     { key: 'limit', label: 'Limit', defaultWidth: 120, minWidth: 100 },
     { key: 'rewards', label: 'Rewards', defaultWidth: 150, minWidth: 130 },
     { key: 'due', label: 'Due', defaultWidth: 140, minWidth: 120 },
@@ -32,6 +34,7 @@ export function useAccountColumnPreferences() {
 
     const [visibleColumns, setVisibleColumns] = useState<Record<AccountColumnKey, boolean>>({
         account: true,
+        role: true,
         limit: true,
         rewards: true,
         due: false,
@@ -91,6 +94,7 @@ export function useAccountColumnPreferences() {
         setColumnOrder(defaultAccountColumns.map(c => c.key));
         setVisibleColumns({
             account: true,
+            role: true,
             limit: true,
             rewards: true,
             due: false,

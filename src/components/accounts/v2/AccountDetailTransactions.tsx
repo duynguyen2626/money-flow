@@ -252,6 +252,13 @@ export function AccountDetailTransactions({
             }))
             setCycles(cycleOptions)
 
+            // ALWAYS Calculate current cycle for reset purposes
+            const config = parseCashbackConfig(account.cashback_config)
+            const cycleRange = getCashbackCycleRange(config, new Date())
+            if (cycleRange) {
+                currentCycleRef.current = formatIsoCycleTag(cycleRange.end)
+            }
+
             // Check if URL has a tag parameter first
             const urlTag = new URLSearchParams(window.location.search).get('tag')
             if (urlTag) {
@@ -264,25 +271,13 @@ export function AccountDetailTransactions({
 
             // Auto-select current cycle ONLY on first mount and only if not already set
             if (!hasAutoSelectedCycle.current && !selectedCycle && account.cashback_config) {
-                const config = parseCashbackConfig(account.cashback_config)
-                const cycleRange = getCashbackCycleRange(config, new Date())
-                if (cycleRange) {
-                    const currentTag = formatIsoCycleTag(cycleRange.end)
-                    // Store current cycle for reset functionality
-                    currentCycleRef.current = currentTag
-
+                if (currentCycleRef.current) {
+                    const currentTag = currentCycleRef.current
                     const matchingCycle = cycleOptions.find(c => c.value === currentTag)
                     if (matchingCycle) {
                         setSelectedCycle(currentTag)
                         hasAutoSelectedCycle.current = true
                     }
-                }
-            } else {
-                // Even if already selected, we still want to know what "current" is for reset purposes
-                const config = parseCashbackConfig(account.cashback_config)
-                const cycleRange = getCashbackCycleRange(config, new Date())
-                if (cycleRange) {
-                    currentCycleRef.current = formatIsoCycleTag(cycleRange.end)
                 }
             }
         }).catch(err => {

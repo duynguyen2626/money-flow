@@ -81,8 +81,12 @@ export type Account = {
   cb_max_budget?: number | null;
   cb_is_unlimited?: boolean;
   cb_rules_json?: Json | null;
+  cb_min_spend?: number | null;
+  cb_cycle_type?: 'calendar_month' | 'statement_cycle';
   statement_day?: number | null;
   due_date?: number | null;
+  holder_type?: 'me' | 'relative' | 'other';
+  holder_person_id?: string | null;
   stats?: AccountStats | null;
   relationships?: AccountRelationships | null;
   credit_card_info?: {

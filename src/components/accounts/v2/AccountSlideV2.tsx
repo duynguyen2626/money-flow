@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2, Sparkles } from "lucide-react";
+import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2, Sparkles, X, Infinity, Building2, Calendar } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
 import { createAccount } from "@/actions/account-actions";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
+    PopoverAnchor,
 } from "@/components/ui/popover";
 import {
     Tooltip,
@@ -61,7 +62,12 @@ interface AccountSlideV2Props {
     onBack?: () => void;
 }
 
-import { Category } from "@/types/moneyflow.types";
+import { Category, Person, Subscription } from "@/types/moneyflow.types";
+import { PeopleSlideV2 } from "../../people/v2/people-slide-v2";
+import { getPeopleAction } from "@/actions/people-actions";
+import { getServicesAction } from "@/actions/service-actions";
+
+type CashbackCycleType = 'calendar_month' | 'statement_cycle';
 
 export function AccountSlideV2({
     open,
@@ -100,7 +106,16 @@ export function AccountSlideV2({
     const [cbMaxBudget, setCbMaxBudget] = useState<number | null>(null);
     const [cbIsUnlimited, setCbIsUnlimited] = useState(true);
     const [cbRulesJson, setCbRulesJson] = useState<CashbackRulesJson | null>(null);
+    const [cbMinSpend, setCbMinSpend] = useState<number>(0);
     const [isCashbackEnabled, setIsCashbackEnabled] = useState(false);
+    const [openAccNumPopover, setOpenAccNumPopover] = useState(false);
+    const [openRxPopover, setOpenRxPopover] = useState(false);
+    const [holderType, setHolderType] = useState<'me' | 'relative' | 'other'>('me');
+    const [holderPersonId, setHolderPersonId] = useState<string | null>(null);
+    const [people, setPeople] = useState<Person[]>([]);
+    const [openHolderPersonPopover, setOpenHolderPersonPopover] = useState(false);
+    const [isPeopleSlideOpen, setIsPeopleSlideOpen] = useState(false);
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
     // Form state
     const [name, setName] = useState("");
@@ -147,7 +162,23 @@ export function AccountSlideV2({
         }
     }, [parentAccountId, allAccounts]);
 
-    // Dirty check state
+    // Initial data fetch
+    useEffect(() => {
+        if (open) {
+            getPeopleAction().then(setPeople);
+            getServicesAction().then(res => setSubscriptions(res as any));
+        }
+    }, [open]);
+
+    const handlePersonCreated = (result: any) => {
+        if (result && result.person) {
+            setPeople(prev => [...prev, result.person as Person]);
+            setHolderPersonId(result.person.id);
+            setHolderType('relative');
+        }
+    };
+
+    // MF5.5 Dirty check state
     const [initialState, setInitialState] = useState<string>("");
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [pendingAction, setPendingAction] = useState<'close' | 'back' | null>(null);
@@ -161,6 +192,8 @@ export function AccountSlideV2({
         setCreditLimit(acc.credit_limit || 0);
         setIsActive(acc.is_active !== false);
         setImageUrl(acc.image_url || "");
+        setHolderType(acc.holder_type || 'me');
+        setHolderPersonId(acc.holder_person_id || null);
 
         // --- REBOOTED CASHBACK LOAD (Phase 16) ---
         const effectiveCbType = acc.cb_type || (acc.cashback_config ? 'simple' : 'none');
@@ -170,23 +203,44 @@ export function AccountSlideV2({
         // Use new columns if available, otherwise fallback to legacy config parsing
         const cb = normalizeCashbackConfig(acc.cashback_config, acc) as any;
 
-        setCbBaseRate(acc.cb_base_rate ?? cb.defaultRate ?? 0);
+        setCbBaseRate((acc.cb_base_rate ?? cb.defaultRate ?? 0) * 100);
         setCbMaxBudget(acc.cb_max_budget ?? cb.maxBudget ?? null);
         setCbIsUnlimited(acc.cb_is_unlimited ?? (!acc.cb_max_budget && !cb.maxBudget));
+        setCbMinSpend(acc.cb_min_spend ?? cb.minSpendTarget ?? 0);
 
         // Map rules - prioritizing new column
         if (acc.cb_rules_json) {
-            setCbRulesJson(acc.cb_rules_json as any);
+            const rawRules = acc.cb_rules_json as any;
+            if (effectiveCbType === 'tiered') {
+                // Tiered config object
+                setCbRulesJson({
+                    base_rate: (rawRules.base_rate || 0) * 100,
+                    tiers: (rawRules.tiers || []).map((t: any) => ({
+                        ...t,
+                        defaultRate: (t.defaultRate || 0) * 100,
+                        rules: (t.rules || []).map((r: any) => ({
+                            ...r,
+                            rate: (r.rate || 0) * 100
+                        }))
+                    }))
+                });
+            } else {
+                // Simple rules array
+                setCbRulesJson(rawRules.map((r: any) => ({
+                    ...r,
+                    rate: (r.rate || 0) * 100
+                })));
+            }
         } else if (cb.levels && cb.levels.length > 0) {
             // Legacy conversion to new structure if possible
             if (effectiveCbType === 'tiered') {
                 setCbRulesJson({
-                    base_rate: cb.defaultRate || 0,
+                    base_rate: (cb.defaultRate || 0) * 100,
                     tiers: cb.levels.map((lvl: any) => ({
                         min_spend: lvl.minTotalSpend || 0,
                         policies: (lvl.rules || []).map((r: any) => ({
                             cat_ids: (r.categoryIds || []).filter(Boolean),
-                            rate: r.rate || 0,
+                            rate: (r.rate || 0) * 100,
                             max: r.maxReward || null
                         }))
                     }))
@@ -196,7 +250,7 @@ export function AccountSlideV2({
                 const firstLevel = cb.levels[0];
                 const rules = (firstLevel.rules || []).map((r: any) => ({
                     cat_ids: (r.categoryIds || []).filter(Boolean),
-                    rate: r.rate || 0,
+                    rate: (r.rate || 0) * 100,
                     max: r.maxReward || null
                 }));
                 setCbRulesJson(rules);
@@ -205,8 +259,10 @@ export function AccountSlideV2({
             setCbRulesJson(null);
         }
 
-        setCycleType(cb.cycleType || 'calendar_month');
-        // Prioritize explicit columns, fallback to legacy config logic
+        // Prioritize explicit columns, then legacy config logic
+        const finalCycleType = acc.cb_cycle_type || (acc.statement_day || cb.cycleType === 'statement_cycle' ? 'statement_cycle' : 'calendar_month');
+        setCycleType(finalCycleType as CashbackCycleType);
+
         setStatementDay(acc.statement_day ?? cb.statementDay ?? null);
         setDueDate(acc.due_date ?? cb.dueDate ?? null);
         setMinSpendTarget(cb.minSpendTarget ?? undefined);
@@ -265,6 +321,7 @@ export function AccountSlideV2({
             setIsAdvancedCashback(false);
             setIsCashbackEnabled(false);
             setCbType('none');
+            setCbMinSpend(0);
             setIsCategoryRestricted(false);
             setRestrictedCategoryIds([]);
         }
@@ -412,6 +469,7 @@ export function AccountSlideV2({
         }
     };
 
+    // Confirm action helper for unsaved changes
     const confirmAction = () => {
         setShowUnsavedConfirm(false);
         if (pendingAction === 'close') {
@@ -421,138 +479,6 @@ export function AccountSlideV2({
         }
         setPendingAction(null);
     };
-    // Load form state from account
-    useEffect(() => {
-        if (open) {
-            if (account) {
-                // Initialize with prop data first (instant)
-                const loadFromAccount = (acc: Account) => {
-                    setName(acc.name || "");
-                    setType(acc.type || 'bank');
-                    setAccountNumber(acc.account_number || "");
-                    setCreditLimit(acc.credit_limit || 0);
-                    setIsActive(acc.is_active !== false);
-                    setImageUrl(acc.image_url || "");
-
-                    const cb = normalizeCashbackConfig(acc.cashback_config, acc) as any;
-                    setCbType(acc.cb_type || 'none');
-                    setIsCashbackEnabled(acc.cb_type !== 'none' && !!acc.cb_type);
-                    setCycleType(cb.cycleType || 'calendar_month');
-                    setStatementDay(cb.statementDay ?? null);
-                    setDueDate(cb.dueDate ?? null);
-                    setMinSpendTarget(cb.minSpendTarget ?? undefined);
-                    setDefaultRate(cb.defaultRate || 0);
-                    setMaxCashback(cb.maxBudget ?? undefined);
-
-                    // New fields
-                    setAnnualFee(acc.annual_fee || 0);
-                    setAnnualFeeWaiverTarget(acc.annual_fee_waiver_target || 0);
-                    setReceiverName(acc.receiver_name || "");
-                    setParentAccountId(acc.parent_account_id || null);
-                    setStartDate((acc as any).start_date);
-
-                    // Determine main type
-                    if (acc.type === 'bank') setActiveMainType('bank');
-                    else if (acc.type === 'credit_card') setActiveMainType('credit');
-                    else if (['savings', 'investment'].includes(acc.type)) setActiveMainType('savings');
-                    else setActiveMainType('others');
-
-                    const loadedLevels = (cb.levels || []).map((lvl: any) => ({
-                        id: lvl.id || Math.random().toString(36).substr(2, 9),
-                        name: lvl.name || "",
-                        minTotalSpend: lvl.minTotalSpend || 0,
-                        defaultRate: lvl.defaultRate || 0,
-                        rules: (lvl.rules || []).map((r: any) => ({
-                            id: r.id || Math.random().toString(36).substr(2, 9),
-                            categoryIds: r.categoryIds || [],
-                            rate: r.rate || 0,
-                            maxReward: r.maxReward || null
-                        }))
-                    }));
-
-                    setSecuredById(acc.secured_by_account_id || "none");
-                    setIsCollateralLinked(!!acc.secured_by_account_id);
-                    setLevels(loadedLevels);
-
-                    // Advanced mode detection: 
-                    // - Multiple levels, OR
-                    // - Multiple rules in any level, OR
-                    // - Any level has category-specific rules (rules with categoryIds)
-                    const hasMultipleLevels = loadedLevels.length > 1;
-                    const hasMultipleRules = loadedLevels.some((lvl: any) => lvl.rules.length > 1);
-                    const hasCategoryRules = loadedLevels.some((lvl: any) =>
-                        lvl.rules.some((rule: any) => rule.categoryIds && rule.categoryIds.length > 0)
-                    );
-
-                    setIsAdvancedCashback(hasMultipleLevels || hasMultipleRules || hasCategoryRules);
-                    setIsCashbackEnabled(cb.defaultRate > 0 || loadedLevels.length > 0);
-
-                    // Check if it's a simple restricted config
-                    // MF5.4.3: Only trigger restricted mode if the overall default rate is 0.
-                    // If defaultRate > 0, it means it's a tiered card (e.g. VCB Signature 0.5% base + 10% Edu)
-                    if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1 && cb.defaultRate === 0) {
-                        setIsCategoryRestricted(true);
-                        setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
-                        setDefaultRate(loadedLevels[0].rules[0].rate);
-                    } else {
-                        // If it's not restricted mode, they see Base Rate = cb.defaultRate.
-                        // To see categories, they MUST use Advanced mode.
-                        setIsCategoryRestricted(false);
-                        setRestrictedCategoryIds([]);
-                        setDefaultRate(cb.defaultRate || 0);
-                    }
-                };
-
-                loadFromAccount(account);
-
-                // Double check with fresh data from DB (in case props are stale)
-                import('@/services/account.service').then(({ getAccountDetails }) => {
-                    getAccountDetails(account.id).then(fresh => {
-                        if (fresh) {
-                            console.log('[AccountSlideV2] Fresh data refetched from DB:', fresh.name, 'cb_type:', fresh.cb_type);
-                            // Unify with the main loadFromAccount function
-                            loadFromAccount(fresh);
-                        }
-                    });
-                });
-
-            } else {
-                setName("");
-                setType('bank');
-                setAccountNumber("");
-                setCreditLimit(0);
-                setIsActive(true);
-                setImageUrl("");
-                setCycleType('calendar_month');
-                setStatementDay(null);
-                setDueDate(null);
-                setMinSpendTarget(undefined);
-                setDefaultRate(0);
-                setMaxCashback(undefined);
-                setAnnualFee(0);
-                setReceiverName("");
-                setSecuredById("none");
-                setIsCollateralLinked(false);
-                setParentAccountId(null);
-                setActiveMainType('bank');
-                setLevels([]);
-                setIsAdvancedCashback(false);
-                setIsCategoryRestricted(false);
-                setRestrictedCategoryIds([]);
-                setOpenCollateralCombo(false);
-                setOpenParentCombo(false);
-                setCbType('none');
-                setCbBaseRate(0);
-                setCbMaxBudget(null);
-                setCbIsUnlimited(false);
-                setCbRulesJson(null);
-                setStatementDay(null);
-                setDueDate(null);
-                setCycleType('calendar_month');
-                setMinSpendTarget(undefined);
-            }
-        }
-    }, [open, account]);
 
     const handleSave = async () => {
         if (!name) {
@@ -621,13 +547,31 @@ export function AccountSlideV2({
 
                     // New Column-based fields
                     cb_type: isCashbackEnabled ? cbType : 'none',
-                    cb_base_rate: cbBaseRate,
+                    cb_base_rate: cbBaseRate / 100,
                     cb_max_budget: cbMaxBudget,
                     cb_is_unlimited: cbIsUnlimited,
-                    cb_rules_json: cbRulesJson as any,
-
+                    cb_rules_json: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
+                        if (lvlOrRule.rules) { // Tiered level
+                            return {
+                                ...lvlOrRule,
+                                defaultRate: (lvlOrRule.defaultRate || 0) / 100,
+                                rules: lvlOrRule.rules.map((r: any) => ({
+                                    ...r,
+                                    rate: (r.rate || 0) / 100
+                                }))
+                            };
+                        }
+                        return { // Simple rule
+                            ...lvlOrRule,
+                            rate: (lvlOrRule.rate || 0) / 100
+                        };
+                    }) as any,
+                    cb_min_spend: cbMinSpend,
+                    cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
                     dueDate: dueDate,
+                    holder_type: holderType,
+                    holder_person_id: holderPersonId,
 
                     // Keep legacy config for safety during transition
                     cashbackConfig: isCashbackEnabled ? {
@@ -635,10 +579,25 @@ export function AccountSlideV2({
                             cycleType,
                             statementDay,
                             dueDate,
-                            minSpendTarget,
-                            defaultRate: cbBaseRate,
+                            minSpendTarget: cbMinSpend,
+                            defaultRate: cbBaseRate / 100,
                             maxBudget: cbMaxBudget,
-                            rules_json_v2: cbRulesJson as any // Cast to any to satisfy Json type
+                            rules_json_v2: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
+                                if (lvlOrRule.rules) {
+                                    return {
+                                        ...lvlOrRule,
+                                        defaultRate: (lvlOrRule.defaultRate || 0) / 100,
+                                        rules: lvlOrRule.rules.map((r: any) => ({
+                                            ...r,
+                                            rate: (r.rate || 0) / 100
+                                        }))
+                                    };
+                                }
+                                return {
+                                    ...lvlOrRule,
+                                    rate: (lvlOrRule.rate || 0) / 100
+                                };
+                            }) as any
                         }
                     } as any : null
                 });
@@ -671,13 +630,31 @@ export function AccountSlideV2({
 
                     // New Column-based fields
                     cb_type: isCashbackEnabled ? cbType : 'none',
-                    cb_base_rate: cbBaseRate,
+                    cb_base_rate: cbBaseRate / 100,
                     cb_max_budget: cbMaxBudget,
                     cb_is_unlimited: cbIsUnlimited,
-                    cb_rules_json: cbRulesJson as any,
-
+                    cb_rules_json: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
+                        if (lvlOrRule.rules) {
+                            return {
+                                ...lvlOrRule,
+                                defaultRate: (lvlOrRule.defaultRate || 0) / 100,
+                                rules: lvlOrRule.rules.map((r: any) => ({
+                                    ...r,
+                                    rate: (r.rate || 0) / 100
+                                }))
+                            };
+                        }
+                        return {
+                            ...lvlOrRule,
+                            rate: (lvlOrRule.rate || 0) / 100
+                        };
+                    }) as any,
+                    cb_min_spend: cbMinSpend,
+                    cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
                     dueDate: dueDate,
+                    holder_type: holderType,
+                    holder_person_id: holderPersonId,
 
                     // Legacy config
                     cashbackConfig: isCashbackEnabled ? {
@@ -685,10 +662,25 @@ export function AccountSlideV2({
                             cycleType,
                             statementDay,
                             dueDate,
-                            minSpendTarget,
-                            defaultRate: cbBaseRate,
+                            minSpendTarget: cbMinSpend,
+                            defaultRate: cbBaseRate / 100,
                             maxBudget: cbMaxBudget,
-                            rules_json_v2: cbRulesJson as any
+                            rules_json_v2: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
+                                if (lvlOrRule.rules) {
+                                    return {
+                                        ...lvlOrRule,
+                                        defaultRate: (lvlOrRule.defaultRate || 0) / 100,
+                                        rules: lvlOrRule.rules.map((r: any) => ({
+                                            ...r,
+                                            rate: (r.rate || 0) / 100
+                                        }))
+                                    };
+                                }
+                                return {
+                                    ...lvlOrRule,
+                                    rate: (lvlOrRule.rate || 0) / 100
+                                };
+                            }) as any
                         }
                     } : null
                 });
@@ -852,341 +844,666 @@ export function AccountSlideV2({
                                 )}
                             </div>
 
+                            {/* Ownership Selection */}
+                            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Account Ownership</Label>
+                                        <p className="text-[9px] text-slate-400 font-medium">Who owns this account/card?</p>
+                                    </div>
+                                    <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                                        {[
+                                            { id: 'me' as const, label: 'Me', icon: Sparkles },
+                                            { id: 'relative' as const, label: 'Relative', icon: HandCoins }
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setHolderType(opt.id as any);
+                                                    if (opt.id === 'me') setHolderPersonId(null);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all",
+                                                    holderType === opt.id
+                                                        ? "bg-slate-900 text-white shadow-md shadow-slate-200"
+                                                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                                                )}
+                                            >
+                                                <opt.icon className="h-3 w-3" />
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {holderType === 'relative' && (
+                                    <div className="flex items-center justify-between gap-4 pt-1 animate-in fade-in slide-in-from-top-1">
+                                        <div className="flex-1">
+                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        size="sm"
+                                                        className="w-full justify-between h-9 text-[11px] font-bold border-slate-200 bg-white shadow-sm"
+                                                    >
+                                                        {holderPersonId ? (
+                                                            <div className="flex items-center gap-2">
+                                                                {(() => {
+                                                                    const sel = people.find(p => p.id === holderPersonId);
+                                                                    return sel ? (
+                                                                        <>
+                                                                            <div className="w-5 h-5 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                                                {sel.image_url ? (
+                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="truncate">{sel.name}</span>
+                                                                        </>
+                                                                    ) : "Select relative...";
+                                                                })()}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400">Select relative...</span>
+                                                        )}
+                                                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-64 p-0" align="start">
+                                                    <Command className="border-none shadow-none">
+                                                        <CommandInput placeholder="Search person..." className="h-8 text-[11px] border-none focus:ring-0" />
+                                                        <CommandList
+                                                            className="max-h-[200px] overflow-y-auto overflow-x-hidden p-1"
+                                                            onWheel={(e) => e.stopPropagation()}
+                                                        >
+                                                            <CommandEmpty className="text-[11px] py-2 px-4">No person found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {people
+                                                                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                                                                    .map((p) => (
+                                                                        <CommandItem
+                                                                            key={p.id}
+                                                                            value={p.name}
+                                                                            onSelect={() => {
+                                                                                setHolderPersonId(p.id);
+                                                                                setOpenHolderPersonPopover(false);
+                                                                            }}
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-5 h-5 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                                                    {p.image_url ? (
+                                                                                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <span className="text-[9px] font-bold text-slate-500">{(p.name || "P")[0]}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="truncate">{p.name}</span>
+                                                                            </div>
+                                                                            <Check className={cn("ml-auto h-3 w-3", holderPersonId === p.id ? "opacity-100" : "opacity-0")} />
+                                                                        </CommandItem>
+                                                                    ))}
+                                                            </CommandGroup>
+                                                            <div className="border-t border-slate-100 my-1 sticky bottom-0 bg-white">
+                                                                <CommandItem
+                                                                    onSelect={() => {
+                                                                        setOpenHolderPersonPopover(false);
+                                                                        setIsPeopleSlideOpen(true);
+                                                                    }}
+                                                                    className="text-[10px] font-black uppercase text-indigo-600 flex items-center gap-2 h-8 cursor-pointer hover:bg-slate-50 transition-colors"
+                                                                >
+                                                                    <Plus className="h-3 w-3" />
+                                                                    Create New Person
+                                                                </CommandItem>
+                                                            </div>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="acc_num" className="text-xs font-black uppercase text-slate-500 tracking-wider">Account Number <span className="text-slate-300 font-normal normal-case">(Optional)</span></Label>
-                                    <Input
-                                        list="existing-acc-nums"
-                                        id="acc_num"
-                                        value={accountNumber}
-                                        onChange={(e) => setAccountNumber(e.target.value)}
-                                        placeholder="Last 4 digits or full"
-                                        className="h-10 border-slate-200"
-                                    />
-                                    <datalist id="existing-acc-nums">
-                                        {existingAccountNumbers.map((num) => (
-                                            <option key={num} value={num} />
-                                        ))}
-                                    </datalist>
+                                    <Label htmlFor="acc_num" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Account Number <span className="font-normal text-slate-400 normal-case">(Optional)</span></Label>
+                                    <Popover open={openAccNumPopover} onOpenChange={setOpenAccNumPopover}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openAccNumPopover}
+                                                className="w-full justify-between h-10 border-slate-200 bg-white px-3 font-normal"
+                                            >
+                                                {accountNumber ? (
+                                                    <span className="text-[12px] font-bold text-slate-700">{accountNumber}</span>
+                                                ) : (
+                                                    <span className="text-[12px] text-slate-400 italic">Select or type number...</span>
+                                                )}
+                                                <div className="flex items-center gap-1">
+                                                    {accountNumber && (
+                                                        <div
+                                                            role="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setAccountNumber("");
+                                                            }}
+                                                            className="h-4 w-4 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center mr-1"
+                                                        >
+                                                            <X className="h-2.5 w-2.5 text-slate-500" />
+                                                        </div>
+                                                    )}
+                                                    <ChevronsUpDown className="h-3 w-3 text-slate-400 opacity-50" />
+                                                </div>
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[340px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput
+                                                    placeholder="Type to search or add new..."
+                                                    className="h-9 text-[12px]"
+                                                    onValueChange={(val) => {
+                                                        // Optional: could do real-time updates here if needed, but safer to let user confirm
+                                                    }}
+                                                />
+                                                <CommandList onWheel={(e) => e.stopPropagation()} className="max-h-[300px] overflow-y-auto overscroll-contain">
+                                                    <CommandEmpty className="py-3 px-4 flex flex-col items-center gap-2">
+                                                        <span className="text-[11px] text-slate-400">No matching account found.</span>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-[10px] w-full border-dashed border-blue-200 text-blue-600 bg-blue-50/50"
+                                                            onClick={() => {
+                                                                const inputVal = (document.querySelector('[cmdk-input]') as HTMLInputElement)?.value;
+                                                                if (inputVal) {
+                                                                    setAccountNumber(inputVal);
+                                                                    setOpenAccNumPopover(false);
+                                                                    // Smart Fill Logic repeated
+                                                                    if (inputVal.length > 3) {
+                                                                        const match = allAccounts.find(a =>
+                                                                            a.account_number === inputVal
+                                                                        );
+                                                                        if (match && match.receiver_name && !receiverName) {
+                                                                            setReceiverName(match.receiver_name);
+                                                                            toast.success(`Found owner: ${match.receiver_name}`);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Plus className="h-3 w-3 mr-1" /> Use typed value
+                                                        </Button>
+                                                    </CommandEmpty>
+                                                    <CommandGroup heading="Suggestions">
+                                                        {(() => {
+                                                            const seen = new Set<string>();
+                                                            return allAccounts
+                                                                .filter(acc => {
+                                                                    if (!acc.account_number || seen.has(acc.account_number)) return false;
+                                                                    seen.add(acc.account_number);
+                                                                    return true;
+                                                                })
+                                                                .map(acc => {
+                                                                    const isCredit = acc.type === 'credit_card';
+                                                                    const displayNum = isCredit ? `...${acc.account_number!.slice(-4)}` : acc.account_number;
+                                                                    return (
+                                                                        <CommandItem
+                                                                            key={`acc-${acc.id}`}
+                                                                            value={acc.account_number!}
+                                                                            onSelect={(currentValue) => {
+                                                                                setAccountNumber(currentValue);
+                                                                                setOpenAccNumPopover(false);
+                                                                                if (acc.receiver_name && !receiverName) {
+                                                                                    setReceiverName(acc.receiver_name);
+                                                                                    toast.success(`Filled owner: ${acc.receiver_name}`);
+                                                                                }
+                                                                            }}
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            <div className="flex flex-col">
+                                                                                <span className="font-bold text-slate-700">{displayNum}</span>
+                                                                                <span className="text-[10px] text-slate-400">
+                                                                                    {acc.receiver_name || acc.name}
+                                                                                    {isCredit && " (Credit Card)"}
+                                                                                </span>
+                                                                            </div>
+                                                                            {accountNumber === acc.account_number && (
+                                                                                <Check className="ml-auto h-3 w-3 text-blue-600" />
+                                                                            )}
+                                                                        </CommandItem>
+                                                                    );
+                                                                });
+                                                        })()}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="receiver" className="text-xs font-black uppercase text-slate-500 tracking-wider">Bank Receiver Name</Label>
-                                    <Input
-                                        list="existing-rx-names"
-                                        id="receiver"
-                                        value={receiverName}
-                                        onChange={(e) => setReceiverName(e.target.value)}
-                                        placeholder="Short name (e.g. NAM)"
-                                        className="h-10 border-slate-200"
-                                    />
-                                    <datalist id="existing-rx-names">
-                                        {existingReceiverNames.map((name) => (
-                                            <option key={name} value={name} />
-                                        ))}
-                                    </datalist>
+                                    <Label htmlFor="receiver" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bank Receiver Name</Label>
+                                    <Popover open={openRxPopover} onOpenChange={setOpenRxPopover}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={openRxPopover}
+                                                className="w-full justify-between h-10 border-slate-200 bg-white px-3 font-normal"
+                                            >
+                                                {receiverName ? (
+                                                    <span className="text-[12px] font-bold text-slate-700 uppercase">{receiverName}</span>
+                                                ) : (
+                                                    <span className="text-[12px] text-slate-400 italic">Select or type name...</span>
+                                                )}
+                                                <div className="flex items-center gap-1">
+                                                    {receiverName && (
+                                                        <div
+                                                            role="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setReceiverName("");
+                                                            }}
+                                                            className="h-4 w-4 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center mr-1"
+                                                        >
+                                                            <X className="h-2.5 w-2.5 text-slate-500" />
+                                                        </div>
+                                                    )}
+                                                    <ChevronsUpDown className="h-3 w-3 text-slate-400 opacity-50" />
+                                                </div>
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[340px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Type to search or add new..." className="h-9 text-[12px]" />
+                                                <CommandList onWheel={(e) => e.stopPropagation()} className="max-h-[300px] overflow-y-auto overscroll-contain">
+                                                    <CommandEmpty className="py-3 px-4 flex flex-col items-center gap-2">
+                                                        <span className="text-[11px] text-slate-400">No name found.</span>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="h-7 text-[10px] w-full border-dashed border-blue-200 text-blue-600 bg-blue-50/50"
+                                                            onClick={() => {
+                                                                const inputVal = (document.querySelector('[cmdk-input]') as HTMLInputElement)?.value;
+                                                                if (inputVal) {
+                                                                    setReceiverName(inputVal.toUpperCase());
+                                                                    setOpenRxPopover(false);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Plus className="h-3 w-3 mr-1" /> Use typed name
+                                                        </Button>
+                                                    </CommandEmpty>
+                                                    <CommandGroup heading="Recent Receivers">
+                                                        {(() => {
+                                                            const uniqueNames = new Set<string>();
+                                                            const items: React.ReactNode[] = [];
+
+                                                            // Helper to add item
+                                                            const addItem = (name: string | null | undefined, idx: number | string) => {
+                                                                if (!name || uniqueNames.has(name)) return;
+                                                                uniqueNames.add(name);
+                                                                items.push(
+                                                                    <CommandItem
+                                                                        key={`rx-${idx}`}
+                                                                        value={name}
+                                                                        onSelect={(val) => {
+                                                                            setReceiverName(val.toUpperCase());
+                                                                            setOpenRxPopover(false);
+                                                                        }}
+                                                                        className="text-[11px] uppercase"
+                                                                    >
+                                                                        <span className="font-bold">{name}</span>
+                                                                        {receiverName === name && (
+                                                                            <Check className="ml-auto h-3 w-3 text-blue-600" />
+                                                                        )}
+                                                                    </CommandItem>
+                                                                );
+                                                            };
+
+                                                            // Add from all accounts
+                                                            allAccounts?.forEach((a, idx) => addItem(a.receiver_name, `acc-${idx}`));
+
+                                                            // Add from existing list
+                                                            existingReceiverNames?.forEach((name, idx) => addItem(name, `exist-${idx}`));
+
+                                                            return items;
+                                                        })()}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
 
                             {/* Parent Account - Only for Credit Cards */}
-                            {type === 'credit_card' && (
-                                <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="space-y-0.5">
-                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Parent Account</Label>
-                                            <p className="text-[9px] text-slate-400 font-medium">Link to a main group for shared limits.</p>
-                                        </div>
-                                        <Popover open={openParentCombo} onOpenChange={setOpenParentCombo}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    size="sm"
-                                                    className="w-48 justify-between h-8 text-[11px] font-bold border-slate-200 bg-white"
-                                                >
-                                                    {parentAccountId ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            {(() => {
-                                                                const sel = allAccounts.find(a => a.id === parentAccountId);
-                                                                return sel ? (
-                                                                    <>
-                                                                        <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center">
-                                                                            {sel.image_url ? (
-                                                                                <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
-                                                                            ) : (
-                                                                                <span className="text-[8px] font-bold text-slate-500">{sel.name[0]}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className="truncate">{sel.name}</span>
-                                                                    </>
-                                                                ) : "None";
-                                                            })()}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-slate-400">None</span>
-                                                    )}
-                                                    <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-64 p-0" align="end">
-                                                <Command>
-                                                    <CommandInput placeholder="Search parent..." className="h-8 text-[11px]" />
-                                                    <CommandList>
-                                                        <CommandEmpty className="text-[11px] py-2 px-4">No account found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            <CommandItem
-                                                                onSelect={() => {
-                                                                    toast.info("Account creation coming soon");
-                                                                    setOpenParentCombo(false);
-                                                                }}
-                                                                className="text-blue-600 font-bold text-[11px]"
-                                                            >
-                                                                <Plus className="mr-2 h-3 w-3" />
-                                                                Add New Group
-                                                            </CommandItem>
-                                                            <CommandItem
-                                                                value="none"
-                                                                onSelect={() => {
-                                                                    setParentAccountId(null);
-                                                                    setOpenParentCombo(false);
-                                                                }}
-                                                                className="text-[11px] font-medium"
-                                                            >
-                                                                <Check className={cn("mr-2 h-3 w-3", !parentAccountId ? "opacity-100" : "opacity-0")} />
-                                                                None (Self)
-                                                            </CommandItem>
-                                                            {allAccounts
-                                                                .filter(a => a.id !== account?.id)
-                                                                .map((a) => (
-                                                                    <CommandItem
-                                                                        key={a.id}
-                                                                        value={a.name}
-                                                                        onSelect={() => {
-                                                                            setParentAccountId(a.id);
-                                                                            setOpenParentCombo(false);
-                                                                        }}
-                                                                        className="text-[11px]"
-                                                                    >
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                                                                {a.image_url ? (
-                                                                                    <img src={a.image_url} alt="" className="w-full h-full object-cover" />
+                            {
+                                type === 'credit_card' && (
+                                    <div className="p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="space-y-0.5">
+                                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Parent Account</Label>
+                                                <p className="text-[9px] text-slate-400 font-medium">Link to a main group for shared limits.</p>
+                                            </div>
+                                            <Popover open={openParentCombo} onOpenChange={setOpenParentCombo}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        size="sm"
+                                                        className="w-48 justify-between h-8 text-[11px] font-bold border-slate-200 bg-white"
+                                                    >
+                                                        {parentAccountId ? (
+                                                            <div className="flex items-center gap-1.5">
+                                                                {(() => {
+                                                                    const sel = allAccounts.find(a => a.id === parentAccountId);
+                                                                    return sel ? (
+                                                                        <>
+                                                                            <div className="w-4 h-4 rounded-none overflow-hidden flex items-center justify-center shrink-0">
+                                                                                {sel.image_url ? (
+                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-contain" />
                                                                                 ) : (
-                                                                                    <span className="text-[8px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                    <span className="text-[8px] font-bold text-slate-500">{sel.name[0]}</span>
                                                                                 )}
                                                                             </div>
-                                                                            <span className="truncate">{a.name}</span>
-                                                                        </div>
-                                                                        <Check className={cn("ml-auto h-3 w-3", parentAccountId === a.id ? "opacity-100" : "opacity-0")} />
-                                                                    </CommandItem>
-                                                                ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
+                                                                            <span className="truncate">{sel.name}</span>
+                                                                        </>
+                                                                    ) : "None";
+                                                                })()}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400">None</span>
+                                                        )}
+                                                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-64 p-0" align="end">
+                                                    <Command>
+                                                        <CommandInput placeholder="Search parent..." className="h-8 text-[11px]" />
+                                                        <CommandList className="max-h-[200px] overflow-y-auto">
+                                                            <CommandEmpty className="text-[11px] py-2 px-4">No account found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    onSelect={() => {
+                                                                        toast.info("Account creation coming soon");
+                                                                        setOpenParentCombo(false);
+                                                                    }}
+                                                                    className="text-blue-600 font-bold text-[11px]"
+                                                                >
+                                                                    <Plus className="mr-2 h-3 w-3" />
+                                                                    Add New Group
+                                                                </CommandItem>
+                                                                <CommandItem
+                                                                    value="none"
+                                                                    onSelect={() => {
+                                                                        setParentAccountId(null);
+                                                                        setOpenParentCombo(false);
+                                                                    }}
+                                                                    className="text-[11px] font-medium"
+                                                                >
+                                                                    <Check className={cn("mr-2 h-3 w-3", !parentAccountId ? "opacity-100" : "opacity-0")} />
+                                                                    None (Self)
+                                                                </CommandItem>
+                                                                {allAccounts
+                                                                    .filter(a => a.id !== account?.id && (a.type === 'bank' || a.type === 'credit_card' || a.type === 'ewallet'))
+                                                                    .filter(a => {
+                                                                        // Smart Filter: If name has 3+ chars, only show potential parents with same prefix
+                                                                        if (name && name.length >= 3) {
+                                                                            const prefix = name.substring(0, 4).toLowerCase(); // Using 4 chars for better precision
+                                                                            return a.name.toLowerCase().startsWith(prefix);
+                                                                        }
+                                                                        return true;
+                                                                    })
+                                                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                                                    .map((a) => (
+                                                                        <CommandItem
+                                                                            key={a.id}
+                                                                            value={`${a.id} ${a.name}`}
+                                                                            onSelect={() => {
+                                                                                setParentAccountId(a.id);
+                                                                                setOpenParentCombo(false);
+                                                                            }}
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-6 h-6 rounded-none overflow-hidden flex items-center justify-center flex-shrink-0">
+                                                                                    {a.image_url ? (
+                                                                                        <img src={a.image_url} alt="" className="w-full h-full object-contain" />
+                                                                                    ) : (
+                                                                                        <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="truncate">{a.name}</span>
+                                                                            </div>
+                                                                            <Check className={cn("ml-auto h-3 w-3", parentAccountId === a.id ? "opacity-100" : "opacity-0")} />
+                                                                        </CommandItem>
+                                                                    ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        {parentAccountId && (() => {
+                                            const p = allAccounts.find(a => a.id === parentAccountId);
+                                            return p ? (
+                                                <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-50/50 border border-indigo-100 rounded text-[10px] text-indigo-600 animate-in fade-in slide-in-from-top-1">
+                                                    <Info className="h-3 w-3" />
+                                                    <span>This account will be a <span className="font-bold">Child</span> of {p.name}.</span>
+                                                </div>
+                                            ) : null;
+                                        })()}
                                     </div>
-                                </div>
-                            )}
+                                )
+                            }
 
-                            {type === 'credit_card' && (
-                                <div className="space-y-4 pt-2 border-t border-slate-100">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <Label htmlFor="limit" className="text-xs font-black uppercase text-slate-500 tracking-wider">Credit Limit</Label>
-                                                {parentAccountId && (
-                                                    <button
-                                                        onClick={() => {
-                                                            const parent = allAccounts.find(a => a.id === parentAccountId);
-                                                            if (parent && onEditAccount) {
-                                                                onEditAccount(parent);
-                                                            } else {
-                                                                toast.info("Parent account details coming soon");
-                                                            }
-                                                        }}
-                                                        className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-50 border border-rose-100 text-[9px] font-black text-rose-500 uppercase tracking-tighter hover:bg-rose-100 transition-colors animate-pulse group"
-                                                    >
-                                                        {(() => {
-                                                            const p = allAccounts.find(a => a.id === parentAccountId);
-                                                            return p ? (
-                                                                <>
-                                                                    <div className="h-4 w-auto min-w-[20px] flex items-center justify-center">
-                                                                        {p.image_url ? (
-                                                                            <img src={p.image_url} alt="" className="h-full w-auto object-contain" />
-                                                                        ) : (
-                                                                            <span className="text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-1 rounded">{p.name[0]}</span>
-                                                                        )}
-                                                                    </div>
-                                                                    Parent: {p.name}
-                                                                    <RotateCcw className="h-2 w-2 group-hover:rotate-180 transition-transform" />
-                                                                </>
-                                                            ) : "Parent Link Limit";
-                                                        })()}
-                                                    </button>
-                                                )}
+                            {
+                                type === 'credit_card' && (
+                                    <div className="space-y-4 pt-2 border-t border-slate-100">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label htmlFor="limit" className="text-xs font-black uppercase text-slate-500 tracking-wider">Credit Limit</Label>
+                                                    {parentAccountId && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const parent = allAccounts.find(a => a.id === parentAccountId);
+                                                                if (parent && onEditAccount) {
+                                                                    onEditAccount(parent);
+                                                                } else {
+                                                                    toast.info("Parent account details coming soon");
+                                                                }
+                                                            }}
+                                                            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-50 border border-rose-100 text-[9px] font-black text-rose-500 uppercase tracking-tighter hover:bg-rose-100 transition-colors animate-pulse group"
+                                                        >
+                                                            {(() => {
+                                                                const p = allAccounts.find(a => a.id === parentAccountId);
+                                                                return p ? (
+                                                                    <>
+                                                                        <div className="h-4 w-auto min-w-[20px] flex items-center justify-center">
+                                                                            {p.image_url ? (
+                                                                                <img src={p.image_url} alt="" className="h-full w-auto object-contain" />
+                                                                            ) : (
+                                                                                <span className="text-[9px] font-bold text-slate-500 bg-white border border-slate-200 px-1 rounded">{p.name[0]}</span>
+                                                                            )}
+                                                                        </div>
+                                                                        Parent: {p.name}
+                                                                        <RotateCcw className="h-2 w-2 group-hover:rotate-180 transition-transform" />
+                                                                    </>
+                                                                ) : "Parent Link Limit";
+                                                            })()}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <SmartAmountInput
+                                                    value={creditLimit}
+                                                    onChange={(val) => setCreditLimit(val ?? 0)}
+                                                    disabled={!!parentAccountId}
+                                                    hideLabel
+                                                    className={cn(
+                                                        "h-10 border-slate-200",
+                                                        parentAccountId && "bg-slate-50 text-slate-400 font-bold border-rose-200 shadow-[0_0_10px_rgba(244,63,94,0.05)]"
+                                                    )}
+                                                />
                                             </div>
-                                            <SmartAmountInput
-                                                value={creditLimit}
-                                                onChange={(val) => setCreditLimit(val ?? 0)}
-                                                disabled={!!parentAccountId}
-                                                hideLabel
-                                                className={cn(
-                                                    "h-10 border-slate-200",
-                                                    parentAccountId && "bg-slate-50 text-slate-400 font-bold border-rose-200 shadow-[0_0_10px_rgba(244,63,94,0.05)]"
-                                                )}
-                                            />
+                                            <div className="space-y-2">
+                                                <Label htmlFor="fee" className="text-xs font-black uppercase text-slate-500 tracking-wider">Annual Fee</Label>
+                                                <SmartAmountInput
+                                                    value={annualFee}
+                                                    onChange={(val) => setAnnualFee(val ?? 0)}
+                                                    hideLabel
+                                                    className="h-10 border-slate-200"
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="fee" className="text-xs font-black uppercase text-slate-500 tracking-wider">Annual Fee</Label>
-                                            <SmartAmountInput
-                                                value={annualFee}
-                                                onChange={(val) => setAnnualFee(val ?? 0)}
-                                                hideLabel
-                                                className="h-10 border-slate-200"
-                                            />
-                                        </div>
+                                        {annualFee > 0 && (
+                                            <div className="space-y-2">
+                                                <Label htmlFor="waiver-target" className="text-xs font-black uppercase text-slate-500 tracking-wider">
+                                                    Fee Waiver Spending Target
+                                                </Label>
+                                                <SmartAmountInput
+                                                    value={annualFeeWaiverTarget}
+                                                    onChange={(val) => setAnnualFeeWaiverTarget(val ?? 0)}
+                                                    hideLabel
+                                                    placeholder="Annual spend to waive fee"
+                                                    className="h-10 border-slate-200"
+                                                />
+                                                <p className="text-[9px] text-slate-400 font-medium">
+                                                    Leave 0 if no waiver program available
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                    {annualFee > 0 && (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="waiver-target" className="text-xs font-black uppercase text-slate-500 tracking-wider">
-                                                Fee Waiver Spending Target
-                                            </Label>
-                                            <SmartAmountInput
-                                                value={annualFeeWaiverTarget}
-                                                onChange={(val) => setAnnualFeeWaiverTarget(val ?? 0)}
-                                                hideLabel
-                                                placeholder="Annual spend to waive fee"
-                                                className="h-10 border-slate-200"
-                                            />
-                                            <p className="text-[9px] text-slate-400 font-medium">
-                                                Leave 0 if no waiver program available
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                )
+                            }
 
                             {/* Security & Collateral - Only for Credit Cards */}
-                            {type === 'credit_card' && (
-                                <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="bg-slate-100 p-1.5 rounded-md">
-                                                <Coins className="h-4 w-4 text-slate-600" />
+                            {
+                                type === 'credit_card' && (
+                                    <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="bg-slate-100 p-1.5 rounded-md">
+                                                    <Coins className="h-4 w-4 text-slate-600" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-bold text-slate-800">Security & Collateral</h3>
+                                                    <p className="text-[10px] text-slate-500 font-medium italic">Link a savings/deposit account if this credit limit is secured.</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 className="text-sm font-bold text-slate-800">Security & Collateral</h3>
-                                                <p className="text-[10px] text-slate-500 font-medium italic">Link a savings/deposit account if this credit limit is secured.</p>
-                                            </div>
+                                            <Switch
+                                                checked={isCollateralLinked}
+                                                onCheckedChange={(checked) => {
+                                                    setIsCollateralLinked(checked);
+                                                    if (!checked) setSecuredById("none");
+                                                }}
+                                                className="scale-75"
+                                            />
                                         </div>
-                                        <Switch
-                                            checked={isCollateralLinked}
-                                            onCheckedChange={(checked) => {
-                                                setIsCollateralLinked(checked);
-                                                if (!checked) setSecuredById("none");
-                                            }}
-                                            className="scale-75"
-                                        />
-                                    </div>
 
-                                    {isCollateralLinked && (
-                                        <Popover open={openCollateralCombo} onOpenChange={setOpenCollateralCombo}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={openCollateralCombo}
-                                                    className="w-full justify-between h-10 border-slate-200 bg-slate-50/50"
-                                                >
-                                                    {securedById && securedById !== "none" ? (
-                                                        <div className="flex items-center gap-2">
-                                                            {(() => {
-                                                                const sel = allAccounts.find(a => a.id === securedById);
-                                                                return sel ? (
-                                                                    <>
-                                                                        <div className="w-5 h-5 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
-                                                                            {sel.image_url ? (
-                                                                                <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
-                                                                            ) : (
-                                                                                <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className="truncate">{sel.name}</span>
-                                                                    </>
-                                                                ) : "Select Account...";
-                                                            })()}
-                                                        </div>
-                                                    ) : (
-                                                        "Select Account..."
-                                                    )}
-                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                                                <Command>
-                                                    <CommandInput placeholder="Search account..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>No account found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            <CommandItem
-                                                                onSelect={() => {
-                                                                    toast.info("Savings creation coming soon");
-                                                                    setOpenCollateralCombo(false);
-                                                                }}
-                                                                className="text-blue-600 font-bold"
-                                                            >
-                                                                <Plus className="mr-2 h-4 w-4" />
-                                                                Create New Savings
-                                                            </CommandItem>
-                                                            {allAccounts
-                                                                .filter(a => a.id !== account?.id && (a.type === 'bank' || a.type === 'savings'))
-                                                                .map((a) => (
-                                                                    <CommandItem
-                                                                        key={a.id}
-                                                                        value={a.name}
-                                                                        onSelect={() => {
-                                                                            setSecuredById(a.id);
-                                                                            setOpenCollateralCombo(false);
-                                                                        }}
-                                                                    >
-                                                                        <div className="flex items-center gap-2 w-full">
-                                                                            <div className="w-6 h-6 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
-                                                                                {a.image_url ? (
-                                                                                    <img src={a.image_url} alt="" className="w-full h-full object-contain" />
+                                        {isCollateralLinked && (
+                                            <Popover open={openCollateralCombo} onOpenChange={setOpenCollateralCombo}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={openCollateralCombo}
+                                                        className="w-full justify-between h-10 border-slate-200 bg-slate-50/50"
+                                                    >
+                                                        {securedById && securedById !== "none" ? (
+                                                            <div className="flex items-center gap-2">
+                                                                {(() => {
+                                                                    const sel = allAccounts.find(a => a.id === securedById);
+                                                                    return sel ? (
+                                                                        <>
+                                                                            <div className="w-5 h-5 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
+                                                                                {sel.image_url ? (
+                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
                                                                                 ) : (
-                                                                                    <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                    <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
                                                                                 )}
                                                                             </div>
-                                                                            <div className="flex flex-col">
-                                                                                <span className="text-sm font-medium">{a.name}</span>
-                                                                                <span className="text-[10px] text-slate-400 font-mono">{(a.current_balance || 0).toLocaleString()} VND</span>
+                                                                            <span className="truncate">{sel.name}</span>
+                                                                        </>
+                                                                    ) : "Select Account...";
+                                                                })()}
+                                                            </div>
+                                                        ) : (
+                                                            "Select Account..."
+                                                        )}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Search account..." />
+                                                        <CommandList onWheel={(e) => e.stopPropagation()} className="max-h-[300px] overflow-y-auto overscroll-contain">
+                                                            <CommandEmpty>No account found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    onSelect={() => {
+                                                                        toast.info("Savings creation coming soon");
+                                                                        setOpenCollateralCombo(false);
+                                                                    }}
+                                                                    className="text-blue-600 font-bold"
+                                                                >
+                                                                    <Plus className="mr-2 h-4 w-4" />
+                                                                    Create New Savings
+                                                                </CommandItem>
+                                                                {allAccounts
+                                                                    .filter(a => a.id !== account?.id && (a.type === 'bank' || a.type === 'savings' || a.type === 'investment'))
+                                                                    .map((a) => (
+                                                                        <CommandItem
+                                                                            key={a.id}
+                                                                            value={`${a.id} ${a.name}`}
+                                                                            onSelect={() => {
+                                                                                setSecuredById(a.id);
+                                                                                setOpenCollateralCombo(false);
+                                                                            }}
+                                                                        >
+                                                                            <div className="flex items-center gap-2 w-full">
+                                                                                <div className="w-6 h-6 rounded-none overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
+                                                                                    {a.image_url ? (
+                                                                                        <img src={a.image_url} alt="" className="w-full h-full object-contain" />
+                                                                                    ) : (
+                                                                                        <span className="text-[10px] font-bold text-slate-500">{a.name[0]}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-sm font-medium">{a.name}</span>
+                                                                                    <span className="text-[10px] text-slate-400 font-mono">{(a.current_balance || 0).toLocaleString()} VND</span>
+                                                                                </div>
+                                                                                <Check
+                                                                                    className={cn(
+                                                                                        "ml-auto h-4 w-4",
+                                                                                        securedById === a.id ? "opacity-100" : "opacity-0"
+                                                                                    )}
+                                                                                />
                                                                             </div>
-                                                                            <Check
-                                                                                className={cn(
-                                                                                    "ml-auto h-4 w-4",
-                                                                                    securedById === a.id ? "opacity-100" : "opacity-0"
-                                                                                )}
-                                                                            />
-                                                                        </div>
-                                                                    </CommandItem>
-                                                                ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    )}
-                                </div>
-                            )}
+                                                                        </CommandItem>
+                                                                    ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        )}
+                                    </div>
+                                )
+                            }
 
                             {/* Rebooted Cashback Configuration (Phase 16) */}
                             <div className="pt-4 border-t border-slate-200">
-                                <div className="px-4 py-3 bg-slate-50 border border-slate-200 border-b-0 rounded-t-xl flex items-center justify-between">
+                                <div className="px-4 py-2 bg-slate-50 border border-slate-200 border-b-0 rounded-t-xl flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <div className="bg-amber-100 p-1.5 rounded-md">
-                                            <Sparkles className="h-4 w-4 text-amber-600" />
+                                        <div className="bg-amber-100 p-1 rounded-md">
+                                            <Sparkles className="h-3.5 w-3.5 text-amber-600" />
                                         </div>
-                                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Cashback Optimization</h3>
+                                        <h3 className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Cashback Optimization</h3>
                                     </div>
                                     <Switch
                                         checked={isCashbackEnabled}
@@ -1210,7 +1527,12 @@ export function AccountSlideV2({
                                             cb_max_budget={cbMaxBudget}
                                             cb_is_unlimited={cbIsUnlimited}
                                             cb_rules_json={cbRulesJson}
+                                            cb_min_spend={cbMinSpend}
                                             categories={categories}
+                                            onOpenCategoryCreator={(callback?: (categoryId: string) => void) => {
+                                                setActiveCategoryCallback(() => callback || null);
+                                                setIsCategoryDialogOpen(true);
+                                            }}
                                             onChange={(updates) => {
                                                 if (updates.cb_type !== undefined) {
                                                     setCbType(updates.cb_type);
@@ -1220,6 +1542,7 @@ export function AccountSlideV2({
                                                 if (updates.cb_max_budget !== undefined) setCbMaxBudget(updates.cb_max_budget);
                                                 if (updates.cb_is_unlimited !== undefined) setCbIsUnlimited(updates.cb_is_unlimited);
                                                 if (updates.cb_rules_json !== undefined) setCbRulesJson(updates.cb_rules_json);
+                                                if (updates.cb_min_spend !== undefined) setCbMinSpend(updates.cb_min_spend);
                                             }}
                                         />
                                     </div>
@@ -1233,76 +1556,78 @@ export function AccountSlideV2({
                             </div>
 
                             {/* Credit Card Settings (Statement & Due Date) - Always visible for credit cards */}
-                            {activeMainType === 'credit' && (
-                                <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm space-y-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <div className="bg-indigo-100 p-1 rounded-md">
-                                            <CreditCard className="h-4 w-4 text-indigo-600" />
-                                        </div>
-                                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Credit Card Configuration</h3>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Billing Cycle</Label>
-                                            <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-lg">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setCycleType('calendar_month')}
-                                                    className={cn(
-                                                        "h-8 text-[11px] font-bold rounded-md transition-all",
-                                                        cycleType === 'calendar_month' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                                                    )}
-                                                >
-                                                    Calendar Month
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setCycleType('statement_cycle')}
-                                                    className={cn(
-                                                        "h-8 text-[11px] font-bold rounded-md transition-all",
-                                                        cycleType === 'statement_cycle' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                                                    )}
-                                                >
-                                                    Statement Cycle
-                                                </button>
+                            {
+                                activeMainType === 'credit' && (
+                                    <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <div className="bg-indigo-100 p-1 rounded-md">
+                                                <CreditCard className="h-4 w-4 text-indigo-600" />
                                             </div>
+                                            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Credit Card Configuration</h3>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {cycleType === 'statement_cycle' && (
-                                                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Day</Label>
-                                                        <CustomTooltip content="The day your bank generates the monthly statement.">
-                                                            <Info className="h-3 w-3 text-slate-300 cursor-help" />
-                                                        </CustomTooltip>
-                                                    </div>
-                                                    <DayOfMonthPicker
-                                                        value={statementDay}
-                                                        onChange={setStatementDay}
-                                                        className="h-9"
-                                                    />
+                                        <div className="space-y-4">
+                                            {/* Cycle Type Toggle */}
+                                            <div className="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-200 rounded-lg">
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-xs font-bold text-slate-700">Statement Cycle</Label>
+                                                    <p className="text-[10px] text-slate-500">
+                                                        {cycleType === 'statement_cycle'
+                                                            ? "Using custom statement dates"
+                                                            : "Standard Calendar Month (1st - End)"}
+                                                    </p>
                                                 </div>
-                                            )}
-                                            <div className={cn("space-y-1.5", cycleType !== 'statement_cycle' && "col-span-2")}>
+                                                <Switch
+                                                    checked={cycleType === 'statement_cycle'}
+                                                    onCheckedChange={(checked) => setCycleType(checked ? 'statement_cycle' : 'calendar_month')}
+                                                />
+                                            </div>
+
+                                            {/* Payment Due Day (Moved up) */}
+                                            <div className="space-y-1.5 pt-2 border-t border-slate-100">
                                                 <div className="flex items-center gap-1.5">
                                                     <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Payment Due Day</Label>
                                                     <CustomTooltip content="The deadline for paying your credit card balance.">
                                                         <Info className="h-3 w-3 text-slate-300 cursor-help" />
                                                     </CustomTooltip>
                                                 </div>
-                                                <DayOfMonthPicker
-                                                    value={dueDate}
-                                                    onChange={setDueDate}
-                                                    className="h-9"
-                                                />
+                                                <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+                                                    <DayOfMonthPicker
+                                                        value={dueDate}
+                                                        onChange={setDueDate}
+                                                        className="h-9 w-full"
+                                                    />
+                                                    <div className="text-[10px] font-medium text-slate-400 italic px-2">
+                                                        of next month
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Day</Label>
+                                                    <CustomTooltip content="The day your bank generates the monthly statement.">
+                                                        <Info className="h-3 w-3 text-slate-300 cursor-help" />
+                                                    </CustomTooltip>
+                                                </div>
+                                                {cycleType === 'statement_cycle' ? (
+                                                    <DayOfMonthPicker
+                                                        value={statementDay}
+                                                        onChange={setStatementDay}
+                                                        className="h-9 w-full"
+                                                    />
+                                                ) : (
+                                                    <div className="h-9 w-full flex items-center px-3 bg-slate-50 border border-slate-100 rounded-md text-[11px] font-bold text-slate-400 italic">
+                                                        Day 1 (Calendar Month)
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )
+                            }
 
+                            {/* Account Status & Closing Logic */}
                             <div className="p-4 bg-white border-y border-slate-100 flex items-center justify-between">
                                 <div>
                                     <p className="text-sm font-bold text-slate-700">Account Status</p>
@@ -1326,65 +1651,64 @@ export function AccountSlideV2({
                                     {isActive ? "Active" : "Closed"}
                                 </Button>
                             </div>
-                        </div>
 
-                        <ConfirmationModal
-                            isOpen={showCloseConfirm}
-                            onClose={() => setShowCloseConfirm(false)}
-                            onConfirm={async () => {
-                                setIsActive(false);
-                                // Save immediately if editing
-                                if (isEdit && account) {
-                                    setLoading(true);
-                                    try {
-                                        const success = await updateAccountConfig(account.id, { is_active: false });
-                                        if (success) {
-                                            toast.success("Account closed");
-                                            onOpenChange(false);
-                                            router.refresh();
+                            <ConfirmationModal
+                                isOpen={showCloseConfirm}
+                                onClose={() => setShowCloseConfirm(false)}
+                                onConfirm={async () => {
+                                    setIsActive(false);
+                                    if (isEdit && account) {
+                                        setLoading(true);
+                                        try {
+                                            const success = await updateAccountConfig(account.id, { is_active: false });
+                                            if (success) {
+                                                toast.success("Account closed");
+                                                onOpenChange(false);
+                                                router.refresh();
+                                            }
+                                        } finally {
+                                            setLoading(false);
                                         }
-                                    } finally {
-                                        setLoading(false);
                                     }
-                                }
-                            }}
-                            title="Close Account?"
-                            description="This will hide the account from active lists. You can still reactivate it later."
-                            confirmText="Yes, Close it"
-                            variant="destructive"
-                        />
+                                }}
+                                title="Close Account?"
+                                description="This will hide the account from active lists. You can still reactivate it later."
+                                confirmText="Yes, Close it"
+                                variant="destructive"
+                            />
 
-                        <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
-                            <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
-                                <div className="p-6 space-y-4">
-                                    <SheetHeader className="space-y-2 text-left">
-                                        <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
-                                            <Trash2 className="h-5 w-5" />
-                                            Unsaved Changes
-                                        </SheetTitle>
-                                        <SheetDescription className="text-sm font-medium text-slate-500">
-                                            You have made changes to this account. Navigating away will discard these changes correctly.
-                                        </SheetDescription>
-                                    </SheetHeader>
-                                    <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => setShowUnsavedConfirm(false)}
-                                            className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
-                                        >
-                                            Keep Editing
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            onClick={confirmAction}
-                                            className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
-                                        >
-                                            Discard Changes
-                                        </Button>
-                                    </SheetFooter>
-                                </div>
-                            </SheetContent>
-                        </Sheet>
+                            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
+                                <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
+                                    <div className="p-6 space-y-4">
+                                        <SheetHeader className="space-y-2 text-left">
+                                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
+                                                <Trash2 className="h-5 w-5" />
+                                                Unsaved Changes
+                                            </SheetTitle>
+                                            <SheetDescription className="text-sm font-medium text-slate-500">
+                                                You have made changes to this account. Navigating away will discard these changes correctly.
+                                            </SheetDescription>
+                                        </SheetHeader>
+                                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setShowUnsavedConfirm(false)}
+                                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
+                                            >
+                                                Keep Editing
+                                            </Button>
+                                            <Button
+                                                variant="destructive"
+                                                onClick={confirmAction}
+                                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
+                                            >
+                                                Discard Changes
+                                            </Button>
+                                        </SheetFooter>
+                                    </div>
+                                </SheetContent>
+                            </Sheet>
+                        </div>
                     </div>
 
                     <SheetFooter className="p-6 bg-white border-t border-slate-200 sm:justify-end gap-3">
@@ -1402,7 +1726,16 @@ export function AccountSlideV2({
                         </Button>
                     </SheetFooter>
                 </SheetContent>
-            </Sheet >
+
+                <PeopleSlideV2
+                    open={isPeopleSlideOpen}
+                    onOpenChange={(isOpen) => {
+                        setIsPeopleSlideOpen(isOpen);
+                    }}
+                    subscriptions={subscriptions}
+                    onSuccess={handlePersonCreated}
+                />
+            </Sheet>
 
             <CategorySlide
                 open={isCategoryDialogOpen}

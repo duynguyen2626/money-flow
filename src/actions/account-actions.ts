@@ -41,8 +41,12 @@ type CreateAccountParams = {
   cb_max_budget?: number | null
   cb_is_unlimited?: boolean
   cb_rules_json?: Json | null
+  cb_min_spend?: number | null
+  cb_cycle_type?: 'calendar_month' | 'statement_cycle'
   statementDay?: number | null
   dueDate?: number | null
+  holder_type?: 'me' | 'relative' | 'other'
+  holder_person_id?: string | null
 }
 
 export async function createAccount(params: CreateAccountParams) {
@@ -71,8 +75,12 @@ export async function createAccount(params: CreateAccountParams) {
     cb_max_budget,
     cb_is_unlimited,
     cb_rules_json,
+    cb_min_spend,
+    cb_cycle_type,
     statementDay,
-    dueDate
+    dueDate,
+    holder_type,
+    holder_person_id
   } = params
 
   // Insert into DB
@@ -97,8 +105,12 @@ export async function createAccount(params: CreateAccountParams) {
       cb_max_budget,
       cb_is_unlimited,
       cb_rules_json,
+      cb_min_spend,
+      cb_cycle_type,
       statement_day: statementDay,
-      due_date: dueDate
+      due_date: dueDate,
+      holder_type: holder_type ?? 'me',
+      holder_person_id: holder_person_id
     })
 
   if (error) {
@@ -150,8 +162,12 @@ export async function updateAccountConfigAction(params: {
   cb_max_budget?: number | null
   cb_is_unlimited?: boolean
   cb_rules_json?: Json | null
+  cb_min_spend?: number | null
+  cb_cycle_type?: 'calendar_month' | 'statement_cycle'
   statementDay?: number | null
   dueDate?: number | null
+  holder_type?: 'me' | 'relative' | 'other'
+  holder_person_id?: string | null
 }) {
   const { updateAccountConfig } = await import('@/services/account.service')
 
@@ -174,8 +190,12 @@ export async function updateAccountConfigAction(params: {
     cb_max_budget: params.cb_max_budget,
     cb_is_unlimited: params.cb_is_unlimited,
     cb_rules_json: params.cb_rules_json,
+    cb_min_spend: params.cb_min_spend,
+    cb_cycle_type: params.cb_cycle_type,
     statement_day: params.statementDay,
-    due_date: params.dueDate
+    due_date: params.dueDate,
+    holder_type: params.holder_type,
+    holder_person_id: params.holder_person_id
   })
 
   if (success) {

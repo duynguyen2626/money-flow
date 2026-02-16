@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from "react"
+import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,7 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
+    PopoverAnchor,
 } from "@/components/ui/popover"
 import {
     Command,
@@ -36,6 +38,7 @@ interface CashbackConfigFormProps {
     cb_max_budget: number | null
     cb_is_unlimited: boolean
     cb_rules_json: CashbackRulesJson | null
+    cb_min_spend: number
     categories: Category[]
     onChange: (updates: {
         cb_type?: 'simple' | 'tiered' | 'none'
@@ -43,7 +46,9 @@ interface CashbackConfigFormProps {
         cb_max_budget?: number | null
         cb_is_unlimited?: boolean
         cb_rules_json?: CashbackRulesJson | null
+        cb_min_spend?: number
     }) => void
+    onOpenCategoryCreator?: (callback?: (newCategoryId: string) => void) => void
 }
 
 export function CashbackConfigForm({
@@ -52,8 +57,10 @@ export function CashbackConfigForm({
     cb_max_budget,
     cb_is_unlimited,
     cb_rules_json,
+    cb_min_spend,
     categories,
     onChange,
+    onOpenCategoryCreator,
 }: CashbackConfigFormProps) {
 
     // Internal mapping or normalization
@@ -109,21 +116,18 @@ export function CashbackConfigForm({
         <div className="space-y-6">
             {/* Header / Switcher */}
             <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-amber-100 p-2 rounded-lg">
-                            <Coins className="h-5 w-5 text-amber-600" />
+                <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-amber-100 p-1.5 rounded-lg">
+                            <Coins className="h-4 w-4 text-amber-600" />
                         </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Reward Strategy</h3>
-                            <p className="text-[10px] text-slate-500 font-medium">Configure how this account earns rewards.</p>
-                        </div>
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-tight">Reward Strategy</h3>
                     </div>
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                    <div className="flex bg-slate-100 p-0.5 rounded-lg scale-90 origin-right">
                         <button
                             onClick={() => onChange({ cb_type: 'simple' })}
                             className={cn(
-                                "px-3 py-1.5 text-[11px] font-bold rounded-md transition-all",
+                                "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
                                 cb_type === 'simple' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
@@ -132,7 +136,7 @@ export function CashbackConfigForm({
                         <button
                             onClick={() => onChange({ cb_type: 'tiered' })}
                             className={cn(
-                                "px-3 py-1.5 text-[11px] font-bold rounded-md transition-all",
+                                "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
                                 cb_type === 'tiered' ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                             )}
                         >
@@ -145,7 +149,7 @@ export function CashbackConfigForm({
             {cb_type === 'simple' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                     {/* Base Settings */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                         <div className="space-y-1.5">
                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
                             <SmartAmountInput
@@ -161,6 +165,25 @@ export function CashbackConfigForm({
                             />
                         </div>
                         <div className="space-y-1.5">
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend</Label>
+                            <SmartAmountInput
+                                value={cb_min_spend}
+                                onChange={(val) => onChange({ cb_min_spend: val ?? 0 })}
+                                hideLabel
+                                compact
+                                placeholder="Min Spend..."
+                                className="h-10 font-bold bg-white border-slate-300"
+                            />
+                            <div className="text-[9px] font-bold text-blue-600/60 truncate h-3">
+                                {cb_min_spend > 0 && formatVietnameseCurrencyText(cb_min_spend).map((p, i) => (
+                                    <React.Fragment key={i}>
+                                        <span className="text-rose-600">{p.value}</span>
+                                        <span className="text-blue-500 ml-0.5">{p.unit} </span>
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Monthly Cap</Label>
                             <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
@@ -170,7 +193,7 @@ export function CashbackConfigForm({
                                         hideLabel
                                         compact
                                         placeholder={cb_is_unlimited ? "Unlimited" : "Max amount"}
-                                        className={cn("h-10 font-bold bg-white border-slate-300", cb_is_unlimited && "text-slate-300")}
+                                        className={cn("h-10 font-bold bg-white border-slate-200", cb_is_unlimited && "text-slate-300")}
                                         disabled={cb_is_unlimited}
                                     />
                                     {cb_is_unlimited && (
@@ -184,14 +207,22 @@ export function CashbackConfigForm({
                                     size="sm"
                                     onClick={() => onChange({ cb_is_unlimited: !cb_is_unlimited, cb_max_budget: !cb_is_unlimited ? null : 0 })}
                                     className={cn(
-                                        "h-10 px-3 text-[10px] font-black border-2 transition-all",
+                                        "h-10 px-2 text-[10px] font-black border transition-all",
                                         cb_is_unlimited
                                             ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
                                             : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500"
                                     )}
                                 >
-                                    {cb_is_unlimited ? "UNLIMITED" : "SET CAP"}
+                                    {cb_is_unlimited ? "INF" : "CAP"}
                                 </Button>
+                            </div>
+                            <div className="text-[9px] font-bold text-blue-600/60 truncate h-3">
+                                {!cb_is_unlimited && (cb_max_budget ?? 0) > 0 && formatVietnameseCurrencyText(cb_max_budget ?? 0).map((p, i) => (
+                                    <React.Fragment key={i}>
+                                        <span className="text-rose-600">{p.value}</span>
+                                        <span className="text-blue-500 ml-0.5">{p.unit} </span>
+                                    </React.Fragment>
+                                ))}
                             </div>
                         </div>
                     </div>
@@ -231,6 +262,7 @@ export function CashbackConfigForm({
                                     onDelete={() => {
                                         updateSimpleRules(simpleRules.filter((_, i) => i !== idx))
                                     }}
+                                    onOpenCategoryCreator={onOpenCategoryCreator}
                                 />
                             ))}
                         </div>
@@ -240,18 +272,34 @@ export function CashbackConfigForm({
 
             {cb_type === 'tiered' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                    {/* Tiered Header */}
-                    <div className="p-4 bg-slate-900 rounded-xl space-y-4">
-                        <div className="flex items-center justify-between">
+                    {/* Tiered Header - Compact */}
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                             <div className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4 text-blue-400" />
-                                <span className="text-xs font-bold text-white uppercase tracking-wider">Tiered Strategy</span>
+                                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Tiered Strategy</span>
                             </div>
-                            <div className="text-[11px] font-medium text-slate-400">Rates change by Monthly Spend</div>
+                            <Button
+                                className="h-6 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-[9px] uppercase tracking-wider px-2"
+                                size="sm"
+                                onClick={() => {
+                                    const newTier: CashbackTier = {
+                                        min_spend: 0,
+                                        policies: []
+                                    }
+                                    updateTieredConfig({
+                                        ...tieredConfig,
+                                        tiers: [...tieredConfig.tiers, newTier].sort((a, b) => a.min_spend - b.min_spend)
+                                    })
+                                }}
+                            >
+                                <Plus className="h-3 w-3 mr-1" /> Add Threshold
+                            </Button>
                         </div>
-                        <div className="grid grid-cols-[1fr_auto] gap-4 pt-3 border-t border-slate-800">
-                            <div className="space-y-1.5 min-w-0 flex-1">
-                                <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Catch-all Rate (%)</Label>
+
+                        <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+                            <div className="space-y-1 block w-full">
+                                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Catch-all Rate (%)</Label>
                                 <SmartAmountInput
                                     value={tieredConfig.base_rate}
                                     onChange={(val) => {
@@ -261,25 +309,11 @@ export function CashbackConfigForm({
                                     unit="%"
                                     hideLabel
                                     compact
-                                    className="h-10 font-black bg-slate-800 border-slate-700 text-white"
+                                    className="h-9 font-black bg-slate-50 border-slate-200 text-slate-900"
                                 />
                             </div>
-                            <div className="flex items-end">
-                                <Button
-                                    className="h-10 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] uppercase tracking-wider px-6"
-                                    onClick={() => {
-                                        const newTier: CashbackTier = {
-                                            min_spend: 0,
-                                            policies: []
-                                        }
-                                        updateTieredConfig({
-                                            ...tieredConfig,
-                                            tiers: [...tieredConfig.tiers, newTier].sort((a, b) => a.min_spend - b.min_spend)
-                                        })
-                                    }}
-                                >
-                                    <Plus className="h-4 w-4 mr-1.5" /> Threshold
-                                </Button>
+                            <div className="text-[10px] font-medium text-slate-400 italic max-w-[150px] text-right pt-4">
+                                Base rate applies when no tier threshold is met.
                             </div>
                         </div>
                     </div>
@@ -299,14 +333,14 @@ export function CashbackConfigForm({
                         )}
 
                         {tieredConfig.tiers.map((tier, tIdx) => (
-                            <div key={tIdx} className="border border-slate-200 rounded-2xl bg-white shadow-sm transition-all hover:border-slate-300">
-                                <div className="p-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-4 flex-1">
-                                        <div className="flex h-7 px-3 items-center justify-center bg-blue-600 text-white text-[10px] font-black rounded-full uppercase tracking-widest shrink-0">
+                            <div key={tIdx} className="border border-slate-200 rounded-xl bg-white shadow-sm transition-all hover:border-slate-300">
+                                <div className="p-2 px-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <div className="flex h-6 px-2.5 items-center justify-center bg-slate-200 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest shrink-0">
                                             Tier {tIdx + 1}
                                         </div>
-                                        <div className="flex flex-col gap-0 min-w-[120px]">
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Spend From</span>
+                                        <div className="flex flex-col gap-0 min-w-[100px]">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Spend From</span>
                                             <div className="relative">
                                                 <SmartAmountInput
                                                     value={tier.min_spend}
@@ -339,9 +373,10 @@ export function CashbackConfigForm({
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
+
                                 </div>
 
-                                <div className="p-4 space-y-3">
+                                <div className="p-3 space-y-3">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Special Rules for this tier</span>
                                         <Button
@@ -377,6 +412,7 @@ export function CashbackConfigForm({
                                                     next.tiers[tIdx].policies.splice(pIdx, 1)
                                                     updateTieredConfig(next)
                                                 }}
+                                                onOpenCategoryCreator={onOpenCategoryCreator}
                                             />
                                         ))}
                                     </div>
@@ -385,7 +421,8 @@ export function CashbackConfigForm({
                         ))}
                     </div>
                 </div>
-            )}
+            )
+            }
 
             {/* Summary Sentence footer */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
@@ -394,15 +431,16 @@ export function CashbackConfigForm({
                     "{summary}"
                 </p>
             </div>
-        </div>
+        </div >
     )
 }
 
-function CashbackRuleRow({ rule, categories, onUpdate, onDelete }: {
+function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryCreator }: {
     rule: CashbackCategoryRule,
     categories: Category[],
     onUpdate: (rule: CashbackCategoryRule) => void,
-    onDelete: () => void
+    onDelete: () => void,
+    onOpenCategoryCreator?: (callback?: (newCategoryId: string) => void) => void
 }) {
     const [open, setOpen] = useState(false)
 
@@ -421,31 +459,58 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete }: {
             {/* Row 1: Category Picker + Action Button */}
             <div className="flex gap-2">
                 <Popover open={open} onOpenChange={setOpen}>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={open}
-                            className="flex-1 justify-between h-10 text-[11px] font-bold border-slate-200 bg-slate-50/50 hover:bg-slate-100 px-3"
-                        >
-                            <div className="flex items-center gap-1.5 truncate">
-                                {selectedCategories.length > 0 ? (
-                                    <>
-                                        <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
-                                        <span className="truncate">{selectedCategories.length} Categories Selected</span>
-                                    </>
-                                ) : (
-                                    <span className="text-slate-400 font-medium whitespace-nowrap italic">Pick Categories & MCCs...</span>
-                                )}
-                            </div>
-                            <ChevronsUpDown className="ml-0.5 h-3.5 w-3.5 shrink-0 opacity-40" />
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72 p-0 shadow-2xl border-slate-200 rounded-xl" align="start">
+                    <PopoverAnchor asChild>
+                        <div className="flex-1">
+                            <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={open}
+                                onClick={() => setOpen(true)}
+                                className="w-full justify-between h-10 text-[11px] font-bold border-slate-200 bg-slate-50/50 hover:bg-slate-100 px-3"
+                            >
+                                <div className="flex items-center gap-1.5 truncate">
+                                    {selectedCategories.length > 0 ? (
+                                        <>
+                                            <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
+                                            <span className="truncate text-slate-900 font-extrabold">{selectedCategories.length} Categories Selected</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-slate-400 font-medium whitespace-nowrap italic">Pick Categories & MCCs...</span>
+                                    )}
+                                </div>
+                                <ChevronsUpDown className="ml-0.5 h-3.5 w-3.5 shrink-0 opacity-40" />
+                            </Button>
+                        </div>
+                    </PopoverAnchor>
+                    <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0 shadow-2xl border-slate-200 rounded-xl" align="start">
                         <Command className="rounded-xl overflow-hidden">
                             <CommandInput placeholder="Search name or MCC..." className="h-10 text-xs" />
-                            <CommandList className="max-h-72 overflow-y-auto">
-                                <CommandEmpty className="text-xs p-4 text-center text-slate-400">MCC or Category not found.</CommandEmpty>
+                            <div className="p-1 border-b border-slate-50">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setOpen(false)
+                                        onOpenCategoryCreator?.((newId: string) => {
+                                            const currentIds = rule.cat_ids || []
+                                            if (!currentIds.includes(newId)) {
+                                                onUpdate({ ...rule, cat_ids: [...currentIds, newId] })
+                                            }
+                                        })
+                                    }}
+                                    className="w-full justify-start text-blue-600 font-bold text-xs h-9 px-2 hover:bg-blue-50"
+                                >
+                                    <Plus className="h-3.5 w-3.5 mr-2" />
+                                    <span>Create New Category</span>
+                                </Button>
+                            </div>
+                            <CommandList
+                                className="max-h-[300px] overflow-y-auto overscroll-contain pb-1"
+                                onWheel={(e) => e.stopPropagation()}
+                            >
+                                <CommandEmpty className="py-6 text-center text-xs text-slate-400 italic">
+                                    No category matching query
+                                </CommandEmpty>
                                 <CommandGroup heading="Select Multiple">
                                     {categories.map((cat) => (
                                         <CommandItem
@@ -457,15 +522,25 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete }: {
                                                     ? currentIds.filter(id => id !== cat.id)
                                                     : [...currentIds, cat.id]
                                                 onUpdate({ ...rule, cat_ids: nextIds })
+                                                // Don't close popover to allow multi-select
                                             }}
                                             className="text-xs h-10 cursor-pointer"
                                         >
                                             <div className="flex items-center gap-2 w-full">
                                                 <div className={cn(
-                                                    "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-all",
-                                                    rule.cat_ids?.includes(cat.id) ? "bg-blue-600 text-white shadow-sm" : "bg-slate-100"
+                                                    "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-all overflow-hidden",
+                                                    rule.cat_ids?.includes(cat.id) ? "bg-blue-600 shadow-sm" : "bg-slate-100"
                                                 )}>
-                                                    {cat.icon || <span className="text-[10px] font-bold opacity-30">{cat.name[0]}</span>}
+                                                    {cat.image_url ? (
+                                                        <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className={cn(
+                                                            "text-[10px] font-bold",
+                                                            rule.cat_ids?.includes(cat.id) ? "text-white" : "text-slate-500 opacity-50"
+                                                        )}>
+                                                            {cat.icon || cat.name[0]}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex flex-col min-w-0 flex-1 leading-tight">
                                                     <span className={cn("truncate font-medium", rule.cat_ids?.includes(cat.id) ? "text-blue-600 font-bold" : "text-slate-600")}>
@@ -505,27 +580,35 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete }: {
             </div>
 
             {/* Row 2: Category Chips (if any) */}
-            {selectedCategories.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/50 rounded-lg border border-slate-100">
-                    {selectedCategories.map((cat) => (
-                        <div key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 pl-1.5 pr-1 py-1 rounded-md shadow-sm animate-in fade-in zoom-in-95">
-                            <span className="text-xs">{cat.icon || "•"}</span>
-                            <div className="flex flex-col leading-none">
-                                <span className="text-[10px] font-bold text-slate-700">{cat.name}</span>
-                                {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                    <span className="text-[8px] text-slate-400 font-mono">MCC {cat.mcc_codes[0]}</span>
-                                )}
+            {
+                selectedCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/50 rounded-lg border border-slate-100">
+                        {selectedCategories.map((cat) => (
+                            <div key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 pl-1 pr-1.5 py-1 rounded-md shadow-sm animate-in fade-in zoom-in-95 overflow-hidden">
+                                <div className="w-5 h-5 rounded-sm bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                    {cat.image_url ? (
+                                        <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <span className="text-[10px]">{cat.icon || "•"}</span>
+                                    )}
+                                </div>
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[10px] font-bold text-slate-700">{cat.name}</span>
+                                    {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                        <span className="text-[8px] text-slate-400 font-mono">MCC {cat.mcc_codes[0]}</span>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => removeCategory(cat.id)}
+                                    className="ml-1 p-0.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => removeCategory(cat.id)}
-                                className="ml-1 p-0.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors"
-                            >
-                                <X className="h-3 w-3" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )
+            }
 
             {/* Row 3: Inputs side by side */}
             <div className="grid grid-cols-2 gap-3">
@@ -574,6 +657,6 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete }: {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
