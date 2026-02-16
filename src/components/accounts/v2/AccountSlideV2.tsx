@@ -1203,7 +1203,7 @@ export function AccountSlideV2({
                                                                     const sel = allAccounts.find(a => a.id === parentAccountId);
                                                                     return sel ? (
                                                                         <>
-                                                                            <div className="w-4 h-4 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
+                                                                            <div className="w-4 h-4 rounded-none overflow-hidden flex items-center justify-center shrink-0">
                                                                                 {sel.image_url ? (
                                                                                     <img src={sel.image_url} alt="" className="w-full h-full object-contain" />
                                                                                 ) : (
@@ -1270,7 +1270,7 @@ export function AccountSlideV2({
                                                                             className="text-[11px]"
                                                                         >
                                                                             <div className="flex items-center gap-2">
-                                                                                <div className="w-6 h-6 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200">
+                                                                                <div className="w-6 h-6 rounded-none overflow-hidden flex items-center justify-center flex-shrink-0">
                                                                                     {a.image_url ? (
                                                                                         <img src={a.image_url} alt="" className="w-full h-full object-contain" />
                                                                                     ) : (
