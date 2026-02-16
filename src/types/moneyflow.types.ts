@@ -85,6 +85,8 @@ export type Account = {
   cb_cycle_type?: 'calendar_month' | 'statement_cycle';
   statement_day?: number | null;
   due_date?: number | null;
+  holder_type?: 'me' | 'relative' | 'other';
+  holder_person_id?: string | null;
   stats?: AccountStats | null;
   relationships?: AccountRelationships | null;
   credit_card_info?: {

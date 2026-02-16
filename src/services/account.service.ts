@@ -252,7 +252,7 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
 
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json, cb_min_spend, cb_cycle_type, statement_day, due_date')
+    .select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json, cb_min_spend, cb_cycle_type, statement_day, due_date, holder_type, holder_person_id')
   // Remove default sorting to handle custom sort logic
 
   if (error) {
@@ -335,6 +335,8 @@ export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Acco
       cb_cycle_type: (item as any).cb_cycle_type ?? 'calendar_month',
       statement_day: (item as any).statement_day ?? null,
       due_date: (item as any).due_date ?? null,
+      holder_type: (item as any).holder_type ?? 'me',
+      holder_person_id: (item as any).holder_person_id ?? null,
       cashback_config: normalizeCashbackConfig(item.cashback_config),
       is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
       image_url: typeof item.image_url === 'string' ? item.image_url : null,
@@ -455,7 +457,9 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     cb_min_spend: row.cb_min_spend ?? null,
     cb_cycle_type: row.cb_cycle_type ?? 'calendar_month',
     statement_day: row.statement_day ?? null,
-    due_date: row.due_date ?? null
+    due_date: row.due_date ?? null,
+    holder_type: (row as any).holder_type ?? 'me',
+    holder_person_id: (row as any).holder_person_id ?? null
   }
 }
 
@@ -550,6 +554,8 @@ export async function updateAccountConfig(
     cb_cycle_type?: 'calendar_month' | 'statement_cycle'
     statement_day?: number | null
     due_date?: number | null
+    holder_type?: 'me' | 'relative' | 'other'
+    holder_person_id?: string | null
   }
 ): Promise<boolean> {
   // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
@@ -574,6 +580,8 @@ export async function updateAccountConfig(
   if ('cb_cycle_type' in data) payload.cb_cycle_type = data.cb_cycle_type ?? 'calendar_month'
   if ('statement_day' in data) payload.statement_day = data.statement_day ?? null
   if ('due_date' in data) payload.due_date = data.due_date ?? null
+  if ('holder_type' in data) payload.holder_type = data.holder_type ?? 'me'
+  if ('holder_person_id' in data) payload.holder_person_id = data.holder_person_id ?? null
 
   // 2. New Cashback Columns
   if (data.cb_type) payload.cb_type = data.cb_type

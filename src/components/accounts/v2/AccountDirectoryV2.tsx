@@ -45,7 +45,8 @@ export function AccountDirectoryV2({
         family: false,
         dueSoon: false,
         needsSpendMore: false,
-        multiRuleCb: false
+        multiRuleCb: false,
+        holderOthers: false
     });
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -109,6 +110,10 @@ export function AccountDirectoryV2({
             });
         }
 
+        if (advancedFilters.holderOthers) {
+            result = result.filter(a => a.holder_type && a.holder_type !== 'me');
+        }
+
         // --- Search Filter ---
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -127,6 +132,19 @@ export function AccountDirectoryV2({
     const activeCount = initialAccounts.filter(a => a.is_active !== false && a.type !== 'debt').length;
     const debtCount = initialAccounts.filter(a => a.type === 'debt' && a.is_active !== false).length;
     const closedCount = initialAccounts.filter(a => a.is_active === false).length;
+
+    const othersStats = useMemo(() => {
+        const otherAccounts = initialAccounts.filter(a => a.holder_type && a.holder_type !== 'me' && a.is_active !== false);
+        const limit = otherAccounts.reduce((sum, a) => {
+            if (a.parent_account_id) return sum;
+            return sum + (a.credit_limit || 0);
+        }, 0);
+        const debt = otherAccounts.reduce((sum, a) => {
+            if (a.type === 'credit_card') return sum + Math.abs(a.current_balance || 0);
+            return sum + (a.current_balance < 0 ? Math.abs(a.current_balance) : 0);
+        }, 0);
+        return { limit, debt };
+    }, [initialAccounts]);
 
     // --- Account Handlers ---
     const handleAddAccount = () => {
@@ -240,6 +258,7 @@ export function AccountDirectoryV2({
                 onCategoryChange={handleCategoryChange}
                 advancedFilters={advancedFilters}
                 onAdvancedFiltersChange={setAdvancedFilters}
+                othersStats={othersStats}
             />
 
             <div className="flex-1 overflow-auto px-6 py-4">

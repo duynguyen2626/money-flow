@@ -62,7 +62,12 @@ interface AccountSlideV2Props {
     onBack?: () => void;
 }
 
-import { Category } from "@/types/moneyflow.types";
+import { Category, Person, Subscription } from "@/types/moneyflow.types";
+import { PeopleSlideV2 } from "../../people/v2/people-slide-v2";
+import { getPeopleAction } from "@/actions/people-actions";
+import { getServicesAction } from "@/actions/service-actions";
+
+type CashbackCycleType = 'calendar_month' | 'statement_cycle';
 
 export function AccountSlideV2({
     open,
@@ -105,6 +110,12 @@ export function AccountSlideV2({
     const [isCashbackEnabled, setIsCashbackEnabled] = useState(false);
     const [openAccNumPopover, setOpenAccNumPopover] = useState(false);
     const [openRxPopover, setOpenRxPopover] = useState(false);
+    const [holderType, setHolderType] = useState<'me' | 'relative' | 'other'>('me');
+    const [holderPersonId, setHolderPersonId] = useState<string | null>(null);
+    const [people, setPeople] = useState<Person[]>([]);
+    const [openHolderPersonPopover, setOpenHolderPersonPopover] = useState(false);
+    const [isPeopleSlideOpen, setIsPeopleSlideOpen] = useState(false);
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
     // Form state
     const [name, setName] = useState("");
@@ -151,7 +162,23 @@ export function AccountSlideV2({
         }
     }, [parentAccountId, allAccounts]);
 
-    // Dirty check state
+    // Initial data fetch
+    useEffect(() => {
+        if (open) {
+            getPeopleAction().then(setPeople);
+            getServicesAction().then(res => setSubscriptions(res as any));
+        }
+    }, [open]);
+
+    const handlePersonCreated = (result: any) => {
+        if (result && result.person) {
+            setPeople(prev => [...prev, result.person as Person]);
+            setHolderPersonId(result.person.id);
+            setHolderType('relative');
+        }
+    };
+
+    // MF5.5 Dirty check state
     const [initialState, setInitialState] = useState<string>("");
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [pendingAction, setPendingAction] = useState<'close' | 'back' | null>(null);
@@ -165,6 +192,8 @@ export function AccountSlideV2({
         setCreditLimit(acc.credit_limit || 0);
         setIsActive(acc.is_active !== false);
         setImageUrl(acc.image_url || "");
+        setHolderType(acc.holder_type || 'me');
+        setHolderPersonId(acc.holder_person_id || null);
 
         // --- REBOOTED CASHBACK LOAD (Phase 16) ---
         const effectiveCbType = acc.cb_type || (acc.cashback_config ? 'simple' : 'none');
@@ -440,6 +469,7 @@ export function AccountSlideV2({
         }
     };
 
+    // Confirm action helper for unsaved changes
     const confirmAction = () => {
         setShowUnsavedConfirm(false);
         if (pendingAction === 'close') {
@@ -449,155 +479,6 @@ export function AccountSlideV2({
         }
         setPendingAction(null);
     };
-    // Load form state from account
-    useEffect(() => {
-        if (open) {
-            if (account) {
-                // Initialize with prop data first (instant)
-                const loadFromAccount = (acc: Account) => {
-                    setName(acc.name || "");
-                    setType(acc.type || 'bank');
-                    setAccountNumber(acc.account_number || "");
-                    setCreditLimit(acc.credit_limit || 0);
-                    setIsActive(acc.is_active !== false);
-                    setImageUrl(acc.image_url || "");
-
-                    const cb = normalizeCashbackConfig(acc.cashback_config, acc) as any;
-                    setCbType(acc.cb_type || 'none');
-                    setIsCashbackEnabled(acc.cb_type !== 'none' && !!acc.cb_type);
-                    setCycleType(cb.cycleType || 'calendar_month');
-                    setStatementDay(cb.statementDay ?? null);
-                    setDueDate(cb.dueDate ?? null);
-                    setMinSpendTarget(cb.minSpendTarget ?? undefined);
-                    setDefaultRate((cb.defaultRate || 0) * 100);
-                    setMaxCashback(cb.maxBudget ?? undefined);
-                    setCbBaseRate((cb.defaultRate || 0) * 100);
-                    setCbMaxBudget(cb.maxBudget ?? null);
-                    setCbIsUnlimited(acc.cb_is_unlimited ?? false);
-                    setCbMinSpend(acc.cb_min_spend ?? 0);
-
-                    // Transform levels to use percentages for UI
-                    const uiLevels = (cb.levels || []).map((lvl: any) => ({
-                        ...lvl,
-                        defaultRate: (lvl.defaultRate || 0) * 100,
-                        rules: (lvl.rules || []).map((r: any) => ({
-                            ...r,
-                            rate: (r.rate || 0) * 100
-                        }))
-                    }));
-                    setLevels(uiLevels);
-                    setCbRulesJson(acc.cb_rules_json as any);
-
-                    // New fields
-                    setAnnualFee(acc.annual_fee || 0);
-                    setAnnualFeeWaiverTarget(acc.annual_fee_waiver_target || 0);
-                    setReceiverName(acc.receiver_name || "");
-                    setParentAccountId(acc.parent_account_id || null);
-                    setStartDate((acc as any).start_date);
-
-                    // Determine main type
-                    if (acc.type === 'bank') setActiveMainType('bank');
-                    else if (acc.type === 'credit_card') setActiveMainType('credit');
-                    else if (['savings', 'investment'].includes(acc.type)) setActiveMainType('savings');
-                    else setActiveMainType('others');
-
-                    const loadedLevels = (cb.levels || []).map((lvl: any) => ({
-                        id: lvl.id || Math.random().toString(36).substr(2, 9),
-                        name: lvl.name || "",
-                        minTotalSpend: lvl.minTotalSpend || 0,
-                        defaultRate: lvl.defaultRate || 0,
-                        rules: (lvl.rules || []).map((r: any) => ({
-                            id: r.id || Math.random().toString(36).substr(2, 9),
-                            categoryIds: r.categoryIds || [],
-                            rate: r.rate || 0,
-                            maxReward: r.maxReward || null
-                        }))
-                    }));
-
-                    setSecuredById(acc.secured_by_account_id || "none");
-                    setIsCollateralLinked(!!acc.secured_by_account_id);
-                    setLevels(loadedLevels);
-
-                    // Advanced mode detection: 
-                    // - Multiple levels, OR
-                    // - Multiple rules in any level, OR
-                    // - Any level has category-specific rules (rules with categoryIds)
-                    const hasMultipleLevels = loadedLevels.length > 1;
-                    const hasMultipleRules = loadedLevels.some((lvl: any) => lvl.rules.length > 1);
-                    const hasCategoryRules = loadedLevels.some((lvl: any) =>
-                        lvl.rules.some((rule: any) => rule.categoryIds && rule.categoryIds.length > 0)
-                    );
-
-                    setIsAdvancedCashback(hasMultipleLevels || hasMultipleRules || hasCategoryRules);
-                    setIsCashbackEnabled(cb.defaultRate > 0 || loadedLevels.length > 0);
-
-                    // Check if it's a simple restricted config
-                    // MF5.4.3: Only trigger restricted mode if the overall default rate is 0.
-                    // If defaultRate > 0, it means it's a tiered card (e.g. VCB Signature 0.5% base + 10% Edu)
-                    if (loadedLevels.length === 1 && loadedLevels[0].minTotalSpend === 0 && loadedLevels[0].rules.length === 1 && cb.defaultRate === 0) {
-                        setIsCategoryRestricted(true);
-                        setRestrictedCategoryIds(loadedLevels[0].rules[0].categoryIds);
-                        setDefaultRate(loadedLevels[0].rules[0].rate);
-                    } else {
-                        // If it's not restricted mode, they see Base Rate = cb.defaultRate.
-                        // To see categories, they MUST use Advanced mode.
-                        setIsCategoryRestricted(false);
-                        setRestrictedCategoryIds([]);
-                        setDefaultRate(cb.defaultRate || 0);
-                    }
-                };
-
-                loadFromAccount(account);
-
-                // Double check with fresh data from DB (in case props are stale)
-                import('@/services/account.service').then(({ getAccountDetails }) => {
-                    getAccountDetails(account.id).then(fresh => {
-                        if (fresh) {
-                            console.log('[AccountSlideV2] Fresh data refetched from DB:', fresh.name, 'cb_type:', fresh.cb_type);
-                            // Unify with the main loadFromAccount function
-                            loadFromAccount(fresh);
-                        }
-                    });
-                });
-
-            } else {
-                setName("");
-                setType('bank');
-                setAccountNumber("");
-                setCreditLimit(0);
-                setIsActive(true);
-                setImageUrl("");
-                setCycleType('calendar_month');
-                setStatementDay(null);
-                setDueDate(null);
-                setMinSpendTarget(undefined);
-                setDefaultRate(0);
-                setMaxCashback(undefined);
-                setAnnualFee(0);
-                setReceiverName("");
-                setSecuredById("none");
-                setIsCollateralLinked(false);
-                setParentAccountId(null);
-                setActiveMainType('bank');
-                setLevels([]);
-                setIsAdvancedCashback(false);
-                setIsCategoryRestricted(false);
-                setRestrictedCategoryIds([]);
-                setOpenCollateralCombo(false);
-                setOpenParentCombo(false);
-                setCbType('none');
-                setCbBaseRate(0);
-                setCbMaxBudget(null);
-                setCbIsUnlimited(false);
-                setCbMinSpend(0);
-                setCbRulesJson(null);
-                setStatementDay(null);
-                setDueDate(null);
-                setCycleType('calendar_month');
-                setMinSpendTarget(undefined);
-            }
-        }
-    }, [open, account]);
 
     const handleSave = async () => {
         if (!name) {
@@ -689,6 +570,8 @@ export function AccountSlideV2({
                     cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
                     dueDate: dueDate,
+                    holder_type: holderType,
+                    holder_person_id: holderPersonId,
 
                     // Keep legacy config for safety during transition
                     cashbackConfig: isCashbackEnabled ? {
@@ -770,6 +653,8 @@ export function AccountSlideV2({
                     cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
                     dueDate: dueDate,
+                    holder_type: holderType,
+                    holder_person_id: holderPersonId,
 
                     // Legacy config
                     cashbackConfig: isCashbackEnabled ? {
@@ -959,6 +844,130 @@ export function AccountSlideV2({
                                 )}
                             </div>
 
+                            {/* Ownership Selection */}
+                            <div className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Account Ownership</Label>
+                                        <p className="text-[9px] text-slate-400 font-medium">Who owns this account/card?</p>
+                                    </div>
+                                    <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                                        {[
+                                            { id: 'me' as const, label: 'Me', icon: Sparkles },
+                                            { id: 'relative' as const, label: 'Relative', icon: HandCoins }
+                                        ].map((opt) => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setHolderType(opt.id as any);
+                                                    if (opt.id === 'me') setHolderPersonId(null);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all",
+                                                    holderType === opt.id
+                                                        ? "bg-slate-900 text-white shadow-md shadow-slate-200"
+                                                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                                                )}
+                                            >
+                                                <opt.icon className="h-3 w-3" />
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {holderType === 'relative' && (
+                                    <div className="flex items-center justify-between gap-4 pt-1 animate-in fade-in slide-in-from-top-1">
+                                        <div className="flex-1">
+                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        size="sm"
+                                                        className="w-full justify-between h-9 text-[11px] font-bold border-slate-200 bg-white shadow-sm"
+                                                    >
+                                                        {holderPersonId ? (
+                                                            <div className="flex items-center gap-2">
+                                                                {(() => {
+                                                                    const sel = people.find(p => p.id === holderPersonId);
+                                                                    return sel ? (
+                                                                        <>
+                                                                            <div className="w-5 h-5 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                                                {sel.image_url ? (
+                                                                                    <img src={sel.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    <span className="text-[9px] font-bold text-slate-500">{sel.name[0]}</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="truncate">{sel.name}</span>
+                                                                        </>
+                                                                    ) : "Select relative...";
+                                                                })()}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400">Select relative...</span>
+                                                        )}
+                                                        <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-64 p-0" align="start">
+                                                    <Command className="border-none shadow-none">
+                                                        <CommandInput placeholder="Search person..." className="h-8 text-[11px] border-none focus:ring-0" />
+                                                        <CommandList
+                                                            className="max-h-[200px] overflow-y-auto overflow-x-hidden p-1"
+                                                            onWheel={(e) => e.stopPropagation()}
+                                                        >
+                                                            <CommandEmpty className="text-[11px] py-2 px-4">No person found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {people
+                                                                    .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                                                                    .map((p) => (
+                                                                        <CommandItem
+                                                                            key={p.id}
+                                                                            value={p.name}
+                                                                            onSelect={() => {
+                                                                                setHolderPersonId(p.id);
+                                                                                setOpenHolderPersonPopover(false);
+                                                                            }}
+                                                                            className="text-[11px]"
+                                                                        >
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className="w-5 h-5 rounded-none overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-200">
+                                                                                    {p.image_url ? (
+                                                                                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                    ) : (
+                                                                                        <span className="text-[9px] font-bold text-slate-500">{(p.name || "P")[0]}</span>
+                                                                                    )}
+                                                                                </div>
+                                                                                <span className="truncate">{p.name}</span>
+                                                                            </div>
+                                                                            <Check className={cn("ml-auto h-3 w-3", holderPersonId === p.id ? "opacity-100" : "opacity-0")} />
+                                                                        </CommandItem>
+                                                                    ))}
+                                                            </CommandGroup>
+                                                            <div className="border-t border-slate-100 my-1 sticky bottom-0 bg-white">
+                                                                <CommandItem
+                                                                    onSelect={() => {
+                                                                        setOpenHolderPersonPopover(false);
+                                                                        setIsPeopleSlideOpen(true);
+                                                                    }}
+                                                                    className="text-[10px] font-black uppercase text-indigo-600 flex items-center gap-2 h-8 cursor-pointer hover:bg-slate-50 transition-colors"
+                                                                >
+                                                                    <Plus className="h-3 w-3" />
+                                                                    Create New Person
+                                                                </CommandItem>
+                                                            </div>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="acc_num" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Account Number <span className="font-normal text-slate-400 normal-case">(Optional)</span></Label>
@@ -1016,12 +1025,11 @@ export function AccountSlideV2({
                                                                     // Smart Fill Logic repeated
                                                                     if (inputVal.length > 3) {
                                                                         const match = allAccounts.find(a =>
-                                                                            a.bank_account_number === inputVal ||
-                                                                            a.credit_card_number_last_4 === inputVal
+                                                                            a.account_number === inputVal
                                                                         );
-                                                                        if (match && match.bank_owner_name && !receiverName) {
-                                                                            setReceiverName(match.bank_owner_name);
-                                                                            toast.success(`Found owner: ${match.bank_owner_name}`);
+                                                                        if (match && match.receiver_name && !receiverName) {
+                                                                            setReceiverName(match.receiver_name);
+                                                                            toast.success(`Found owner: ${match.receiver_name}`);
                                                                         }
                                                                     }
                                                                 }
@@ -1718,6 +1726,15 @@ export function AccountSlideV2({
                         </Button>
                     </SheetFooter>
                 </SheetContent>
+
+                <PeopleSlideV2
+                    open={isPeopleSlideOpen}
+                    onOpenChange={(isOpen) => {
+                        setIsPeopleSlideOpen(isOpen);
+                    }}
+                    subscriptions={subscriptions}
+                    onSuccess={handlePersonCreated}
+                />
             </Sheet>
 
             <CategorySlide
