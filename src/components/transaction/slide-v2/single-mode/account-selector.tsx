@@ -1,21 +1,19 @@
-import { useState, useEffect } from "react";
-import { useFormContext, useWatch } from "react-hook-form";
-import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users } from "lucide-react";
+"use client";
+
+import { useState, useEffect, useMemo } from "react";
+import { useFormContext, useWatch, Controller } from "react-hook-form";
+import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users, Store, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import {
     FormControl,
-    FormField,
     FormItem,
     FormLabel,
     FormMessage
 } from "@/components/ui/form";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SingleTransactionFormValues } from "../types";
 import { Account, Person } from "@/types/moneyflow.types";
 import { Combobox, ComboboxGroup } from "@/components/ui/combobox";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { PersonAvatar } from "@/components/ui/person-avatar";
 
 type AccountSelectorProps = {
@@ -29,268 +27,152 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const form = useFormContext<SingleTransactionFormValues>();
     const type = useWatch({ control: form.control, name: "type" });
     const personId = useWatch({ control: form.control, name: "person_id" });
-
-    const [showAllAccounts, setShowAllAccounts] = useState(false);
-    const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
-    const [lastSubmittedAccountId, setLastSubmittedAccountId] = useState<string | null>(null);
-
+    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
     const targetId = useWatch({ control: form.control, name: "target_account_id" });
 
-    // Load last submitted person and account on mount
+    const selectedPerson = useMemo(() => people.find(p => p.id === personId), [people, personId]);
+
+    // Mode detection
+    const isSpecialMode = ['transfer', 'credit_pay'].includes(type);
+
+    // Smart Type Inferrer
     useEffect(() => {
-        try {
-            const savedPerson = localStorage.getItem("mf_last_submitted_person_id");
-            if (savedPerson) setLastSubmittedPersonId(savedPerson);
+        if (isSpecialMode) return;
 
-            const savedAccount = localStorage.getItem("mf_last_submitted_account_id");
-            if (savedAccount) setLastSubmittedAccountId(savedAccount);
-        } catch (e) {
-            console.error("Failed to load last submitted data", e);
+        if (personId) {
+            if (sourceId && !targetId) form.setValue('type', 'debt');
+            else if (!sourceId && targetId) form.setValue('type', 'repayment');
+        } else {
+            if (sourceId && !targetId) form.setValue('type', 'expense');
+            else if (!sourceId && targetId) form.setValue('type', 'income');
         }
-    }, []);
+    }, [sourceId, targetId, personId, isSpecialMode, form]);
 
-    // Phase 8X: Auto-select linked bank for repayments if person is selected
-    useEffect(() => {
-        if (type === 'repayment' && personId) {
-            const p = people.find(x => x.id === personId);
-            if (p?.sheet_linked_bank_id) {
-                // If the current source is not the linked bank, and we just switched to repayment or person changed,
-                // we should set it. But only if it's not already set to something valid.
-                // To avoid conflict with the "recent" logic, we force linked bank for repayments.
-                form.setValue('source_account_id', p.sheet_linked_bank_id);
-            }
-        }
-    }, [type, personId, people, form]); // Remove sourceId from deps to allow override once
-
-    // Filter accounts based on type and toggle
-    const validAccounts = accounts.filter(a => {
-        if (type === 'transfer' && !showAllAccounts) {
-            // For transfer, usually hide credit cards unless toggled
-            return a.type !== 'credit_card';
-        }
-        if (type === 'credit_pay') {
-            // Credit pay only works with credit cards
-            return a.type === 'credit_card';
-        }
-        return true;
-    });
-
-    // Watch for source account changes
-    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
-
-    // Auto-set source and target for credit_pay (same account)
-    useEffect(() => {
-        if (type === 'credit_pay' && sourceId) {
-            const isCreditCard = accounts.find(a => a.id === sourceId)?.type === 'credit_card';
-            if (isCreditCard) {
-                // Target should be same as source for credit pay
-                form.setValue('target_account_id', sourceId);
-            }
-        }
-    }, [type, sourceId, accounts, form]);
-
-    const creditAccounts = validAccounts.filter(a => a.type === 'credit_card');
-    const cashAccounts = validAccounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
-
-    // Helper to map account to item
+    // Filtering logic for special rules
     const mapAccountToItem = (a: Account) => ({
         value: a.id,
         label: a.name,
         icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-none" /> : undefined
     });
-    const recentAccountItems: any[] = [];
 
-    // 1. Current Selection
-    const currentAcc = sourceId ? validAccounts.find(a => a.id === sourceId) : null;
-    if (currentAcc) recentAccountItems.push(mapAccountToItem(currentAcc));
+    const getAccountGroups = (side: 'source' | 'target'): ComboboxGroup[] => {
+        let filtered = accounts;
 
-    // 2. Last Submitted (if valid and different)
-    const lastAcc = lastSubmittedAccountId ? validAccounts.find(a => a.id === lastSubmittedAccountId) : null;
-    if (lastAcc && lastAcc.id !== sourceId) recentAccountItems.push(mapAccountToItem(lastAcc));
+        if (type === 'transfer') {
+            if (side === 'source' && targetId) filtered = accounts.filter(a => a.id !== targetId);
+            if (side === 'target' && sourceId) filtered = accounts.filter(a => a.id !== sourceId);
+        } else if (type === 'credit_pay') {
+            if (side === 'source') filtered = accounts.filter(a => a.type !== 'credit_card');
+            else filtered = accounts.filter(a => a.type === 'credit_card');
+        }
 
-    // Prepare Groups for Combobox
-    const accountGroups: ComboboxGroup[] = [
-        ...(recentAccountItems.length > 0 ? [{ label: "Recent", items: recentAccountItems }] : []),
-        ...(creditAccounts.length > 0 ? [{
-            label: "Credit Cards",
-            items: creditAccounts.map(mapAccountToItem)
-        }] : []),
+        const creditAccounts = filtered.filter(a => a.type === 'credit_card');
+        const cashAccounts = filtered.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
+
+        return [
+            ...(creditAccounts.length > 0 ? [{ label: "Credit Cards", items: creditAccounts.map(mapAccountToItem) }] : []),
+            { label: "Cash / Bank", items: cashAccounts.map(mapAccountToItem) }
+        ];
+    };
+
+    const peopleGroups: ComboboxGroup[] = [
         {
-            label: "Cash / Bank",
-            items: cashAccounts.map(mapAccountToItem)
+            label: "All People",
+            items: people.map(p => ({
+                value: p.id,
+                label: p.name,
+                icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
+            }))
         }
     ];
 
-    // People Options & Groups
-    const peopleList = people.map(p => ({
-        value: p.id,
-        label: p.name,
-        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
-    }));
+    const isIncomeFlow = !sourceId && !!targetId;
+    const isExpenseFlow = !!sourceId && !targetId;
+    const isTransferFlow = isSpecialMode || (!!sourceId && !!targetId);
 
-    // Logic: 1. Current (if exists), 2. Last Submitted (if exists and != current)
-    const recentItems: any[] = [];
-    const validCurrent = personId ? peopleList.find(p => p.value === personId) : null;
-    const validLast = lastSubmittedPersonId ? peopleList.find(p => p.value === lastSubmittedPersonId) : null;
+    // --- Dynamic Placeholder Logic (BẬP BÊNH) ---
+    const sourcePlaceholder = useMemo(() => {
+        if (targetId && !isSpecialMode) {
+            if (personId) return `Payer: ${selectedPerson?.name || 'Person'}`;
+            return "Receiving Mode (Bank Active)";
+        }
+        return "Choose Pay With";
+    }, [targetId, isSpecialMode, personId, selectedPerson]);
 
-    if (validCurrent) recentItems.push(validCurrent);
-    if (validLast && validLast.value !== personId) recentItems.push(validLast);
-
-    const peopleGroups: ComboboxGroup[] = [
-        ...(recentItems.length > 0 ? [{ label: "Recent", items: recentItems }] : []),
-        { label: "All People", items: peopleList }
-    ];
+    const targetPlaceholder = useMemo(() => {
+        if (sourceId && !isSpecialMode) {
+            if (personId) return `Borrower: ${selectedPerson?.name || 'Person'}`;
+            return "Spending Mode (Bank Active)";
+        }
+        return "Choose Deposit To";
+    }, [sourceId, isSpecialMode, personId, selectedPerson]);
 
     return (
-        <div className="space-y-4 pt-2">
+        <div className="space-y-6 pt-2">
+            {/* ROW 1: PEOPLE */}
+            <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                <Controller
+                    control={form.control}
+                    name="person_id"
+                    render={({ field }) => (
+                        <FormItem className="w-full">
+                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                                Involved Person
+                            </FormLabel>
+                            <FormControl>
+                                <Combobox
+                                    groups={peopleGroups}
+                                    value={field.value ?? undefined}
+                                    onValueChange={field.onChange}
+                                    placeholder="Personal Flow (No one)"
+                                    className="w-full h-11 bg-white border-slate-200 shadow-sm transition-all hover:bg-slate-50/50"
+                                    onAddNew={onAddNewPerson}
+                                    addLabel="Person"
+                                />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
 
-            {/* TYPE TABS */}
-            <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormControl>
-                            <div className="flex flex-col gap-3">
-                                {/* LEVEL 1: Main Context (Personal vs External) */}
-                                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100/50 rounded-lg border border-slate-200/60">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!['expense', 'income', 'transfer'].includes(field.value)) {
-                                                field.onChange('expense');
-                                            }
-                                        }}
-                                        className={cn(
-                                            "flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                                            ['expense', 'income', 'transfer'].includes(field.value)
-                                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/50"
-                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                        )}
-                                    >
-                                        <User className="w-4 h-4" />
-                                        <span>Personal</span>
-                                    </button>
+            {/* ROW 2: ACCOUNT FLOW */}
+            <div className="grid grid-cols-2 gap-4 items-start relative">
+                {/* Visual Connector: The BẬP BÊNH beam */}
+                <div className="absolute left-1/2 top-11 -translate-x-1/2 w-8 h-[2px] bg-slate-100 z-0 hidden sm:block" />
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (!['debt', 'repayment'].includes(field.value)) {
-                                                field.onChange('debt');
-                                            }
-                                        }}
-                                        className={cn(
-                                            "flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                                            ['debt', 'repayment'].includes(field.value)
-                                                ? "bg-white text-slate-900 shadow-sm border border-slate-200/50"
-                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                        )}
-                                    >
-                                        <Users className="w-4 h-4" />
-                                        <span>External (Debt)</span>
-                                    </button>
-                                </div>
+                {/* SOURCE */}
+                <div className="space-y-1.5 z-10">
+                    <FormLabel className={cn(
+                        "text-[10px] font-black uppercase tracking-wider block mb-1 transition-colors",
+                        isIncomeFlow ? "text-slate-200" : "text-rose-500"
+                    )}>
+                        Pay With (Từ)
+                    </FormLabel>
 
-                                {/* LEVEL 2: Sub-Types */}
-                                {['expense', 'income', 'transfer', 'credit_pay'].includes(field.value) ? (
-                                    <Tabs
-                                        value={field.value}
-                                        onValueChange={(val) => field.onChange(val as any)}
-                                        className="w-full"
-                                    >
-                                        <TabsList className={cn("h-9 bg-slate-100/50", field.value === 'credit_pay' ? "grid w-full grid-cols-1" : "grid w-full grid-cols-4")}>
-                                            <TabsTrigger
-                                                value="expense"
-                                                className="text-xs gap-1.5 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm hover:text-rose-600 transition-colors"
-                                            >
-                                                <ArrowUpRight className="w-3.5 h-3.5" />
-                                                Expense
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="income"
-                                                className="text-xs gap-1.5 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm hover:text-emerald-600 transition-colors"
-                                            >
-                                                <ArrowDownLeft className="w-3.5 h-3.5" />
-                                                Income
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="transfer"
-                                                className="text-xs gap-1.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm hover:text-blue-600 transition-colors"
-                                            >
-                                                <ArrowRightLeft className="w-3.5 h-3.5" />
-                                                Transfer
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="credit_pay"
-                                                className="text-xs gap-1.5 data-[state=active]:bg-violet-50 data-[state=active]:text-violet-700 data-[state=active]:shadow-sm hover:text-violet-600 transition-colors"
-                                            >
-                                                <RefreshCcw className="w-3.5 h-3.5" />
-                                                Credit Pay
-                                            </TabsTrigger>
-                                        </TabsList>
-                                    </Tabs>
-                                ) : (
-                                    <div className="hidden" />
-                                )}
-                            </div>
-                        </FormControl>
-                    </FormItem>
-                )}
-            />
-
-            {/* ACCOUNT SELECTION GRID */}
-            <div className="grid grid-cols-2 gap-4">
-
-                {/* SOURCE ACCOUNT: Full width for Expense/Income/CreditPay */}
-                <div className={cn(
-                    "space-y-2",
-                    (type === 'expense' || type === 'income' || type === 'credit_pay') ? "col-span-2" : "col-span-1"
-                )}>
-                    <FormField
+                    <Controller
                         control={form.control}
                         name="source_account_id"
                         render={({ field }) => (
                             <FormItem>
-                                <div className="flex items-center justify-between h-5 mb-1">
-                                    <FormLabel className="text-xs font-semibold text-slate-500">
-                                        {(type === 'income' || type === 'repayment') ? 'Deposit To' : 'Pay With'}
-                                    </FormLabel>
-                                    {type === 'transfer' && (
-                                        <div className="flex items-center gap-2">
-                                            <Label htmlFor="show-all" className="text-[10px] text-slate-400 font-medium cursor-pointer">All</Label>
-                                            <Switch
-                                                id="show-all"
-                                                checked={showAllAccounts}
-                                                onCheckedChange={setShowAllAccounts}
-                                                className="scale-75 origin-right"
-                                            />
-                                        </div>
-                                    )}
-                                    {(type === 'debt' || type === 'repayment') && (
-                                        <div className="flex items-center gap-2 bg-slate-100/50 px-2 py-0.5 rounded-full border border-slate-200">
-                                            <span className={cn("text-[10px] font-bold uppercase transition-colors", type === 'debt' ? "text-rose-600" : "text-slate-400")}>
-                                                Lend
-                                            </span>
-                                            <Switch
-                                                checked={type === 'repayment'}
-                                                onCheckedChange={(checked) => form.setValue('type', checked ? 'repayment' : 'debt')}
-                                                className={cn(
-                                                    "scale-75 data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-rose-500"
-                                                )}
-                                            />
-                                            <span className={cn("text-[10px] font-bold uppercase transition-colors", type === 'repayment' ? "text-emerald-600" : "text-slate-400")}>
-                                                Repay
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
                                 <FormControl>
                                     <Combobox
-                                        groups={accountGroups}
+                                        groups={getAccountGroups('source')}
                                         value={field.value ?? undefined}
-                                        onValueChange={field.onChange}
-                                        placeholder="Select account"
-                                        className="w-full h-10"
+                                        onValueChange={(val) => {
+                                            field.onChange(val || undefined); // Use undefined instead of null to fix lint
+                                            // BẬP BÊNH logic: Selecting source clears target if standard mode
+                                            if (val && !isSpecialMode && targetId) {
+                                                form.setValue('target_account_id', undefined as any);
+                                            }
+                                        }}
+                                        placeholder={sourcePlaceholder}
+                                        triggerClassName={cn(
+                                            "h-11 border-slate-200 transition-all duration-300",
+                                            isIncomeFlow && "opacity-40 border-dashed bg-slate-50 grayscale",
+                                            field.value && "border-rose-100 shadow-sm ring-1 ring-rose-50"
+                                        )}
+                                        className="w-full"
                                         onAddNew={onAddNewAccount}
                                         addLabel="Account"
                                     />
@@ -301,63 +183,84 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                     />
                 </div>
 
-                {/* TARGET ACCOUNT (Transfer Only) */}
-                {type === 'transfer' && (
-                    <div className="space-y-2 col-span-1">
-                        <FormField
-                            control={form.control}
-                            name="target_account_id"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel className="text-xs font-semibold text-slate-500">To Account</FormLabel>
-                                    <FormControl>
-                                        <Combobox
-                                            groups={accountGroups}
-                                            value={field.value ?? undefined}
-                                            onValueChange={field.onChange}
-                                            placeholder="Destination"
-                                            className="w-full h-10"
-                                            onAddNew={onAddNewAccount}
-                                            addLabel="Account"
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                )}
+                {/* TARGET */}
+                <div className="space-y-1.5 z-10">
+                    <FormLabel className={cn(
+                        "text-[10px] font-black uppercase tracking-wider block mb-1 transition-colors",
+                        isExpenseFlow ? "text-slate-200" : "text-emerald-500"
+                    )}>
+                        Deposit To (Đến)
+                    </FormLabel>
 
-                {/* PERSON (Debt/Repayment Only) */}
-                {(type === 'debt' || type === 'repayment') && (
-                    <div className="space-y-2 col-span-1">
-                        <FormField
-                            control={form.control}
-                            name="person_id"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <div className="flex items-center justify-between h-5 mb-1">
-                                        <FormLabel className="text-xs font-semibold text-slate-500">Person</FormLabel>
-                                    </div>
-                                    <FormControl>
-                                        <Combobox
-                                            groups={peopleGroups}
-                                            value={field.value ?? undefined}
-                                            onValueChange={field.onChange}
-                                            placeholder="Select person"
-                                            className="w-full h-10"
-                                            onAddNew={onAddNewPerson}
-                                            addLabel="Person"
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                )}
+                    <Controller
+                        control={form.control}
+                        name="target_account_id"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormControl>
+                                    <Combobox
+                                        groups={getAccountGroups('target')}
+                                        value={field.value ?? undefined}
+                                        onValueChange={(val) => {
+                                            field.onChange(val || undefined);
+                                            // BẬP BÊNH logic: Selecting target clears source if standard mode
+                                            if (val && !isSpecialMode && sourceId) {
+                                                form.setValue('source_account_id', undefined as any);
+                                            }
+                                        }}
+                                        placeholder={targetPlaceholder}
+                                        triggerClassName={cn(
+                                            "h-11 border-slate-200 transition-all duration-300",
+                                            isExpenseFlow && "opacity-40 border-dashed bg-slate-50 grayscale",
+                                            field.value && "border-emerald-100 shadow-sm ring-1 ring-emerald-50"
+                                        )}
+                                        className="w-full"
+                                        onAddNew={onAddNewAccount}
+                                        addLabel="Account"
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
             </div>
 
+            {/* ROW 3: CONTEXT HINT */}
+            <div className="animate-in fade-in slide-in-from-bottom-1 duration-400">
+                <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200/50 shadow-sm flex items-start gap-4 transition-all overflow-hidden group">
+                    <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-sm transition-all duration-500",
+                        isIncomeFlow ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-100" :
+                            isExpenseFlow ? "bg-rose-500 text-white border-rose-600 shadow-rose-100" :
+                                isTransferFlow ? (type === 'credit_pay' ? "bg-violet-600 text-white border-violet-700 shadow-violet-100" : "bg-blue-500 text-white border-blue-600 shadow-blue-100") :
+                                    "bg-white text-slate-400 border-slate-200"
+                    )}>
+                        {isIncomeFlow ? <ArrowUpRight className="w-5 h-5 animate-pulse" /> :
+                            isExpenseFlow ? <ArrowDownLeft className="w-5 h-5 animate-pulse" /> :
+                                isTransferFlow ? (type === 'credit_pay' ? <RefreshCcw className="w-5 h-5" /> : <ArrowRightLeft className="w-5 h-5" />) :
+                                    <User className="w-5 h-5" />}
+                    </div>
+                    <div className="space-y-0.5 flex-1">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Automated Flow Summary</span>
+                        <p className="text-[11px] text-slate-600 leading-tight font-bold">
+                            {type === 'credit_pay' ? (
+                                sourceId && targetId ? "Card Repayment Match: Moving funds to settle credit debt." : "Card Repayment Mode: Please choose source bank and target credit card."
+                            ) : isTransferFlow ? (
+                                sourceId && targetId ? "Internal Transfer: Moving funds between your own assets." : "Transfer Mode: Please select both source and destination accounts."
+                            ) : isIncomeFlow ? (
+                                personId ? `Repayment Flow: ${selectedPerson?.name} is paying you back into ${accounts.find(a => a.id === targetId)?.name}.` :
+                                    `Income Flow: Receiving funds into ${accounts.find(a => a.id === targetId)?.name}.`
+                            ) : isExpenseFlow ? (
+                                personId ? `Lending Flow: You are lending to ${selectedPerson?.name} from ${accounts.find(a => a.id === sourceId)?.name}.` :
+                                    `Expense Flow: Paying from ${accounts.find(a => a.id === sourceId)?.name}.`
+                            ) : (
+                                "Intelligent Transaction Flow: Start by picking an account or person."
+                            )}
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

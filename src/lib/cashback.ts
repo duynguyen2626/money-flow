@@ -168,6 +168,16 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
   };
 }
 
+const normalizeRate = (val: any): number => {
+  const r = Number(val ?? 0);
+  // Smart heuristic: In this project, rates >= 0.3 are almost certainly percentages (0.5 for 0.5%, 5 for 5%)
+  // while rates < 0.3 are almost certainly decimals (0.003 for 0.3%, 0.15 for 15%)
+  // We choose 0.3 because 30% is a common max for high-cat cashback (0.3), 
+  // and 0.5 is a common base rate (0.5).
+  if (r >= 0.3) return r / 100;
+  return r;
+};
+
 export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgram {
   const parsed = parseCashbackConfig(raw);
   const program = parsed.program;
@@ -175,24 +185,24 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
   // If account is provided with new cb_ columns, use them first
   if (account && account.cb_type && account.cb_type !== 'none') {
     return {
-      defaultRate: Number(account.cb_base_rate ?? program?.defaultRate ?? 0) / 100,
+      defaultRate: normalizeRate(account.cb_base_rate ?? program?.defaultRate ?? 0),
       maxBudget: account.cb_is_unlimited ? null : Number(account.cb_max_budget ?? program?.maxBudget ?? 0),
-      // Cycle info is still in JSON for now
-      cycleType: program?.cycleType || 'calendar_month',
-      statementDay: program?.statementDay ?? null,
-      minSpendTarget: program?.minSpendTarget ?? null,
-      dueDate: program?.dueDate ?? null,
+      // Cycle info prioritization
+      cycleType: account.cb_cycle_type || program?.cycleType || 'calendar_month',
+      statementDay: (account.statement_day ?? program?.statementDay) ?? null,
+      minSpendTarget: (account.cb_min_spend ?? program?.minSpendTarget) ?? null,
+      dueDate: (account.due_date ?? program?.dueDate) ?? null,
       levels: (() => {
         if (account.cb_type === 'tiered' && Array.isArray(account.cb_rules_json)) {
           return (account.cb_rules_json as any[]).map((lvl: any) => ({
             id: lvl.id || Math.random().toString(36).substr(2, 9),
             name: lvl.name || "",
             minTotalSpend: Number(lvl.minTotalSpend ?? 0),
-            defaultRate: lvl.defaultRate !== undefined ? Number(lvl.defaultRate) / 100 : null,
+            defaultRate: normalizeRate(lvl.defaultRate),
             rules: (lvl.rules || []).map((r: any) => ({
               id: r.id || Math.random().toString(36).substr(2, 9),
               categoryIds: r.categoryIds || r.cat_ids || [],
-              rate: Number(r.rate ?? 0) / 100,
+              rate: normalizeRate(r.rate),
               maxReward: (r.maxReward !== undefined ? r.maxReward : (r.max !== undefined ? r.max : null)),
               description: r.description
             }))
@@ -202,17 +212,21 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
             id: 'simple_level',
             name: 'General',
             minTotalSpend: 0,
-            defaultRate: Number(account.cb_base_rate ?? 0) / 100,
+            defaultRate: normalizeRate(account.cb_base_rate),
             rules: (account.cb_rules_json as any[]).map((r: any) => ({
               id: r.id || Math.random().toString(36).substr(2, 9),
               categoryIds: r.categoryIds || r.cat_ids || [],
-              rate: Number(r.rate ?? 0) / 100,
+              rate: normalizeRate(r.rate),
               maxReward: (r.maxReward !== undefined ? r.maxReward : (r.max !== undefined ? r.max : null)),
               description: r.description
             }))
           }];
         }
-        return program?.levels || [];
+        return program?.levels?.map(lvl => ({
+          ...lvl,
+          defaultRate: normalizeRate(lvl.defaultRate),
+          rules: lvl.rules?.map(r => ({ ...r, rate: normalizeRate(r.rate) }))
+        })) || [];
       })()
     };
   }
@@ -220,7 +234,7 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
   // If already in new format, just clean up and return
   if (parsed.program) {
     return {
-      defaultRate: Number(parsed.program.defaultRate ?? 0),
+      defaultRate: normalizeRate(parsed.program.defaultRate),
       maxBudget: parsed.program.maxBudget !== undefined ? parsed.program.maxBudget : null,
       cycleType: parsed.program.cycleType || 'calendar_month',
       statementDay: parsed.program.statementDay !== undefined ? parsed.program.statementDay : null,
@@ -230,11 +244,11 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
         id: lvl.id,
         name: lvl.name,
         minTotalSpend: Number(lvl.minTotalSpend ?? 0),
-        defaultRate: lvl.defaultRate !== undefined ? lvl.defaultRate : null,
+        defaultRate: normalizeRate(lvl.defaultRate),
         rules: lvl.rules?.map(rule => ({
           id: rule.id,
           categoryIds: rule.categoryIds || [],
-          rate: Number(rule.rate ?? 0),
+          rate: normalizeRate(rule.rate),
           maxReward: rule.maxReward !== undefined ? rule.maxReward : null,
           description: rule.description
         })) || []

@@ -12,7 +12,7 @@ export const singleTransactionSchema = z.object({
     type: z.enum(["expense", "income", "debt", "transfer", "repayment", "credit_pay"]),
 
     // Relations
-    source_account_id: z.string().min(1, "Source account is required"),
+    source_account_id: z.string().optional().nullable(),
     target_account_id: z.string().optional().nullable(),
 
     // Categorization
@@ -35,6 +35,10 @@ export const singleTransactionSchema = z.object({
         is_fixed: z.boolean().optional(),
         note: z.string().optional().nullable()
     })).optional().nullable(),
+
+    // Installment
+    is_installment: z.boolean().default(false).optional(),
+    installment_plan_id: z.string().optional().nullable(),
 
     // Temporary UI state (not sent to API)
     ui_is_cashback_expanded: z.boolean().default(false).optional(),

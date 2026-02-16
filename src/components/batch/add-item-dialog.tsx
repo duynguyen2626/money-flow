@@ -27,7 +27,6 @@ import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Info, Edit, Plus, Loader2 } from 'lucide-react'
 import { AccountSlideV2 } from '@/components/accounts/v2/AccountSlideV2'
-import { CreateAccountDialog } from '@/components/moneyflow/create-account-dialog'
 
 
 const formSchema = z.object({
@@ -158,8 +157,8 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                 if (bankCode) searchTerms.add(bankCode.toLowerCase())
 
                 // Add short name if available - ONLY from banks matching current bankType
-                const mapping = bankMappings.find(b => 
-                    b.bank_type === bankType && 
+                const mapping = bankMappings.find(b =>
+                    b.bank_type === bankType &&
                     (b.bank_code === bankCode || b.short_name === bankName)
                 )
                 if (mapping?.short_name) searchTerms.add(mapping.short_name.toLowerCase())
@@ -506,13 +505,15 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                                             <Edit className="h-3 w-3" /> Edit Info
                                                         </button>
                                                     )}
-                                                    <CreateAccountDialog
-                                                        trigger={
-                                                            <span className="text-[10px] text-green-600 hover:underline flex items-center gap-0.5 cursor-pointer">
-                                                                <Plus className="h-3 w-3" /> New Account
-                                                            </span>
-                                                        }
-                                                    />
+                                                    <span
+                                                        onClick={() => {
+                                                            setSelectedAccountForEdit(null);
+                                                            setIsAccountSlideOpen(true);
+                                                        }}
+                                                        className="text-[10px] text-green-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                    >
+                                                        <Plus className="h-3 w-3" /> New Account
+                                                    </span>
                                                 </div>
                                             </div>
                                             <FormControl>

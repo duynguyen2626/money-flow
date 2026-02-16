@@ -68,10 +68,10 @@ export function CycleFilterDropdown(props: CycleFilterDropdownProps) {
             >
               <div className="flex items-center gap-1.5 truncate">
                 <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{selected ? selected.label : 'Cycle'}</span>
+                <span className="truncate">{value === 'all' ? 'All Cycles' : (selected ? selected.label : 'Cycle')}</span>
               </div>
               <div className="flex items-center gap-0.5 shrink-0">
-                {selected && !disabled && (
+                {value && !disabled && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div

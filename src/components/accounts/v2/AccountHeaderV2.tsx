@@ -3,12 +3,25 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Category } from "@/types/moneyflow.types";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+
+export interface AdvancedFilters {
+    family: boolean;
+    dueSoon: boolean;
+    needsSpendMore: boolean;
+    multiRuleCb: boolean;
+}
 
 interface AccountHeaderProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
-    activeFilter: 'accounts_cards' | 'credit' | 'savings' | 'debt';
-    onFilterChange: (filter: 'accounts_cards' | 'credit' | 'savings' | 'debt') => void;
+    activeFilter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed';
+    onFilterChange: (filter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed') => void;
     onAdd: () => void;
     viewMode: 'table' | 'grid';
     onViewModeChange: (mode: 'table' | 'grid') => void;
@@ -18,6 +31,8 @@ interface AccountHeaderProps {
     categories?: Category[];
     selectedCategory?: string | null;
     onCategoryChange?: (categoryId: string | undefined) => void;
+    advancedFilters: AdvancedFilters;
+    onAdvancedFiltersChange: (filters: AdvancedFilters) => void;
 }
 
 export function AccountHeaderV2({
@@ -34,13 +49,18 @@ export function AccountHeaderV2({
     categories = [],
     selectedCategory,
     onCategoryChange,
+    advancedFilters,
+    onAdvancedFiltersChange,
 }: AccountHeaderProps) {
     const filters = [
         { id: 'accounts_cards' as const, label: 'Accounts & Cards' },
         { id: 'credit' as const, label: 'Credit' },
         { id: 'savings' as const, label: 'Savings' },
         { id: 'debt' as const, label: 'Debt' },
+        { id: 'closed' as const, label: `Closed (${closedCount})` },
     ];
+
+    const hasActiveAdvanced = Object.values(advancedFilters).some(v => v);
 
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between sticky top-0 z-20 shadow-sm transition-all duration-200">
@@ -96,6 +116,82 @@ export function AccountHeaderV2({
                         </button>
                     )}
                 </div>
+
+                <div className="h-6 w-px bg-slate-200 mx-1 hidden lg:block" />
+
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                                "h-9 gap-2 px-3 text-[10px] font-black uppercase tracking-wider transition-all",
+                                hasActiveAdvanced ? "bg-blue-50 text-blue-600 border border-blue-100" : "text-slate-500 hover:text-slate-900"
+                            )}
+                        >
+                            <Filter className={cn("h-3.5 w-3.5", hasActiveAdvanced && "fill-blue-600")} />
+                            Advanced
+                            {hasActiveAdvanced && (
+                                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[8px]">
+                                    {Object.values(advancedFilters).filter(Boolean).length}
+                                </span>
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-4 shadow-xl border-slate-200 rounded-xl" align="end">
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">Filter Options</h4>
+                            <div className="space-y-3">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="filter-family"
+                                        checked={advancedFilters.family}
+                                        onCheckedChange={(checked) => onAdvancedFiltersChange({ ...advancedFilters, family: !!checked })}
+                                    />
+                                    <label htmlFor="filter-family" className="text-xs font-bold text-slate-600 cursor-pointer">Family (Parent-Child)</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="filter-due"
+                                        checked={advancedFilters.dueSoon}
+                                        onCheckedChange={(checked) => onAdvancedFiltersChange({ ...advancedFilters, dueSoon: !!checked })}
+                                    />
+                                    <label htmlFor="filter-due" className="text-xs font-bold text-slate-600 cursor-pointer text-nowrap">Due Soon ({"<"} 5 days)</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="filter-spend"
+                                        checked={advancedFilters.needsSpendMore}
+                                        onCheckedChange={(checked) => onAdvancedFiltersChange({ ...advancedFilters, needsSpendMore: !!checked })}
+                                    />
+                                    <label htmlFor="filter-spend" className="text-xs font-bold text-slate-600 cursor-pointer">Needs Spend More</label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="filter-rules"
+                                        checked={advancedFilters.multiRuleCb}
+                                        onCheckedChange={(checked) => onAdvancedFiltersChange({ ...advancedFilters, multiRuleCb: !!checked })}
+                                    />
+                                    <label htmlFor="filter-rules" className="text-xs font-bold text-slate-600 cursor-pointer">Multi-rule Cashback</label>
+                                </div>
+                            </div>
+                            {hasActiveAdvanced && (
+                                <Button
+                                    variant="ghost"
+                                    className="w-full h-8 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 p-0"
+                                    onClick={() => onAdvancedFiltersChange({
+                                        family: false,
+                                        dueSoon: false,
+                                        needsSpendMore: false,
+                                        multiRuleCb: false
+                                    })}
+                                >
+                                    Reset Filters
+                                </Button>
+                            )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
 
                 <div className="h-6 w-px bg-slate-200 mx-1 hidden lg:block" />
 

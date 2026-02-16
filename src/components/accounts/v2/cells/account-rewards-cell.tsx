@@ -204,11 +204,11 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
         const availableSpend = (isCapped && currentRate > 0 && remainingReward !== null) ? Math.floor(remainingReward / currentRate) : null;
 
         const statusLabel = !isMet
-            ? (isCapped ? `Available ${new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(availableSpend || 0)}` : `Needs ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`)
+            ? `Need ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`
             : (isCapped
                 ? (remainingReward !== null && remainingReward <= 0
                     ? 'Cap Reached'
-                    : `Available ${new Intl.NumberFormat('vi-VN').format(availableSpend || 0)}`)
+                    : `Available ${new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(availableSpend || 0)}`)
                 : 'Qualified');
 
         const progressDetail = !isMet
@@ -233,7 +233,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                 {/* Line 1: Status Text Only (Aligned with Limit column) */}
                 <div className="flex items-center justify-between px-0.5 min-h-[17px]">
                     {!isMet ? (
-                        <span className="text-[11px] font-black text-rose-600 flex items-center gap-1.5 leading-none">
+                        <span className="text-[11px] font-black text-rose-500 flex items-center gap-1.5 leading-none">
                             <span className="text-xs">⚠️</span>
                             {statusLabel}
                         </span>
@@ -287,7 +287,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                     {/* Right: Percentage */}
                                     <span className={cn(
                                         "text-[10px] font-bold tabular-nums pointer-events-none",
-                                        isMet ? "text-emerald-700" : "text-rose-700"
+                                        isMet ? "text-emerald-700" : "text-rose-600"
                                     )}>
                                         {Math.round(progress)}%
                                     </span>
@@ -305,7 +305,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                     </span>
                                     <span className={cn(
                                         "text-[10px] px-2 py-1 rounded font-black",
-                                        !isMet ? "bg-rose-100 text-rose-700 border border-rose-300" : "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                                        !isMet ? "bg-rose-50 text-rose-600 border border-rose-200" : "bg-emerald-100 text-emerald-700 border border-emerald-300"
                                     )}>{statusLabel}</span>
                                 </div>
 

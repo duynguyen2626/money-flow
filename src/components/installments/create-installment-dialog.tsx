@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,10 +25,15 @@ interface CreateInstallmentDialogProps {
         transactionId?: string
     }
     trigger?: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
-export function CreateInstallmentDialog({ initialData, trigger }: CreateInstallmentDialogProps) {
-    const [open, setOpen] = useState(false)
+export function CreateInstallmentDialog({ initialData, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: CreateInstallmentDialogProps) {
+    const [internalOpen, setInternalOpen] = useState(false)
+    const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+    const setOpen = setControlledOpen !== undefined ? setControlledOpen : setInternalOpen
+
     const [loading, setLoading] = useState(false)
     const router = useRouter()
 
@@ -38,6 +43,18 @@ export function CreateInstallmentDialog({ initialData, trigger }: CreateInstallm
         term: "3",
         fee: "0",
     })
+
+    // Update form data when initialData changes or dialog opens
+    useEffect(() => {
+        if (open) {
+            setFormData({
+                name: initialData?.name || "",
+                totalAmount: initialData?.totalAmount?.toString() || "",
+                term: "3",
+                fee: "0",
+            })
+        }
+    }, [open, initialData])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()

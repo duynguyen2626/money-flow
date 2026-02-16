@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, memo } from 'react';
 import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check, Filter, Coins, CalendarClock, Wallet, Clock, TrendingUp, Plus, ListFilter, X } from 'lucide-react';
-import { CreateAccountDialog } from './create-account-dialog';
+import { AccountSlideV2 } from '@/components/accounts/v2/AccountSlideV2';
 import { AccountCard } from './account-card';
 import { AccountTable } from './account-table';
 import { FamilyCluster } from './family-cluster';
@@ -77,6 +77,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
 
   // Mobile states
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [isAccountSlideOpen, setIsAccountSlideOpen] = useState(false);
 
   useEffect(() => {
     setItems(accounts);
@@ -383,15 +384,14 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             </button>
           </div>
 
-          <CreateAccountDialog
-            collateralAccounts={items}
-            trigger={
-              <Button size="sm" className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 px-3">
-                <Plus className="w-4 h-4 md:mr-1.5" />
-                <span className="hidden md:inline">Add New</span>
-              </Button>
-            }
-          />
+          <Button
+            onClick={() => setIsAccountSlideOpen(true)}
+            size="sm"
+            className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 px-3"
+          >
+            <Plus className="w-4 h-4 md:mr-1.5" />
+            <span className="hidden md:inline">Add New</span>
+          </Button>
         </div>
       </div>
 
@@ -473,6 +473,12 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
           </div>
         </details>
       )}
+      <AccountSlideV2
+        open={isAccountSlideOpen}
+        onOpenChange={setIsAccountSlideOpen}
+        allAccounts={accounts}
+        categories={categories}
+      />
     </div>
   );
 }

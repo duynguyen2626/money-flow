@@ -28,20 +28,14 @@ import { Combobox } from "@/components/ui/combobox";
 import { formatShortVietnameseCurrency } from "@/lib/number-to-text";
 
 type BasicInfoSectionProps = {
-    shops: Shop[];
-    categories: Category[];
     people: Person[];
-    onAddNewCategory?: () => void;
     operationMode?: 'add' | 'edit' | 'duplicate';
-    isLoadingCategories?: boolean;
 };
 
-export function BasicInfoSection({ shops, categories, people, onAddNewCategory, operationMode, isLoadingCategories }: BasicInfoSectionProps) {
+export function BasicInfoSection({ people, operationMode }: BasicInfoSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
-    const isShopHidden = ['income', 'repayment', 'transfer', 'credit_pay'].includes(transactionType);
     const amount = useWatch({ control: form.control, name: "amount" });
-    const serviceFee = useWatch({ control: form.control, name: "service_fee" });
 
     // Sync Tag with Date
     const occurredAt = useWatch({ control: form.control, name: "occurred_at" });
@@ -50,68 +44,6 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
             form.setValue("tag", format(occurredAt, "yyyy-MM"));
         }
     }, [occurredAt, form]);
-
-    // Filter categories based on transaction type (Case-insensitve & Robust)
-    const filteredCategories = categories.filter(c => {
-        if (!c.type) return true; // Show uncategorized if any
-        const catType = c.type.toLowerCase();
-        const txType = transactionType?.toLowerCase() || 'expense';
-
-        if (txType === 'expense' || txType === 'debt' || txType === 'credit_pay') return catType === 'expense';
-        if (txType === 'income' || txType === 'repayment') return catType === 'income';
-        // For transfer, usually we want 'transfer' categories, but sometimes 'expense' (e.g. fees)
-        if (txType === 'transfer') return catType === 'transfer';
-
-        return true;
-    });
-
-    // Auto-select defaults for Debt (Lend) and Repayment
-    useEffect(() => {
-        // Skip auto-assignment if not a new transaction or if category already set
-        const currentCategoryId = form.getValues('category_id');
-        if (operationMode === 'edit' || operationMode === 'duplicate' || currentCategoryId) return;
-
-        if (transactionType === 'debt') {
-            const shoppingCat = categories.find(c => c.name === 'Shopping');
-            if (shoppingCat) {
-                form.setValue('category_id', shoppingCat.id);
-            }
-            const shopeeShop = shops.find(s => s.name === 'Shopee');
-            if (shopeeShop) {
-                form.setValue('shop_id', shopeeShop.id);
-            }
-        } else if (transactionType === 'repayment') {
-            const repaymentCat = categories.find(c => c.name === 'Repayment');
-            if (repaymentCat) {
-                form.setValue('category_id', repaymentCat.id);
-            }
-        }
-    }, [transactionType, categories, shops, form]);
-
-    const categoryOptions = filteredCategories.map(c => ({
-        value: c.id,
-        label: c.name,
-        icon: c.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.image_url} alt={c.name} className="w-5 h-5 object-contain rounded-md" />
-        ) : c.icon ? (
-            <span className="text-sm">{c.icon}</span>
-        ) : (
-            <Book className="w-4 h-4 text-slate-400" />
-        )
-    }));
-
-    const shopOptions = shops.map(s => ({
-        value: s.id,
-        label: s.name,
-        icon: s.image_url ? (
-            <img
-                src={s.image_url}
-                alt={s.name}
-                className="w-6 h-6 object-contain rounded-md"
-            />
-        ) : <Store className="w-4 h-4 text-slate-400" />
-    }));
 
     return (
         <div className="space-y-3">
@@ -242,149 +174,7 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory, 
                 </div>
             </div>
 
-            {/* ROW 2: Amount (Prominent) */}
-            <div className="space-y-1.5">
-                <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                        <FormItem className="space-y-1">
-                            <FormControl>
-                                <SmartAmountInput
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    hideLabel={true}
-                                    className="text-2xl font-bold h-12"
-                                    placeholder="0"
-                                />
-                            </FormControl>
-                            {field.value ? (
-                                <p className="text-[10px] font-bold text-rose-600 px-1 italic">
-                                    {formatShortVietnameseCurrency(field.value)}
-                                </p>
-                            ) : null}
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                {/* Service Fee (Optional) */}
-                <FormField
-                    control={form.control}
-                    name="service_fee"
-                    render={({ field }) => {
-                        const fee = field.value || 0;
-                        const hasFee = fee > 0;
-                        const totalAmount = (amount || 0) + fee;
-
-                        return (
-                            <FormItem className="space-y-0">
-                                <div className="flex items-center justify-between gap-3 bg-indigo-50/30 rounded-lg px-4 py-3 border border-dashed border-indigo-200 shadow-sm">
-                                    <div className="flex flex-col gap-0.5">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-[10px] font-black text-indigo-700 shadow-sm">FEE</div>
-                                            <span className="text-xs font-black text-indigo-900/70 uppercase tracking-wider">Service Fee</span>
-                                        </div>
-                                        {hasFee && (
-                                            <p className="text-[10px] font-bold text-rose-600 px-1 italic leading-none mt-1">
-                                                {formatShortVietnameseCurrency(fee)}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <FormControl>
-                                            <SmartAmountInput
-                                                value={field.value || undefined}
-                                                onChange={field.onChange}
-                                                hideLabel={true}
-                                                placeholder="0"
-                                                className="w-28 h-9 text-sm font-black text-right"
-                                                compact={true}
-                                                hideCurrencyText={true}
-                                                hideCalculator={true}
-                                            />
-                                        </FormControl>
-                                        {hasFee && (
-                                            <div className="flex items-center gap-2 pl-3 border-l-2 border-slate-200/50">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">Total</span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-lg font-black text-slate-900 tabular-nums leading-none">
-                                                            {new Intl.NumberFormat('vi-VN').format(totalAmount)}
-                                                        </span>
-                                                        <div className="p-0.5 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 shadow-sm">
-                                                            <Check className="w-2.5 h-2.5" />
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-rose-600 italic leading-none mt-0.5">
-                                                        {formatShortVietnameseCurrency(totalAmount)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <FormMessage />
-                            </FormItem>
-                        );
-                    }}
-                />
-            </div>
-
-            {/* ROW 3: Category & Shop */}
-            <div className={cn("grid gap-3", isShopHidden ? "grid-cols-1" : "grid-cols-2")}>
-                {/* Category Selection */}
-                <FormField
-                    control={form.control}
-                    name="category_id"
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormControl>
-                                <Combobox
-                                    items={categoryOptions}
-                                    value={field.value || undefined}
-                                    onValueChange={field.onChange}
-                                    placeholder="Category"
-                                    inputPlaceholder="Search category..."
-                                    className="w-full h-10 bg-white"
-                                    onAddNew={onAddNewCategory}
-                                    addLabel="Category"
-                                    isLoading={isLoadingCategories}
-                                />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
-                {/* Shop Selection (Hidden for Income/Transfer/Repayment) */}
-                {!isShopHidden && (
-                    <FormField
-                        control={form.control}
-                        name="shop_id"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormControl>
-                                    <Combobox
-                                        items={shopOptions}
-                                        value={field.value || undefined}
-                                        onValueChange={field.onChange}
-                                        placeholder="Select Shop"
-                                        inputPlaceholder="Search shops..."
-                                        emptyState="No shop found."
-                                        className="w-full h-10 bg-white"
-                                        onAddNew={() => console.log("Add new shop clicked")}
-                                        addLabel="Shop"
-                                    />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                )}
-            </div>
-
-            {/* ROW 4: Note */}
+            {/* ROW 3: Note */}
             <FormField
                 control={form.control}
                 name="note"

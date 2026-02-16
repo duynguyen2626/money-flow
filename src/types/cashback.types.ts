@@ -70,6 +70,16 @@ export type CashbackCard = {
   totalGivenAway: number
 }
 
+export type RuleProgress = {
+  ruleId: string
+  name: string
+  rate: number
+  spent: number
+  earned: number
+  max: number | null
+  isMain: boolean
+}
+
 export type AccountSpendingStats = {
   currentSpend: number
   minSpend: number | null
@@ -84,6 +94,7 @@ export type AccountSpendingStats = {
   potentialRate?: number
   matchReason?: string
   policyMetadata?: CashbackPolicyMetadata
+  activeRules?: RuleProgress[]
   maxReward?: number | null // Category-specific max reward limit
   is_min_spend_met?: boolean
   cycle?: {

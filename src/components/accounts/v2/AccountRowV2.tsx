@@ -407,7 +407,7 @@ function renderCell(
                                                                                         <span className="text-[12px] font-black text-slate-800 uppercase tracking-tight">{cat.name}</span>
                                                                                     </div>
                                                                                     <div className="flex flex-col items-end">
-                                                                                        <span className="text-[11px] font-black text-emerald-600">{(rules.find((r: any) => r.categoryIds?.includes(cid))?.rate * 100 || 0).toFixed(1)}%</span>
+                                                                                        <span className="text-[11px] font-black text-emerald-600">{((rules.find((r: any) => r.categoryIds?.includes(cid))?.rate ?? 0) * 100).toFixed(1)}%</span>
                                                                                     </div>
                                                                                 </div>
                                                                             )
@@ -534,39 +534,41 @@ function renderCell(
                         </div>
                     </div>
 
-                    {isExpanded && children.length > 0 && (
-                        <div className="ml-10 flex flex-col gap-1 border-l-2 border-indigo-100 pl-3 py-1">
-                            {children.map((child: Account) => (
-                                <div key={child.id} className="flex items-center justify-between gap-2 py-0.5">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center bg-white rounded-none overflow-hidden p-1">
-                                            {child.image_url ? (
-                                                <img src={child.image_url} alt="" className="w-full h-full object-contain" />
-                                            ) : (
-                                                (() => {
-                                                    const Placeholder = getPlaceholderIcon(child.type);
-                                                    return <Placeholder className="w-full h-full text-slate-200" />;
-                                                })()
-                                            )}
+                    {
+                        isExpanded && children.length > 0 && (
+                            <div className="ml-10 flex flex-col gap-1 border-l-2 border-indigo-100 pl-3 py-1">
+                                {children.map((child: Account) => (
+                                    <div key={child.id} className="flex items-center justify-between gap-2 py-0.5">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-7 h-7 flex-shrink-0 flex items-center justify-center bg-white rounded-none overflow-hidden p-1">
+                                                {child.image_url ? (
+                                                    <img src={child.image_url} alt="" className="w-full h-full object-contain" />
+                                                ) : (
+                                                    (() => {
+                                                        const Placeholder = getPlaceholderIcon(child.type);
+                                                        return <Placeholder className="w-full h-full text-slate-200" />;
+                                                    })()
+                                                )}
+                                            </div>
+                                            <Link
+                                                href={`/accounts/${child.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 truncate"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {child.name}
+                                            </Link>
                                         </div>
-                                        <Link
-                                            href={`/accounts/${child.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 truncate"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {child.name}
-                                        </Link>
+                                        <span className="text-[10px] font-black tabular-nums text-slate-400">
+                                            {formatMoneyVND(child.current_balance || 0)}
+                                        </span>
                                     </div>
-                                    <span className="text-[10px] font-black tabular-nums text-slate-400">
-                                        {formatMoneyVND(child.current_balance || 0)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                ))}
+                            </div>
+                        )
+                    }
+                </div >
             );
         }
         case 'limit': {
@@ -599,14 +601,14 @@ function renderCell(
             const limitProgress = limit > 0 ? Math.min(100, (debtAbs / limit) * 100) : 0;
             const usagePerc = limitProgress.toFixed(0);
             const familyDebtAbs = Math.abs(familyDebt);
-            const hasWaiver = account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0;
+            const hasWaiver = !!(account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0);
 
             return (
                 <div className="flex flex-col items-end gap-2 min-w-[140px] py-1">
                     {/* Line 1: Limit Row */}
                     <div className="flex flex-col items-end gap-1 w-full group/limit">
                         <div className="flex items-center gap-1.5 justify-end w-full px-0.5 min-h-[14px]">
-                            {account.secured_by_account_id && (
+                            {!!account.secured_by_account_id && (
                                 <TooltipProvider>
                                     <Tooltip delayDuration={300}>
                                         <TooltipTrigger asChild>
@@ -630,7 +632,7 @@ function renderCell(
                                     </Tooltip>
                                 </TooltipProvider>
                             )}
-                            {account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0 && (
+                            {!!(account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0) && (
                                 (() => {
                                     const target = account.stats.annual_fee_waiver_target || 0;
                                     const rawSpent = account.stats.spent_this_cycle || 0;

@@ -1,18 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useForm, FormProvider, useWatch } from "react-hook-form";
+import { useForm, FormProvider, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
 import { format } from "date-fns";
-import { CalendarIcon, ArrowLeft } from "lucide-react";
+import { CalendarIcon, ArrowLeft, RefreshCw } from "lucide-react";
 import {
     Sheet,
     SheetContent,
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import {
+    FormControl,
+    FormItem,
+    FormLabel,
+    FormMessage
+} from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
+import { CategoryShopSection } from "./single-mode/category-shop-section";
 import { Button } from "@/components/ui/button";
 import {
     TransactionSlideV2Props,
@@ -21,6 +29,12 @@ import {
     BulkTransactionFormValues,
 } from "./types";
 import { singleTransactionSchema, bulkTransactionSchema } from "./schema";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 
 import { cn } from "@/lib/utils";
@@ -32,18 +46,23 @@ import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
 
 // Components
+import { TransactionTypeSelector } from "./single-mode/type-selector";
+import { AmountSection } from "./single-mode/amount-section";
 import { BasicInfoSection } from "@/components/transaction/slide-v2/single-mode/basic-info-section";
 import { AccountSelector } from "@/components/transaction/slide-v2/single-mode/account-selector";
 import { CashbackSection } from "@/components/transaction/slide-v2/single-mode/cashback-section";
 import { SplitBillSection } from "@/components/transaction/slide-v2/single-mode/split-bill-section";
+import { InstallmentSelector } from "./single-mode/installment-selector";
 import { BulkInputSection } from "@/components/transaction/slide-v2/bulk-mode/bulk-input-section";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
 // Dialogs
-import { CreateAccountDialog } from "@/components/moneyflow/create-account-dialog";
+import { AccountSlideV2 } from "@/components/accounts/v2/AccountSlideV2";
 import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { QuickPeopleSettingsDialog } from "@/components/moneyflow/quick-people-settings-dialog";
+import { CreatePersonDialog } from "@/components/people/create-person-dialog";
+import { AddShopDialog } from "@/components/moneyflow/add-shop-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function TransactionSlideV2({
@@ -72,6 +91,8 @@ export function TransactionSlideV2({
     const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [isPeopleDialogOpen, setIsPeopleDialogOpen] = useState(false);
+    const [isCreatePersonDialogOpen, setIsCreatePersonDialogOpen] = useState(false);
+    const [isShopDialogOpen, setIsShopDialogOpen] = useState(false);
 
     // Category Auto-Refresh State
     const [isLoadingCategories, setIsLoadingCategories] = useState(false);
@@ -104,8 +125,16 @@ export function TransactionSlideV2({
         console.log("   operationMode:", operationMode);
 
         if (initialData) {
+            // MF5.5: Check if we should override type based on initialData
+            let type: SingleTransactionFormValues["type"] = initialData.type || "expense";
+
+            // If we have both accounts, it's likely a transfer (even if not explicitly set)
+            if (!initialData.type && initialData.source_account_id && initialData.target_account_id) {
+                type = 'transfer';
+            }
+
             const values: SingleTransactionFormValues = {
-                type: initialData.type || "expense",
+                type,
                 category_id: initialData.category_id ?? null,
                 occurred_at: initialData.occurred_at || new Date(),
                 amount: Math.abs(initialData.amount ?? 0),
@@ -119,6 +148,7 @@ export function TransactionSlideV2({
                 cashback_share_percent: initialData.cashback_share_percent ?? null,
                 cashback_share_fixed: initialData.cashback_share_fixed ?? null,
                 ui_is_cashback_expanded: initialData.ui_is_cashback_expanded ?? false,
+                is_installment: initialData.is_installment ?? false,
                 metadata: initialData.metadata ?? null,
                 service_fee: initialData.service_fee ?? (initialData.metadata?.service_fee ? Number(initialData.metadata.service_fee) : null),
             };
@@ -126,7 +156,9 @@ export function TransactionSlideV2({
             return values;
         }
         console.log("   ℹ️ No initialData - using defaults");
-        return {
+
+        // MF5.5: Default logic for blank new transaction
+        const defaultValues: SingleTransactionFormValues = {
             type: "expense",
             category_id: null,
             occurred_at: new Date(),
@@ -141,9 +173,12 @@ export function TransactionSlideV2({
             tag: null,
             cashback_share_percent: null,
             cashback_share_fixed: null,
+            is_installment: false,
             metadata: null,
             service_fee: null,
         };
+
+        return defaultValues;
     }, [initialData, accounts]);
 
     // --- Helper for safe schema resolution ---
@@ -203,6 +238,8 @@ export function TransactionSlideV2({
         defaultValues: defaultFormValues,
     });
 
+    const { isDirty: isSingleDirty } = singleForm.formState;
+
     // --- Bulk Transaction Form ---
     const bulkForm = useForm<BulkTransactionFormValues>({
         resolver: safeResolver(bulkTransactionSchema, 'bulkTransactionSchema') as any,
@@ -212,6 +249,18 @@ export function TransactionSlideV2({
             default_source_account_id: accounts[0]?.id || "",
         }
     });
+
+    const onAddNewAccount = () => {
+        setIsAccountDialogOpen(true);
+    };
+    const onAddNewPerson = () => {
+        setIsCreatePersonDialogOpen(true);
+    };
+    const onAddNewShop = () => {
+        setIsShopDialogOpen(true);
+    };
+
+    const { isDirty: isBulkDirty } = bulkForm.formState;
 
 
 
@@ -255,6 +304,18 @@ export function TransactionSlideV2({
             onHasChanges?.(false);
         }
     }, [open, defaultFormValues]);
+
+    // Watch for bulk form rows
+    const bulkRows = useWatch({ control: bulkForm.control, name: "rows" });
+
+    useEffect(() => {
+        if (mode === 'bulk') {
+            // In bulk mode, if form is dirty and has rows, we check changes
+            const hasBulkChanges = isBulkDirty && bulkRows && bulkRows.length > 0 && bulkRows.some((row: any) => row.amount > 0 || row.note || row.shop_id);
+            setHasChanges(hasBulkChanges);
+            onHasChanges?.(hasBulkChanges);
+        }
+    }, [bulkRows, mode, onHasChanges, isBulkDirty]);
     // Removed singleForm and onHasChanges from deps to avoid extra resets if they are stable
     // Note: react-hook-form provides stable identities for reset and the form object usually.
 
@@ -263,6 +324,13 @@ export function TransactionSlideV2({
         if (!open) return; // Don't track when closed
 
         const subscription = singleForm.watch((currentValues) => {
+            // Check if form is actually dirty from user interaction
+            if (!isSingleDirty) {
+                setHasChanges(false);
+                onHasChanges?.(false);
+                return;
+            }
+
             // Deep comparison of relevant fields
             const hasActualChanges =
                 currentValues.type !== defaultFormValues.type ||
@@ -278,6 +346,7 @@ export function TransactionSlideV2({
                 currentValues.cashback_share_percent !== defaultFormValues.cashback_share_percent ||
                 currentValues.cashback_share_fixed !== defaultFormValues.cashback_share_fixed ||
                 currentValues.service_fee !== defaultFormValues.service_fee ||
+                currentValues.is_installment !== defaultFormValues.is_installment ||
                 currentValues.occurred_at?.getTime() !== defaultFormValues.occurred_at?.getTime();
 
             setHasChanges(hasActualChanges);
@@ -286,11 +355,38 @@ export function TransactionSlideV2({
         });
 
         return () => subscription.unsubscribe();
-    }, [open, defaultFormValues, singleForm, onHasChanges]);
+    }, [open, defaultFormValues, singleForm, onHasChanges, isSingleDirty]);
 
-    // Watch for cashback auto-expand and debt auto-giveaway
+    // Watch for cashback auto-expand and reset special modes when person selected
     const sourceAccId = useWatch({ control: singleForm.control, name: "source_account_id" });
     const currentTxnType = useWatch({ control: singleForm.control, name: "type" });
+    const currentPersonId = useWatch({ control: singleForm.control, name: "person_id" });
+
+    // MF5.5: Reset Transfer/Pay when person selected
+    useEffect(() => {
+        if (!open) return;
+        if (currentPersonId && (currentTxnType === 'transfer' || currentTxnType === 'credit_pay')) {
+            console.log("👤 Person selected: Resetting special mode...");
+            singleForm.setValue('type', 'expense', { shouldDirty: true });
+        }
+    }, [currentPersonId, currentTxnType, open, singleForm]);
+
+    // MF5.5: Pre-populate source account for Transfer/Pay if empty or not bank
+    useEffect(() => {
+        if (!open || operationMode === 'edit') return;
+
+        if (currentTxnType === 'transfer' || currentTxnType === 'credit_pay') {
+            const currentAcc = accounts.find(a => a.id === sourceAccId);
+            if (!sourceAccId || (currentAcc && currentAcc.type !== 'bank')) {
+                // Find a bank account to pre-populate
+                const bankAcc = accounts.find(a => a.type === 'bank');
+                if (bankAcc) {
+                    console.log("🔄 Auto-populating bank account for special mode");
+                    singleForm.setValue('source_account_id', bankAcc.id, { shouldDirty: false });
+                }
+            }
+        }
+    }, [currentTxnType, open, operationMode, accounts, singleForm, sourceAccId]);
 
     useEffect(() => {
         if (!open || operationMode === 'edit') return;
@@ -299,11 +395,11 @@ export function TransactionSlideV2({
         const hasCashback = acc && (acc as any).cb_type !== 'none';
 
         if (hasCashback) {
-            singleForm.setValue('ui_is_cashback_expanded', true);
+            singleForm.setValue('ui_is_cashback_expanded', true, { shouldDirty: false });
 
             // If it's debt (External Debt tab), auto Give Away
             if (currentTxnType === 'debt') {
-                singleForm.setValue('cashback_mode', 'real_percent');
+                singleForm.setValue('cashback_mode', 'real_percent', { shouldDirty: false });
             }
         }
     }, [sourceAccId, currentTxnType, open, operationMode, accounts, singleForm]);
@@ -331,6 +427,7 @@ export function TransactionSlideV2({
                             cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : undefined,
                             cashback_share_fixed: txn.cashback_share_fixed || undefined,
                             ui_is_cashback_expanded: !!txn.cashback_mode && txn.cashback_mode !== 'none_back',
+                            is_installment: !!txn.is_installment,
                             service_fee: txn.metadata?.service_fee ? Number(txn.metadata.service_fee) : null,
                         };
                         singleForm.reset(formVal);
@@ -358,30 +455,37 @@ export function TransactionSlideV2({
         console.log("🎯 Operation:", operationMode, "| editingId:", editingId);
         console.log("🔀 Will call:", editingId ? "updateTransaction()" : "createTransaction()");
 
-        const payload = {
+        const payload: any = {
             occurred_at: data.occurred_at.toISOString(),
-            amount: data.amount,
-            note: data.note,
+            amount: data.amount + (data.service_fee || 0),
+            note: data.note || "",
             type: data.type,
-            source_account_id: data.source_account_id,
-            target_account_id: data.target_account_id,
+            // Directional Logic:
+            // For Income/Repayment: Money goes TO target_account_id. Service expects principal in source_account_id.
+            // For Expense/Debt: Money comes FROM source_account_id.
+            // For Transfer/Credit Pay: Both are used.
+            source_account_id: (((data.type === 'income' || data.type === 'repayment')
+                ? (data.target_account_id || data.source_account_id)
+                : (data.source_account_id || data.target_account_id)) || "") as string,
+            target_account_id: (data.type === 'transfer' || data.type === 'credit_pay')
+                ? data.target_account_id
+                : null,
             category_id: data.category_id || null,
             shop_id: data.shop_id || null,
             person_id: data.person_id || null,
-            tag: data.tag,
+            tag: data.tag || "",
             cashback_mode: data.cashback_mode,
-            // Convert UI percentage (20) to DB decimal (0.2)
             cashback_share_percent: data.cashback_share_percent ? data.cashback_share_percent / 100 : null,
             cashback_share_fixed: data.cashback_share_fixed,
+            is_installment: !!data.is_installment,
+            installment_plan_id: data.installment_plan_id,
             metadata: {
                 ...data.metadata,
                 service_fee: data.service_fee || undefined
             },
         };
-        // Total amount = Base amount + Service Fee
-        if (data.service_fee) {
-            payload.amount = data.amount + data.service_fee;
-        }
+
+        console.log("🚀 Mapped Payload for Service:", payload);
 
         // UX: Close immediately if handler provided
         if (onSubmissionStart) {
@@ -390,22 +494,14 @@ export function TransactionSlideV2({
             setIsSubmitting(true);
         }
 
-        // Fire and forget (or await if parent logic keeps this alive)
-        // Note: If component unmounts, this promise continues but state updates will fail/warn.
-        // Since we closed the sheet, we shouldn't touch local state after this point if onSubmissionStart was used.
         try {
             let success = false;
-            console.log("🚀 Starting transaction submit...");
-
             if (editingId) {
-                console.log("📝 UPDATE mode - editingId:", editingId);
                 success = await updateTransaction(editingId, payload);
                 if (success) toast.success("Transaction updated successfully");
                 else toast.error("Failed to update transaction");
             } else {
-                console.log("➕ CREATE mode - creating new transaction");
                 const newId = await createTransaction(payload);
-                console.log("✨ Create result - newId:", newId);
                 if (newId) {
                     success = true;
                     toast.success("Transaction created successfully");
@@ -582,43 +678,72 @@ export function TransactionSlideV2({
                         {mode === 'single' ? (
                             <div className="px-6 py-6">
                                 <FormProvider {...singleForm}>
-                                    <form
-                                        id="single-txn-form"
-                                        onSubmit={singleForm.handleSubmit(
-                                            onSingleSubmit,
-                                            (errors) => {
-                                                console.error("❌ Form validation FAILED");
-                                                console.error("Validation errors object:", errors);
-                                                console.error("Form state:", {
-                                                    isValid: singleForm.formState.isValid,
-                                                    isSubmitting: singleForm.formState.isSubmitting,
-                                                    errors: singleForm.formState.errors,
-                                                });
-                                                console.error("Current form values:", singleForm.getValues());
-                                                console.error("Operation mode:", operationMode, "| editingId:", editingId);
-                                                console.error("Initial data passed:", initialData);
-                                                toast.error("Please fill in all required fields correctly.");
-                                            }
-                                        )}
-                                        className="space-y-6"
-                                    >
-                                        <BasicInfoSection
-                                            shops={shops}
-                                            categories={localCategories}
-                                            people={people}
-                                            onAddNewCategory={() => setIsCategoryDialogOpen(true)}
-                                            operationMode={operationMode}
-                                            isLoadingCategories={isLoadingCategories}
-                                        />
-                                        <AccountSelector
-                                            accounts={accounts}
-                                            people={people}
-                                            onAddNewAccount={() => setIsAccountDialogOpen(true)}
-                                            onAddNewPerson={() => setIsPeopleDialogOpen(true)}
-                                        />
-                                        <SplitBillSection people={people} />
-                                        <CashbackSection accounts={accounts} categories={categories} />
-                                    </form>
+                                    <TooltipProvider>
+                                        <form
+                                            id="single-txn-form"
+                                            onSubmit={singleForm.handleSubmit(
+                                                onSingleSubmit,
+                                                (errors) => {
+                                                    console.error("❌ Form validation FAILED");
+                                                    console.error("Validation errors object:", errors);
+                                                    console.error("Form state:", {
+                                                        isValid: singleForm.formState.isValid,
+                                                        isSubmitting: singleForm.formState.isSubmitting,
+                                                        errors: singleForm.formState.errors,
+                                                    });
+                                                    console.error("Current form values:", singleForm.getValues());
+                                                    console.error("Operation mode:", operationMode, "| editingId:", editingId);
+                                                    console.error("Initial data passed:", initialData);
+                                                    toast.error("Please fill in all required fields correctly.");
+                                                }
+                                            )}
+                                            className="space-y-6"
+                                        >
+                                            <TransactionTypeSelector />
+
+                                            {/* A. FLOW: ACCOUNTS & PEOPLE */}
+                                            <div className="pt-2">
+                                                <AccountSelector
+                                                    accounts={accounts}
+                                                    people={people}
+                                                    onAddNewAccount={onAddNewAccount}
+                                                    onAddNewPerson={onAddNewPerson}
+                                                />
+                                            </div>
+
+                                            {/* B. DETAILS GROUPING */}
+                                            <div className="space-y-6 pt-6 border-t border-slate-100">
+                                                <BasicInfoSection
+                                                    people={people}
+                                                    operationMode={operationMode}
+                                                />
+
+                                                <CategoryShopSection
+                                                    shops={shops}
+                                                    categories={localCategories}
+                                                    onAddNewCategory={() => setIsCategoryDialogOpen(true)}
+                                                    onAddNewShop={onAddNewShop}
+                                                    isLoadingCategories={isLoadingCategories}
+                                                />
+
+                                                <AmountSection />
+
+                                                <div className="grid grid-cols-1 gap-4 pt-2">
+                                                    <InstallmentSelector />
+                                                    <SplitBillSection people={people} />
+                                                </div>
+                                            </div>
+
+                                            {/* C. PAYMENTS & PROMOTIONS */}
+                                            <div className="space-y-4 pt-6 border-t border-slate-100">
+                                                <div className="flex items-center justify-between px-1">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Optimizations & Add-ons</span>
+                                                </div>
+
+                                                <CashbackSection accounts={accounts} categories={categories} />
+                                            </div>
+                                        </form>
+                                    </TooltipProvider>
                                 </FormProvider>
                             </div>
                         ) : (
@@ -629,8 +754,8 @@ export function TransactionSlideV2({
                                         shops={shops}
                                         accounts={accounts}
                                         people={people}
-                                        onAddNewAccount={() => setIsAccountDialogOpen(true)}
-                                        onAddNewPerson={() => setIsPeopleDialogOpen(true)}
+                                        onAddNewAccount={onAddNewAccount}
+                                        onAddNewPerson={onAddNewPerson}
                                     />
                                 </form>
                             </FormProvider>
@@ -656,10 +781,11 @@ export function TransactionSlideV2({
                     </div>
 
                     {/* Dialogs */}
-                    <CreateAccountDialog
+                    <AccountSlideV2
                         open={isAccountDialogOpen}
                         onOpenChange={setIsAccountDialogOpen}
-                        trigger={null}
+                        allAccounts={accounts}
+                        categories={localCategories}
                     />
 
                     <CategorySlide
@@ -697,11 +823,23 @@ export function TransactionSlideV2({
                         people={people}
                     />
 
+                    <CreatePersonDialog
+                        open={isCreatePersonDialogOpen}
+                        onOpenChange={setIsCreatePersonDialogOpen}
+                        subscriptions={[]} // Quick add doesn't need subs usually
+                    />
+
+                    <AddShopDialog
+                        open={isShopDialogOpen}
+                        onOpenChange={setIsShopDialogOpen}
+                        categories={categories}
+                    />
+
                 </SheetContent>
-            </Sheet>
+            </Sheet >
 
             {/* Unsaved Changes Dialog */}
-            <UnsavedChangesDialog
+            < UnsavedChangesDialog
                 open={showUnsavedDialog}
                 onOpenChange={setShowUnsavedDialog}
                 onConfirm={handleConfirmDiscard}
