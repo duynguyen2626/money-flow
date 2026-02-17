@@ -5,7 +5,7 @@ import { normalizeCashbackConfig } from "@/lib/cashback";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, Zap, AlertCircle, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AccountRewardsCellProps = {
@@ -203,6 +203,31 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
         const remainingReward = isCapped ? Math.max(0, maxBudgetVal - awardedForBudget) : null;
         const availableSpend = (isCapped && currentRate > 0 && remainingReward !== null) ? Math.floor(remainingReward / currentRate) : null;
 
+        const cycleRange = stats?.cycle_range;
+        let cycleProgress = 0;
+        let isSlowSpend = false;
+        let isCritical = false;
+        let daysLeft = 99;
+
+        if (cycleRange) {
+            const rangeParts = cycleRange.split(' - ');
+            const start = new Date(rangeParts[0]);
+            const end = new Date(rangeParts[1]);
+            const now = new Date();
+            const total = end.getTime() - start.getTime();
+            const elapsed = now.getTime() - start.getTime();
+            if (total > 0) {
+                cycleProgress = Math.min(100, Math.max(0, (elapsed / total) * 100));
+            }
+            daysLeft = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        if (minSpend > 0 && !isMet) {
+            const spendProgress = (currentSpent / minSpend) * 100;
+            if (spendProgress < cycleProgress - 5) isSlowSpend = true;
+            if (daysLeft <= 7) isCritical = true;
+        }
+
         const statusLabel = !isMet
             ? `Need ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`
             : (isCapped
@@ -216,8 +241,6 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
             : (hasNextLevel
                 ? `Need ${new Intl.NumberFormat('vi-VN').format(Math.max(0, nextLevelSpendNeeded))} more to reach ${nextLevelName}`
                 : 'Auto-claim when the cycle closes');
-
-        const percentLabel = `${Math.round(progress)}%`;
 
         const defaultEarning = currentSpent * (config.defaultRate || 0);
         const estReward = Math.max(realAwarded || 0, projectedAwarded || 0, defaultEarning || 0);
@@ -233,10 +256,20 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                 {/* Line 1: Status Text Only (Aligned with Limit column) */}
                 <div className="flex items-center justify-between px-0.5 min-h-[17px]">
                     {!isMet ? (
-                        <span className="text-[11px] font-black text-rose-500 flex items-center gap-1.5 leading-none">
-                            <span className="text-xs">⚠️</span>
-                            {statusLabel}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                                "text-[12px] font-black flex items-center gap-1.5 leading-none transition-all duration-300",
+                                isCritical ? "text-rose-600 animate-pulse scale-105 origin-left" : isSlowSpend ? "text-amber-600" : "text-slate-900"
+                            )}>
+                                {isCritical ? <Zap className="w-3.5 h-3.5 fill-rose-600" /> : isSlowSpend ? <AlertCircle className="w-3.5 h-3.5" /> : <Info className="w-3.5 h-3.5" />}
+                                {statusLabel}
+                            </span>
+                            {isCritical && (
+                                <span className="text-[8px] font-black uppercase tracking-tighter text-rose-500 bg-rose-50 px-1 rounded border border-rose-100">
+                                    {daysLeft <= 0 ? "Ending" : `${daysLeft}d left`}
+                                </span>
+                            )}
+                        </div>
                     ) : (
                         <span className="text-[11px] font-black text-emerald-600 leading-none">
                             Qualified

@@ -1,13 +1,15 @@
 "use client"
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { AccountHeaderV2, AdvancedFilters } from "./AccountHeaderV2";
 import { AccountTableV2 } from "./AccountTableV2";
 import { AccountGridView } from "./AccountGridView";
 import { AccountSlideV2 } from "./AccountSlideV2";
+import { AccountQuickStats } from "./AccountQuickStats";
 import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
+import { getLastTransactionAccountId } from "@/actions/account-actions";
 import { toast } from "sonner";
 import {
     AlertDialog,
@@ -48,7 +50,17 @@ export function AccountDirectoryV2({
         multiRuleCb: false,
         holderOthers: false
     });
-    const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+    const [viewMode, setViewMode] = useState<'table' | 'grid'>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('mf_account_view_mode');
+            if (saved === 'table' || saved === 'grid') return saved;
+        }
+        return 'table';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('mf_account_view_mode', viewMode);
+    }, [viewMode]);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     // CRUD state (Account)
@@ -61,6 +73,11 @@ export function AccountDirectoryV2({
     // Transaction state
     const [isTxnSlideOpen, setIsTxnSlideOpen] = useState(false);
     const [txnInitialData, setTxnInitialData] = useState<any>(null);
+    const [lastTxnAccountId, setLastTxnAccountId] = useState<string | null>(null);
+
+    useEffect(() => {
+        getLastTransactionAccountId().then(setLastTxnAccountId);
+    }, []);
 
     const filteredAccounts = useMemo(() => {
         let result = initialAccounts;
@@ -241,7 +258,7 @@ export function AccountDirectoryV2({
     };
 
     return (
-        <div className="flex flex-col h-full bg-white">
+        <div className="flex flex-col h-full bg-slate-50/50">
             <AccountHeaderV2
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -261,7 +278,9 @@ export function AccountDirectoryV2({
                 othersStats={othersStats}
             />
 
-            <div className="flex-1 overflow-auto px-6 py-4">
+            <AccountQuickStats accounts={initialAccounts} lastTxnAccountId={lastTxnAccountId || undefined} />
+
+            <div className="flex-1 overflow-auto px-6 py-4 scrollbar-hide">
                 {viewMode === 'table' ? (
                     <AccountTableV2
                         accounts={filteredAccounts}

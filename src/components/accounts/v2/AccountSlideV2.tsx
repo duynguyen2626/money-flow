@@ -217,10 +217,12 @@ export function AccountSlideV2({
                     base_rate: (rawRules.base_rate || 0) * 100,
                     tiers: (rawRules.tiers || []).map((t: any) => ({
                         ...t,
-                        defaultRate: (t.defaultRate || 0) * 100,
-                        rules: (t.rules || []).map((r: any) => ({
-                            ...r,
-                            rate: (r.rate || 0) * 100
+                        base_rate: (t.base_rate ?? t.defaultRate ?? 0) * 100,
+                        max_reward: t.max_reward ?? t.maxReward ?? null,
+                        policies: (t.policies || t.rules || []).map((p: any) => ({
+                            cat_ids: p.cat_ids || p.categoryIds || [],
+                            rate: (p.rate || 0) * 100,
+                            max: p.max ?? p.maxReward ?? null
                         }))
                     }))
                 });
@@ -488,6 +490,28 @@ export function AccountSlideV2({
 
         setLoading(true);
         try {
+            const transformRulesForSave = (rules: any) => {
+                if (!rules) return null;
+                if (Array.isArray(rules)) {
+                    return rules.map((r: any) => ({
+                        ...r,
+                        rate: (r.rate || 0) / 100
+                    }));
+                }
+                return {
+                    ...rules,
+                    base_rate: (rules.base_rate || 0) / 100,
+                    tiers: (rules.tiers || []).map((t: any) => ({
+                        ...t,
+                        base_rate: t.base_rate !== undefined ? t.base_rate / 100 : undefined,
+                        policies: (t.policies || []).map((p: any) => ({
+                            ...p,
+                            rate: (p.rate || 0) / 100
+                        }))
+                    }))
+                };
+            };
+
             if (isEdit && account) {
                 // Determine cb_type
                 let effectiveCbType: 'none' | 'simple' | 'tiered' = 'none';
@@ -530,6 +554,7 @@ export function AccountSlideV2({
                 }
 
                 console.log('[AccountSlideV2] Calling updateAccountConfigAction...', { id: account.id, cbType });
+
                 const { updateAccountConfigAction } = await import('@/actions/account-actions');
                 const success = await updateAccountConfigAction({
                     id: account.id,
@@ -550,22 +575,7 @@ export function AccountSlideV2({
                     cb_base_rate: cbBaseRate / 100,
                     cb_max_budget: cbMaxBudget,
                     cb_is_unlimited: cbIsUnlimited,
-                    cb_rules_json: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
-                        if (lvlOrRule.rules) { // Tiered level
-                            return {
-                                ...lvlOrRule,
-                                defaultRate: (lvlOrRule.defaultRate || 0) / 100,
-                                rules: lvlOrRule.rules.map((r: any) => ({
-                                    ...r,
-                                    rate: (r.rate || 0) / 100
-                                }))
-                            };
-                        }
-                        return { // Simple rule
-                            ...lvlOrRule,
-                            rate: (lvlOrRule.rate || 0) / 100
-                        };
-                    }) as any,
+                    cb_rules_json: transformRulesForSave(cbRulesJson),
                     cb_min_spend: cbMinSpend,
                     cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
@@ -582,22 +592,7 @@ export function AccountSlideV2({
                             minSpendTarget: cbMinSpend,
                             defaultRate: cbBaseRate / 100,
                             maxBudget: cbMaxBudget,
-                            rules_json_v2: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
-                                if (lvlOrRule.rules) {
-                                    return {
-                                        ...lvlOrRule,
-                                        defaultRate: (lvlOrRule.defaultRate || 0) / 100,
-                                        rules: lvlOrRule.rules.map((r: any) => ({
-                                            ...r,
-                                            rate: (r.rate || 0) / 100
-                                        }))
-                                    };
-                                }
-                                return {
-                                    ...lvlOrRule,
-                                    rate: (lvlOrRule.rate || 0) / 100
-                                };
-                            }) as any
+                            rules_json_v2: transformRulesForSave(cbRulesJson)
                         }
                     } as any : null
                 });
@@ -633,22 +628,7 @@ export function AccountSlideV2({
                     cb_base_rate: cbBaseRate / 100,
                     cb_max_budget: cbMaxBudget,
                     cb_is_unlimited: cbIsUnlimited,
-                    cb_rules_json: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
-                        if (lvlOrRule.rules) {
-                            return {
-                                ...lvlOrRule,
-                                defaultRate: (lvlOrRule.defaultRate || 0) / 100,
-                                rules: lvlOrRule.rules.map((r: any) => ({
-                                    ...r,
-                                    rate: (r.rate || 0) / 100
-                                }))
-                            };
-                        }
-                        return {
-                            ...lvlOrRule,
-                            rate: (lvlOrRule.rate || 0) / 100
-                        };
-                    }) as any,
+                    cb_rules_json: transformRulesForSave(cbRulesJson),
                     cb_min_spend: cbMinSpend,
                     cb_cycle_type: cycleType as any,
                     statementDay: statementDay,
@@ -665,22 +645,7 @@ export function AccountSlideV2({
                             minSpendTarget: cbMinSpend,
                             defaultRate: cbBaseRate / 100,
                             maxBudget: cbMaxBudget,
-                            rules_json_v2: (cbRulesJson as any[])?.map((lvlOrRule: any) => {
-                                if (lvlOrRule.rules) {
-                                    return {
-                                        ...lvlOrRule,
-                                        defaultRate: (lvlOrRule.defaultRate || 0) / 100,
-                                        rules: lvlOrRule.rules.map((r: any) => ({
-                                            ...r,
-                                            rate: (r.rate || 0) / 100
-                                        }))
-                                    };
-                                }
-                                return {
-                                    ...lvlOrRule,
-                                    rate: (lvlOrRule.rate || 0) / 100
-                                };
-                            }) as any
+                            rules_json_v2: transformRulesForSave(cbRulesJson)
                         }
                     } : null
                 });

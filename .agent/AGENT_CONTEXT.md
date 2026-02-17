@@ -1,7 +1,7 @@
 # Money Flow 3 - Agent Context & Project State
 
-**Last Updated:** January 31, 2026  
-**Current Phase:** Phase 9.5 - Unified Flow UI + Phase 10 Prep (Accounts Enhancements)
+**Last Updated:** February 17, 2026  
+**Current Phase:** Phase 15 - Categories UI & Account Table Refinements
 
 ---
 
@@ -329,6 +329,13 @@ type CashbackMonthSummary = {
 5. **Month Detail Modal:** Multi-tab (card/volunteer) transaction display
 6. **tsconfig.json:** Added `baseUrl: "."` for path alias; excluded `.next/dev/types` from validation
 7. **Policy Resolver:** Uses `totalGivenAway` sum for year totals consistency
+8. **Account Table V2 Refinements (Feb 17):**
+    - Implemented sorting by Balance (Available Credit for CCs).
+    - Added "Intelligence Legend" for amount color-coding (Red > 100M, Orange 50-100M, Green < 50M).
+    - Separated "Waiver Tracking" into its own dedicated quick stat unit.
+    - Fixed sticky header scroll blurring and layering issues.
+    - Added "Coverage" hover-card explanation for external credit exposure.
+    - Enhanced search with a clear (X) trigger and added "Reset Sort" button.
 
 ### PR Status
 - **Branch:** `feature/cashback-page-fix-v2`

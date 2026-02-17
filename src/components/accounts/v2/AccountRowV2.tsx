@@ -8,6 +8,7 @@ import { AccountColumnConfig, AccountColumnKey } from "@/hooks/useAccountColumnP
 import { ExpandIcon } from "@/components/transaction/ui/ExpandIcon";
 import { AccountRowDetailsV2 } from "./AccountRowDetailsV2";
 import { Button } from "@/components/ui/button";
+import { VietnameseCurrency } from "@/components/ui/vietnamese-currency";
 import {
     Edit,
     Wallet,
@@ -28,6 +29,8 @@ import {
     User,
     CircleDashed,
     Crown,
+    UserSquare2,
+    ArrowRight
 } from "lucide-react";
 import { normalizeCashbackConfig } from "@/lib/cashback";
 
@@ -254,38 +257,64 @@ function renderCell(
     const badgeBase = "h-6 px-3 text-[10px] font-semibold uppercase tracking-wide rounded-full border flex items-center justify-center gap-1 min-w-[96px]";
 
     const renderRoleBadge = (role: 'parent' | 'child' | 'standalone') => {
-        const base = "h-7 px-3 text-[10px] font-black uppercase tracking-wider rounded-md border flex items-center justify-center gap-2 w-[110px] shadow-sm transition-all";
+        const base = "h-7 px-3 text-[10px] font-black uppercase tracking-[0.15em] rounded-lg border-2 flex items-center justify-center gap-2 w-[115px] shadow-sm transition-all duration-300";
         if (role === 'parent') {
-            return <span className={cn(base, "bg-blue-600 text-white border-blue-700")}><User className="w-3.5 h-3.5 fill-current" />Parent</span>;
+            return (
+                <div className={cn(base, "bg-indigo-600 text-white border-indigo-500 shadow-indigo-600/20 hover:shadow-indigo-600/40 hover:-translate-y-0.5")}>
+                    <Users className="w-3.5 h-3.5 fill-current" />
+                    <span>Parent</span>
+                </div>
+            );
         }
         if (role === 'child') {
-            return <span className={cn(base, "bg-blue-100 text-blue-700 border-blue-300")}><User className="w-3.5 h-3.5 opacity-80" />Child</span>;
+            return (
+                <div className={cn(base, "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:-translate-y-0.5")}>
+                    <UserSquare2 className="w-3.5 h-3.5" />
+                    <span>Child</span>
+                </div>
+            );
         }
-        return <span className={cn(base, "bg-blue-50 text-blue-500 border-blue-200 shadow-none")}><User className="w-3.5 h-3.5 opacity-50" />Solo</span>;
+        return (
+            <div className={cn(base, "bg-slate-50 text-slate-500 border-slate-200 shadow-none opacity-80")}>
+                <User className="w-3.5 h-3.5 opacity-60" />
+                <span>Solo</span>
+            </div>
+        );
     };
 
     const renderOwnershipBadge = (type: 'me' | 'relative' | 'other', personId?: string | null) => {
-        const base = "w-7 h-7 flex items-center justify-center rounded-md border shadow-sm transition-all shrink-0 cursor-help";
+        const base = "w-8 h-8 flex items-center justify-center rounded-none border-2 shadow-sm transition-all duration-300 shrink-0 cursor-help group/owner";
         let content;
         let tooltipLabel = "Other";
 
         if (!type || type === 'me') {
-            content = <span className={cn(base, "bg-amber-400 text-amber-950 border-amber-500")}><Crown className="w-3.5 h-3.5 fill-current" /></span>;
-            tooltipLabel = "Mine";
+            content = (
+                <div className={cn(base, "bg-amber-400 text-amber-950 border-amber-500 hover:shadow-amber-400/30 hover:scale-110")}>
+                    <Crown className="w-4 h-4 fill-current animate-pulse" />
+                </div>
+            );
+            tooltipLabel = "Personal Ownership (Mine)";
         } else if (type === 'relative') {
             const p = people?.find(p => p.id === personId);
-            tooltipLabel = p?.name || "Relative";
+            tooltipLabel = p?.name ? `Owner: ${p.name}` : "Family Member";
             content = (
-                <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200 overflow-hidden")}>
+                <div className={cn(base, "bg-white border-sky-400 p-0 hover:border-sky-600 hover:scale-110")}>
                     {p?.image_url ? (
                         <img src={p.image_url} className="w-full h-full rounded-none object-cover" alt="" />
                     ) : (
-                        <Users className="w-3.5 h-3.5" />
+                        <div className="w-full h-full flex items-center justify-center bg-sky-50 text-sky-600">
+                            <Users className="w-4 h-4" />
+                        </div>
                     )}
-                </span>
+                </div>
             );
         } else {
-            content = <span className={cn(base, "bg-amber-50 text-amber-700 border-amber-200")}><Building2 className="w-3.5 h-3.5" /></span>;
+            content = (
+                <div className={cn(base, "bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-500 hover:scale-110")}>
+                    <Building2 className="w-4 h-4" />
+                </div>
+            );
+            tooltipLabel = "Corporate / Other Ownership";
         }
 
         return (
@@ -550,51 +579,88 @@ function renderCell(
         }
         case 'role': {
             return (
-                <div className="flex flex-row gap-2 items-center justify-center min-w-[180px]">
+                <div className="flex flex-row items-center justify-center min-w-[190px] group/role-cell">
                     {/* Role Badge (Left) */}
-                    {account.relationships?.is_parent ? (
-                        <TooltipProvider>
-                            <Tooltip delayDuration={300}>
-                                <TooltipTrigger asChild>
-                                    <div className="cursor-help">{renderRoleBadge('parent')}</div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <div className="space-y-1">
-                                        <p className="font-bold">Child Accounts:</p>
-                                        {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
-                                            <div key={child.id} className="flex items-center gap-2">
-                                                {renderIcon(child.type, child.image_url, child.name)}
-                                                <span>{child.name}</span>
+                    <div className="flex-shrink-0">
+                        {account.relationships?.is_parent ? (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <div className="cursor-help">{renderRoleBadge('parent')}</div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-900 text-white border-slate-800 p-3 rounded-xl shadow-2xl">
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest border-b border-white/10 pb-1.5">Child Accounts</p>
+                                            {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
+                                                <div key={child.id} className="flex items-center justify-between gap-4">
+                                                    <div className="flex items-center gap-2">
+                                                        {renderIcon(child.type, child.image_url, child.name, "w-5 h-5")}
+                                                        <span className="text-xs font-medium text-slate-200">{child.name}</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-black tabular-nums text-slate-400">{formatMoneyVND(child.current_balance || 0)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : account.relationships?.parent_info ? (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <div className="cursor-help">{renderRoleBadge('child')}</div>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="bg-slate-900 text-white border-slate-800 p-3 rounded-xl shadow-2xl">
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest border-b border-white/10 pb-1.5">Parent Account</p>
+                                            <div className="flex items-center gap-3">
+                                                {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name, "w-8 h-8")}
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-bold text-slate-200">{account.relationships.parent_info.name}</span>
+                                                    <span className="text-[10px] text-slate-500 italic uppercase">Primary Authorized</span>
+                                                </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    ) : account.relationships?.parent_info ? (
-                        <TooltipProvider>
-                            <Tooltip delayDuration={300}>
-                                <TooltipTrigger asChild>
-                                    <div className="cursor-help">{renderRoleBadge('child')}</div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <div className="flex items-center gap-2">
-                                        {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name)}
-                                        <span>Parent: {account.relationships.parent_info.name}</span>
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    ) : (
-                        renderRoleBadge('standalone')
-                    )}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : (
+                            renderRoleBadge('standalone')
+                        )}
+                    </div>
+
+                    {/* Connector Arrow */}
+                    <div className="flex items-center justify-center w-8 overflow-hidden">
+                        <ArrowRight className="w-4 h-4 text-slate-300 group-hover/role-cell:text-indigo-400 group-hover/role-cell:translate-x-0.5 transition-all duration-300" />
+                    </div>
 
                     {/* Ownership Badge (Right) */}
-                    {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
+                    <div className="flex-shrink-0">
+                        {renderOwnershipBadge(account.holder_type as any, account.holder_person_id)}
+                    </div>
                 </div>
             )
         }
         case 'limit': {
+            const isCC = account.type === 'credit_card';
+
+            if (!isCC) {
+                return (
+                    <div className="flex flex-col items-end justify-center min-w-[140px] py-1 text-right">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] leading-none mb-2">Status / Type</span>
+                        <div className="flex items-center gap-1.5">
+                            {account.secured_by_account_id ? (
+                                <span className="h-5 px-2.5 flex items-center bg-indigo-500/10 text-indigo-600 border border-indigo-200 rounded-full text-[9px] font-black uppercase tracking-wider backdrop-blur-sm shadow-sm shadow-indigo-500/5">Secured</span>
+                            ) : (
+                                <span className="h-5 px-2.5 flex items-center bg-slate-500/5 text-slate-500 border border-slate-200 rounded-full text-[9px] font-black uppercase tracking-wider backdrop-blur-sm">
+                                    {account.type === 'savings' ? 'Savings' : account.type === 'ewallet' ? 'Digital Wallet' : 'Checking'}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
             const isParent = account.relationships?.is_parent;
             const parentId = account.parent_account_id;
             const parentAccount = parentId ? allAccounts?.find(a => a.id === parentId) : null;
@@ -617,29 +683,26 @@ function renderCell(
                 familyDebt = (parentAccount.current_balance || 0) + childrenBalances;
             }
 
-            // Use the individual card's debt for the main display as requested, 
-            // especially for supplementary cards that mirror the parent's balance.
-            const debtAbs = cardDebtAbs;
-            const limit = displayLimit;
-            const limitProgress = limit > 0 ? Math.min(100, (debtAbs / limit) * 100) : 0;
-            const usagePerc = limitProgress.toFixed(0);
             const familyDebtAbs = Math.abs(familyDebt);
+            const limit = displayLimit;
+            // Logic: High remaining (100%) is Good/Indigo, Low remaining (<10%) is Danger/Rose
+            const remainingPercent = limit > 0 ? Math.max(0, 100 - (familyDebtAbs / limit) * 100) : 0;
+            const remainingPercLabel = remainingPercent.toFixed(0);
             const hasWaiver = !!(account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0);
 
             return (
                 <div className="flex flex-col items-end gap-2 min-w-[140px] py-1">
-                    {/* Line 1: Limit Row */}
-                    <div className="flex flex-col items-end gap-1 w-full group/limit">
-                        <div className="flex items-center gap-1.5 justify-end w-full px-0.5 min-h-[14px]">
+                    <div className="flex flex-col items-end gap-1.5 w-full group/limit">
+                        <div className="flex items-center gap-2 justify-end w-full px-0.5 min-h-[16px]">
                             {!!account.secured_by_account_id && (
                                 <TooltipProvider>
                                     <Tooltip delayDuration={300}>
                                         <TooltipTrigger asChild>
-                                            <div className="h-3.5 px-1 flex items-center justify-center bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[3px] text-[8px] font-black uppercase tracking-tight cursor-help leading-none">
+                                            <div className="h-4 px-1.5 flex items-center justify-center bg-indigo-600 text-white border border-indigo-700 rounded-[4px] text-[8px] font-black uppercase tracking-widest cursor-help leading-none shadow-md shadow-indigo-600/10">
                                                 SECURED
                                             </div>
                                         </TooltipTrigger>
-                                        <TooltipContent>
+                                        <TooltipContent side="top">
                                             <div className="flex items-center gap-2">
                                                 {(() => {
                                                     const secured = allAccounts?.find(a => a.id === account.secured_by_account_id);
@@ -660,61 +723,65 @@ function renderCell(
                                     const target = account.stats.annual_fee_waiver_target || 0;
                                     const rawSpent = account.stats.spent_this_cycle || 0;
                                     const currentBalanceAbs = Math.abs(account.current_balance || 0);
-                                    // Use the higher value between reported spent and actual balance debt
                                     const spent = Math.max(rawSpent, currentBalanceAbs);
                                     const remaining = target - spent;
                                     const isMet = remaining <= 0;
 
                                     const formatWaiverAmount = (val: number) => {
                                         const absVal = Math.abs(val);
-                                        if (absVal >= 1000000) {
-                                            return (val / 1000000).toFixed(1) + "tr";
-                                        }
+                                        if (absVal >= 1000000) return (val / 1000000).toFixed(1) + "tr";
                                         return formatCompactMoney(val);
                                     };
 
                                     return (
                                         <div className={cn(
-                                            "h-3.5 px-1.5 flex items-center justify-center border rounded-[3px] text-[8px] font-bold leading-none shadow-sm",
+                                            "h-4 px-2 flex items-center justify-center border rounded-[4px] text-[8px] font-black leading-none shadow-sm uppercase tracking-wider",
                                             isMet
-                                                ? "bg-emerald-100 text-emerald-900 border-emerald-200"
-                                                : "bg-amber-100 text-amber-900 border-amber-200"
+                                                ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-500/20"
+                                                : "bg-amber-100 text-amber-900 border-amber-300"
                                         )}>
-                                            {isMet ? 'Waiver met' : `Waiver needs ${formatWaiverAmount(remaining)}`}
+                                            {isMet ? 'Waiver met' : `Needs ${formatWaiverAmount(remaining)}`}
                                         </div>
                                     );
                                 })()
                             )}
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Limit</span>
-                            <span className="font-black text-slate-700 text-[11px] tabular-nums leading-none">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Limit</span>
+                            <span className={cn(
+                                "font-black text-[11px] tabular-nums leading-none",
+                                displayLimit > 100000000 ? "text-rose-600" : displayLimit >= 50000000 ? "text-amber-600" : "text-emerald-600"
+                            )}>
                                 {displayLimit ? formatMoneyVND(displayLimit) : '—'}
                             </span>
                         </div>
 
                         {displayLimit > 0 && (
                             <div className={cn(
-                                "relative w-full h-5 bg-slate-50 rounded-md border border-slate-200 overflow-hidden group",
-                                hasWaiver && "border-amber-200/60 shadow-[inset_0_0_4px_rgba(245,158,11,0.05)]"
+                                "relative w-full h-6 bg-slate-100/50 rounded-lg border border-slate-200 overflow-hidden group transition-all duration-300 hover:border-indigo-300 hover:shadow-inner",
+                                hasWaiver && "border-amber-200 shadow-[inset_0_0_8px_rgba(245,158,11,0.05)]"
                             )}>
+                                {/* Shine effect */}
+                                <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
+
                                 <div
                                     className={cn(
-                                        "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
-                                        limitProgress > 90 ? "bg-rose-500" : limitProgress > 70 ? "bg-amber-500" : "bg-indigo-500"
+                                        "absolute inset-0 h-full transition-all duration-700 ease-in-out shadow-[0_0_15px_rgba(0,0,0,0.1)]",
+                                        remainingPercent < 10 ? "bg-gradient-to-r from-rose-500 to-rose-600" :
+                                            remainingPercent < 30 ? "bg-gradient-to-r from-amber-500 to-amber-600" :
+                                                "bg-gradient-to-r from-indigo-500 to-indigo-600"
                                     )}
-                                    style={{ width: `${Math.max(limitProgress, 0)}%` }}
+                                    style={{ width: `${Math.max(remainingPercent, 0)}%` }}
                                 />
-                                {/* Wave-top line if waiver present */}
                                 {hasWaiver && (
-                                    <div className="absolute top-0 left-0 w-full h-[1.5px] bg-amber-400 opacity-60 z-10" />
+                                    <div className="absolute top-0 left-0 w-full h-[1.5px] bg-amber-400/80 blur-[0.5px] z-10" />
                                 )}
 
-                                <div className="absolute inset-0 flex items-center justify-between px-2 pointer-events-none">
+                                <div className="absolute inset-0 flex items-center justify-between px-2.5 pointer-events-none">
                                     <div className="flex items-center gap-1">
                                         {hasWaiver && (
-                                            <Zap className="w-2.5 h-2.5 text-amber-500 animate-pulse drop-shadow-[0_0_3px_rgba(245,158,11,0.4)]" />
+                                            <Zap className="w-2.5 h-2.5 text-white animate-pulse drop-shadow-[0_0_3px_rgba(255,255,255,0.8)]" />
                                         )}
-                                        <span className="text-[9px] font-black text-slate-400 tabular-nums">
-                                            {usagePerc}%
+                                        <span className="text-[10px] font-black text-white drop-shadow-sm tabular-nums">
+                                            {remainingPercLabel}% <span className="text-[7px] opacity-70 ml-0.5">REMAINING</span>
                                         </span>
                                     </div>
                                     <div />
@@ -723,74 +790,72 @@ function renderCell(
                                 <TooltipProvider>
                                     <Tooltip delayDuration={300}>
                                         <TooltipTrigger asChild>
-                                            <div className="absolute inset-0 flex items-center justify-end px-2 cursor-help pointer-events-auto">
-                                                <span className="text-[9px] font-bold text-slate-600 tabular-nums drop-shadow-sm flex items-center gap-1">
-                                                    <Calculator className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover/limit:opacity-100 transition-opacity" />
-                                                    {numberFormatter.format(debtAbs)} <span className="text-slate-400 mx-0.5">/</span> {numberFormatter.format(limit)}
+                                            <div className="absolute inset-0 flex items-center justify-end px-2.5 cursor-help pointer-events-auto">
+                                                <span className="text-[9px] font-black text-slate-700/80 tabular-nums bg-white/40 backdrop-blur-sm px-1.5 py-0.5 rounded transition-colors group-hover:bg-white/80 flex items-center gap-1">
+                                                    <Calculator className="w-2.5 h-2.5 opacity-60" />
+                                                    {numberFormatter.format(familyDebtAbs)}
                                                 </span>
                                             </div>
                                         </TooltipTrigger>
-                                        <TooltipContent side="left" className="p-3 min-w-[240px] bg-slate-900 text-slate-100 border-slate-800 shadow-2xl z-[9999]">
-                                            <div className="space-y-4">
+                                        <TooltipContent side="left" className="p-4 min-w-[280px] bg-slate-900/95 backdrop-blur-xl text-slate-100 border-white/10 shadow-2xl z-[9999] rounded-2xl font-sans">
+                                            <div className="space-y-5">
                                                 {/* Section 1: Balance Calculation */}
-                                                <div className="space-y-2">
-                                                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest pb-1 border-b border-white/10 flex items-center gap-2">
-                                                        <Calculator className="w-3 h-3" />
-                                                        Balance Calculation
+                                                <div className="space-y-3">
+                                                    <p className="text-[10px] font-black text-indigo-400 underline underline-offset-4 decoration-2 uppercase tracking-widest flex items-center gap-2">
+                                                        <Calculator className="w-4 h-4" />
+                                                        Balance Formula
                                                     </p>
-                                                    <div className="space-y-1.5 text-xs">
+                                                    <div className="space-y-2 text-sm">
                                                         <div className="flex justify-between gap-4">
-                                                            <span className="text-slate-400 font-medium">Main Account:</span>
-                                                            <span className="font-bold tabular-nums">{formatMoneyVND(parentBalance)}</span>
+                                                            <span className="text-slate-400">Card Active Balance:</span>
+                                                            <span className="font-bold tabular-nums text-white">{formatMoneyVND(parentBalance)}</span>
                                                         </div>
                                                         {childrenBalances > 0 && (
                                                             <div className="flex justify-between gap-4">
-                                                                <span className="text-slate-400 font-medium">Children Total:</span>
-                                                                <span className="font-bold tabular-nums">+ {formatMoneyVND(childrenBalances)}</span>
+                                                                <span className="text-slate-400">Supplementary Cards:</span>
+                                                                <span className="font-bold tabular-nums text-indigo-300">+ {formatMoneyVND(childrenBalances)}</span>
                                                             </div>
                                                         )}
-                                                        <div className="pt-1.5 mt-1 border-t border-white/10 flex justify-between gap-4">
-                                                            <span className="text-indigo-300 font-black uppercase text-[9px] tracking-wider">Family Total:</span>
-                                                            <span className="font-black text-indigo-400 tabular-nums">{formatMoneyVND(familyDebtAbs)}</span>
+                                                        <div className="pt-2 mt-2 border-t border-white/10 flex justify-between gap-4">
+                                                            <span className="text-indigo-400 font-black uppercase text-[10px]">Family Liability:</span>
+                                                            <span className="font-black text-indigo-400 text-lg tabular-nums">{formatMoneyVND(familyDebtAbs)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 {/* Section 2: Waiver Progress (Integrated) */}
-                                                {account.stats?.annual_fee_waiver_target && account.stats.annual_fee_waiver_target > 0 && (
-                                                    <div className="space-y-2 pt-2 border-t border-white/10">
-                                                        <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest pb-1 flex items-center gap-2">
-                                                            <Zap className="w-3 h-3" />
-                                                            Annual Fee Waiver
+                                                {hasWaiver && (
+                                                    <div className="space-y-3 pt-3 border-t border-white/10">
+                                                        <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                                            <Zap className="w-4 h-4 fill-amber-400" />
+                                                            Fee Waiver Progress
                                                         </p>
-                                                        <div className="space-y-1.5 text-xs">
+                                                        <div className="space-y-2 text-sm bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
                                                             <div className="flex justify-between gap-4">
-                                                                <span className="text-slate-400 font-medium">Spent Cycle:</span>
-                                                                <span className="font-bold tabular-nums text-amber-200">{formatMoneyVND(account.stats.spent_this_cycle || 0)}</span>
+                                                                <span className="text-slate-400">Total Spent:</span>
+                                                                <span className="font-bold tabular-nums text-amber-200">{formatMoneyVND(account.stats?.spent_this_cycle || 0)}</span>
                                                             </div>
                                                             <div className="flex justify-between gap-4">
-                                                                <span className="text-slate-400 font-medium">Waiver Target:</span>
-                                                                <span className="font-bold tabular-nums">{formatMoneyVND(account.stats.annual_fee_waiver_target)}</span>
+                                                                <span className="text-slate-400">Annual Target:</span>
+                                                                <span className="font-bold tabular-nums text-white">{formatMoneyVND(account.stats?.annual_fee_waiver_target || 0)}</span>
                                                             </div>
 
                                                             {/* Mini Progress Bar in Tooltip */}
-                                                            <div className="h-1.5 w-full bg-white/10 rounded-full mt-2 overflow-hidden">
+                                                            <div className="h-2 w-full bg-white/10 rounded-full mt-2 overflow-hidden border border-white/5">
                                                                 <div
-                                                                    className="h-full bg-amber-500 rounded-full transition-all duration-500"
-                                                                    style={{ width: `${Math.min(100, account.stats.annual_fee_waiver_progress || 0)}%` }}
-                                                                />
+                                                                    className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-1000"
+                                                                    style={{ width: `${Math.min(100, account.stats?.annual_fee_waiver_progress || 0)}%` }}
+                                                                >
+                                                                    <div className="w-full h-full bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] bg-[length:20px_20px] animate-[shimmer_2s_linear_infinite]" />
+                                                                </div>
                                                             </div>
-                                                            <div className="flex justify-between items-center text-[10px] pt-1">
-                                                                <span className="text-slate-500 font-bold">Progress</span>
-                                                                <span className="text-amber-400 font-black">{(account.stats.annual_fee_waiver_progress || 0).toFixed(1)}%</span>
+                                                            <div className="flex justify-between items-center text-[10px] pt-1 font-black">
+                                                                <span className="text-slate-500 uppercase">Current Progress</span>
+                                                                <span className="text-amber-400">{(account.stats?.annual_fee_waiver_progress || 0).toFixed(1)}%</span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
-
-                                                <div className="pt-1 text-[9px] text-slate-500 italic leading-relaxed border-t border-white/5">
-                                                    Showing current card balance. Use Formula tooltip for Available logic.
-                                                </div>
                                             </div>
                                         </TooltipContent>
                                     </Tooltip>
@@ -798,14 +863,27 @@ function renderCell(
                             </div>
                         )}
                     </div>
-
-
                 </div>
             );
         }
-        case 'rewards':
+        case 'rewards': {
+            const isCC = account.type === 'credit_card';
+
+            if (!isCC) {
+                // For non-credit cards, the "Rewards" column is used for "Interest & Fees"
+                return (
+                    <div className="flex flex-col items-end justify-center min-w-[150px] py-1 text-right  group/rewards">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] leading-none mb-2 text-nowrap">Interest & Benefits</span>
+                        <div className="flex flex-col items-end gap-0.5">
+                            <span className="text-xs font-black text-emerald-600 tabular-nums bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 group-hover/rewards:bg-emerald-500 group-hover/rewards:text-white transition-all duration-300">0.0% / yr</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter italic">No Maint. Fees</span>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
-                <div className="flex flex-col items-end justify-center min-w-[150px]">
+                <div className="flex flex-col items-end justify-center min-w-[150px] transition-transform duration-300 hover:scale-[1.02]">
                     <AccountRewardsCell
                         account={account}
                         categories={categories}
@@ -822,6 +900,7 @@ function renderCell(
                     />
                 </div>
             );
+        }
         case 'due': {
             const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
             const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
@@ -908,13 +987,18 @@ function renderCell(
                 <TooltipProvider>
                     <Tooltip delayDuration={300}>
                         <TooltipTrigger asChild>
-                            <div className="flex flex-col items-end text-right gap-0.5 cursor-help min-w-[100px]">
+                            <div className="flex flex-col items-end text-right gap-0.5 cursor-help min-w-[120px]">
                                 <div className={cn(
-                                    "tabular-nums text-sm font-black tracking-tight",
-                                    finalBalance >= 0 ? "text-emerald-600" : "text-rose-600"
+                                    "tabular-nums text-[13px] font-black tracking-tight",
+                                    Math.abs(finalBalance) > 100000000 ? "text-rose-600" : Math.abs(finalBalance) >= 50000000 ? "text-amber-600" : "text-emerald-600"
                                 )}>
-                                    {formatMoneyVND(finalBalance)}
+                                    {finalBalance < 0 ? "-" : ""}{formatMoneyVND(Math.round(Math.abs(finalBalance)))}
                                 </div>
+                                <VietnameseCurrency
+                                    amount={finalBalance}
+                                    variant="stylized"
+                                    className="text-[11px]"
+                                />
                             </div>
                         </TooltipTrigger>
                         <TooltipContent side="left" className="p-3 min-w-[200px] bg-slate-900 text-slate-100 border-slate-800 shadow-xl">

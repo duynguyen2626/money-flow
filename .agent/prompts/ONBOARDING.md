@@ -98,7 +98,8 @@ npm run dev
 ### Read First
 1. `.agent/rules/rules.md` (coding standards)
 2. `.agent/rules/ui_rules.md` (UI standards)
-3. Current handover document (e.g., `HANDOVER_PHASE_14.md` or `HANDOVER_PENDING_UI.md`)
+3. `.agent/workflows/cashback-config-guide.md` (Card configurations)
+4. Current handover document (e.g., `AGENT_CONTEXT.md` or `HANDOVER_PHASE_15.md`)
 
 ---
 
@@ -119,5 +120,5 @@ npm run dev
 
 ---
 
-**Last Updated**: 2026-02-12  
+**Last Updated**: 2026-02-17  
 **Maintained By**: Money Flow 3 Team
