@@ -3,145 +3,74 @@
 Money Flow 3 is a comprehensive personal finance application focused on transaction management, debt tracking, and spending analytics.
 
 ## Tech Stack
-
 - **Framework:** Next.js 15 (App Router)
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS, Shadcn UI
 - **Database:** Supabase (PostgreSQL)
 - **State/Data:** React Server Components, Server Actions
-
-## Core Features
-
-- **Transactions:** Income, Expense, Transfer, Debt, Repayment tracking.
-- **Accounts:** Management of bank accounts, wallets, credit cards.
-- **People:** Debt and shared expense tracking associated with people.
-- **Cashback:** Advanced cashback calculation and tracking.
-- **Services:** Subscription management.
-
-## Current Status: Phase 15 (Feb 2026)
-
-**Focus**: AI Intelligence & Voice (Gemini Integration)
-
-### Phase 13 Updates (Current)
-- **Batch Detail UI Redesign**:
-  - ✅ Icon-based toolbar with individual tooltips (Send to Sheet, AI Import, Add Item, More Actions)
-  - ✅ Step 1 (Fund) & Step 2 (Match Source) now show full text labels with icons
-  - ✅ Hamburger menu moved after Add Item button for better UX
-  - ✅ Compact header: removed brackets, bold badges, source account grouped
-  
-- **Batch Item Editing**:
-  - ✅ Fixed `bank_code` schema error (excluded from batch_items update)
-  - ✅ "Edit Info" button now properly shows AccountSlideV2 for target account editing
-  - ✅ Auto-fill logic preserved for receiver, card name, and note
-  
-- **Error Handling**:
-  - ✅ Added proper try-catch to all batch actions
-  - ✅ Consistent response format: `{ success, error, data }`
-  - ✅ User-friendly error messages via toast notifications
-  
-- **Network & Type Safety**:
-  - ✅ Fixed ReferenceError (missing Wallet import in dashboard)
-  - ✅ Fixed network errors from unhandled promise rejections
-  - ✅ Updated action signatures to accept batchId for correct revalidation
-
-### Phase 75 Updates (Feb 2026)
-- **People UI & Detail Enhancements**:
-  - ✅ Replaced legacy modals with **PeopleSlideV2** for editing and management.
-  - ✅ Standardized **Sync Button Group** (170px width, Title Case tags, centered FileSheet icon).
-  - ✅ Integrated **Active Subs** column into People list with visibility preferences.
-  - ✅ Switched all stat labels and group headers to **Title Case** for modern aesthetics.
-- **Transaction Slide V2**:
-  - ✅ Fixed **Duplication Bug**: amount, category, and shop now persist correctly during cloning.
-  - ✅ Replaced native confirms with custom **UnsavedChangesDialog**.
-  - ✅ Redesigned **Cashback Section** with icon-based tabs and refined styling.
-  - ✅ Standardized all transaction avatars to **Square (`rounded-none`)** across table and mobile views.
-
-### Previous Phase 12 Updates
-- **Account Details Flow UI**: Implemented "Single Flow" mode for simple Income/Expense transactions
-  - Removed redundant self-reference badges (e.g., "FROM Msb Online" for Cashback)
-  - Display Category/Shop instead of generic "Unknown"
-  - Cleaner UI with no duplicate directional badges
-- **Bug Fixes**: 
-  - Fixed People Details URL parameter issue
-  - Fixed Account Edit Form data loading (fresh fetch strategy)
-  - Fixed TypeScript errors in Single Flow mode
+- **Package Manager:** pnpm (Recommended)
 
 ---
 
-## 📚 Documentation
+## 🚀 Current Milestone: Phase 15 (Feb 2026)
+**Focus**: Account Intelligence & UI Refinements
 
-### For New Developers/Agents
-- **Start Here**: [GEMINI.md](./GEMINI.md) - Quick context for Gemini CLI
-- **Full Onboarding**: [.agent/prompts/onboarding.md](./.agent/prompts/onboarding.md) - Complete onboarding guide
-- **Start Prompts**: [.agent/prompts/start_prompts.md](./.agent/prompts/start_prompts.md) - Dynamic templates for new chat sessions
-
-### Rules & Standards
-- **Coding Standards**: [.agent/rules/rules.md](./.agent/rules/rules.md)
-- **UI Standards**: [.agent/rules/ui_rules.md](./.agent/rules/ui_rules.md) (STRICT)
-
-### Current Work
-- **Phase 14 Handover**: [.agent/HANDOVER_PHASE_14.md](./.agent/HANDOVER_PHASE_14.md)
-- **Phase 15 Plan**: [.agent/PHASE_15_PLAN.md](./.agent/PHASE_15_PLAN.md)
+### Key Deliverables:
+- ✅ **Account Table Intelligence**: Implemented Intelligence Legend row with amount color-coding (Red > 100M, Orange 50-100M, Green < 50M).
+- ✅ **Coverage Insight**: Added "Coverage" hover-card to track external credit exposure (total limit vs. debt for non-primary holders).
+- ✅ **UX Refinements**: Fixed all sticky header offsets and scroll blurring. Added "Reset Sort" and "Clear Search" functionality.
+- ✅ **Sanitized Documentation**: Moved all legacy phase plans and handovers to `.agent/archive/`.
+- ✅ **Standardized Workflows**: Implemented dynamic context-loading prompts for smarter AI agent onboarding.
 
 ---
 
+## 📚 Documentation System
 
-## Project Structure
+### 🤖 For AI Agents (MANDATORY)
+1. **[MASTER_CONTEXT_LOAD.md](./.agent/prompts/MASTER_CONTEXT_LOAD.md)**: Run this first to initialize your session with full repo context.
+2. **[TASK_TEMPLATE.md](./.agent/prompts/TASK_TEMPLATE.md)**: Use this template for defining and executing specific tasks.
+3. **[ONBOARDING.md](./.agent/prompts/ONBOARDING.md)**: Core onboarding guide and reading list.
 
+### 📖 For Developers & Users
+- **[AGENT_CONTEXT.md](./.agent/AGENT_CONTEXT.md)**: Single source of truth for current project state and technical architecture.
+- **[Cashback Guide](./.agent/workflows/cashback-config-guide.md)**: JSON samples for complex card rules (Diamond/Lady).
+- **[Vietnamese User Manual](./.agent/MANUAL_GUIDE_ADVANCED_VI.md)**: Hướng dẫn hạch toán và quy tắc cashback nâng cao.
+
+---
+
+## 🏗️ Project Structure
 - `src/app`: Page routes and layouts.
 - `src/components`: UI components (moneyflow, people, etc).
-- `src/lib`: Utilities and helpers.
+- `src/services`: Core business logic (Single source of truth).
 - `src/actions`: Server actions for data mutation.
 - `src/types`: TypeScript definitions.
 
-## Recently Updated (Jan 2026)
+---
 
-### Phase 3: Batch UI & Installments
-- **Smart Installment Modal**: New dialog to pay installments directly from Batch items. Auto-calculates remaining balance and periods.
-- **Batch Workflow**: Added numbered badges (1: Fund, 2: Match) to guide users through the batch funding process.
-- **UI Refinements**: Improved clone loading state, fixed "Rendering" bugs, and standardized bank icon mapping (`MBB`/`VIB`).
-- **CI/CD**: Relaxed lint rules to ensure smoother Vercel deployments while maintaining code quality locally.
+## 🚨 Development Standards (CRITICAL)
 
-### Planned: Phase 10 (Accounts Enhancements)
-- **MCC Column**: Display MCC per account/transaction context.
-- **Annual Fee Waiver Target**: Compute “target met” based on credit card spend rules.
-- **Category Filter**: Add category dropdown to Accounts filters.
+### 1. UI Strict Rules
+- **FORCE SQUARE**: Icons and avatars MUST use `rounded-none`. NO cropping or borders.
+- **NO MONOSPACE**: Do not use monospace fonts (`font-mono`) for UI text.
+- **DROPDOWNS**: Always test scrollable visibility for popovers and selects.
 
-## Getting Started
-
-First, install dependencies:
-
+### 2. Quality Gates
+Before committing code, you **MUST** ensure:
 ```bash
+# 1. Update lockfile (Critical for Vercel)
 pnpm install
+
+# 2. Check for linting errors
+pnpm lint
+
+# 3. Verify build succeeds
+pnpm build
 ```
 
-Then, run the development server:
+**Do not commit if build or lint fails.**
 
-```bash
-pnpm dev
-```
+---
 
-## 🚨 Development Rules (Critical)
-
-Before committing any code, you **MUST** run the following commands to ensure quality:
-
-```bash
-# 1. Check for linting errors
-npm run lint
-
-# 2. Verify build succeeds
-# 2. Verify build succeeds
-npm run build
-```
-
-## Google Apps Script
-
-To deploy changes to the People Management Sheet script:
-
-```bash
-npm run sheet:people
-# or
-pnpm push sheet people
-```
-
-**Do not commit if either of these fails.**
+**Version**: 3.1.0 (Phase 15)  
+**Last Updated**: Feb 17, 2026  
+**License**: Internal project - Money Flow 3

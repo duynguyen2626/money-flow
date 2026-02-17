@@ -158,6 +158,26 @@ For credit cards with configured statement day:
 ## Keyboard Shortcuts
 (To be implemented)
 
+## Account Intelligence (Phase 15)
+
+The Accounts V2 table (`/accounts/v2`) includes smart visualization tools to help track financial health.
+
+### Intelligence Legend
+Amounts in the table are automatically color-coded based on their magnitude:
+- 🔴 **Red (Critical)**: Amounts > 100,000,000 VND. Requires immediate attention.
+- 🟠 **Orange (Monitoring)**: Amounts between 50,000,000 and 100,000,000 VND. Keep an eye on these.
+- 🟢 **Green (Safe)**: Amounts < 50,000,000 VND. Standard safe zone.
+
+### Coverage Metric
+Found in the main header, **Coverage** tracks your external credit exposure:
+- **Formula**: Total External Limit / Current External Debt.
+- **Purpose**: Helps visualize how much credit capacity is still available for family/others.
+- **HoverCard**: Hover over the Coverage stat to see a detailed breakdown.
+
+### Waiver & Qualification
+- **Qualified**: Visible when spend targets (e.g., for cashback or fee waiver) are met.
+- **Needs Action**: Visible when further spend is required to meet targets.
+
 ## Troubleshooting
 
 ### Cashback not showing
@@ -176,6 +196,7 @@ For credit cards with configured statement day:
 - Ensure default account is selected
 
 ## Related Documentation
-- [Implementation Plan](./implementation_plan.md)
-- [Task Breakdown](./task.md)
-- [Handover Guide](./handover.md)
+- [MASTER_CONTEXT_LOAD.md](./prompts/MASTER_CONTEXT_LOAD.md)
+- [TASK_TEMPLATE.md](./prompts/TASK_TEMPLATE.md)
+- [AGENT_CONTEXT.md](./AGENT_CONTEXT.md)
+- [ONBOARDING.md](./prompts/ONBOARDING.md)
