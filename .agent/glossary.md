@@ -16,6 +16,8 @@ This document provides a mapping of long terms used in the codebase to their cor
 | **Bulk Selection** | `bulk` | Batch actions, selection sets |
 | **Final Price** | `fp` | Calculation logic |
 | **Cashback** | `cb` | Rewards tracking |
+| **Account Intelligence** | `acc-intel` | Color-coding and smart stats logic |
+| **Coverage** | `cov` | External credit limit vs debt tracking |
 
 ---
 **Standard Usage**:

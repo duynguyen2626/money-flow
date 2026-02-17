@@ -29,6 +29,7 @@ export type CashbackLevel = {
   name: string;
   minTotalSpend: number;
   defaultRate: number | null;
+  maxReward: number | null; // Shared cap for all rules in this level
   rules?: CashbackCategoryRule[];
 };
 
@@ -193,13 +194,17 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
       minSpendTarget: (account.cb_min_spend ?? program?.minSpendTarget) ?? null,
       dueDate: (account.due_date ?? program?.dueDate) ?? null,
       levels: (() => {
-        if (account.cb_type === 'tiered' && Array.isArray(account.cb_rules_json)) {
-          return (account.cb_rules_json as any[]).map((lvl: any) => ({
+        if (account.cb_type === 'tiered') {
+          const rawRules = account.cb_rules_json;
+          const tiers = Array.isArray(rawRules) ? rawRules : (rawRules?.tiers || []);
+
+          return tiers.map((lvl: any) => ({
             id: lvl.id || Math.random().toString(36).substr(2, 9),
             name: lvl.name || "",
-            minTotalSpend: Number(lvl.minTotalSpend ?? 0),
-            defaultRate: normalizeRate(lvl.defaultRate),
-            rules: (lvl.rules || []).map((r: any) => ({
+            minTotalSpend: Number(lvl.minTotalSpend ?? lvl.min_spend ?? 0),
+            defaultRate: normalizeRate(lvl.defaultRate ?? lvl.base_rate),
+            maxReward: Number(lvl.maxReward ?? lvl.max_reward ?? 0) || null,
+            rules: (lvl.rules || lvl.policies || []).map((r: any) => ({
               id: r.id || Math.random().toString(36).substr(2, 9),
               categoryIds: r.categoryIds || r.cat_ids || [],
               rate: normalizeRate(r.rate),
@@ -213,6 +218,7 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
             name: 'General',
             minTotalSpend: 0,
             defaultRate: normalizeRate(account.cb_base_rate),
+            maxReward: null,
             rules: (account.cb_rules_json as any[]).map((r: any) => ({
               id: r.id || Math.random().toString(36).substr(2, 9),
               categoryIds: r.categoryIds || r.cat_ids || [],
@@ -245,6 +251,7 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
         name: lvl.name,
         minTotalSpend: Number(lvl.minTotalSpend ?? 0),
         defaultRate: normalizeRate(lvl.defaultRate),
+        maxReward: lvl.maxReward !== undefined ? lvl.maxReward : null,
         rules: lvl.rules?.map(rule => ({
           id: rule.id,
           categoryIds: rule.categoryIds || [],
@@ -269,6 +276,7 @@ export function normalizeCashbackConfig(raw: any, account?: any): CashbackProgra
       name: tier.name || `Level ${idx + 1}`,
       minTotalSpend: tier.minSpend,
       defaultRate: tier.defaultRate !== undefined ? tier.defaultRate : null,
+      maxReward: null,
       rules: Object.entries(tier.categories || {}).map(([catKey, catData], rIdx) => ({
         id: `rule_${idx + 1}_${rIdx + 1}`,
         categoryIds: [catKey], // Note: legacy used string keys, might need mapping

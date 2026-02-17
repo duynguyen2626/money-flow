@@ -205,3 +205,24 @@ export async function updateAccountConfigAction(params: {
 
   return success
 }
+
+export async function getLastTransactionAccountId() {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('account_id')
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() as any
+
+    if (error) throw error
+    return data?.account_id || null
+  } catch (error) {
+    console.error('Failed to fetch last transaction account', error)
+    return null
+  }
+}

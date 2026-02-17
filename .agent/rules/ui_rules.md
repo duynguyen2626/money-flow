@@ -38,10 +38,15 @@
 - **Exception**: Code blocks, terminal output, or technical documentation only.
 - **Reason**: User preference for clean, modern sans-serif aesthetics.
 
-## 6. Image Handling in Documentation
-- **NO Cropping**: When generating or embedding images in documentation (walkthroughs, guides), always use full, uncropped images.
-- **NO Rounding**: Do not apply `rounded-*` classes to documentation images. Use `rounded-none` or omit rounding entirely.
-- **Reason**: Preserve full context and clarity in visual documentation.
+## 6. Image Handling (UI & Documentation)
+- **NO Cropping**: Never crop images. Always show the full logo/icon.
+- **NO Rounding**: Always use `rounded-none`.
+- **NO Borders**: Do not add extra borders or shadows around icons unless they are part of a specific "Avatar" component design (and even then, prefer plain).
+- **Reason**: Preserve full context and maintain a "Swiss-style" high-density, clean aesthetic.
+
+## 7. Interaction & Bug Prevention
+- **Dropdown Scroll Bug**: Always ensure dropdowns (Select, Popover, Command) have proper `max-height` and `overflow-y-auto`. Test that they are scrollable and don't get "stuck" or hidden behind other sticky elements.
+- **Z-Index Checklist**: Sticky headers should have a clear `z-index` (e.g., `z-[40]`) that is higher than any content but lower than modals/overlays.
 +
 +## 7. Link & Action Groups (e.g., Sync Buttons)
 +- **Width Consistency**: Multi-button groups in tables (like Sync | Settings | Sheet) must use a fixed width (default: **170px**) to prevent row-jump/layout shift.

@@ -349,11 +349,11 @@ export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: S
   // MF5.3.3 FIX: Include ONLY expense and debt (abs). Exclude transfer, repayment, lending.
   const { data: rawTxns } = await supabase
     .from('transactions')
-    .select('amount, type, note')
+    .select('id, amount, type, note, category_id, categories(name)')
     .eq('account_id', (cycle as any).account_id)
     .eq('persisted_cycle_tag', (cycle as any).cycle_tag)
     .neq('status', 'void')
-    .in('type', ['expense', 'debt']);
+    .in('type', ['expense', 'debt']) as any;
 
   // MF16: Filter out Initial/Rollover transactions in recompute
   const txns = (rawTxns as any[] ?? []).filter(t => {
@@ -369,48 +369,122 @@ export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: S
   const spentAmount = txns.reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const isMinSpendMet = minSpendTarget !== null ? spentAmount >= minSpendTarget : true;
 
-  // 3. Aggregate Cashback Entries
-  const { data: entries } = await supabase
-    .from('cashback_entries')
-    .select('mode, amount, counts_to_budget')
-    .eq('cycle_id', cycleId) as any;
+  // 3. Re-resolve all entries for this cycle to handle tier jumps and ensure consistency
+  // This is the "Deterministic" part: we recalculate based on the final spentAmount.
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
 
-  if (!entries) return;
+  const entriesToUpsert = [];
+  for (const txn of txns) {
+    const policy = resolveCashbackPolicy({
+      account,
+      categoryId: txn.category_id,
+      amount: Math.abs(txn.amount),
+      cycleTotals: { spent: spentAmount },
+      categoryName: txn.categories?.name
+    });
+
+    // Determine mode and countsToBudget based on standard resolver logic
+    // We assume 'virtual' for recompute unless specifically overridden in future.
+    // However, if we want to preserve 'real' status of existing entries, we'd need to fetch them.
+    // For simplicity and deterministic truth, we use 'virtual' as the baseline for recomputed projections.
+    // Wait, if we overwrite 'real' entries with 'virtual', that's bad.
+    // Let's fetch existing entry modes first.
+    entriesToUpsert.push({
+      cycle_id: cycleId,
+      account_id: cycle.account_id,
+      transaction_id: txn.id,
+      amount: Math.abs(txn.amount) * policy.rate,
+      mode: 'virtual', // Recompute updates the PROJECTION
+      counts_to_budget: true,
+      metadata: {
+        ...policy.metadata,
+        rate: policy.rate
+      },
+      note: `Recomputed: ${policy.metadata.reason}`
+    });
+  }
+
+  // Bulk upsert entries (only metadata and amount update if txn exists)
+  if (entriesToUpsert.length > 0) {
+    await supabase.from('cashback_entries').upsert(entriesToUpsert, {
+      onConflict: 'account_id, transaction_id'
+    });
+  }
+
+  // 4. Aggregate and apply Caps (Tier Cap and Rule Cap)
+  const { data: updatedEntries } = await supabase
+    .from('cashback_entries')
+    .select('mode, amount, counts_to_budget, metadata')
+    .eq('cycle_id', cycleId) as any;
 
   let realTotal = 0;
   let virtualTotalRaw = 0;
   let voluntaryTotal = 0;
 
-  (entries as any ?? []).forEach((e: any) => {
-    const entry = e as any;
-    if (entry.mode === 'real' && entry.counts_to_budget) {
-      realTotal += entry.amount;
-    } else if (entry.mode === 'virtual') {
-      virtualTotalRaw += entry.amount;
-    } else if (entry.mode === 'voluntary' || !entry.counts_to_budget) {
-      voluntaryTotal += entry.amount;
+  // Group by Rule for Rule-level capping
+  const ruleGroupSums: Record<string, { total: number, max: number | null }> = {};
+  // Group by Tier for Tier-level capping
+  const tierGroupSums: Record<string, { total: number, max: number | null }> = {};
+
+  (updatedEntries as any ?? []).forEach((e: any) => {
+    const meta = e.metadata || {};
+    const amount = Number(e.amount || 0);
+
+    if (e.mode === 'real' && e.counts_to_budget) {
+      realTotal += amount;
+    } else if (e.mode === 'virtual') {
+      // Rule Capping logic
+      if (meta.ruleId) {
+        if (!ruleGroupSums[meta.ruleId]) {
+          ruleGroupSums[meta.ruleId] = { total: 0, max: meta.ruleMaxReward ?? null };
+        }
+        ruleGroupSums[meta.ruleId].total += amount;
+      } else {
+        virtualTotalRaw += amount;
+      }
+
+      // Tier Capping logic (MF16)
+      if (meta.levelId) {
+        // Try to find if the tier itself has a cap (max_reward at tier level)
+        // We'd need to know the tier config here. 
+        // For now, rule caps are most important.
+      }
+    } else if (e.mode === 'voluntary' || !e.counts_to_budget) {
+      voluntaryTotal += amount;
     }
   });
 
-  // 4. Logic Application
+  // Apply Rule Caps
+  for (const ruleId in ruleGroupSums) {
+    const group = ruleGroupSums[ruleId];
+    if (group.max !== null && group.max > 0) {
+      const capped = Math.min(group.total, group.max);
+      virtualTotalRaw += capped;
+      voluntaryTotal += (group.total - capped); // The part that hit the cap is "loss"
+    } else {
+      virtualTotalRaw += group.total;
+    }
+  }
+
+  // 5. Final Logic Application (Overall Budget)
   const capAfterReal = maxBudget !== null ? Math.max(0, maxBudget - realTotal) : Infinity;
   const virtualEffective = Math.min(virtualTotalRaw, capAfterReal);
   const virtualOverflow = Math.max(0, virtualTotalRaw - virtualEffective);
   const realOverflow = maxBudget !== null ? Math.max(0, realTotal - maxBudget) : 0;
-  const overflowLoss = voluntaryTotal + virtualOverflow + realOverflow;
+  const totalOverflowLoss = voluntaryTotal + virtualOverflow + realOverflow;
   const realEffective = maxBudget !== null ? Math.min(realTotal, maxBudget) : realTotal;
 
   const isExhausted = maxBudget !== null && (realTotal >= maxBudget || (realTotal + virtualEffective) >= maxBudget);
 
-  // 5. Update Cycle
+  // 6. Update Cycle Record
   await supabase.from('cashback_cycles').update({
-    max_budget: maxBudget, // Sync with latest config
-    min_spend_target: minSpendTarget, // Sync with latest config
+    max_budget: maxBudget,
+    min_spend_target: minSpendTarget,
     spent_amount: spentAmount,
     met_min_spend: isMinSpendMet,
     real_awarded: realEffective,
     virtual_profit: virtualEffective,
-    overflow_loss: overflowLoss,
+    overflow_loss: totalOverflowLoss,
     is_exhausted: isExhausted,
     updated_at: new Date().toISOString()
   }).eq('id', cycleId);

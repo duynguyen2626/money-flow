@@ -62,22 +62,22 @@ Installments: Installments are linked to transaction_lines. Do not double-count 
      - Exclusions: Income, Transfers, and "Create Initial" notes MUST NOT earn cashback.
    - **Research**: Use branch `fix/categories-ui-optimization` as documentation for display logic.
 
-10. Mandatory Quality Gates (Vibe Coding Strict)
+6. Mandatory Quality Gates (Vibe Coding Strict)
    
-   - **Build**: `npm run build` must pass before any handover.
-   - **Documentation**: Any significant logic change (like the cashback placeholder) must be documented in a Phase-specific Handover file in `.agent/`.
-   - **Branching**: Do not merge or reboot cashback without referencing the `fix/categories-ui-optimization` branch logic.
+   - **Build**: `pnpm build` must pass before any handover.
+   - **Documentation**: Any significant logic change must be documented in a Handover file or updated in `AGENT_CONTEXT.md`.
+   - **Lockfile Sync (CRITICAL)**: Always run `pnpm install` after changing `package.json` to ensure `pnpm-lock.yaml` is up to date. Vercel builds will FAIL if the lockfile is out of sync.
    
-   CI/CD: GitHub Actions will block any PR/push that fails lint or build.
+   CI/CD: GitHub Actions/Vercel will block any PR/push that fails lint or build.
    
    Local Check (MANDATORY): BEFORE committing or handing over, you MUST run:
-   > npm run build
-   > npm run lint
+   > pnpm build
+   > pnpm lint
    
    Testing:
-   - Vitest is configured. Run `npm test` (if available) or minimally ensure `npm run build` passes.
-   - HANDOVER REQUIREMENT: You MUST verify the build passes (`npm run build`) before ending the session.
-   - Any Types: PROHIBITED. Fix them, do not cast as any unless absolutely necessary for external libraries.
+   - Vitest is configured. Run `pnpm test` (if available) or minimally ensure `pnpm build` passes.
+   - HANDOVER REQUIREMENT: You MUST verify the build passes (`pnpm build`) before ending the session.
+   - Any Types: PROHIBITED. Fix them, do not cast as `any` unless absolutely necessary for external libraries.
    
 7. Database Schema & Migrations
    - Schema File: `database/schema.sql`.

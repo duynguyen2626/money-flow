@@ -190,6 +190,8 @@ export interface SimpleCashbackConfig {
 
 export interface CashbackTier {
   min_spend: number;
+  base_rate?: number; // Base rate specific to this tier
+  max_reward?: number | null; // Shared cap for ALL policies in this tier (e.g., VPBank 1M cap for Group Rules)
   policies: CashbackCategoryRule[];
 }
 

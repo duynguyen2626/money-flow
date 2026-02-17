@@ -7,7 +7,8 @@ Transaction Slide V2 is a modern, full-featured transaction input system for Mon
 ## Status
 
 ✅ **Phase 1 Complete** - Production-ready, available at `/txn/v2`
-✅ **Phase 9 Complete** - Unified Flow UI for transactions + detail pages (icon-first, no direction badges, centered single-flow on detail pages)
+✅ **Phase 9 Complete** - Unified Flow UI for transactions
+✅ **Phase 15 Complete** - Account Table Intelligence (Sorting, Color-coding, Waiver Tracking)
 
 ## Features
 
@@ -55,6 +56,7 @@ npm test
 - **Implementation Plan**: `.agent/implementation_plan.md` - Technical roadmap
 - **Task Breakdown**: `.agent/task.md` - Detailed task list
 - **Handover Guide**: `.agent/handover.md` - For next developer
+- **Cashback Config Guide**: `.agent/workflows/cashback-config-guide.md` - JSON samples for VPBank Diamond/Lady
 
 ## Architecture
 
@@ -178,7 +180,7 @@ Internal project - Money Flow 3
 
 ---
 
-**Version**: 2.0.0
-**Last Updated**: 2026-01-31
-**Status**: Production-ready (Phase 1)
-**Test URL**: http://localhost:3000/txn/v2
+**Version**: 2.1.0
+**Last Updated**: 2026-02-17
+**Status**: Production-ready (Phase 15)
+**Test URL**: http://localhost:3000/accounts/v2

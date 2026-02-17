@@ -36,7 +36,7 @@ export function resolveCashbackPolicy(params: {
 
     // PRIORITY 1: New Column-based Config
     if (account.cb_type && account.cb_type !== 'none') {
-        const baseRate = Number(account.cb_base_rate ?? 0) / 100;
+        const baseRate = Number(account.cb_base_rate ?? 0); // Already decimal in DB
         const maxBudget = account.cb_is_unlimited ? undefined : (account.cb_max_budget ?? undefined);
 
         let finalRate = baseRate;
@@ -49,59 +49,70 @@ export function resolveCashbackPolicy(params: {
             priority: 0
         };
 
-        if (account.cb_type === 'tiered' && Array.isArray(account.cb_rules_json)) {
-            const levels = (account.cb_rules_json as any[]).sort((a, b) => b.minTotalSpend - a.minTotalSpend);
-            const qualifiedLevels = levels.filter(lvl => cycleTotals.spent >= (lvl.minTotalSpend ?? 0));
+        if (account.cb_type === 'tiered' && account.cb_rules_json) {
+            // Support both object { tiers, base_rate } and legacy array
+            const rawRules = account.cb_rules_json;
+            const tiers = Array.isArray(rawRules) ? rawRules : (rawRules.tiers || []);
+            const tieredBaseRate = !Array.isArray(rawRules) && rawRules.base_rate !== undefined
+                ? Number(rawRules.base_rate)
+                : baseRate;
 
-            let matchedRule: any = null;
-            if (categoryId && qualifiedLevels.length > 0) {
-                for (const lvl of qualifiedLevels) {
-                    const rules = Array.isArray(lvl.rules) ? lvl.rules : [];
-                    const found = rules.find((r: any) => r.categoryIds?.includes(categoryId) || r.cat_ids?.includes(categoryId));
+            const sortedTiers = [...tiers].sort((a, b) => b.min_spend - a.min_spend);
+            const qualifiedTiers = sortedTiers.filter(t => cycleTotals.spent >= (t.min_spend ?? 0));
+
+            let matchedPolicy: any = null;
+            if (categoryId && qualifiedTiers.length > 0) {
+                for (const tier of qualifiedTiers) {
+                    const policies = Array.isArray(tier.policies) ? tier.policies : (tier.rules || []);
+                    const found = policies.find((p: any) => p.categoryIds?.includes(categoryId) || p.cat_ids?.includes(categoryId));
                     if (found) {
-                        matchedRule = { ...found, level: lvl };
+                        matchedPolicy = { ...found, tier };
                         break;
                     }
                 }
             }
 
-            if (matchedRule) {
-                finalRate = Number(matchedRule.rate ?? 0) / 100;
-                finalMaxReward = matchedRule.maxReward ?? matchedRule.max ?? undefined;
+            if (matchedPolicy) {
+                finalRate = Number(matchedPolicy.rate ?? 0);
+                finalMaxReward = matchedPolicy.max ?? matchedPolicy.maxReward ?? undefined;
                 source = {
                     policySource: 'category_rule',
                     reason: categoryName ? `${categoryName} rule` : 'Category rule matched',
                     rate: finalRate,
-                    levelId: matchedRule.level.id,
-                    levelName: matchedRule.level.name,
-                    levelMinSpend: matchedRule.level.minTotalSpend,
+                    levelId: matchedPolicy.tier.id || `tier-${matchedPolicy.tier.min_spend}`,
+                    levelName: matchedPolicy.tier.name || `Tier ≥${matchedPolicy.tier.min_spend}`,
+                    levelMinSpend: matchedPolicy.tier.min_spend,
                     categoryId: categoryId || undefined,
-                    ruleId: matchedRule.id,
+                    ruleId: matchedPolicy.id,
                     ruleMaxReward: finalMaxReward,
                     ruleType: 'category',
                     priority: 20
                 };
-            } else if (qualifiedLevels.length > 0) {
-                const topLevel = qualifiedLevels[0];
-                finalRate = topLevel.defaultRate !== undefined && topLevel.defaultRate !== null ? Number(topLevel.defaultRate) / 100 : baseRate;
+            } else if (qualifiedTiers.length > 0) {
+                const topTier = qualifiedTiers[0];
+                finalRate = topTier.base_rate !== undefined && topTier.base_rate !== null
+                    ? Number(topTier.base_rate)
+                    : tieredBaseRate;
                 source = {
                     policySource: 'level_default',
-                    reason: `Level matched: ${topLevel.name}`,
+                    reason: topTier.name ? `Level matched: ${topTier.name}` : `Tier matched: ≥${topTier.min_spend}`,
                     rate: finalRate,
-                    levelId: topLevel.id,
-                    levelName: topLevel.name,
-                    levelMinSpend: topLevel.minTotalSpend,
+                    levelId: topTier.id || `tier-${topTier.min_spend}`,
+                    levelName: topTier.name || `Tier ≥${topTier.min_spend}`,
+                    levelMinSpend: topTier.min_spend,
                     ruleType: 'level_default',
                     priority: 10
                 };
+            } else {
+                finalRate = tieredBaseRate;
             }
         } else if (account.cb_type === 'simple' && Array.isArray(account.cb_rules_json)) {
             const rules = account.cb_rules_json as any[];
             const matchedRule = categoryId ? rules.find((r: any) => r.categoryIds?.includes(categoryId) || r.cat_ids?.includes(categoryId)) : null;
 
             if (matchedRule) {
-                finalRate = Number(matchedRule.rate ?? 0) / 100;
-                finalMaxReward = matchedRule.maxReward ?? matchedRule.max ?? undefined;
+                finalRate = Number(matchedRule.rate ?? 0);
+                finalMaxReward = matchedRule.max ?? matchedRule.maxReward ?? undefined;
                 source = {
                     policySource: 'category_rule',
                     reason: categoryName ? `${categoryName} rule` : 'Category rule matched',

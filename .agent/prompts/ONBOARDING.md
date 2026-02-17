@@ -89,16 +89,22 @@ money-flow-3/
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Run dev server
-npm run dev
+pnpm dev
 ```
 
-### Read First
+### Quick Initialization (DYNAMIC PROMPTS)
+When starting a new session or task, use these templates:
+1. **`.agent/prompts/MASTER_CONTEXT_LOAD.md`**: Run this first to load all project context.
+2. **`.agent/prompts/TASK_TEMPLATE.md`**: Fill this out to define your specific task.
+
+### Essential Reading
 1. `.agent/rules/rules.md` (coding standards)
 2. `.agent/rules/ui_rules.md` (UI standards)
-3. Current handover document (e.g., `HANDOVER_PHASE_14.md` or `HANDOVER_PENDING_UI.md`)
+3. `.agent/workflows/cashback-config-guide.md` (Card configurations)
+4. `.agent/AGENT_CONTEXT.md` (Current project state)
 
 ---
 
@@ -119,5 +125,5 @@ npm run dev
 
 ---
 
-**Last Updated**: 2026-02-12  
+**Last Updated**: 2026-02-17  
 **Maintained By**: Money Flow 3 Team

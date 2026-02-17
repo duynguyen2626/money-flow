@@ -1,13 +1,10 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from "react"
-import { toast } from "sonner"
-import { Switch } from "@/components/ui/switch"
+import React, { useState, useMemo } from "react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { SmartAmountInput } from "@/components/ui/smart-amount-input"
-import { Plus, Trash2, Coins, Sparkles, ChevronRight, Info, Check, ChevronsUpDown, X, Infinity } from "lucide-react"
+import { Plus, Trash2, Coins, Sparkles, ChevronRight, Check, ChevronsUpDown, X, Infinity } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatVietnameseCurrencyText } from "@/lib/number-to-text"
 import { Category } from "@/types/moneyflow.types"
@@ -116,7 +113,7 @@ export function CashbackConfigForm({
         <div className="space-y-6">
             {/* Header / Switcher */}
             <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex items-center gap-2">
                         <div className="bg-amber-100 p-1.5 rounded-lg">
                             <Coins className="h-4 w-4 text-amber-600" />
@@ -144,35 +141,19 @@ export function CashbackConfigForm({
                         </button>
                     </div>
                 </div>
-            </div>
 
-            {cb_type === 'simple' && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                    {/* Base Settings */}
-                    <div className="grid grid-cols-3 gap-3">
+                {/* Global Settings (Visible for both Simple & Tiered) */}
+                {(cb_type === 'simple' || cb_type === 'tiered') && (
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50/20 border border-slate-200 rounded-xl animate-in fade-in slide-in-from-top-1">
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Base Rate (%)</Label>
-                            <SmartAmountInput
-                                value={cb_base_rate}
-                                onChange={(val) => {
-                                    const nextRate = val ?? 0
-                                    onChange({ cb_base_rate: nextRate > 100 ? 100 : nextRate })
-                                }}
-                                unit="%"
-                                hideLabel
-                                compact
-                                className="h-10 font-black bg-white border-slate-300"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend</Label>
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Min Spend to Qualify</Label>
                             <SmartAmountInput
                                 value={cb_min_spend}
                                 onChange={(val) => onChange({ cb_min_spend: val ?? 0 })}
                                 hideLabel
                                 compact
                                 placeholder="Min Spend..."
-                                className="h-10 font-bold bg-white border-slate-300"
+                                className="h-9 font-bold bg-white border-slate-300 shadow-sm"
                             />
                             <div className="text-[9px] font-bold text-blue-600/60 truncate h-3">
                                 {cb_min_spend > 0 && formatVietnameseCurrencyText(cb_min_spend).map((p, i) => (
@@ -184,7 +165,7 @@ export function CashbackConfigForm({
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Monthly Cap</Label>
+                            <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Overall Monthly Cap</Label>
                             <div className="flex items-center gap-2">
                                 <div className="relative flex-1">
                                     <SmartAmountInput
@@ -193,7 +174,7 @@ export function CashbackConfigForm({
                                         hideLabel
                                         compact
                                         placeholder={cb_is_unlimited ? "Unlimited" : "Max amount"}
-                                        className={cn("h-10 font-bold bg-white border-slate-200", cb_is_unlimited && "text-slate-300")}
+                                        className={cn("h-9 font-bold bg-white border-slate-200 shadow-sm", cb_is_unlimited && "text-slate-300")}
                                         disabled={cb_is_unlimited}
                                     />
                                     {cb_is_unlimited && (
@@ -207,7 +188,7 @@ export function CashbackConfigForm({
                                     size="sm"
                                     onClick={() => onChange({ cb_is_unlimited: !cb_is_unlimited, cb_max_budget: !cb_is_unlimited ? null : 0 })}
                                     className={cn(
-                                        "h-10 px-2 text-[10px] font-black border transition-all",
+                                        "h-9 px-2 text-[10px] font-black border transition-all",
                                         cb_is_unlimited
                                             ? "bg-blue-600 border-blue-600 text-white hover:bg-blue-700"
                                             : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-500"
@@ -226,8 +207,26 @@ export function CashbackConfigForm({
                             </div>
                         </div>
                     </div>
+                )}
+            </div>
 
-                    {/* Category Rules */}
+            {cb_type === 'simple' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
+                    <div className="space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Global Base Rate (%)</Label>
+                        <SmartAmountInput
+                            value={cb_base_rate}
+                            onChange={(val) => {
+                                const nextRate = val ?? 0
+                                onChange({ cb_base_rate: nextRate > 100 ? 100 : nextRate })
+                            }}
+                            unit="%"
+                            hideLabel
+                            compact
+                            className="h-10 font-black bg-white border-slate-300 shadow-sm"
+                        />
+                    </div>
+
                     <div className="space-y-3 pt-2">
                         <div className="flex items-center justify-between">
                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Category Exceptions</Label>
@@ -243,9 +242,9 @@ export function CashbackConfigForm({
                             </Button>
                         </div>
 
-                        <div className="space-y-2 text-slate-100">
+                        <div className="space-y-2">
                             {simpleRules.length === 0 && (
-                                <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                                <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl bg-slate-50/50">
                                     <p className="text-[11px] text-slate-400 font-medium italic">No category overrides. Base rate applies to all.</p>
                                 </div>
                             )}
@@ -277,14 +276,16 @@ export function CashbackConfigForm({
                         <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-                                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Tiered Strategy</span>
+                                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">Tiered Strategy Dashboard</span>
                             </div>
                             <Button
-                                className="h-6 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-black text-[9px] uppercase tracking-wider px-2"
+                                className="h-6 bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-wider px-2 shadow-sm"
                                 size="sm"
                                 onClick={() => {
                                     const newTier: CashbackTier = {
                                         min_spend: 0,
+                                        base_rate: cb_base_rate,
+                                        max_reward: null,
                                         policies: []
                                     }
                                     updateTieredConfig({
@@ -309,7 +310,7 @@ export function CashbackConfigForm({
                                     unit="%"
                                     hideLabel
                                     compact
-                                    className="h-9 font-black bg-slate-50 border-slate-200 text-slate-900"
+                                    className="h-9 font-black bg-slate-50 border-slate-200 text-slate-900 shadow-inner"
                                 />
                             </div>
                             <div className="text-[10px] font-medium text-slate-400 italic max-w-[150px] text-right pt-4">
@@ -321,26 +322,26 @@ export function CashbackConfigForm({
                     {/* Tiers List */}
                     <div className="space-y-4">
                         {tieredConfig.tiers.length === 0 && (
-                            <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                            <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-100/20">
                                 <div className="flex flex-col items-center gap-2 max-w-xs mx-auto">
                                     <div className="p-3 bg-white rounded-full shadow-sm">
                                         <ChevronRight className="h-6 w-6 text-slate-300" />
                                     </div>
-                                    <p className="text-sm font-bold text-slate-600">No Volume Tiers</p>
-                                    <p className="text-[11px] text-slate-400">Click "New Threshold" to add reward steps for high spending months (e.g. VPBank Lady).</p>
+                                    <p className="text-sm font-bold text-slate-600">No Volume Tiers Defined</p>
+                                    <p className="text-[11px] text-slate-400 leading-relaxed">Click "Add Threshold" to define reward levels based on monthly volume.</p>
                                 </div>
                             </div>
                         )}
 
                         {tieredConfig.tiers.map((tier, tIdx) => (
-                            <div key={tIdx} className="border border-slate-200 rounded-xl bg-white shadow-sm transition-all hover:border-slate-300">
-                                <div className="p-2 px-3 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3 flex-1">
-                                        <div className="flex h-6 px-2.5 items-center justify-center bg-slate-200 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest shrink-0">
+                            <div key={tIdx} className="border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden group">
+                                <div className="p-2.5 px-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className="flex h-7 px-3 items-center justify-center bg-slate-600 text-white text-[10px] font-black rounded uppercase tracking-widest shrink-0 shadow-sm">
                                             Tier {tIdx + 1}
                                         </div>
-                                        <div className="flex flex-col gap-0 min-w-[100px]">
-                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Spend From</span>
+                                        <div className="flex flex-col gap-0 min-w-[120px] flex-1">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Active From Spend</span>
                                             <div className="relative">
                                                 <SmartAmountInput
                                                     value={tier.min_spend}
@@ -349,22 +350,66 @@ export function CashbackConfigForm({
                                                         next.tiers[tIdx].min_spend = val ?? 0
                                                         updateTieredConfig(next)
                                                     }}
-                                                    placeholder="Enter Amt..."
+                                                    placeholder="Enter Amount..."
                                                     hideLabel
                                                     hideCurrencyText
                                                     hideClearButton
-                                                    className="h-8 text-base font-black p-0 border-none shadow-none focus-visible:ring-0 bg-transparent text-blue-700 w-full"
+                                                    className="h-8 text-lg font-black p-0 border-none shadow-none focus-visible:ring-0 bg-transparent text-blue-600 w-full"
                                                 />
-                                                <div className="text-[9px] font-bold text-blue-600/60 -mt-0.5 truncate h-3">
+                                                <div className="text-[9px] font-black text-blue-600/60 -mt-1 truncate h-3">
                                                     {formatVietnameseCurrencyText(tier.min_spend).map(p => p.value + p.unit).join(' ')}
                                                 </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-0 items-end min-w-[80px]">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight">Tier Base Rate</span>
+                                            <div className="flex items-center">
+                                                <SmartAmountInput
+                                                    value={tier.base_rate ?? cb_base_rate}
+                                                    onChange={(val) => {
+                                                        const next = { ...tieredConfig }
+                                                        next.tiers[tIdx].base_rate = val ?? 0
+                                                        updateTieredConfig(next)
+                                                    }}
+                                                    unit="%"
+                                                    hideLabel
+                                                    hideCurrencyText
+                                                    hideClearButton
+                                                    compact
+                                                    className="h-8 text-sm font-black p-0 border-none shadow-none focus-visible:ring-0 bg-transparent text-slate-800 text-right w-12"
+                                                />
+                                                <span className="text-xs font-black text-slate-400 ml-0.5">%</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col gap-0 items-end min-w-[100px]">
+                                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tight text-right">Rules Shared Cap</span>
+                                            <div className="relative">
+                                                <SmartAmountInput
+                                                    value={tier.max_reward ?? 0}
+                                                    onChange={(val) => {
+                                                        const next = { ...tieredConfig }
+                                                        next.tiers[tIdx].max_reward = val || null
+                                                        updateTieredConfig(next)
+                                                    }}
+                                                    placeholder="Unlimited"
+                                                    hideLabel
+                                                    hideCurrencyText
+                                                    hideClearButton
+                                                    compact
+                                                    className={cn(
+                                                        "h-8 text-sm font-black p-0 border-none shadow-none focus-visible:ring-0 bg-transparent text-right w-24",
+                                                        !tier.max_reward ? "text-slate-300" : "text-rose-600"
+                                                    )}
+                                                />
                                             </div>
                                         </div>
                                     </div>
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8 text-slate-400 hover:text-rose-500"
+                                        className="h-8 w-8 text-slate-300 hover:text-rose-600 hover:bg-rose-50"
                                         onClick={() => {
                                             const next = { ...tieredConfig }
                                             next.tiers.splice(tIdx, 1)
@@ -373,29 +418,30 @@ export function CashbackConfigForm({
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
-
                                 </div>
 
-                                <div className="p-3 space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Special Rules for this tier</span>
+                                <div className="p-4 space-y-4 bg-white">
+                                    <div className="flex items-center justify-between px-1">
+                                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Category Policies (MCC Group)</Label>
                                         <Button
                                             size="sm"
                                             variant="ghost"
-                                            className="h-6 px-2 text-[9px] font-black text-blue-600 uppercase hover:bg-blue-50"
+                                            className="h-7 px-2 text-[9px] font-black text-blue-600 uppercase hover:bg-blue-50 bg-blue-50/50"
                                             onClick={() => {
                                                 const next = { ...tieredConfig }
                                                 next.tiers[tIdx].policies.push({ cat_ids: [], rate: 0, max: null })
                                                 updateTieredConfig(next)
                                             }}
                                         >
-                                            <Plus className="h-3 w-3 mr-1" /> Add Rule
+                                            <Plus className="h-3.5 w-3.5 mr-1" /> Add Category Rule
                                         </Button>
                                     </div>
 
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         {tier.policies.length === 0 && (
-                                            <p className="text-[10px] text-slate-400 italic py-2 text-center">No overrides in this tier. Catch-all rate applies.</p>
+                                            <div className="py-8 text-center bg-slate-50/50 border border-dashed border-slate-200 rounded-xl">
+                                                <p className="text-[11px] text-slate-400 font-bold italic">No special categories for this tier. Using Base Rate only.</p>
+                                            </div>
                                         )}
                                         {tier.policies.map((p, pIdx) => (
                                             <CashbackRuleRow
@@ -421,17 +467,16 @@ export function CashbackConfigForm({
                         ))}
                     </div>
                 </div>
-            )
-            }
+            )}
 
             {/* Summary Sentence footer */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3">
-                <div className="p-1 px-2 bg-slate-200 rounded text-[9px] font-bold text-slate-600 uppercase mt-0.5">Summary</div>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed italic">
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3 shadow-inner">
+                <div className="p-1 px-2 bg-slate-200 rounded text-[9px] font-bold text-slate-600 uppercase mt-0.5 tracking-wider">Plan Summary</div>
+                <p className="text-[11px] text-slate-600 font-bold leading-relaxed italic pr-4">
                     "{summary}"
                 </p>
             </div>
-        </div >
+        </div>
     )
 }
 
@@ -528,7 +573,7 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                                         >
                                             <div className="flex items-center gap-2 w-full">
                                                 <div className={cn(
-                                                    "w-6 h-6 rounded flex items-center justify-center flex-shrink-0 transition-all overflow-hidden",
+                                                    "w-6 h-6 rounded-none flex items-center justify-center flex-shrink-0 transition-all overflow-hidden",
                                                     rule.cat_ids?.includes(cat.id) ? "bg-blue-600 shadow-sm" : "bg-slate-100"
                                                 )}>
                                                     {cat.image_url ? (
@@ -584,8 +629,8 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                 selectedCategories.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/50 rounded-lg border border-slate-100">
                         {selectedCategories.map((cat) => (
-                            <div key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 pl-1 pr-1.5 py-1 rounded-md shadow-sm animate-in fade-in zoom-in-95 overflow-hidden">
-                                <div className="w-5 h-5 rounded-sm bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <div key={cat.id} className="flex items-center gap-1.5 bg-white border border-slate-200 pl-1 pr-1.5 py-1 rounded-none shadow-sm animate-in fade-in zoom-in-95 overflow-hidden">
+                                <div className="w-5 h-5 rounded-none bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                                     {cat.image_url ? (
                                         <img src={cat.image_url} alt="" className="w-full h-full object-cover" />
                                     ) : (
@@ -657,6 +702,6 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     )
 }
