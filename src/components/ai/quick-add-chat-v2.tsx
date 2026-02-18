@@ -276,7 +276,7 @@ export function QuickAddChatV2({
                     <button
                         onClick={() => setOpen(true)}
                         className={cn(
-                            "fixed bottom-5 right-5 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-2xl transition-all hover:scale-110 hover:shadow-blue-500/50",
+                            "fixed bottom-5 right-5 z-[40] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-2xl transition-all hover:scale-110 hover:shadow-blue-500/50",
                             unreadRemindersCount > 0 && "animate-pulse shadow-[0_0_20px_rgba(59,130,246,0.6)]"
                         )}
                     >
@@ -293,7 +293,7 @@ export function QuickAddChatV2({
 
                 {/* Chat Dialog */}
                 {open && (
-                    <div className="fixed bottom-20 right-4 z-[50] flex h-[600px] w-[400px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+                    <div className="fixed bottom-20 right-4 z-[40] flex h-[600px] w-[400px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
                         {/* Header */}
                         <div className="flex items-center justify-between border-b border-slate-100 bg-white/80 px-4 py-3 backdrop-blur-md">
                             <div className="flex items-center gap-3">

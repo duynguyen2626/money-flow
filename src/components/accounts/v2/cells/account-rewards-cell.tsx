@@ -25,8 +25,9 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
     const minSpend = stats?.min_spend || config.minSpendTarget || 0;
     const isQualified = stats?.is_qualified || false;
     const realAwarded = stats?.real_awarded || 0; // Actual bank cashback
-    const virtualProfit = stats?.virtual_profit || 0; // Profit from sharing gap
-    const earnedSoFar = realAwarded + virtualProfit; // Keep for display, but cap logic uses realAwarded only
+    const sharedAmount = stats?.shared_cashback || 0; // Amount shared with others
+    const virtualProfit = stats?.virtual_profit || 0; // Legacy profit field
+    const earnedSoFar = realAwarded + virtualProfit; // Keep for display
 
     const maxBudget = config.maxBudget;
     const maxBudgetVal = maxBudget || 0;
@@ -189,19 +190,36 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
             currentRate = Math.max(currentRate, maxRuleRate);
         }
 
+        // SMART CAP DETECTION: Use account cap or find the highest rule cap
+        const ruleCaps = config.levels?.flatMap(l => l.rules || []).map(r => r.maxReward).filter((cap): cap is number => cap !== null) || [];
+        const maxRuleCap = ruleCaps.length > 0 ? Math.max(...ruleCaps) : 0;
+        const effectiveCap = maxBudgetVal || maxRuleCap;
+        const effectiveIsCapped = effectiveCap > 0;
+
         const projectedAwarded = (isMet && currentRate > 0)
             ? Math.max(0, currentSpent * currentRate)
             : 0;
         const awardedForBudget = Math.max(realAwarded, projectedAwarded);
 
-        const capProgress = isCapped ? Math.min(100, (awardedForBudget / maxBudgetVal) * 100) : 0;
-        const showSpendProgress = !isMet || !isCapped; // Before qualification, always show spend progress even if capped
-        const progress = showSpendProgress ? spendProgress : capProgress;
+        // Progress Calculation
+        let progress = 0;
+        let showSpendProgress = false;
+
+        if (!isMet) {
+            showSpendProgress = true;
+            progress = spendProgress;
+        } else if (effectiveIsCapped) {
+            progress = Math.min(100, (awardedForBudget / effectiveCap) * 100);
+        } else {
+            // Qualified but no cap -> 100% or don't show percentage
+            progress = 100;
+        }
+
         const remainingMinSpend = Math.max(0, minSpend - currentSpent);
         // nextLevelName updated above
 
-        const remainingReward = isCapped ? Math.max(0, maxBudgetVal - awardedForBudget) : null;
-        const availableSpend = (isCapped && currentRate > 0 && remainingReward !== null) ? Math.floor(remainingReward / currentRate) : null;
+        const remainingReward = effectiveIsCapped ? Math.max(0, effectiveCap - awardedForBudget) : null;
+        const availableSpend = (effectiveIsCapped && currentRate > 0 && remainingReward !== null) ? Math.floor(remainingReward / currentRate) : null;
 
         const cycleRange = stats?.cycle_range;
         let cycleProgress = 0;
@@ -230,7 +248,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
 
         const statusLabel = !isMet
             ? `Need ${new Intl.NumberFormat('vi-VN').format(remainingMinSpend)}`
-            : (isCapped
+            : (effectiveIsCapped
                 ? (remainingReward !== null && remainingReward <= 0
                     ? 'Cap Reached'
                     : `Available ${new Intl.NumberFormat('vi-VN', { notation: "compact" }).format(availableSpend || 0)}`)
@@ -247,8 +265,8 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
 
         const claimLabel = !isMet
             ? `Est. reward ${formatCompactMoney(estReward)}`
-            : (isCapped
-                ? `Claim ${formatCompactMoney(Math.max(realAwarded, projectedAwarded))} / ${formatCompactMoney(maxBudgetVal)}`
+            : (effectiveIsCapped
+                ? `Claim ${formatCompactMoney(Math.max(realAwarded, projectedAwarded))} / ${formatCompactMoney(effectiveCap)}`
                 : `Reward ${formatCompactMoney(realAwarded || projectedAwarded || earnedSoFar)}`);
 
         spentContent = (
@@ -286,7 +304,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                 <div
                                     className={cn(
                                         "absolute inset-0 h-full transition-all duration-500 ease-out opacity-20 group-hover:opacity-30",
-                                        isMet ? (isCapped && availableSpend === 0 ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
+                                        isMet ? (effectiveIsCapped && (availableSpend === 0 || progress >= 100) ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
                                     )}
                                     style={{ width: `${Math.max(progress, 0)}%` }}
                                 />
@@ -294,7 +312,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                 <div
                                     className={cn(
                                         "absolute bottom-0 left-0 h-[2px] transition-all duration-500 ease-out",
-                                        isMet ? (isCapped && availableSpend === 0 ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
+                                        isMet ? (effectiveIsCapped && (availableSpend === 0 || progress >= 100) ? "bg-amber-500" : "bg-emerald-500") : "bg-rose-500"
                                     )}
                                     style={{ width: `${Math.max(progress, 0)}%` }}
                                 />
@@ -393,56 +411,85 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                                 {/* Two Column Layout with totals */}
                                 <div className="grid grid-cols-2 gap-4">
                                     {/* Left Column */}
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-start justify-between text-xs">
-                                            <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">💸</span>Spent</span>
-                                            <div className="text-right">
-                                                <div className="text-emerald-600 font-black">{new Intl.NumberFormat('vi-VN').format(currentSpent)}</div>
-                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(currentSpent)}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-start justify-between text-xs">
-                                            <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">🎯</span>Target</span>
-                                            <div className="text-right">
-                                                <div className="text-indigo-600 font-black">{new Intl.NumberFormat('vi-VN').format(target)}</div>
-                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(target)}</div>
-                                            </div>
-                                        </div>
-                                        {isCapped && (
+                                    <div className="space-y-2.5">
+                                        {/* Spent Row */}
+                                        <div className="space-y-0.5">
                                             <div className="flex items-start justify-between text-xs">
-                                                <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">🔒</span>Cap</span>
+                                                <span className="text-slate-600 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">💸</span>Spent</span>
                                                 <div className="text-right">
-                                                    <div className="text-slate-700 font-black">{new Intl.NumberFormat('vi-VN').format(maxBudgetVal)}</div>
-                                                    <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(maxBudgetVal)}</div>
+                                                    <div className="text-emerald-600 font-black">{new Intl.NumberFormat('vi-VN').format(currentSpent)}</div>
                                                 </div>
+                                            </div>
+                                            <div className="text-[8px] text-slate-500 font-bold pl-1 text-left uppercase tracking-tighter">Tổng chi tiêu hợp lệ</div>
+                                        </div>
+
+                                        {/* Target Row */}
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-start justify-between text-xs">
+                                                <span className="text-slate-600 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">🎯</span>Target</span>
+                                                <div className="text-right">
+                                                    <div className="text-indigo-600 font-black">{new Intl.NumberFormat('vi-VN').format(target)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-[8px] text-slate-500 font-bold pl-1 text-left uppercase tracking-tighter">Hạn mức chi tiêu tối thiểu</div>
+                                        </div>
+
+                                        {isCapped && (
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-start justify-between text-xs">
+                                                    <span className="text-slate-600 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">🔒</span>Cap</span>
+                                                    <div className="text-right">
+                                                        <div className="text-slate-700 font-black">{new Intl.NumberFormat('vi-VN').format(maxBudgetVal)}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-[8px] text-slate-500 font-bold pl-1 text-left uppercase tracking-tighter">Cashback tối đa của thẻ</div>
                                             </div>
                                         )}
                                     </div>
+
                                     {/* Right Column */}
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-start justify-between text-xs">
-                                            <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">✅</span>Awarded</span>
-                                            <div className="text-right">
-                                                <div className="text-emerald-600 font-black">{new Intl.NumberFormat('vi-VN').format(realAwarded)}</div>
-                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(realAwarded)}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-start justify-between text-xs">
-                                            <span className="text-sky-700 flex items-center gap-1.5 font-bold"><span className="text-base">🌍</span>General {currentRate > 0 ? `(${(currentRate * 100).toFixed(1)}%)` : ''}</span>
-                                            <div className="text-right">
-                                                <div className="text-sky-700 font-black">{new Intl.NumberFormat('vi-VN').format(currentSpent * currentRate)}</div>
-                                                <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(currentSpent * currentRate)}</div>
-                                            </div>
-                                        </div>
-                                        {virtualProfit > 0 && (
+                                    <div className="space-y-2.5">
+                                        {/* Awarded Row */}
+                                        <div className="space-y-0.5">
                                             <div className="flex items-start justify-between text-xs">
-                                                <span className="text-slate-600 flex items-center gap-1.5 font-bold"><span className="text-base">💰</span>Profit</span>
+                                                <span className="text-slate-600 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">✅</span>Awarded</span>
                                                 <div className="text-right">
-                                                    <div className="text-amber-600 font-black">{new Intl.NumberFormat('vi-VN').format(virtualProfit)}</div>
-                                                    <div className="text-[9px] text-slate-400 font-medium">{formatReadableAmount(virtualProfit)}</div>
+                                                    <div className="text-emerald-600 font-black">{new Intl.NumberFormat('vi-VN').format(realAwarded)}</div>
                                                 </div>
                                             </div>
-                                        )}
+                                            <div className="text-[8px] text-rose-500 font-bold pr-1 text-right uppercase tracking-tighter underline decoration-rose-200">Thực nhận từ Ngân hàng</div>
+                                        </div>
+
+                                        {/* General Row */}
+                                        <div className="space-y-0.5">
+                                            <div className="flex items-start justify-between text-xs">
+                                                <span className="text-sky-700 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">🌍</span>General {currentRate > 0 ? `(${(currentRate * 100).toFixed(1)}%)` : ''}</span>
+                                                <div className="text-right">
+                                                    <div className="text-sky-700 font-black">{new Intl.NumberFormat('vi-VN').format(currentSpent * currentRate)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-[8px] text-sky-600 font-bold pr-1 text-right uppercase tracking-tighter">Ước tính thêm trong kỳ</div>
+                                        </div>
+
+                                        {(() => {
+                                            const estTotalAwarded = realAwarded + (currentSpent * currentRate);
+                                            const netCycleProfit = estTotalAwarded - sharedAmount;
+                                            if (sharedAmount === 0 && netCycleProfit <= 0) return null;
+
+                                            return (
+                                                <div className="space-y-0.5 pt-1 border-t border-slate-100">
+                                                    <div className="flex items-start justify-between text-xs">
+                                                        <span className="text-slate-600 flex items-center gap-1.5 font-black uppercase tracking-tight text-[10px]"><span className="text-xs">💰</span>Profit</span>
+                                                        <div className="text-right">
+                                                            <div className={cn("font-black", netCycleProfit >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                                                                {new Intl.NumberFormat('vi-VN').format(netCycleProfit)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[8px] text-emerald-600 font-bold pr-1 text-right uppercase tracking-tighter">Lợi nhuận thực nhận</div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 <div className="text-[9px] text-slate-400 border-t border-slate-200 pt-1 flex justify-between">
@@ -453,7 +500,7 @@ export function AccountRewardsCell({ account, categories, onOpenTransactions }: 
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
-            </div>
+            </div >
         );
 
     } else if (config.defaultRate || rulesBadge) {

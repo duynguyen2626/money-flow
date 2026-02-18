@@ -472,7 +472,7 @@ function renderCell(
                                                             <div className="flex items-center gap-1.5 bg-indigo-50/50 border border-indigo-100/50 rounded-md px-2 py-0.5 hover:bg-indigo-100/50 transition-all cursor-help group/rewards shadow-sm">
                                                                 <Zap className="w-3 h-3 text-indigo-500 animate-pulse" />
                                                                 <div className="flex items-center gap-1 text-[10px] font-black text-indigo-700 uppercase tracking-tight">
-                                                                    <span className="truncate max-w-[80px]">{badgeLabel}</span>
+                                                                    <span className="truncate max-w-[160px]">{badgeLabel}</span>
                                                                     <span className="text-indigo-400 font-bold ml-0.5">{(badgeRate * 100).toFixed(1)}%</span>
                                                                 </div>
                                                                 {remainingCount > 0 && (

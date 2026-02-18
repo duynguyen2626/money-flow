@@ -113,9 +113,26 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
   // 1. Stats from Cycle (Primary Source)
   let spent_this_cycle = cycle?.spent_amount ?? 0
-  const real_awarded = cycle?.real_awarded ?? 0
+  let real_awarded = cycle?.real_awarded ?? 0
   const virtual_profit = cycle?.virtual_profit ?? 0
 
+  // 1.1 Fallback/Live fetch for real_awarded (Income from Bank)
+  if (real_awarded === 0) {
+    const { data: incomeTxns } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('account_id', account.id)
+      .eq('type', 'income')
+      .eq('status', 'posted')
+      .or('category_id.eq.e0000000-0000-0000-0000-000000000092,category_id.is.null') // Include Cashback category or null
+      .in('persisted_cycle_tag', cycleTags)
+
+    if (incomeTxns && incomeTxns.length > 0) {
+      real_awarded = incomeTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
+    }
+  }
+
+  // MF5.3.3 FIX: Fallback for spent_this_cycle if snapshot is lagging
   if (!cycle || spent_this_cycle === 0) {
     const { data: taggedTxns, error: taggedError } = await supabase
       .from('transactions')
@@ -130,21 +147,27 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       if (taggedSum > 0) {
         spent_this_cycle = taggedSum
       }
-    } else if (!taggedError && start && end) {
+    } else if (!taggedError && start && end) { // Range fallback if tag query returned nothing
       const { data: rangeTxns } = await supabase
         .from('transactions')
-        .select('amount')
+        .select('amount, type')
         .eq('account_id', account.id)
         .neq('status', 'void')
-        .in('type', ['expense', 'debt'])
+        .in('type', ['expense', 'debt', 'income'])
         .gte('occurred_at', start.toISOString())
-        .lte('occurred_at', end.toISOString())
+        .lte('occurred_at', end.toISOString()) as any
 
       if (rangeTxns && rangeTxns.length > 0) {
-        const rangeSum = rangeTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
-        if (rangeSum > 0) {
-          spent_this_cycle = rangeSum
-        }
+        const rangeSpent = rangeTxns
+          .filter((t: any) => t.type === 'expense' || t.type === 'debt')
+          .reduce((sum: number, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
+
+        const rangeAwarded = rangeTxns
+          .filter((t: any) => t.type === 'income')
+          .reduce((sum: number, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
+
+        if (rangeSpent > 0 && spent_this_cycle === 0) spent_this_cycle = rangeSpent
+        if (rangeAwarded > 0 && real_awarded === 0) real_awarded = rangeAwarded
       }
     }
   }

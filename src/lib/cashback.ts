@@ -169,7 +169,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
   };
 }
 
-const normalizeRate = (val: any): number => {
+export const normalizeRate = (val: any): number => {
   const r = Number(val ?? 0);
   // Smart heuristic: In this project, rates >= 0.3 are almost certainly percentages (0.5 for 0.5%, 5 for 5%)
   // while rates < 0.3 are almost certainly decimals (0.003 for 0.3%, 0.15 for 15%)

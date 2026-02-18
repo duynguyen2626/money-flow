@@ -1,4 +1,4 @@
-import { parseCashbackConfig, calculateBankCashback, CashbackLevel, CashbackCategoryRule } from '@/lib/cashback'
+import { parseCashbackConfig, calculateBankCashback, CashbackLevel, CashbackCategoryRule, normalizeRate } from '@/lib/cashback'
 import { CashbackPolicyMetadata } from '@/types/cashback.types'
 
 export type CashbackPolicyResult = {
@@ -18,12 +18,13 @@ export type CashbackPolicyResult = {
 export function resolveCashbackPolicy(params: {
     account: {
         id?: string;
-        cashback_config: any;
+        cashback_config?: any;
         cb_type?: string;
         cb_base_rate?: number;
         cb_max_budget?: number | null;
         cb_is_unlimited?: boolean;
         cb_rules_json?: any;
+        cb_min_spend?: number | null;
     }
     categoryId?: string | null
     amount: number
@@ -36,8 +37,7 @@ export function resolveCashbackPolicy(params: {
 
     // PRIORITY 1: New Column-based Config
     if (account.cb_type && account.cb_type !== 'none') {
-        const baseRate = Number(account.cb_base_rate ?? 0); // Already decimal in DB
-        const maxBudget = account.cb_is_unlimited ? undefined : (account.cb_max_budget ?? undefined);
+        const baseRate = normalizeRate(account.cb_base_rate ?? 0);
 
         let finalRate = baseRate;
         let finalMaxReward: number | undefined = undefined;
@@ -54,7 +54,7 @@ export function resolveCashbackPolicy(params: {
             const rawRules = account.cb_rules_json;
             const tiers = Array.isArray(rawRules) ? rawRules : (rawRules.tiers || []);
             const tieredBaseRate = !Array.isArray(rawRules) && rawRules.base_rate !== undefined
-                ? Number(rawRules.base_rate)
+                ? normalizeRate(rawRules.base_rate)
                 : baseRate;
 
             const sortedTiers = [...tiers].sort((a, b) => b.min_spend - a.min_spend);
@@ -73,7 +73,7 @@ export function resolveCashbackPolicy(params: {
             }
 
             if (matchedPolicy) {
-                finalRate = Number(matchedPolicy.rate ?? 0);
+                finalRate = normalizeRate(matchedPolicy.rate ?? 0);
                 finalMaxReward = matchedPolicy.max ?? matchedPolicy.maxReward ?? undefined;
                 source = {
                     policySource: 'category_rule',
@@ -91,7 +91,7 @@ export function resolveCashbackPolicy(params: {
             } else if (qualifiedTiers.length > 0) {
                 const topTier = qualifiedTiers[0];
                 finalRate = topTier.base_rate !== undefined && topTier.base_rate !== null
-                    ? Number(topTier.base_rate)
+                    ? normalizeRate(topTier.base_rate)
                     : tieredBaseRate;
                 source = {
                     policySource: 'level_default',
@@ -111,12 +111,13 @@ export function resolveCashbackPolicy(params: {
             const matchedRule = categoryId ? rules.find((r: any) => r.categoryIds?.includes(categoryId) || r.cat_ids?.includes(categoryId)) : null;
 
             if (matchedRule) {
-                finalRate = Number(matchedRule.rate ?? 0);
+                finalRate = normalizeRate(matchedRule.rate ?? 0);
                 finalMaxReward = matchedRule.max ?? matchedRule.maxReward ?? undefined;
                 source = {
                     policySource: 'category_rule',
                     reason: categoryName ? `${categoryName} rule` : 'Category rule matched',
                     rate: finalRate,
+                    levelId: matchedRule.id,
                     categoryId: categoryId || undefined,
                     ruleId: matchedRule.id,
                     ruleMaxReward: finalMaxReward,
@@ -129,6 +130,7 @@ export function resolveCashbackPolicy(params: {
         return {
             rate: finalRate,
             maxReward: finalMaxReward,
+            minSpend: account.cb_min_spend ?? undefined,
             metadata: source
         };
     }

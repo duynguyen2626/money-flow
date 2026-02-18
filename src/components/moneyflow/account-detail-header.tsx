@@ -514,6 +514,11 @@ export function AccountDetailHeader({
         categories={categories}
         people={people}
         shops={shops}
+        onSubmissionStart={() => setTransactionSlideOpen(false)}
+        onSuccess={() => {
+          window.dispatchEvent(new CustomEvent('refresh-account-data'));
+          router.refresh();
+        }}
       />
     </div>
   )

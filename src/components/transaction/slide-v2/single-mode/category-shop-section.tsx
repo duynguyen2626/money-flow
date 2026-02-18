@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Book, Store, Tag } from "lucide-react";
+import Image from "next/image";
 import {
     FormControl,
     FormField,
@@ -15,6 +16,8 @@ import { SingleTransactionFormValues } from "../types";
 import { Shop, Category } from "@/types/moneyflow.types";
 import { Combobox } from "@/components/ui/combobox";
 
+import { getRecentShopByCategoryId } from "@/actions/transaction-actions";
+
 type CategoryShopSectionProps = {
     shops: Shop[];
     categories: Category[];
@@ -26,6 +29,7 @@ type CategoryShopSectionProps = {
 export function CategoryShopSection({ shops, categories, onAddNewCategory, onAddNewShop, isLoadingCategories }: CategoryShopSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
+    const categoryId = useWatch({ control: form.control, name: "category_id" });
 
     // Filter categories based on transaction type
     const filteredCategories = useMemo(() => {
@@ -46,7 +50,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         value: c.id,
         label: c.name,
         icon: c.image_url ? (
-            <img src={c.image_url} alt={c.name} className="w-5 h-5 object-contain rounded-none" />
+            <Image src={c.image_url} alt={c.name} width={20} height={20} className="object-contain rounded-none" />
         ) : c.icon ? (
             <span className="text-sm">{c.icon}</span>
         ) : (
@@ -58,9 +62,29 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         value: s.id,
         label: s.name,
         icon: s.image_url ? (
-            <img src={s.image_url} alt={s.name} className="w-6 h-6 object-contain rounded-none" />
+            <Image src={s.image_url} alt={s.name} width={24} height={24} className="object-contain rounded-none" />
         ) : <Store className="w-4 h-4 text-slate-400" />
     }));
+
+    // Auto-select shop based on recently used for selected category
+    useEffect(() => {
+        if (!categoryId) return;
+
+        // Don't auto-set if shop is already selected (prevent overwriting user selection if they just picked one)
+        // BUT if it's the very first time category is selected (form is clean), we should auto-set
+        const currentShopId = form.getValues('shop_id');
+
+        // We use a small flag or check if it's "clean"
+        // Actually, usually users want smart suggestion if they just changed category
+        const fetchRecent = async () => {
+            const recentShopId = await getRecentShopByCategoryId(categoryId);
+            if (recentShopId && !currentShopId) {
+                form.setValue('shop_id', recentShopId);
+            }
+        };
+
+        fetchRecent();
+    }, [categoryId, form]);
 
     // Auto-select defaults logic
     useEffect(() => {

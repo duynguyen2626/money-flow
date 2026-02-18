@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
 import { format } from "date-fns";
-import { CalendarIcon, ArrowLeft, RefreshCw } from "lucide-react";
+import { CalendarIcon, ArrowLeft, RefreshCw, Loader2 } from "lucide-react";
 import {
     Sheet,
     SheetContent,
@@ -133,12 +133,21 @@ export function TransactionSlideV2({
                 type = 'transfer';
             }
 
+            // Duplicate logic: set occurred_at to now (note stays clean - badge shown in table)
+            let note = initialData.note ?? "";
+            let occurredAt = initialData.occurred_at || new Date();
+
+            if (operationMode === 'duplicate') {
+                occurredAt = new Date(); // Always now for duplicates
+                // Do NOT append #Clone to note - the table shows a CLONE badge instead
+            }
+
             const values: SingleTransactionFormValues = {
                 type,
                 category_id: initialData.category_id ?? null,
-                occurred_at: initialData.occurred_at || new Date(),
+                occurred_at: occurredAt,
                 amount: Math.abs(initialData.amount ?? 0),
-                note: initialData.note ?? "",
+                note: note,
                 source_account_id: initialData.source_account_id || accounts[0]?.id || "",
                 target_account_id: initialData.target_account_id ?? null,
                 shop_id: initialData.shop_id ?? null,
@@ -179,7 +188,7 @@ export function TransactionSlideV2({
         };
 
         return defaultValues;
-    }, [initialData, accounts]);
+    }, [initialData, accounts, operationMode]);
 
     // --- Helper for safe schema resolution ---
     // Wraps zodResolver in a try-catch to prevent "Cannot read properties of undefined" crashes
@@ -237,6 +246,8 @@ export function TransactionSlideV2({
         resolver: safeResolver(singleTransactionSchema, 'singleTransactionSchema'),
         defaultValues: defaultFormValues,
     });
+
+
 
     const { isDirty: isSingleDirty } = singleForm.formState;
 
@@ -373,7 +384,7 @@ export function TransactionSlideV2({
 
     // MF5.5: Pre-populate source account for Transfer/Pay if empty or not bank
     useEffect(() => {
-        if (!open || operationMode === 'edit') return;
+        if (!open || operationMode === 'edit' || operationMode === 'duplicate') return;
 
         if (currentTxnType === 'transfer' || currentTxnType === 'credit_pay') {
             const currentAcc = accounts.find(a => a.id === sourceAccId);
@@ -389,7 +400,8 @@ export function TransactionSlideV2({
     }, [currentTxnType, open, operationMode, accounts, singleForm, sourceAccId]);
 
     useEffect(() => {
-        if (!open || operationMode === 'edit') return;
+        // Only auto-expand cashback for new transactions, not edit/duplicate
+        if (!open || operationMode === 'edit' || operationMode === 'duplicate') return;
 
         const acc = accounts.find(a => a.id === sourceAccId);
         const hasCashback = acc && (acc as any).cb_type !== 'none';
@@ -455,10 +467,22 @@ export function TransactionSlideV2({
         console.log("🎯 Operation:", operationMode, "| editingId:", editingId);
         console.log("🔀 Will call:", editingId ? "updateTransaction()" : "createTransaction()");
 
+        // Auto-Note for Fee: Append #Fee=x,xxx to note if service_fee exists
+        let finalNote = data.note || "";
+        if (data.service_fee && data.service_fee > 0) {
+            const feeMarker = `#Fee=${new Intl.NumberFormat('vi-VN').format(data.service_fee)}`;
+            if (!finalNote.includes('#Fee=')) {
+                finalNote = finalNote ? `${finalNote} ${feeMarker}` : feeMarker;
+            } else {
+                // Replace existing fee marker if it exists and is different
+                finalNote = finalNote.replace(/#Fee=[\d,.]+/g, feeMarker);
+            }
+        }
+
         const payload: any = {
             occurred_at: data.occurred_at.toISOString(),
             amount: data.amount + (data.service_fee || 0),
-            note: data.note || "",
+            note: finalNote,
             type: data.type,
             // Directional Logic:
             // For Income/Repayment: Money goes TO target_account_id. Service expects principal in source_account_id.
@@ -496,6 +520,8 @@ export function TransactionSlideV2({
 
         try {
             let success = false;
+            let finalTxnId = editingId;
+
             if (editingId) {
                 success = await updateTransaction(editingId, payload);
                 if (success) toast.success("Transaction updated successfully");
@@ -504,6 +530,7 @@ export function TransactionSlideV2({
                 const newId = await createTransaction(payload);
                 if (newId) {
                     success = true;
+                    finalTxnId = newId;
                     toast.success("Transaction created successfully");
                 } else toast.error("Failed to create transaction");
             }
@@ -515,7 +542,7 @@ export function TransactionSlideV2({
                     setHasChanges(false);
                     onHasChanges?.(false);
                 }
-                onSuccess?.(editingId ? { id: editingId, ...payload } : undefined);
+                onSuccess?.(finalTxnId ? { id: finalTxnId, ...payload } : undefined);
             }
         } catch (error) {
             console.error("❌ Submission error caught:", error);
@@ -661,16 +688,13 @@ export function TransactionSlideV2({
                     </div>
 
                     <div className="flex-1 overflow-y-auto bg-slate-50/50 relative">
-                        {isSubmitting && (
+                        {isLoadingEdit && (
                             <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in duration-200">
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="h-10 w-10 rounded-xl bg-white shadow-xl flex items-center justify-center border border-slate-100">
-                                        <svg className="animate-spin h-6 w-6 text-slate-900" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
+                                        <Loader2 className="h-6 w-6 text-slate-900 animate-spin" />
                                     </div>
-                                    <span className="text-sm font-bold text-slate-900">Saving transaction...</span>
+                                    <span className="text-sm font-bold text-slate-900 uppercase tracking-widest animate-pulse">Loading Details...</span>
                                 </div>
                             </div>
                         )}

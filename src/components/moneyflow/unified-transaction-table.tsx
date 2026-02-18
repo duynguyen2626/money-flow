@@ -43,11 +43,13 @@ import {
   Wrench,
   Pencil,
   Settings2,
+  SlidersHorizontal,
   Zap,
   FileSpreadsheet,
   Users2,
   ShoppingBag,
-  Book
+  Book,
+  FileText
 } from "lucide-react"
 import { normalizeCashbackConfig } from "@/lib/cashback"
 import { ColumnCustomizer } from "./column-customizer"
@@ -106,7 +108,7 @@ import { RequestRefundDialog } from "./request-refund-dialog"
 import { TransactionHistoryModal } from "./transaction-history-modal"
 
 import { cancelOrder } from "@/actions/transaction-actions"
-import { AddTransactionDialog } from "./add-transaction-dialog"
+import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 import { ColumnKey } from "@/components/app/table/transactionColumns"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -330,16 +332,15 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 110, minWidth: 90 },
     { key: "shop", label: "NOTE & CATEGORY", defaultWidth: 360, minWidth: 280 },
-    { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
     { key: "account", label: "Flow", defaultWidth: 300, minWidth: 280 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
+    { key: "total_back", label: "Total Back", defaultWidth: 120, minWidth: 100 },
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "actual_cashback", label: "Est. Cashback", defaultWidth: 120, minWidth: 100 },
     { key: "est_share", label: "Cashback Shared", defaultWidth: 100, minWidth: 80 },
     { key: "net_profit", label: "Profit", defaultWidth: 100, minWidth: 80 },
-    { key: "page", label: "Page", defaultWidth: 80, minWidth: 60 },
     { key: "actions", label: "Action", defaultWidth: 100, minWidth: 60 },
   ]
   const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false)
@@ -354,6 +355,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+  const [showTotals, setShowTotals] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const initial: Record<ColumnKey, boolean> = {
@@ -365,14 +367,13 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       account: true,
       amount: true,
       final_price: true,
-      back_info: false,
+      total_back: false,
       id: false,
-      people: false,
       actions: true,
       actual_cashback: false,
       est_share: false,
       net_profit: false,
-      page: false,
+      back_info: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -631,6 +632,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   // State for actions
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
+  const [successTxnIds, setSuccessTxnIds] = useState<Set<string>>(new Set()) // For green flash effect if needed
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
   const [confirmCancelTarget, setConfirmCancelTarget] = useState<TransactionWithDetails | null>(null)
   const [isVoiding, setIsVoiding] = useState(false)
@@ -639,6 +641,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   const [voidError, setVoidError] = useState<string | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
   const [confirmDeletingTarget, setConfirmDeletingTarget] = useState<TransactionWithDetails | null>(null)
+  const [operationMode, setOperationMode] = useState<'add' | 'edit' | 'duplicate'>('edit')
 
   useEffect(() => {
     if (!actionMenuOpen) return
@@ -902,6 +905,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       externalOnEdit(txn);
       return;
     }
+    setOperationMode('edit');
     setEditingTxn(txn);
     setActionMenuOpen(null);
   };
@@ -911,9 +915,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       externalOnDuplicate(txn as any);
       return;
     }
-    // Fallback if no external handler
+    setOperationMode('duplicate');
     setEditingTxn(txn);
-    // Note: If adding internal slide support, set operation mode here
     setActionMenuOpen(null);
   };
 
@@ -960,10 +963,15 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     stopBulk.current = false
     let processedCount = 0
 
+    const processIds = Array.from(selection);
+
+    // Initial loading state
+    setUpdatingTxnIds(new Set(processIds));
+
     if (mode === 'void') {
       setIsVoiding(true)
       let errorCount = 0
-      for (const id of Array.from(selection)) {
+      for (const id of processIds) {
         if (stopBulk.current) {
           toast.info(`Process stopped. ${processedCount} items processed.`)
           break
@@ -977,6 +985,12 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
           }
         } catch {
           errorCount++
+        } finally {
+          setUpdatingTxnIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
         }
         processedCount++
       }
@@ -991,7 +1005,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     } else if (mode === 'restore') {
       setIsRestoring(true)
       let errorCount = 0
-      for (const id of Array.from(selection)) {
+      for (const id of processIds) {
         if (stopBulk.current) {
           toast.info(`Process stopped. ${processedCount} items processed.`)
           break
@@ -1002,6 +1016,11 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         } else {
           errorCount++
         }
+        setUpdatingTxnIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
         processedCount++
       }
       setIsRestoring(false)
@@ -1015,7 +1034,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     } else if (mode === 'delete') {
       setIsDeleting(true)
       let errorCount = 0
-      for (const id of Array.from(selection)) {
+      for (const id of processIds) {
         if (stopBulk.current) {
           toast.info(`Process stopped. ${processedCount} items processed.`)
           break
@@ -1024,6 +1043,11 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         if (!ok) {
           errorCount++
         }
+        setUpdatingTxnIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
         processedCount++
       }
       setIsDeleting(false)
@@ -1036,6 +1060,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       }
     }
     setBulkDialog(null)
+    setUpdatingTxnIds(new Set()) // Safety clear
   }
 
   const displayedTransactions = useMemo(() => {
@@ -1057,7 +1082,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
           (txn.note?.toLowerCase() || '').includes(q) ||
           (txn.category_name?.toLowerCase() || '').includes(q) ||
           ((txn.amount || '').toString().includes(q)) ||
-          ((txn.metadata as any)?.page?.toString()?.toLowerCase() || '').includes(q) ||
           ((txn.metadata as any)?.original_description?.toLowerCase() || '').includes(q)
 
         if (!match) return false
@@ -1164,9 +1188,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       } else if (visualType === 'expense') {
         expenseSummary.sumAmount += absAmount;
       } else {
-        // For transfers/others, fallback to amount sign if needed, or default to expense as per FilterableTransactions?
-        // FilterableTransactions defaults 'else' to expense.
-        // But let's try to be smarter: if amount > 0, income, else expense.
         const amount = txn.amount ?? 0;
         if (amount > 0) {
           incomeSummary.sumAmount += absAmount;
@@ -1177,6 +1198,58 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     }
     return { incomeSummary, expenseSummary }
   }, [selection, tableData])
+
+  const tableTotals = useMemo(() => {
+    let base = 0, net = 0, back = 0, estCb = 0, shared = 0, profit = 0;
+
+    const sourceData = selection.size > 0
+      ? tableData.filter(t => selection.has(t.id))
+      : paginatedTransactions;
+
+    sourceData.forEach(txn => {
+      const isVoided = (statusOverrides[txn.id] ?? txn.status) === 'void';
+      if (isVoided) return;
+
+      const amount = Math.abs(txn.amount ?? 0);
+      const originalAmount = typeof txn.original_amount === 'number' ? Math.abs(txn.original_amount) : amount;
+
+      const percentDisp = Number(txn.cashback_share_percent ?? 0);
+      const fixedDisp = Number(txn.cashback_share_fixed ?? 0);
+      const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp;
+      const calcBack = (originalAmount * rate) + fixedDisp;
+      const cashbackAmount = txn.cashback_share_amount ?? (calcBack > 0 ? calcBack : 0);
+
+      const finalPrice = typeof txn.final_price === 'number' ? Math.abs(txn.final_price) : Math.max(0, originalAmount - cashbackAmount);
+
+      // Est Cashback (From Policy)
+      let est_cb = 0;
+      const isExpense = txn.type === 'expense';
+      const account = accounts.find(a => a.id === txn.account_id);
+      if (isExpense && account?.type === 'credit_card') {
+        const policy = resolveCashbackPolicy({
+          account: account as any,
+          categoryId: txn.category_id,
+          amount: originalAmount,
+          categoryName: txn.category_name,
+          cycleTotals: { spent: 0 }
+        });
+        const policyRate = policy?.rate ?? 0;
+        const baseVal = originalAmount * policyRate;
+        est_cb = (policy?.maxReward !== undefined && policy.maxReward !== null)
+          ? Math.min(baseVal, policy.maxReward)
+          : baseVal;
+      }
+
+      base += originalAmount;
+      back += cashbackAmount;
+      net += finalPrice;
+      estCb += est_cb;
+      shared += (txn.cashback_share_amount ?? 0);
+      profit += (est_cb - (txn.cashback_share_amount ?? 0));
+    });
+
+    return { base, net, back, estCb, shared, profit };
+  }, [paginatedTransactions, statusOverrides, accounts]);
 
   const renderActionMenuItems = (
     txn: TransactionWithDetails,
@@ -1625,16 +1698,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                         ) : col.key === 'actions' ? (
                           <div className="flex items-center justify-center w-full relative group">
                             <span className="mr-6">{columnLabel}</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setIsColumnCustomizerOpen(true)
-                              }}
-                              className="absolute right-0 p-1.5 hover:bg-slate-300 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                              title="Customize Columns"
-                            >
-                              <Settings2 className="h-3.5 w-3.5 text-slate-600" />
-                            </button>
+                            <CustomTooltip content="Customize Columns" side="top">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setIsColumnCustomizerOpen(true)
+                                }}
+                                className="absolute right-0 p-1.5 hover:bg-slate-300 rounded-md transition-colors text-slate-600"
+                              >
+                                <SlidersHorizontal className="h-3.5 w-3.5" />
+                              </button>
+                            </CustomTooltip>
                           </div>
                         ) : (
                           columnLabel
@@ -1741,9 +1815,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           )
                         }
                         case "actions": {
+                          const isUpdating = updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id);
                           return (
                             <div className="flex items-center justify-end w-full pr-1">
-                              {renderRowActions(txn, isVoided)}
+                              {isUpdating ? (
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100/80 animate-pulse">
+                                  <Loader2 className="h-3 w-3 animate-spin text-slate-500" />
+                                  <span className="text-[10px] font-semibold text-slate-500 uppercase">Updating</span>
+                                </div>
+                              ) : (
+                                renderRowActions(txn, isVoided)
+                              )}
                             </div>
                           )
                         }
@@ -1925,14 +2007,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                         }
                         // Note: 'type' column was removed - it's now merged into the 'date' column
 
-                        case "page": {
-                          const page = (txn.metadata as any)?.page
-                          return (
-                            <span className="text-xs text-slate-500 font-bold">
-                              {page || '-'}
-                            </span>
-                          )
-                        }
+
 
                         case "shop": {
                           let shopLogo = txn.shop_image_url;
@@ -2307,21 +2382,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             </div>
                           );
                         }
-                        case "people": {
-                          const personName = (txn as any).person_name ?? people.find(p => p.id === txn.person_id)?.name
-                          if (!personName) return <span className="text-slate-400 italic text-xs">-</span>
 
-                          return (
-                            <div className="flex items-center gap-1.5">
-                              <div className="flex items-center justify-center h-8 w-8 rounded-sm bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
-                                {personName.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
-                                {personName}
-                              </span>
-                            </div>
-                          )
-                        }
                         case "category": {
                           const actualCategory = categories.find(c => c.id === txn.category_id) || null;
                           const displayCategory = actualCategory?.name || txn.category_name || "Uncategorized";
@@ -2423,8 +2484,26 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           ) : null
 
                           // People debt tag badge with click/hover logic
+                          const person = people.find(p => p.id === personId);
+                          const cycleSheet = person?.cycle_sheets?.find(s => s.cycle_tag === debtTag);
+                          const sheetUrl = cycleSheet?.sheet_url || person?.google_sheet_url || person?.sheet_link;
+
                           const peopleDebtTag = personId && debtTag ? (
-                            <div key={`debt-tag-${txn.id}`} className="shrink-0">
+                            <div key={`debt-tag-${txn.id}`} className="flex items-center gap-1.5 shrink-0">
+                              {sheetUrl && (
+                                <CustomTooltip content={`Open Tracking Sheet for ${personName} (${debtTag})`}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(sheetUrl, '_blank', 'noopener,noreferrer');
+                                    }}
+                                    className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 h-6 text-[9px] font-black uppercase tracking-tighter cursor-pointer hover:bg-emerald-100 transition-colors shadow-sm"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    SHEET
+                                  </button>
+                                </CustomTooltip>
+                              )}
                               <CustomTooltip content={`Open details for ${personName} in new tab filtered by cycle ${debtTag}`}>
                                 <span
                                   onClick={(e) => {
@@ -2793,21 +2872,92 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
                           return (
                             <div className="flex flex-col items-end gap-1 w-full">
-                              <div className="flex items-center gap-1.5 justify-end">
-                                {percentDisp > 0 && (
-                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
-                                    -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
+                              <CustomTooltip
+                                content={
+                                  <div className="text-xs space-y-1">
+                                    <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Net Value Formula</div>
+                                    <div className="flex justify-between gap-4">
+                                      <span>Base Amount:</span>
+                                      <span className="font-bold">{numberFormatter.format(baseAmount)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-emerald-600">
+                                      <span>Est. Refund/Bank Reward:</span>
+                                      <span className="font-bold">{numberFormatter.format(cashbackAmount)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
+                                      <span>Net Result:</span>
+                                      <span className="font-bold">{numberFormatter.format(finalDisp)}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 italic pt-1">
+                                      Formula: Base - (Rate% × Base)
+                                    </div>
+                                  </div>
+                                }
+                                side="bottom"
+                              >
+                                <div className="flex items-center gap-1.5 justify-end cursor-help">
+                                  {percentDisp > 0 && !visibleColumns.total_back && (
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                      -{(percentDisp > 1 ? percentDisp : percentDisp * 100).toFixed(0)}%
+                                    </span>
+                                  )}
+                                  {fixedDisp > 0 && (
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
+                                      -{numberFormatter.format(fixedDisp)}
+                                    </span>
+                                  )}
+                                  <span className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)} style={{ fontSize: `0.9em` }}>
+                                    {numberFormatter.format(finalDisp)}
                                   </span>
-                                )}
-                                {fixedDisp > 0 && (
-                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
-                                    -{numberFormatter.format(fixedDisp)}
+                                </div>
+                              </CustomTooltip>
+                            </div>
+                          )
+                        }
+                        case "total_back": {
+                          const amount = typeof txn.amount === "number" ? txn.amount : 0
+                          const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+                          const baseAmount = Math.abs(Number(originalAmount ?? 0));
+
+                          const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                          const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+                          const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                          const cashbackCalc = (baseAmount * rate) + fixedDisp
+                          const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+
+                          if (cashbackAmount === 0 && !percentDisp && !fixedDisp) return <span className="text-slate-300">-</span>;
+
+                          const effectivePercent = baseAmount > 0 ? (cashbackAmount / baseAmount) * 100 : 0;
+
+                          return (
+                            <div className="flex flex-col items-end gap-0.5 w-full">
+                              <CustomTooltip
+                                content={
+                                  <div className="text-xs space-y-1">
+                                    <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Total Back Details</div>
+                                    <div className="flex justify-between gap-4">
+                                      <span>Base:</span>
+                                      <span className="font-bold">{numberFormatter.format(baseAmount)}</span>
+                                    </div>
+                                    <div className="flex justify-between gap-4 text-emerald-600">
+                                      <span>Back:</span>
+                                      <span className="font-bold">{numberFormatter.format(cashbackAmount)}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 italic pt-1 text-right">
+                                      ~ {effectivePercent.toFixed(2)}%
+                                    </div>
+                                  </div>
+                                }
+                              >
+                                <div className="flex items-baseline gap-1.5 justify-end cursor-help">
+                                  <span className="text-[10px] font-bold text-emerald-600">
+                                    -{effectivePercent.toFixed(0)}% =
                                   </span>
-                                )}
-                                <span className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)} style={{ fontSize: `0.9em` }}>
-                                  {numberFormatter.format(finalDisp)}
-                                </span>
-                              </div>
+                                  <span className="font-black text-emerald-700 tabular-nums">
+                                    {numberFormatter.format(cashbackAmount)}
+                                  </span>
+                                </div>
+                              </CustomTooltip>
                             </div>
                           )
                         }
@@ -2873,12 +3023,15 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                       <TableRow
                         key={txn.id}
                         className={cn(
-                          "border-b border-slate-200 transition-colors text-base",
+                          "border-b border-slate-200 transition-colors text-base relative",
                           isMenuOpen ? "bg-blue-50" : rowBgColor,
                           !isExcelMode && "hover:bg-slate-50/50",
-                          (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
+                          (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50",
+                          successTxnIds.has(txn.id) && "bg-emerald-50/10 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
                         )}
                       >
+                        {/* Processing Overlay for Row */}
+
                         {displayedColumns.map(col => {
                           const allowOverflow = col.key === "date"
                           const stickyStyle: React.CSSProperties = {
@@ -2911,6 +3064,46 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                   })
                 )}
               </TableBody>
+              {selection.size > 0 && paginatedTransactions.length > 0 && (
+                <tfoot className="sticky bottom-0 z-40 bg-slate-900 text-white font-black shadow-[0_-4px_12px_rgba(0,0,0,0.2)] border-t-2 border-slate-700">
+                  <TableRow className="hover:bg-slate-900 border-0">
+                    {displayedColumns.map((col, idx) => {
+                      const width = columnWidths[col.key];
+                      const isFirst = idx === 0;
+
+                      let content: React.ReactNode = null;
+                      if (isFirst) {
+                        content = <span className="text-[10px] uppercase tracking-widest opacity-60 ml-8">Total Rows</span>;
+                      } else if (col.key === 'amount') {
+                        content = numberFormatter.format(tableTotals.base);
+                      } else if (col.key === 'total_back') {
+                        content = numberFormatter.format(tableTotals.back);
+                      } else if (col.key === 'final_price') {
+                        content = numberFormatter.format(tableTotals.net);
+                      } else if (col.key === 'actual_cashback') {
+                        content = numberFormatter.format(tableTotals.estCb);
+                      } else if (col.key === 'est_share') {
+                        content = numberFormatter.format(tableTotals.shared);
+                      } else if (col.key === 'net_profit') {
+                        content = numberFormatter.format(tableTotals.profit);
+                      }
+
+                      return (
+                        <TableCell
+                          key={`total-${col.key}`}
+                          className={cn(
+                            "py-2.5 px-3 whitespace-nowrap border-r border-slate-800",
+                            (col.key === 'amount' || col.key === 'total_back' || col.key === 'final_price' || col.key === 'actual_cashback' || col.key === 'est_share' || col.key === 'net_profit') && "text-right tabular-nums"
+                          )}
+                          style={{ width, maxWidth: width }}
+                        >
+                          {content}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -3034,27 +3227,60 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
         {
           editingTxn && editingInitialValues && (
-            <AddTransactionDialog
-              isOpen={!!editingTxn}
+            <TransactionSlideV2
+              open={!!editingTxn}
               onOpenChange={(open) => {
                 if (!open) setEditingTxn(null)
               }}
-              mode="edit"
-              transactionId={editingTxn.id}
-              initialValues={editingInitialValues}
+              mode="single"
+              operationMode={operationMode}
+              editingId={operationMode === 'edit' ? editingTxn.id : undefined}
+              initialData={editingInitialValues as any}
               accounts={accounts}
               categories={categories}
               people={people}
               shops={shops}
-              triggerContent={<span className="hidden"></span>}
-              onSuccess={(txn) => {
-                // CRITICAL: Always close modal first, then try optimistic update
+              onSubmissionStart={() => {
+                // IMMEDIATE CLOSE - for performance and feel
                 setEditingTxn(null);
 
-                // Try optimistic update if txn is provided
-                if (txn) {
-                  handleOptimisticUpdate(txn);
+                // Show processing spinner on the row if we have an ID
+                if (editingTxn?.id) {
+                  setUpdatingTxnIds(prev => new Set(prev).add(editingTxn.id));
                 }
+              }}
+              onSuccess={async (txn) => {
+                // If we have a txn being updated, show processing effect
+                if (txn?.id) {
+                  // Ensure ID is in updating state (in case onSubmissionStart missed it or it's a new ID)
+                  setUpdatingTxnIds(prev => new Set(prev).add(txn.id));
+
+                  // Optimistic update
+                  handleOptimisticUpdate(txn);
+
+                  // Simulate revalidation wait or wait for router refresh
+                  setTimeout(() => {
+                    setUpdatingTxnIds(prev => {
+                      const next = new Set(prev);
+                      next.delete(txn.id);
+                      return next;
+                    });
+                    setSuccessTxnIds(prev => new Set(prev).add(txn.id));
+                    setTimeout(() => {
+                      setSuccessTxnIds(prev => {
+                        const next = new Set(prev);
+                        next.delete(txn.id);
+                        return next;
+                      });
+                    }, 2000);
+                  }, 1500);
+                } else {
+                  // If no specific txn (like bulk), refresh everything
+                  router.refresh();
+                }
+              }}
+              onSubmissionEnd={() => {
+                // Optional: ensure global busy states are cleared
               }}
             />
           )
@@ -3344,6 +3570,114 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
             />
           )
         }
+
+        {/* Floating Bulk Action Toolbar */}
+        {!isExcelMode && selection.size > 0 && typeof document !== 'undefined' && createPortal(
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none">
+            {/* Totals Summary Card */}
+            {showTotals && (
+              <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-4 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-auto">
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
+                  {[
+                    { label: 'BASE', value: tableTotals.base, color: 'text-slate-200' },
+                    { label: 'NET', value: tableTotals.net, color: 'text-blue-400' },
+                    { label: 'BACK', value: tableTotals.back, color: 'text-emerald-400' },
+                    { label: 'EST. CASHBACK', value: tableTotals.estCb, color: 'text-emerald-500' },
+                    { label: 'C. SHARED', value: tableTotals.shared, color: 'text-amber-400' },
+                    { label: 'PROFIT', value: tableTotals.profit, color: tableTotals.profit >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex flex-col gap-0.5 min-w-[80px]">
+                      <span className="text-[9px] font-black text-slate-500 tracking-tighter uppercase">{item.label}</span>
+                      <span className={cn("text-xs font-black tabular-nums tracking-tighter", item.color)}>
+                        {numberFormatter.format(item.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Main Action Bar */}
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-900/95 border border-slate-800 p-2 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-8 duration-300 pointer-events-auto">
+              <div className="flex items-center gap-2 px-3 border-r border-slate-700 mr-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
+                  {selection.size}
+                </span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Selected</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {currentTab === 'void' ? (
+                  <button
+                    onClick={handleBulkRestore}
+                    disabled={isRestoring}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-500 transition-all disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    RESTORE
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleBulkVoid}
+                    disabled={isVoiding}
+                    className="flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-black text-white hover:bg-amber-500 transition-all disabled:opacity-50"
+                  >
+                    <Ban className="h-3.5 w-3.5" />
+                    VOID
+                  </button>
+                )}
+
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isDeleting}
+                  className="flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-xs font-black text-white hover:bg-rose-500 transition-all disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  DELETE
+                </button>
+
+                <div className="h-8 w-px bg-slate-700 mx-2" />
+
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all cursor-pointer select-none",
+                    showSelectedOnly ? "bg-blue-600/20 border-blue-500 text-blue-400" : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800"
+                  )}
+                  onClick={() => setShowSelectedOnly(!showSelectedOnly)}
+                >
+                  <div className={cn(
+                    "h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all",
+                    showSelectedOnly ? "bg-blue-500 border-blue-400" : "border-slate-500"
+                  )}>
+                    {showSelectedOnly && <Check className="h-2.5 w-2.5 text-white" />}
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-tight">Show Selected</span>
+                </div>
+
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all cursor-pointer select-none",
+                    showTotals ? "bg-emerald-600/20 border-emerald-500 text-emerald-400" : "bg-slate-800/50 border-slate-700 text-slate-400 hover:bg-slate-800"
+                  )}
+                  onClick={() => setShowTotals(!showTotals)}
+                >
+                  <Sigma className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-black uppercase tracking-tight">Totals</span>
+                </div>
+
+                <button
+                  onClick={() => updateSelection(new Set())}
+                  className="ml-2 flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-800 text-slate-400 transition-colors"
+                  title="Clear Selection"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
         {/* Column Customizer */}
         <ColumnCustomizer
           open={isColumnCustomizerOpen}
@@ -3380,15 +3714,14 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               tag: false,
               account: true,
               amount: true,
+              total_back: false,
               final_price: true,
-              back_info: false,
               id: false,
-              people: false,
               actions: true,
-              page: false,
               actual_cashback: false,
               est_share: false,
               net_profit: false,
+              back_info: false,
             };
             setVisibleColumns(defaultVis);
             localStorage.removeItem('mf_v3_col_vis');
@@ -3408,7 +3741,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
             setColumnWidths(prev => ({ ...prev, [key]: width }))
           }}
         />
-      </div >
+      </div>
     </div>
   );
 });

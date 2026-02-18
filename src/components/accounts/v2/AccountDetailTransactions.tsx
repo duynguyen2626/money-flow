@@ -17,7 +17,7 @@ import { SingleTransactionFormValues } from '@/components/transaction/slide-v2/t
 import { DateRange } from 'react-day-picker'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, format } from 'date-fns'
-import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2, Loader2 } from 'lucide-react'
+import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -165,8 +165,10 @@ export function AccountDetailTransactions({
     const [isAddSlideOpen, setIsAddSlideOpen] = useState(false)
     const [addOperationMode, setAddOperationMode] = useState<'add' | 'duplicate'>('add')
     const [addInitialData, setAddInitialData] = useState<Partial<SingleTransactionFormValues> | undefined>()
+    const [isSubmittingAdd, setIsSubmittingAdd] = useState(false)
     const [isEditSlideOpen, setIsEditSlideOpen] = useState(false)
     const [editingTransaction, setEditingTransaction] = useState<TransactionWithDetails | null>(null)
+    const [isSubmittingEdit, setIsSubmittingEdit] = useState(false)
     const [clearConfirmationOpen, setClearConfirmationOpen] = useState(false)
     const [clearType, setClearType] = useState<'filter' | 'all'>('filter')
 
@@ -487,13 +489,18 @@ export function AccountDetailTransactions({
                 categories={categories}
                 people={people}
                 shops={shops}
-                onSuccess={() => {
+                onSubmissionStart={() => {
+                    setIsAddSlideOpen(false)
+                    setIsSubmittingAdd(true)
+                }}
+                onSubmissionEnd={() => {
+                    setIsSubmittingAdd(false)
                     startTransition(() => {
-                        setIsAddSlideOpen(false)
                         router.refresh()
                         if (onSuccess) onSuccess()
                     })
                 }}
+                onSuccess={() => { }}
             />
 
             {/* Edit Transaction Slide (V2) */}
@@ -507,14 +514,19 @@ export function AccountDetailTransactions({
                 categories={categories}
                 people={people}
                 shops={shops}
-                onSuccess={() => {
+                onSubmissionStart={() => {
+                    setIsEditSlideOpen(false)
+                    setIsSubmittingEdit(true)
+                }}
+                onSubmissionEnd={() => {
+                    setIsSubmittingEdit(false)
+                    setEditingTransaction(null)
                     startTransition(() => {
-                        setIsEditSlideOpen(false)
-                        setEditingTransaction(null)
                         router.refresh()
                         if (onSuccess) onSuccess()
                     })
                 }}
+                onSuccess={() => { }}
             />
 
             {/* Toolbar */}
@@ -706,15 +718,27 @@ export function AccountDetailTransactions({
             </div>
 
             <div className="flex-1 overflow-hidden relative">
-                {/* Internal Loading Indicator - Non-blocking floating */}
-                {isPending && (
-                    <div className="absolute bottom-4 right-4 z-[60] pointer-events-none animate-in fade-in slide-in-from-right-4">
-                        <div className="bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-xl flex items-center gap-2 border border-slate-700 shadow-lg">
-                            <Loader2 className="h-3 w-3 animate-spin text-indigo-400" />
-                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Processing</span>
+                {/* Add/Duplicate Spinner */}
+                {isSubmittingAdd && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-semibold text-white">
+                                {addOperationMode === 'duplicate' ? 'Duplicating transaction...' : 'Creating transaction...'}
+                            </span>
                         </div>
                     </div>
                 )}
+                {/* Edit Spinner */}
+                {isSubmittingEdit && (
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300">
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-semibold text-white">Updating transaction...</span>
+                        </div>
+                    </div>
+                )}
+
 
                 <UnifiedTransactionTable
                     transactions={filteredTransactions}
@@ -734,10 +758,21 @@ export function AccountDetailTransactions({
                     onDuplicate={(txn) => {
                         setAddOperationMode('duplicate')
                         setAddInitialData({
-                            ...txn,
-                            id: undefined, // New ID
-                            occurred_at: new Date(), // Reset to now
-                        } as any)
+                            type: txn.type as any,
+                            occurred_at: new Date(),
+                            amount: Math.abs(Number(txn.amount)),
+                            note: txn.note || '',
+                            source_account_id: txn.account_id || accounts[0]?.id || '',
+                            target_account_id: (txn as any).to_account_id || undefined,
+                            category_id: txn.category_id || undefined,
+                            shop_id: txn.shop_id || undefined,
+                            person_id: txn.person_id || undefined,
+                            tag: txn.tag || undefined,
+                            cashback_mode: txn.cashback_mode || 'none_back',
+                            cashback_share_percent: txn.cashback_share_percent,
+                            cashback_share_fixed: txn.cashback_share_fixed,
+                            metadata: { duplicated_from_id: txn.id },
+                        })
                         setIsAddSlideOpen(true)
                     }}
                     onSuccess={onSuccess}

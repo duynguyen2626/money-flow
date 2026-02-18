@@ -48,6 +48,7 @@ export function TransactionTrigger({
                 people={people}
                 shops={shops}
                 onSuccess={handleSuccess}
+                onSubmissionStart={() => setOpen(false)}
             />
         </>
     );
