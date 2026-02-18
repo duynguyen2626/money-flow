@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
     DndContext,
     closestCenter,
@@ -21,7 +21,26 @@ import { CSS } from "@dnd-kit/utilities";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { GripVertical, Lock, RotateCcw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+    GripVertical,
+    Lock,
+    RotateCcw,
+    Search,
+    Calendar,
+    ShoppingBag,
+    LayoutGrid,
+    Wallet,
+    Sigma,
+    Undo2,
+    Zap,
+    Hash,
+    Settings2,
+    Gift,
+    Users2,
+    TrendingUp,
+    Tag
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ColumnKey = string;
@@ -44,12 +63,32 @@ interface ColumnCustomizerProps {
     onReset?: () => void;
 }
 
+const getColumnIcon = (key: string) => {
+    switch (key) {
+        case 'date': return <Calendar className="h-4 w-4" />;
+        case 'shop': return <ShoppingBag className="h-4 w-4" />;
+        case 'category': return <LayoutGrid className="h-4 w-4" />;
+        case 'account': return <Wallet className="h-4 w-4" />;
+        case 'amount': return <Sigma className="h-4 w-4" />;
+        case 'total_back': return <Undo2 className="h-4 w-4" />;
+        case 'final_price': return <Zap className="h-4 w-4" />;
+        case 'tag': return <Tag className="h-4 w-4" />;
+        case 'id': return <Hash className="h-4 w-4" />;
+        case 'actions': return <Settings2 className="h-4 w-4" />;
+        case 'actual_cashback': return <Gift className="h-4 w-4" />;
+        case 'est_share': return <Users2 className="h-4 w-4" />;
+        case 'net_profit': return <TrendingUp className="h-4 w-4" />;
+        default: return <Settings2 className="h-4 w-4" />;
+    }
+}
+
 function SortableItem({
     id,
     label,
     visible,
     frozen,
     width,
+    isHighlighted,
     onToggle,
     onWidthChange
 }: {
@@ -58,6 +97,7 @@ function SortableItem({
     visible: boolean,
     frozen?: boolean,
     width: number,
+    isHighlighted?: boolean,
     onToggle: (checked: boolean) => void,
     onWidthChange: (width: number) => void
 }) {
@@ -82,8 +122,9 @@ function SortableItem({
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center justify-between p-3 bg-card border rounded-md mb-2",
-                isDragging && "shadow-lg bg-accent"
+                "flex items-center justify-between p-3 bg-card border rounded-md mb-2 transition-colors",
+                isDragging && "shadow-lg bg-accent",
+                isHighlighted && "bg-yellow-400/20 border-yellow-400/50 ring-1 ring-yellow-400/30"
             )}
         >
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -94,7 +135,16 @@ function SortableItem({
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                     </div>
                 )}
-                <span className="font-medium text-sm truncate mr-2">{label}</span>
+                <div className={cn(
+                    "flex items-center gap-2 px-2 py-1 rounded bg-muted/50 text-muted-foreground shrink-0",
+                    isHighlighted && "bg-yellow-400/30 text-yellow-700"
+                )}>
+                    {getColumnIcon(id)}
+                </div>
+                <span className={cn(
+                    "font-medium text-sm truncate mr-2",
+                    isHighlighted && "bg-yellow-200 text-yellow-900 rounded px-1"
+                )}>{label}</span>
             </div>
 
             <div className="flex items-center gap-3">
@@ -132,6 +182,8 @@ export function ColumnCustomizer({
     onWidthChange,
     onReset
 }: ColumnCustomizerProps) {
+    const [searchQuery, setSearchQuery] = useState("");
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -157,46 +209,64 @@ export function ColumnCustomizer({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="right" className="w-[400px] sm:w-[540px] overflow-y-auto">
-                <SheetHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
-                    <SheetTitle>Customize Columns</SheetTitle>
-                    {onReset && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={onReset}
-                            className="h-8 gap-1.5"
-                        >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span className="text-xs">Reset Default</span>
-                        </Button>
-                    )}
-                </SheetHeader>
+            <SheetContent side="right" className="w-[400px] sm:w-[540px] flex flex-col p-0">
+                <div className="p-6 border-b">
+                    <SheetHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                        <SheetTitle>Customize Columns</SheetTitle>
+                        {onReset && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={onReset}
+                                className="h-8 gap-1.5"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span className="text-xs">Reset Default</span>
+                            </Button>
+                        )}
+                    </SheetHeader>
 
-                <div className="mt-6 space-y-4">
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <SortableContext
-                            items={columns.map((c) => c.id)}
-                            strategy={verticalListSortingStrategy}
+                    <div className="relative mt-4">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search columns to highlight..."
+                            className="pl-9 h-10 bg-muted/30 focus-visible:ring-1"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 pt-2">
+                    <div className="space-y-4">
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
                         >
-                            {columns.map((col) => (
-                                <SortableItem
-                                    key={col.id}
-                                    id={col.id}
-                                    label={col.label}
-                                    visible={visibleColumns[col.id]}
-                                    frozen={col.frozen}
-                                    width={widths[col.id] || 100}
-                                    onToggle={(checked) => onVisibilityChange(col.id, checked)}
-                                    onWidthChange={(w) => onWidthChange(col.id, w)}
-                                />
-                            ))}
-                        </SortableContext>
-                    </DndContext>
+                            <SortableContext
+                                items={columns.map((c) => c.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {columns.map((col) => {
+                                    const isHighlighted = searchQuery !== "" && col.label.toLowerCase().includes(searchQuery.toLowerCase());
+                                    return (
+                                        <SortableItem
+                                            key={col.id}
+                                            id={col.id}
+                                            label={col.label}
+                                            visible={visibleColumns[col.id]}
+                                            frozen={col.frozen}
+                                            width={widths[col.id] || 100}
+                                            isHighlighted={isHighlighted}
+                                            onToggle={(checked) => onVisibilityChange(col.id, checked)}
+                                            onWidthChange={(w) => onWidthChange(col.id, w)}
+                                        />
+                                    );
+                                })}
+                            </SortableContext>
+                        </DndContext>
+                    </div>
                 </div>
             </SheetContent>
         </Sheet>

@@ -18,7 +18,7 @@ import { PeopleSlideV2 } from '@/components/people/v2/people-slide-v2'
 import { FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
 import { parseISO, isWithinInterval } from 'date-fns'
-import { Info } from 'lucide-react'
+import { Info, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -454,23 +454,15 @@ export function MemberDetailView({
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3 relative">
                         {isSubmitting && (
-                            <div className="absolute inset-0 bg-white/60 z-50 flex flex-col items-center justify-center backdrop-blur-[1px] animate-in fade-in duration-300">
-                                <div className="flex flex-col items-center gap-4 bg-white p-8 rounded-3xl shadow-2xl border border-slate-100 scale-95 animate-in zoom-in-95 duration-300">
-                                    <div className="relative">
-                                        <div className="h-12 w-12 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin" />
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-1.5 text-center">
-                                        <span className="text-base font-black text-slate-900 leading-tight">
+                            <div className="absolute inset-0 bg-white/40 z-50 flex items-center justify-center backdrop-blur-[1px] animate-in fade-in duration-300">
+                                <div className="flex items-center gap-3 bg-slate-900 shadow-2xl border border-slate-800 px-6 py-3 rounded-full text-white scale-90 animate-in zoom-in-95 duration-300">
+                                    <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                                    <div className="flex flex-col">
+                                        <span className="text-[11px] font-black uppercase tracking-widest leading-none">
                                             {slideMode === 'edit' ? 'Updating...' :
-                                                slideMode === 'duplicate' ? 'Duplicating...' :
-                                                    'Creating...'}
+                                                slideMode === 'duplicate' ? 'Cloning...' :
+                                                    'Saving...'}
                                         </span>
-                                        <p className="text-xs text-slate-500 font-medium max-w-[160px]">
-                                            One moment, syncing with database
-                                        </p>
                                     </div>
                                 </div>
                             </div>

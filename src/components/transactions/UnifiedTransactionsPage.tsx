@@ -784,6 +784,7 @@ export function UnifiedTransactionsPage({
                     people={people}
                     shops={shops}
                     selectedTxnIds={selectedIds}
+                    onSelectionChange={setSelectedIds}
                     onSelectTxn={handleSelect}
                     onEdit={handleEdit}
                     onDuplicate={handleDuplicate}

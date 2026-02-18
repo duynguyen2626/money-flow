@@ -68,19 +68,19 @@ export function AccountDetailViewV2({
     const summary = useMemo(() => {
         const targetYear = selectedYear ? parseInt(selectedYear) : new Date().getFullYear();
         const categoryMap = new Map(categories.map(c => [c.id, c]))
-        let yearDebtTotal = 0
-        let debtTotal = 0
-        let expensesTotal = 0
-        let cashbackTotal = 0
+        let cardYearlyCashbackTotal = 0;
+        let cardYearlyCashbackGivenTotal = 0;
+        let yearDebtTotal = 0;
+        let debtTotal = 0;
+        let expensesTotal = 0;
+        let cashbackTotal = 0;
         let yearExpensesTotal = 0;
-
         let yearPureIncomeTotal = 0;
         let yearPureExpenseTotal = 0;
         let yearLentTotal = 0;
         let yearRepaidTotal = 0;
 
         initialTransactions.forEach(tx => {
-            // MF16: Strict Exclusion Logic
             const status = String(tx?.status || '').toLowerCase()
             if (status === 'void') return
 
@@ -101,8 +101,28 @@ export function AccountDetailViewV2({
             if (year === targetYear) {
                 if (type === 'debt') yearLentTotal += amount
                 if (type === 'repayment') yearRepaidTotal += amount
-                if (type === 'income') yearPureIncomeTotal += amount
-                if (type === 'expense') yearPureExpenseTotal += amount
+                if (type === 'income') {
+                    yearPureIncomeTotal += amount
+
+                    // Yearly Cashback Total
+                    const categoryId = tx?.category_id
+                    const category = categoryId ? categoryMap.get(categoryId) : null
+                    const categoryName = category?.name?.toLowerCase() || ''
+                    if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
+                        cardYearlyCashbackTotal += amount
+                    }
+                }
+                if (type === 'expense') {
+                    yearPureExpenseTotal += amount
+
+                    // Yearly Shared/Given Cashback
+                    const categoryId = tx?.category_id
+                    const category = categoryId ? categoryMap.get(categoryId) : null
+                    const categoryName = category?.name?.toLowerCase() || ''
+                    if (categoryName.includes('shared') || categoryName.includes('chia sẻ cashback')) {
+                        cardYearlyCashbackGivenTotal += amount
+                    }
+                }
             }
 
             if (type === 'debt') {
@@ -131,6 +151,8 @@ export function AccountDetailViewV2({
             }
         })
 
+        const netProfitYearly = cardYearlyCashbackTotal - cardYearlyCashbackGivenTotal;
+
         return {
             yearDebtTotal,
             debtTotal,
@@ -142,6 +164,9 @@ export function AccountDetailViewV2({
             yearLentTotal,
             yearRepaidTotal,
             targetYear,
+            cardYearlyCashbackTotal,
+            cardYearlyCashbackGivenTotal,
+            netProfitYearly,
             pendingCount: pendingItems.length + pendingRefundCount
         }
     }, [initialTransactions, categories, selectedYear, pendingItems.length, pendingRefundCount])

@@ -11,8 +11,8 @@ import {
     Info,
     Sparkles,
     Calendar,
-    ArrowRightCircle,
-    BarChart3
+    BarChart3,
+    X
 } from "lucide-react";
 import { SingleTransactionFormValues } from "../types";
 import { AccountSpendingStats } from "@/types/cashback.types";
@@ -105,7 +105,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
         const projectedSpent = cycleSpent + totalGrossAmount;
 
         return resolveCashbackPolicy({
-            account: activeAccount as any,
+            account: activeAccount as Account,
             categoryId,
             amount: totalGrossAmount,
             cycleTotals: {
@@ -133,13 +133,19 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
 
     const totalSharedVal = useMemo(() => {
         if (!isSharing) return 0;
-        return (totalGrossAmount * ((sharePercent || 0) / 100)) + (shareFixed || 0);
+        const rate = (sharePercent || 0) / 100;
+        return (totalGrossAmount * rate) + (shareFixed || 0);
     }, [totalGrossAmount, sharePercent, shareFixed, isSharing]);
 
-    const effectiveDisplayPercent = useMemo(() => {
-        if (totalGrossAmount > 0) return ((totalSharedVal / totalGrossAmount) * 100).toFixed(1);
-        return (policy?.rate ? policy.rate * 100 : 0).toFixed(1);
-    }, [totalGrossAmount, totalSharedVal, policy]);
+    const netProfitValue = useMemo(() => {
+        return actualBankReward - totalSharedVal;
+    }, [actualBankReward, totalSharedVal]);
+
+    // AMBIGUITY FIX: Show Net Profit % in the header instead of sharing %
+    const netProfitPercent = useMemo(() => {
+        if (totalGrossAmount > 0) return ((netProfitValue / totalGrossAmount) * 100).toFixed(2);
+        return (policy?.rate ? policy.rate * 100 : 0).toFixed(2);
+    }, [totalGrossAmount, netProfitValue, policy]);
 
     const suggestedShareRate = useMemo(() => {
         return policy?.rate ? Number((policy.rate * 100).toFixed(2)) : undefined;
@@ -148,8 +154,6 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
     const toggleSharing = (checked: boolean) => {
         if (!checked) {
             form.setValue('cashback_mode', 'percent');
-            // We keep the values but set mode to percent which effectively disables the sharing logic in the service
-            // but the user wants to keep the fields visible but inactive.
         } else {
             form.setValue('cashback_mode', 'real_percent');
             if (sharePercent === null && shareFixed === null && suggestedShareRate) {
@@ -167,7 +171,6 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
         }
     }, [isExpanded, policy, transactionType, suggestedShareRate, form, sharePercent, shareFixed]);
 
-    const netProfitValue = actualBankReward - totalSharedVal;
     if (!isVisible) return null;
 
     return (
@@ -206,8 +209,13 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                 <div className="flex items-center gap-4">
                     {!isExpanded && (
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Estimate</span>
-                            <span className="text-xs font-black text-slate-700">{effectiveDisplayPercent}%</span>
+                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Net Yield</span>
+                            <span className={cn(
+                                "text-xs font-black",
+                                Number(netProfitPercent) >= 0 ? "text-emerald-600" : "text-rose-500"
+                            )}>
+                                {Number(netProfitPercent) >= 0 ? "+" : ""}{netProfitPercent}%
+                            </span>
                         </div>
                     )}
                     <div className={cn(
@@ -271,23 +279,53 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                             render={({ field }) => (
                                 <FormItem className="space-y-1.5">
                                     <div className="flex items-center justify-between">
-                                        <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rate (%)</FormLabel>
+                                        <div className="flex items-center gap-2">
+                                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rate (%)</FormLabel>
+                                        </div>
                                         <Percent className="w-2.5 h-2.5 text-slate-300" />
                                     </div>
                                     <FormControl>
-                                        <div className="relative group">
-                                            <Input
-                                                {...field}
-                                                type="number"
-                                                placeholder={suggestedShareRate ? `Suggest: ${suggestedShareRate}%` : "0.0"}
-                                                className="h-10 font-black bg-white border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all pr-8 text-xs"
-                                                onChange={e => {
-                                                    const val = e.target.value === "" ? null : parseFloat(e.target.value);
-                                                    field.onChange(val !== null && !isNaN(val) ? Math.max(0, val) : null);
-                                                }}
-                                                value={field.value ?? ""}
-                                            />
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-[10px]">%</div>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="relative group">
+                                                <Input
+                                                    {...field}
+                                                    type="number"
+                                                    placeholder={suggestedShareRate ? `Suggest: ${suggestedShareRate}%` : "0.0"}
+                                                    className={cn(
+                                                        "h-10 font-black bg-white border-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all pr-8 text-xs",
+                                                        (field.value || 0) > 100 && "border-rose-300 bg-rose-50/30 text-rose-600"
+                                                    )}
+                                                    onChange={e => {
+                                                        const rawVal = e.target.value;
+                                                        if (rawVal === "") {
+                                                            field.onChange(null);
+                                                            return;
+                                                        }
+                                                        const val = parseFloat(rawVal);
+                                                        // Allow 0, prevent negative
+                                                        field.onChange(!isNaN(val) ? Math.max(0, val) : null);
+                                                    }}
+                                                    value={field.value ?? ""}
+                                                />
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                                    {field.value !== null && field.value !== undefined && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => field.onChange(null)}
+                                                            className="p-0.5 hover:bg-slate-100 rounded transition-colors"
+                                                        >
+                                                            <X className="w-3 h-3 text-slate-300" />
+                                                        </button>
+                                                    )}
+                                                    <div className="text-slate-400 font-bold text-[10px]">%</div>
+                                                </div>
+                                            </div>
+                                            {(field.value || 0) > 100 && (
+                                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-rose-500 px-1">
+                                                    <AlertTriangle className="w-2.5 h-2.5 animate-pulse" />
+                                                    Efficiency &gt; 100% means sharing more than total amount!
+                                                </div>
+                                            )}
                                         </div>
                                     </FormControl>
                                 </FormItem>
@@ -327,7 +365,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                             {netProfitValue < 0 ? (
                                 <div className="flex items-center gap-1.5 text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100 shadow-sm">
                                     <AlertTriangle className="h-3 w-3" />
-                                    <span className="text-[9px] font-black uppercase tracking-tighter">Over Reward Limit</span>
+                                    <span className="text-[9px] font-black uppercase tracking-tighter">Voluntary Sharing</span>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 shadow-sm">
@@ -358,27 +396,17 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             )}
                                         </div>
                                     </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[220px] bg-slate-900 text-white p-3 leading-relaxed border-none shadow-xl space-y-2">
+                                    <TooltipContent side="right" className="max-w-[240px] bg-slate-900 text-white p-3 border-none shadow-xl space-y-2">
                                         <div className="flex flex-col gap-1.5">
-                                            <span className="text-[10px] opacity-70">Số tiền ngân hàng trả (đã áp dụng Cap theo Rule).</span>
-                                            {policy && (
-                                                <div className="pt-2 border-t border-white/10 space-y-1">
-                                                    <div className="flex justify-between gap-4 text-[9px]">
-                                                        <span className="opacity-50 uppercase">Reason:</span>
-                                                        <span className="font-bold text-indigo-400 capitalize">{policy.metadata?.reason || 'Default'}</span>
-                                                    </div>
-                                                    <div className="flex justify-between gap-4 text-[9px]">
-                                                        <span className="opacity-50 uppercase">Rate:</span>
-                                                        <span className="font-bold text-indigo-400">{(policy.rate * 100).toFixed(2)}%</span>
-                                                    </div>
-                                                    {remainsCap !== null && remainsCap !== undefined && (
-                                                        <div className="flex justify-between gap-4 text-[9px]">
-                                                            <span className="opacity-50 uppercase">Budget:</span>
-                                                            <span className="font-bold text-indigo-400">{formatVN(remainsCap)} left</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+                                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Calculation Formula:</span>
+                                            <div className="bg-white/10 p-2 rounded text-[11px] font-mono">
+                                                {formatVN(totalGrossAmount)} × {(policy?.rate ? policy.rate * 100 : 0).toFixed(2)}%
+                                                {policy?.maxReward ? ` (Cap: ${formatVN(policy.maxReward)})` : ""}
+                                                <div className="mt-1 pt-1 border-t border-white/10 text-emerald-400 font-bold">= {formatVN(actualBankReward)}</div>
+                                            </div>
+                                            <span className="text-[9px] opacity-60 italic pt-1 border-t border-white/5">
+                                                * Using {policy?.metadata?.reason || 'default'} strategy for this category.
+                                            </span>
                                         </div>
                                     </TooltipContent>
                                 </Tooltip>
@@ -395,8 +423,17 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             <span className="font-black text-amber-600 tabular-nums tracking-tight">-{formatVN(totalSharedVal)}</span>
                                         </div>
                                     </TooltipTrigger>
-                                    <TooltipContent side="right" className="max-w-[200px] bg-slate-900 text-white text-[10px] p-2 leading-relaxed border-none shadow-xl">
-                                        Số tiền chia sẻ cho người khác.
+                                    <TooltipContent side="right" className="max-w-[240px] bg-slate-900 text-white p-3 border-none shadow-xl space-y-2">
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Calculation Formula:</span>
+                                            <div className="bg-white/10 p-2 rounded text-[11px] font-mono">
+                                                {sharePercent ? `(${formatVN(totalGrossAmount)} × ${sharePercent}%)` : ""}
+                                                {sharePercent && shareFixed ? " + " : ""}
+                                                {shareFixed ? formatVN(shareFixed) : ""}
+                                                <div className="mt-1 pt-1 border-t border-white/10 text-amber-400 font-bold">= {formatVN(totalSharedVal)}</div>
+                                            </div>
+                                            <span className="text-[9px] opacity-60 pt-1">Amount deducted from reward to person.</span>
+                                        </div>
                                     </TooltipContent>
                                 </Tooltip>
 
@@ -408,9 +445,20 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                                 <Info className="h-2.5 w-2.5 text-slate-300" />
                                             </div>
                                         </TooltipTrigger>
-                                        <TooltipContent side="right" className="max-w-[200px] bg-slate-900 text-white text-[10px] p-2 leading-relaxed border-none shadow-xl">
-                                            Lợi nhuận thực nhận (Bank Reward - Shared).
-                                            {netProfitValue < 0 && " Bạn đang tự nguyện chịu lỗ cho giao dịch này."}
+                                        <TooltipContent side="right" className="max-w-[240px] bg-slate-900 text-white p-3 border-none shadow-xl space-y-2">
+                                            <div className="flex flex-col gap-1.5">
+                                                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Net Formula:</span>
+                                                <div className="bg-white/10 p-2 rounded text-[11px] font-mono">
+                                                    {formatVN(actualBankReward)} (Bank) - {formatVN(totalSharedVal)} (Shared)
+                                                    <div className={cn(
+                                                        "mt-1 pt-1 border-t border-white/10 font-bold",
+                                                        netProfitValue >= 0 ? "text-emerald-400" : "text-rose-400"
+                                                    )}>= {formatVN(netProfitValue)}</div>
+                                                </div>
+                                                {netProfitValue < 0 && (
+                                                    <p className="text-[9px] text-rose-300 italic">You are voluntarily giving more to people than bank rewarded.</p>
+                                                )}
+                                            </div>
                                         </TooltipContent>
                                     </Tooltip>
                                     <div className="flex flex-col items-end">
@@ -427,13 +475,13 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                         </div>
                                         {totalGrossAmount > 0 && (
                                             <span className="text-[8px] text-slate-400 font-bold italic mt-1 tracking-tight">
-                                                ~{((netProfitValue / totalGrossAmount) * 100).toFixed(2)}% net efficiency
+                                                ~{netProfitPercent}% net efficiency
                                             </span>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* BUDGET SECTION - ADDED AS PER USER REQUEST */}
+                                {/* BUDGET SECTION */}
                                 <div className="pt-4 mt-2 border-t border-dashed border-slate-200">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
@@ -444,7 +492,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             {cycleStats?.cycle?.label || 'Current'}
                                         </span>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-3 mb-3">
                                         <div className="bg-slate-50 border border-slate-100 rounded-lg p-2">
                                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter block mb-0.5">Total Shared</span>
                                             <span className="text-xs font-black text-amber-600 tabular-nums leading-none">
@@ -455,14 +503,12 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             {(() => {
                                                 const ruleId = policy?.metadata?.ruleId;
                                                 const activeRule = ruleId ? cycleStats?.activeRules?.find(r => r.ruleId === ruleId) : null;
-                                                const ruleMax = activeRule?.max ?? policy?.maxReward ?? null;
-                                                const hasRuleCap = ruleMax !== null;
                                                 const ruleRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
 
                                                 return (
                                                     <>
                                                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter block mb-0.5 flex items-center gap-1">
-                                                            {hasRuleCap ? (activeRule?.name ? `Rule Cap: ${activeRule.name}` : 'Policy Cap') : 'Overall Cap'}
+                                                            Remains Cashback
                                                             {isLoadingStats && <div className="w-1 h-1 bg-indigo-400 rounded-full animate-pulse" />}
                                                         </span>
                                                         <span className={cn(
@@ -476,6 +522,49 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             })()}
                                         </div>
                                     </div>
+
+                                    {/* Remains Spendable Section */}
+                                    {(() => {
+                                        const ruleId = policy?.metadata?.ruleId;
+                                        const activeRule = ruleId ? cycleStats?.activeRules?.find(r => r.ruleId === ruleId) : null;
+                                        const rewardRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
+
+                                        if (rewardRemaining === null || rewardRemaining === Infinity || !policy?.rate || policy.rate <= 0) return null;
+
+                                        const spendableRemaining = Math.max(0, rewardRemaining / policy.rate);
+                                        const isOverbudget = totalGrossAmount > spendableRemaining;
+
+                                        return (
+                                            <div className={cn(
+                                                "border rounded-lg p-2 transition-all",
+                                                isOverbudget ? "bg-rose-50 border-rose-200" : "bg-indigo-50/50 border-indigo-100"
+                                            )}>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className={cn(
+                                                        "text-[8px] font-black uppercase tracking-tighter",
+                                                        isOverbudget ? "text-rose-600" : "text-indigo-600"
+                                                    )}>
+                                                        {isOverbudget ? "Budget Exceeded!" : "Remains Spendable Target"}
+                                                    </span>
+                                                    {isOverbudget && <AlertTriangle className="h-2.5 w-2.5 text-rose-500 animate-pulse" />}
+                                                </div>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className={cn(
+                                                        "text-xs font-black tabular-nums tracking-tight",
+                                                        isOverbudget ? "text-rose-700" : "text-indigo-700"
+                                                    )}>
+                                                        {formatVN(spendableRemaining)}
+                                                    </span>
+                                                    <span className="text-[8px] text-slate-400 font-bold uppercase">suggested limit</span>
+                                                </div>
+                                                {isOverbudget && (
+                                                    <p className="text-[7px] text-rose-500 font-bold italic mt-1 uppercase tracking-tight">
+                                                        Note: amount &gt; remains means NO cashback earned for overflow.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </TooltipProvider>
                         </div>

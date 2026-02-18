@@ -89,7 +89,7 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Relationships & ID</h4>
                             {/* Main Account ID Copy */}
                             <button
-                                onClick={() => copyToClipboard(account.account_number || account.id, account.id)}
+                                onClick={() => copyToClipboard(account.id, account.id)}
                                 className="text-[9px] font-mono text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-white"
                             >
                                 <span className="opacity-50">#</span>

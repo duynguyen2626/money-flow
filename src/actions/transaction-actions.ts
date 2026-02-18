@@ -1240,3 +1240,22 @@ export async function bulkMoveToCategory(transactionIds: string[], targetCategor
     return { success: false, error: error.message };
   }
 }
+export async function getRecentShopByCategoryId(categoryId: string): Promise<string | null> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('shop_id')
+    .eq('category_id', categoryId)
+    .not('shop_id', 'is', null)
+    .order('occurred_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching recent shop for category:', error);
+    return null;
+  }
+
+  return data?.shop_id ?? null;
+}
