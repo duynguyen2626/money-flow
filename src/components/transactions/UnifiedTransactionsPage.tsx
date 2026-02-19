@@ -152,10 +152,10 @@ export function UnifiedTransactionsPage({
                 setDuplicateData({
                     type: parsedDraft.type || parsedDraft.intent || 'expense',
                     occurred_at: parsedDraft.occurred_at ? new Date(parsedDraft.occurred_at) : new Date(),
-                    amount: parsedDraft.amount || 0,
+                    amount: Math.round(parsedDraft.amount || 0),
                     note: parsedDraft.note || '',
-                    source_account_id: parsedDraft.source_account_id || (accounts[0]?.id || ''),
-                    target_account_id: parsedDraft.destination_account_id || undefined,
+                    source_account_id: ['income', 'repayment'].includes(parsedDraft.type || parsedDraft.intent) ? undefined : (parsedDraft.source_account_id || (accounts[0]?.id || '')),
+                    target_account_id: ['income', 'repayment'].includes(parsedDraft.type || parsedDraft.intent) ? (parsedDraft.source_account_id || (accounts[0]?.id || '')) : (parsedDraft.destination_account_id || undefined),
                     category_id: parsedDraft.category_id || undefined,
                     shop_id: parsedDraft.shop_id || undefined,
                     person_id: (parsedDraft.person_ids && parsedDraft.person_ids.length > 0) ? parsedDraft.person_ids[0] : undefined,
@@ -540,11 +540,11 @@ export function UnifiedTransactionsPage({
         const sourceAccountId = t.account_id || accounts[0]?.id || '';
         const newData = {
             type: t.type as any,
-            occurred_at: new Date(), // Always today for duplication
-            amount: Math.abs(Number(t.amount)),
+            occurred_at: new Date(), // Always            occurred_at: new Date(),
+            amount: Math.round(Math.abs(Number(t.amount))),
             note: t.note || '',
-            source_account_id: sourceAccountId,
-            target_account_id: t.to_account_id || undefined,
+            source_account_id: ['income', 'repayment'].includes(t.type) ? undefined : (t.account_id || accounts[0]?.id || ''),
+            target_account_id: ['income', 'repayment'].includes(t.type) ? (t.account_id || undefined) : (t.to_account_id || undefined),
             category_id: t.category_id || undefined,
             shop_id: t.shop_id || undefined,
             person_id: t.person_id || undefined,
@@ -663,12 +663,14 @@ export function UnifiedTransactionsPage({
         console.log("   slideMode:", slideMode);
 
         if (slideOverrideType) {
+            const isTypeIn = ['income', 'repayment'].includes(slideOverrideType);
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
                 amount: 0,
                 cashback_mode: "none_back" as const,
-                source_account_id: accounts[0]?.id || '',
+                source_account_id: isTypeIn ? undefined : undefined,
+                target_account_id: isTypeIn ? undefined : undefined,
             };
         }
 
@@ -685,15 +687,16 @@ export function UnifiedTransactionsPage({
 
         // Use local variable for stability
         const txn = selectedTxn;
-        const sourceAccountId = txn.account_id || accounts[0]?.id || '';
+        const isTypeIn = ['income', 'repayment'].includes(txn.type);
+        const accountId = txn.account_id || undefined;
 
         const result = {
             type: txn.type as any,
             occurred_at: slideMode === 'duplicate' ? new Date() : new Date(txn.occurred_at),
-            amount: Math.abs(Number(txn.amount)),
+            amount: Math.round(Math.abs(Number(txn.amount))),
             note: txn.note || '',
-            source_account_id: sourceAccountId,
-            target_account_id: txn.to_account_id || undefined,
+            source_account_id: isTypeIn ? undefined : accountId,
+            target_account_id: isTypeIn ? accountId : (txn.to_account_id || undefined),
             category_id: txn.category_id || undefined,
             shop_id: txn.shop_id || undefined,
             person_id: txn.person_id || undefined,

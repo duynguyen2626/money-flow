@@ -46,10 +46,21 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         });
     }, [categories, transactionType]);
 
+    const isValidUrl = (url: string | null | undefined): url is string => {
+        if (!url) return false;
+        try {
+            // Next.js Image handles relative paths and absolute URLs
+            if (url.startsWith('/') || url.startsWith('http')) return true;
+            return false;
+        } catch {
+            return false;
+        }
+    };
+
     const categoryOptions = filteredCategories.map(c => ({
         value: c.id,
         label: c.name,
-        icon: c.image_url ? (
+        icon: isValidUrl(c.image_url) ? (
             <Image src={c.image_url} alt={c.name} width={20} height={20} className="object-contain rounded-none" />
         ) : c.icon ? (
             <span className="text-sm">{c.icon}</span>
@@ -61,7 +72,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
     const shopOptions = shops.map(s => ({
         value: s.id,
         label: s.name,
-        icon: s.image_url ? (
+        icon: isValidUrl(s.image_url) ? (
             <Image src={s.image_url} alt={s.name} width={24} height={24} className="object-contain rounded-none" />
         ) : <Store className="w-4 h-4 text-slate-400" />
     }));
@@ -99,8 +110,16 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         }
     }, [transactionType, categories, form]);
 
-    // Shop is only truly irrelevant for Internal Transfers and Credit Card Payments
-    const isShopHidden = ['transfer', 'credit_pay'].includes(transactionType);
+    // Shop is only truly irrelevant for Internal Transfers, Credit Card Payments, Income and Repayment
+    const isShopHidden = ['transfer', 'credit_pay', 'income', 'repayment'].includes(transactionType);
+
+    // Auto-clear shop if hidden
+    useEffect(() => {
+        if (isShopHidden) {
+            const currentShop = form.getValues('shop_id');
+            if (currentShop) form.setValue('shop_id', null);
+        }
+    }, [isShopHidden, form]);
 
     return (
         <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">

@@ -8,6 +8,8 @@ interface StatsPopoverProps {
     netLend: number
     repay: number
     remains: number
+    paidRollover?: number
+    receiveRollover?: number
     children?: React.ReactNode
 }
 
@@ -21,6 +23,8 @@ export function StatsPopover({
     netLend,
     repay,
     remains,
+    paidRollover,
+    receiveRollover,
     children
 }: StatsPopoverProps) {
     return (
@@ -91,15 +95,46 @@ export function StatsPopover({
                     </div>
 
                     {/* Step 4: Repay Deduction */}
-                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 p-2 rounded-lg z-10">
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                            <span className="text-xs font-medium text-emerald-700">Less Repay</span>
+                    <div className="flex flex-col gap-2 bg-emerald-50 border border-emerald-100 p-2 rounded-lg z-10">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                                <span className="text-xs font-medium text-emerald-700">Total Repay</span>
+                            </div>
+                            <span className="font-mono text-sm font-bold text-emerald-700">
+                                -{numberFormatter.format(repay)}
+                            </span>
                         </div>
-                        <span className="font-mono text-sm font-bold text-emerald-700">
-                            -{numberFormatter.format(repay)}
-                        </span>
+                        {(paidRollover || 0) > 0 && (
+                            <div className="flex items-center justify-between pl-4 text-[10px] text-emerald-600/80 italic">
+                                <span>incl. Paid Rollover</span>
+                                <span>-{numberFormatter.format(paidRollover || 0)}</span>
+                            </div>
+                        )}
                     </div>
+
+                    {/* Step 5: Receive Rollover (If any) */}
+                    {(receiveRollover || 0) > 0 && (
+                        <>
+                            <div className="flex justify-center -my-1">
+                                <ArrowRight className="h-3 w-3 text-slate-300 rotate-90" />
+                            </div>
+                            <div className="flex flex-col gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg z-10">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-2 w-2 rounded-full bg-slate-400" />
+                                        <span className="text-xs font-medium text-slate-600">Opening Balance</span>
+                                    </div>
+                                    <span className="font-mono text-sm font-bold text-slate-900">
+                                        {numberFormatter.format(receiveRollover || 0)}
+                                    </span>
+                                </div>
+                                <div className="pl-4 text-[10px] text-slate-400 italic">
+                                    From previous cycle
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     {/* Divider */}
                     <div className="h-px bg-slate-200 my-2" />

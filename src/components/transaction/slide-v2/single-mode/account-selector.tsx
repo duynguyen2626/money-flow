@@ -48,6 +48,17 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
         }
     }, [sourceId, targetId, personId, isSpecialMode, form]);
 
+    // Enforce BẬP BÊNH from Type (inverse logic)
+    useEffect(() => {
+        if (isSpecialMode) return;
+
+        if (['income', 'repayment'].includes(type)) {
+            if (sourceId) form.setValue('source_account_id', null);
+        } else if (['expense', 'debt'].includes(type)) {
+            if (targetId) form.setValue('target_account_id', null);
+        }
+    }, [type, isSpecialMode, sourceId, targetId, form]);
+
     // Filtering logic for special rules
     const mapAccountToItem = (a: Account) => ({
         value: a.id,

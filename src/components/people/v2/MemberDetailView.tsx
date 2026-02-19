@@ -21,6 +21,7 @@ import { parseISO, isWithinInterval } from 'date-fns'
 import { Info, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useLoadingFavicon } from '@/hooks/use-loading-favicon'
 
 interface MemberDetailViewProps {
     person: Person
@@ -63,6 +64,15 @@ export function MemberDetailView({
     const [dateRangeFilter, setDateRangeFilter] = useState<{ from: Date; to: Date } | undefined>()
     const [isSubmitting, setIsSubmitting] = useState(false)
 
+    // Global loading for table actions (e.g. Voiding, Rollover, Sync)
+    const [isGlobalLoading, setIsGlobalLoading] = useState(false)
+    const [loadingMessage, setLoadingMessage] = useState<string | null>(null)
+
+    const [isPending, startTransition] = useTransition()
+
+    // Browser Tab Spinner Enhancement
+    useLoadingFavicon(isSubmitting || isGlobalLoading || isPending)
+
     // Derive active month/year from URL (Single Source of Truth)
     const urlYear = searchParams.get('year')
     const activeCycleTag = urlTag || currentMonthTag
@@ -72,8 +82,6 @@ export function MemberDetailView({
         if (urlTag && urlTag.includes('-')) return urlTag.split('-')[0]
         return new Date().getFullYear().toString()
     }, [urlTag, urlYear])
-
-    const [isPending, startTransition] = useTransition()
 
     // Data Hooks
     const { debtCycles, availableYears, currentCycle } = usePersonDetails({
@@ -203,8 +211,10 @@ export function MemberDetailView({
             cashback: acc.cashback + cycle.stats.cashback,
             netLend: acc.netLend + cycle.stats.lend,
             repay: acc.repay + cycle.stats.repay,
-            remains: acc.remains + cycle.remains
-        }), { originalLend: 0, cashback: 0, netLend: 0, repay: 0, remains: 0 })
+            remains: acc.remains + cycle.remains,
+            paidRollover: acc.paidRollover + cycle.stats.paidRollover,
+            receiveRollover: acc.receiveRollover + cycle.stats.receiveRollover,
+        }), { originalLend: 0, cashback: 0, netLend: 0, repay: 0, remains: 0, paidRollover: 0, receiveRollover: 0 })
     }, [debtCycles, selectedYear])
 
     // Absolute Active Cycle Logic (No fuzzy fallbacks)
@@ -219,6 +229,8 @@ export function MemberDetailView({
                     repay: headerStats.repay,
                     originalLend: headerStats.originalLend,
                     cashback: headerStats.cashback,
+                    paidRollover: headerStats.paidRollover,
+                    receiveRollover: headerStats.receiveRollover,
                 },
                 isSettled: Math.abs(headerStats.remains) < 100,
                 latestDate: 0,
@@ -364,20 +376,22 @@ export function MemberDetailView({
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
-                amount: isRepayment ? (activeCycle?.remains || 0) : 0,
+                amount: isRepayment ? Math.round(activeCycle?.remains || 0) : 0,
                 cashback_mode: "none_back" as const,
                 person_id: person.id,
-                source_account_id: (isRepayment && person.sheet_linked_bank_id) ? person.sheet_linked_bank_id : undefined,
+                tag: activeCycle?.tag || undefined,
+                target_account_id: (isRepayment && person.sheet_linked_bank_id) ? person.sheet_linked_bank_id : undefined,
             }
         }
         if (!selectedTxn) return undefined
+        const isTypeIn = ['income', 'repayment'].includes(selectedTxn.type);
         return {
             type: selectedTxn.type as any,
             occurred_at: slideMode === 'duplicate' ? new Date() : new Date(selectedTxn.occurred_at),
-            amount: Math.abs(Number(selectedTxn.amount)),
+            amount: Math.round(Math.abs(Number(selectedTxn.amount))),
             note: selectedTxn.note || '',
-            source_account_id: selectedTxn.account_id || '',
-            target_account_id: selectedTxn.to_account_id || undefined,
+            source_account_id: isTypeIn ? undefined : (selectedTxn.account_id || ''),
+            target_account_id: isTypeIn ? (selectedTxn.account_id || undefined) : (selectedTxn.to_account_id || undefined),
             category_id: selectedTxn.category_id || undefined,
             shop_id: selectedTxn.shop_id || undefined,
             person_id: selectedTxn.person_id || person.id,
@@ -451,17 +465,20 @@ export function MemberDetailView({
                         isPending={isPending}
                         initialSheetUrl={activeCycleSheet?.sheet_url}
                         onRefresh={handleRefresh}
+                        setIsGlobalLoading={setIsGlobalLoading}
+                        setLoadingMessage={setLoadingMessage}
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3 relative">
-                        {isSubmitting && (
+                        {(isSubmitting || isGlobalLoading) && (
                             <div className="absolute inset-0 bg-white/40 z-50 flex items-center justify-center backdrop-blur-[1px] animate-in fade-in duration-300">
                                 <div className="flex items-center gap-3 bg-slate-900 shadow-2xl border border-slate-800 px-6 py-3 rounded-full text-white scale-90 animate-in zoom-in-95 duration-300">
                                     <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
                                     <div className="flex flex-col">
                                         <span className="text-[11px] font-black uppercase tracking-widest leading-none">
-                                            {slideMode === 'edit' ? 'Updating...' :
-                                                slideMode === 'duplicate' ? 'Cloning...' :
-                                                    'Saving...'}
+                                            {isGlobalLoading ? (loadingMessage || 'Executing...') :
+                                                slideMode === 'edit' ? 'Updating...' :
+                                                    slideMode === 'duplicate' ? 'Cloning...' :
+                                                        'Saving...'}
                                         </span>
                                     </div>
                                 </div>
@@ -481,6 +498,8 @@ export function MemberDetailView({
                                 contextId={person.id}
                                 onEdit={handleEditTransaction}
                                 onDuplicate={handleDuplicateTransaction}
+                                setIsGlobalLoading={setIsGlobalLoading}
+                                setLoadingMessage={setLoadingMessage}
                             />
                         )}
                     </div>
@@ -501,6 +520,8 @@ export function MemberDetailView({
                         searchTerm={searchTerm}
                         context="person"
                         contextId={person.id}
+                        setIsGlobalLoading={setIsGlobalLoading}
+                        setLoadingMessage={setLoadingMessage}
                     />
                 </div>
             )}

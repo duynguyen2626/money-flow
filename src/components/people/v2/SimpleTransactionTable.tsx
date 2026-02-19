@@ -15,6 +15,8 @@ interface SimpleTransactionTableProps {
     contextId?: string
     onEdit?: (txn: TransactionWithDetails) => void
     onDuplicate?: (txn: TransactionWithDetails) => void
+    setIsGlobalLoading?: (loading: boolean) => void
+    setLoadingMessage?: (message: string) => void
 }
 
 /**
@@ -32,6 +34,8 @@ export function SimpleTransactionTable({
     contextId,
     onEdit,
     onDuplicate,
+    setIsGlobalLoading,
+    setLoadingMessage,
 }: SimpleTransactionTableProps) {
     // Apply search filter
     const filteredTransactions = searchTerm
@@ -61,6 +65,8 @@ export function SimpleTransactionTable({
                 hiddenColumns={['id', 'tag']}
                 onEdit={onEdit}
                 onDuplicate={onDuplicate}
+                setIsGlobalLoading={setIsGlobalLoading}
+                setLoadingMessage={setLoadingMessage}
             />
         </div>
     )

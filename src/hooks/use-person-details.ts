@@ -14,6 +14,8 @@ export interface DebtCycle {
         repay: number
         originalLend: number
         cashback: number
+        paidRollover: number
+        receiveRollover: number
     }
     serverStatus?: any
     remains: number
@@ -148,6 +150,8 @@ export function usePersonDetails({
                     const amount = Math.abs(Number(txn.amount) || 0)
                     const type = txn.type
                     const isOutboundDebt = (type === 'debt' && (Number(txn.amount) || 0) < 0) || (type === 'expense' && !!txn.person_id)
+                    const note = (txn.note || '').toLowerCase()
+                    const isRollover = note.includes('rollover')
 
                     // Cashback Calculation
                     let cashback = 0
@@ -169,14 +173,12 @@ export function usePersonDetails({
                         const effectiveFinal = txn.final_price !== null && txn.final_price !== undefined ? Math.abs(Number(txn.final_price)) : amount
                         acc.lend += effectiveFinal // This is NET LEND
                         acc.originalLend += amount
+                        if (isRollover) acc.receiveRollover += amount
                     }
 
-                    if (type === 'repayment') {
+                    if (type === 'repayment' || (type === 'debt' && (Number(txn.amount) || 0) > 0) || (type === 'income' && !!txn.person_id)) {
                         acc.repay += amount
-                    } else if (type === 'debt' && (Number(txn.amount) || 0) > 0) {
-                        acc.repay += amount
-                    } else if (type === 'income' && !!txn.person_id) {
-                        acc.repay += amount
+                        if (isRollover) acc.paidRollover += amount
                     }
 
                     if (cashback > 0) {
@@ -185,7 +187,7 @@ export function usePersonDetails({
 
                     return acc
                 },
-                { lend: 0, repay: 0, originalLend: 0, cashback: 0 }
+                { lend: 0, repay: 0, originalLend: 0, cashback: 0, paidRollover: 0, receiveRollover: 0 }
             )
 
             // Get Server Status if available

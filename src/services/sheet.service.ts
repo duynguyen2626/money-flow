@@ -373,7 +373,8 @@ export async function syncAllTransactions(personId: string) {
         shop_id,
         shops ( name ),
         account_id,
-        accounts!account_id ( name )
+        accounts!account_id ( name ),
+        categories ( name )
       `)
       .eq('person_id', personId)
       .neq('status', 'void')
@@ -453,8 +454,9 @@ export async function syncAllTransactions(personId: string) {
 
         // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
         if (!shopName) {
-          if (txn.note?.toLowerCase().startsWith('rollover')) {
-            shopName = 'Bank'
+          const categoryName = (txn.categories as any)?.name
+          if (txn.note?.toLowerCase().startsWith('rollover') || categoryName === 'Rollover') {
+            shopName = 'Rollover'
           } else {
             const accData = txn.accounts as any
             shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
@@ -591,7 +593,8 @@ export async function syncCycleTransactions(
         shop_id,
         shops ( name ),
         account_id,
-        accounts!account_id ( name )
+        accounts!account_id ( name ),
+        categories ( name )
       `)
       .eq('person_id', personId)
       .in('tag', tags)
@@ -614,8 +617,9 @@ export async function syncCycleTransactions(
         let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
 
         if (!shopName) {
-          if (txn.note?.toLowerCase().startsWith('rollover')) {
-            shopName = 'Bank'
+          const categoryName = (txn.categories as any)?.name
+          if (txn.note?.toLowerCase().startsWith('rollover') || categoryName === 'Rollover') {
+            shopName = 'Rollover'
           } else {
             const accData = txn.accounts as any
             shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''

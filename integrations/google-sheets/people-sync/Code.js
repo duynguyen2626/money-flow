@@ -1,7 +1,7 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 7.6 (QR Range M7:N17 & Forced Format Update)
- * @date 2026-02-09 09:05
+ * @version 7.8 (Auto-Shift Row & Safety Backup)
+ * @date 2026-02-19 13:45
  *
  * LAYOUT v7.6 (Explicit Columns):
  * A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
@@ -131,7 +131,7 @@ function handleSyncTransactions(payload) {
     setupNewSheet(sheet, syncOptions.summaryOptions);
 
     // UPDATE VERSION NOTE (Verification)
-    sheet.getRange('A1').setNote('Script Version: 7.6\nUpdated: ' + new Date().toISOString());
+    sheet.getRange('A1').setNote('Script Version: 7.8\nUpdated: ' + new Date().toISOString());
 
     // --- UPSERT STRATEGY v6.9 ---
     // A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
@@ -185,15 +185,26 @@ function handleSyncTransactions(payload) {
             // Manual Row Detection
             // v6.9: A:Empty, B:Type, C:Date, F:Amount
             var hasData = false;
-            // Check broadly to catch manual rows from broken v6.8 too
-            // If v6.8, manual rows might be at A(Date), D(Amt).
+
+            // Check if this row has ShopSource data (hidden column K)
+            // If it has ShopSource but no ID, it's likely a "Zombie System Row"
+            // created by an older version or failed sync.
+            var shopSource = (row[10] || "").toString().trim();
+            var isBrokenSystemRow = shopSource.length > 0 && idVal.length <= 5;
+
+            // Only treat as MANUAL if it has data AND is NOT a broken system row
             if (layoutVersion === 'v6.8') {
                 hasData = row[0] || row[3];
             } else {
                 // v6.9 standard: Check Date (C-2), Amt (F-5)
                 hasData = row[2] || row[5];
             }
-            if (hasData) manualRowIndices.push(i);
+
+            if (hasData && !isBrokenSystemRow) {
+                manualRowIndices.push(i);
+            } else if (isBrokenSystemRow) {
+                Logger.log("Detected Zombie System Row at index " + i + " (ShopSource: " + shopSource + "). Treating as system row for possible adoption/cleanup.");
+            }
         }
     }
 
@@ -396,19 +407,17 @@ function handleSingleTransaction(payload, action) {
     var ss = getOrCreateSpreadsheet(personId, payload);
     var sheet = getOrCreateCycleTab(ss, cycleTag);
     var syncOptions = buildSheetSyncOptions(payload);
-
     setupNewSheet(sheet, syncOptions.summaryOptions);
+
+    // Safety Backup before any modifications
+    autoBackupSheet(ss, sheet);
 
     var rowIndex = findRowById(sheet, payload.id);
 
     if (action === 'delete' || payload.status === 'void') {
         if (rowIndex > 0) {
-            // Clear row content instead of deleting to preserve row positions
-            // This prevents Summary area (L7:N35) from shifting when rows change
-            var range = sheet.getRange(rowIndex, 1, 1, 11); // A:K
-            range.clearContent();
-            range.setBackground('white');
-            Logger.log('Row ' + rowIndex + ' cleared (not deleted) - Summary area protected');
+            sheet.deleteRow(rowIndex);
+            Logger.log('Row ' + rowIndex + ' deleted and shifted up - Backup created');
         }
         applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
         return jsonResponse({ ok: true, action: 'deleted' });
@@ -632,7 +641,7 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 7.4');
+    sheet.getRange('A1').setNote('Script Version: 7.7');
     setMonthTabColor(sheet);
 
     sheet.getRange('A:O').setFontSize(12);
@@ -682,24 +691,35 @@ function setupNewSheet(sheet, summaryOptions) {
     });
 
     if (!hasTypeRule) {
-        // IN (Green)
+        // Full Row Range: A2:K1000
+        var fullRange = sheet.getRange('A2:K1000');
+
+        // IN (Green) - Full Row
         var ruleIn = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo('In')
+            .whenFormulaSatisfied('=$B2="In"')
             .setBackground('#DCFCE7')
             .setFontColor('#166534')
-            .setRanges([sheet.getRange('B2:B1000')])
+            .setRanges([fullRange])
             .build();
 
-        // OUT (Red)
+        // OUT (Red) - Full Row (Optional, user usually wants In highlighted)
         var ruleOut = SpreadsheetApp.newConditionalFormatRule()
-            .whenTextEqualTo('Out')
-            .setBackground('#FEE2E2')
+            .whenFormulaSatisfied('=$B2="Out"')
+            .setBackground('#FFFFFF') // Keep white for Out or use light red
+            .setFontColor('#000000')   // Standard black
+            .setRanges([fullRange])
+            .build();
+
+        // Let's use light red for Out if they want full coloring
+        var ruleOutRed = SpreadsheetApp.newConditionalFormatRule()
+            .whenFormulaSatisfied('=$B2="Out"')
+            .setBackground('#FFF1F1') // Ultra light red
             .setFontColor('#991B1B')
-            .setRanges([sheet.getRange('B2:B1000')])
+            .setRanges([fullRange])
             .build();
 
         rules.push(ruleIn);
-        rules.push(ruleOut);
+        rules.push(ruleOutRed);
         sheet.setConditionalFormatRules(rules);
     }
 
@@ -1053,17 +1073,12 @@ function cleanupEmptyRows(sheet) {
             var isEmpty = (!idVal || idVal === "") && (!dateVal || dateVal === "") && (!amtVal && amtVal !== 0);
 
             if (isEmpty) {
-                // Clear content A:K (Columns 1 to 11)
-                // Protect Summary at M:O
-                var emptyRow = sheet.getRange(i + 2, 1, 1, 11);
-                emptyRow.clearContent();
-                emptyRow.setBackground('white');
-                emptyRow.setBorder(false, false, false, false, false, false);
+                sheet.deleteRow(i + 2);
                 rowsCleared++;
             }
         }
         if (rowsCleared > 0) {
-            Logger.log("cleanupEmptyRows: Cleared " + rowsCleared + " empty rows (Summary M:O protected).");
+            Logger.log("cleanupEmptyRows: Deleted and shifted " + rowsCleared + " empty rows.");
         }
     } catch (e) {
         Logger.log("cleanupEmptyRows Error: " + e.toString());

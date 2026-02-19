@@ -26,6 +26,7 @@ export type CreateTransactionInput = {
   discount_category_id?: string | null;
   shop_id?: string | null;
   cashback_mode?: string | null;
+  linked_transaction_id?: string | null;
 };
 
 async function resolveSystemCategory(
@@ -185,7 +186,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   );
 
   // Single Table Insertion Logic
-  const originalAmount = Math.abs(input.amount);
+  const originalAmount = Math.round(Math.abs(input.amount));
   let finalAmount = originalAmount;
   const targetAccountId = input.destination_account_id ?? input.debt_account_id ?? null;
   const personId = input.person_id ?? null;
@@ -229,6 +230,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       cashback_share_percent: sharePercent,
       cashback_share_fixed: shareFixed,
       cashback_mode: input.cashback_mode ?? null,
+      linked_transaction_id: input.linked_transaction_id ?? null,
     })
     .select()
     .single();
@@ -692,7 +694,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   );
 
   // Calculate final amounts for single-table storage
-  const originalAmount = Math.abs(input.amount);
+  const originalAmount = Math.round(Math.abs(input.amount));
   const sharePercentEntry = typeof input.cashback_share_percent === 'number' ? Math.max(0, input.cashback_share_percent) : null;
   let sharePercent = null;
   if (sharePercentEntry !== null) {
