@@ -704,10 +704,12 @@ export function AccountDetailTransactions({
                         <AddTransactionDropdown
                             accountType={account.type}
                             onSelect={(type) => {
+                                const isTypeIn = ['income', 'repayment'].includes(type || '');
                                 setAddOperationMode('add')
                                 setAddInitialData({
                                     type: (type as 'expense' | 'income' | 'transfer' | 'debt' | 'repayment') ?? 'expense',
-                                    source_account_id: account.id,
+                                    source_account_id: isTypeIn ? undefined : account.id,
+                                    target_account_id: isTypeIn ? account.id : undefined,
                                     occurred_at: new Date(),
                                 })
                                 setIsAddSlideOpen(true)
@@ -756,14 +758,15 @@ export function AccountDetailTransactions({
                         setIsEditSlideOpen(true)
                     }}
                     onDuplicate={(txn) => {
+                        const isTypeIn = ['income', 'repayment'].includes(txn.type);
                         setAddOperationMode('duplicate')
                         setAddInitialData({
                             type: txn.type as any,
                             occurred_at: new Date(),
-                            amount: Math.abs(Number(txn.amount)),
+                            amount: Math.round(Math.abs(Number(txn.amount))),
                             note: txn.note || '',
-                            source_account_id: txn.account_id || accounts[0]?.id || '',
-                            target_account_id: (txn as any).to_account_id || undefined,
+                            source_account_id: isTypeIn ? undefined : (txn.account_id || undefined),
+                            target_account_id: isTypeIn ? (txn.account_id || undefined) : ((txn as any).to_account_id || undefined),
                             category_id: txn.category_id || undefined,
                             shop_id: txn.shop_id || undefined,
                             person_id: txn.person_id || undefined,

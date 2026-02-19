@@ -67,6 +67,8 @@ export interface ManageSheetButtonProps {
   isSettled?: boolean
   activeCycleRemains?: number
   isPending?: boolean
+  setIsGlobalLoading?: (loading: boolean) => void
+  setLoadingMessage?: (msg: string | null) => void
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -112,6 +114,8 @@ export function ManageSheetButton({
   isSettled = false,
   activeCycleRemains = 0,
   isPending = false,
+  setIsGlobalLoading,
+  setLoadingMessage,
 }: ManageSheetButtonProps) {
   const [activeTab, setActiveTab] = useState<'history' | 'settings'>('history')
   const [sheetUrl, setSheetUrl] = useState<string | null>(initialSheetUrl ?? null)
@@ -232,6 +236,9 @@ export function ManageSheetButton({
     }
 
     setShowPopover(false)
+    if (setIsGlobalLoading) setIsGlobalLoading(true)
+    if (setLoadingMessage) setLoadingMessage(sheetUrl ? 'Syncing to Google Sheets...' : 'Creating Google Sheet...')
+
     startManageTransition(async () => {
       const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...', {
         description: `Processing cycle ${cycleTag}`,
@@ -283,6 +290,9 @@ export function ManageSheetButton({
       } catch (error) {
         toast.dismiss(toastId)
         toast.error('Manage sheet failed.')
+      } finally {
+        if (setIsGlobalLoading) setIsGlobalLoading(false)
+        if (setLoadingMessage) setLoadingMessage(null)
       }
     })
   }

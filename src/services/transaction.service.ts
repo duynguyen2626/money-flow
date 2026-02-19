@@ -48,6 +48,7 @@ export type CreateTransactionInput = {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_mode?: CashbackMode | null;
+  linked_transaction_id?: string | null;
 };
 
 type FlatTransactionRow = {
@@ -74,6 +75,7 @@ type FlatTransactionRow = {
   cashback_share_amount?: number | null;
   cashback_mode?: CashbackMode | null;
   currency?: string | null;
+  linked_transaction_id?: string | null;
 
   final_price?: number | null;
   transaction_history?: { count: number }[];
@@ -116,7 +118,7 @@ export async function normalizeAmountForType(
   amount: number,
 ): Promise<number> {
   const baseType = resolveBaseType(type);
-  const absolute = Math.abs(amount);
+  const absolute = Math.round(Math.abs(amount));
   if (baseType === "income") return absolute;
   if (baseType === "transfer") return -absolute;
   return -absolute;
@@ -161,6 +163,7 @@ async function normalizeInput(
     cashback_share_percent: input.cashback_share_percent ?? null,
     cashback_share_fixed: input.cashback_share_fixed ?? null,
     cashback_mode: input.cashback_mode ?? null,
+    linked_transaction_id: input.linked_transaction_id ?? null,
   };
 }
 
@@ -582,6 +585,20 @@ export async function createTransaction(
           shopName = (shop as any)?.name ?? null;
         }
 
+        // Fallback for Repayment/Income/Transfer if shop is empty -> Use Account Name
+        if (!shopName) {
+          if (input.note?.toLowerCase().startsWith('rollover') || input.category_id === '71e71711-83e5-47ba-8ff5-85590f45a70c') {
+            shopName = 'Rollover';
+          } else {
+            const { data: acc } = await supabase
+              .from("accounts")
+              .select("name")
+              .eq("id", input.source_account_id)
+              .single();
+            shopName = (acc as any)?.name ?? 'Bank';
+          }
+        }
+
         // Calculate final amount (for debt: amount - cashback)
         const originalAmount = Math.abs(input.amount);
         // DB stores decimal (0.05). Input to this func came from Form which ALREADY divided by 100.
@@ -805,6 +822,20 @@ export async function updateTransaction(
         shopName = (shop as any)?.name ?? null;
       }
 
+      // Fallback for Repayment/Income/Transfer if shop is empty -> Use Account Name
+      if (!shopName) {
+        if (input.note?.toLowerCase().startsWith('rollover') || input.category_id === '71e71711-83e5-47ba-8ff5-85590f45a70c') {
+          shopName = 'Rollover';
+        } else {
+          const { data: acc } = await supabase
+            .from("accounts")
+            .select("name")
+            .eq("id", input.source_account_id)
+            .single();
+          shopName = (acc as any)?.name ?? 'Bank';
+        }
+      }
+
       // Calculate final amount
       const originalAmount = Math.abs(input.amount);
       const decimalRate = Number(input.cashback_share_percent ?? 0);
@@ -863,7 +894,7 @@ export async function updateTransaction(
           original_amount: originalAmount,
           cashback_share_percent: decimalRate,
           cashback_share_fixed: fixedAmount,
-          type: input.type === "repayment" ? "In" : "Debt",
+          type: ['repayment', 'income'].includes(input.type) ? "In" : "Debt",
         };
 
         try {

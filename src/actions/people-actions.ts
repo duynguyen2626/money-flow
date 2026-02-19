@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
 import { createPerson, ensureDebtAccount, updatePerson, getPersonWithSubs, getPeople } from '@/services/people.service'
 import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
@@ -176,12 +177,13 @@ export async function rolloverDebtAction(
   const fromCycle = formData.get('fromCycle') as string
   const toCycle = formData.get('toCycle') as string
   const amountStr = formData.get('amount') as string
+  const occurredAt = formData.get('occurredAt') as string
 
   if (!personId || !fromCycle || !toCycle || !amountStr) {
     return { success: false, error: 'Missing required fields' }
   }
 
-  const amount = Number(amountStr)
+  const amount = Math.round(Number(amountStr))
   if (isNaN(amount) || amount <= 0) {
     return { success: false, error: 'Invalid amount' }
   }
@@ -193,31 +195,30 @@ export async function rolloverDebtAction(
     return { success: false, error: 'Could not resolve debt account for person' }
   }
 
-  // Ensure 'Bank' shop exists for Settlement (Transaction 1)
-  const bankShopId = await findOrCreateBankShop()
-
-  // Ensure 'Shopee' shop exists for Opening (Transaction 2)
-  const shopeeShopId = await (async () => {
+  // Ensure 'Rollover' shop exists
+  const rolloverShopId = await (async () => {
     const shops = await getShops()
-    const shopee = shops.find(s => s.name.toLowerCase() === 'shopee')
-    if (shopee) return shopee.id
-    const newShop = await createShop({ name: 'Shopee' })
+    const rollover = shops.find(s => s.name.toLowerCase() === 'rollover')
+    if (rollover) return rollover.id
+    const newShop = await createShop({ name: 'Rollover' })
     return newShop?.id
   })()
 
   // Transaction 1: Settlement (IN) for the OLD cycle (Debt Repayment)
   // This reduces the balance of the old month to 0 (or less)
   const settleNote = `Rollover to ${toCycle}`
+  const txDate = occurredAt ? new Date(occurredAt).toISOString() : new Date().toISOString()
+
   const settleRes = await createTransaction({
-    occurred_at: new Date().toISOString(),
+    occurred_at: txDate,
     tag: fromCycle,
     note: settleNote,
     type: 'repayment', // Counts as IN (Reduces debt)
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
-    category_id: 'e0000000-0000-0000-0000-000000000096', // Debt Repayment
-    shop_id: bankShopId ?? undefined,
+    category_id: '71e71711-83e5-47ba-8ff5-85590f45a70c', // Rollover Category
+    shop_id: rolloverShopId ?? undefined,
   })
 
   if (!settleRes) {
@@ -228,20 +229,25 @@ export async function rolloverDebtAction(
   // This increases the balance of the new month
   const openNote = `Rollover from ${fromCycle}`
   const openRes = await createTransaction({
-    occurred_at: new Date().toISOString(),
+    occurred_at: txDate,
     tag: toCycle,
     note: openNote,
     type: 'debt', // Counts as OUT (Increases debt)
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
-    category_id: 'e0000000-0000-0000-0000-000000000089', // Lending (Expense/Debt)
-    shop_id: shopeeShopId ?? undefined,
+    category_id: '71e71711-83e5-47ba-8ff5-85590f45a70c', // Rollover Category
+    shop_id: rolloverShopId ?? undefined,
   })
 
   if (!openRes) {
     return { success: false, error: 'Failed to create opening balance transaction' }
   }
+
+  // Link Transaction 1 to Transaction 2 (Bidirectional for easier voiding)
+  const supabase = createClient()
+  await (supabase.from('transactions').update as any)({ linked_transaction_id: openRes }).eq('id', settleRes);
+  await (supabase.from('transactions').update as any)({ linked_transaction_id: settleRes }).eq('id', openRes);
 
   revalidatePath(`/people/${personId}`)
   return { success: true, message: 'Debt rolled over successfully' }

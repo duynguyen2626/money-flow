@@ -331,7 +331,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   }, [])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 110, minWidth: 90 },
-    { key: "shop", label: "NOTE & CATEGORY", defaultWidth: 360, minWidth: 280 },
+    { key: "shop", label: "Notes Flow", defaultWidth: 360, minWidth: 280 },
     { key: "account", label: "Flow", defaultWidth: 300, minWidth: 280 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
     { key: "total_back", label: "Total Back", defaultWidth: 120, minWidth: 100 },
@@ -778,14 +778,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     setVoidError(null)
     setIsVoiding(true)
     if (setIsGlobalLoading) setIsGlobalLoading(true)
+    if (setLoadingMessage) setLoadingMessage('Voiding transaction...')
+    const targetId = confirmVoidTarget.id
+    setUpdatingTxnIds(prev => new Set(prev).add(targetId))
 
     try {
-      const ok = await voidTransactionAction(confirmVoidTarget.id)
+      const ok = await voidTransactionAction(targetId)
       if (!ok) {
         setVoidError('Unable to void transaction. Please try again.')
         return
       }
-      setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
+      setStatusOverrides(prev => ({ ...prev, [targetId]: 'void' }))
       closeVoidDialog()
       if (onSuccess) await onSuccess()
       window.dispatchEvent(new CustomEvent('refresh-account-data'))
@@ -802,6 +805,11 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     } finally {
       setIsVoiding(false)
       if (setIsGlobalLoading) setIsGlobalLoading(false)
+      setUpdatingTxnIds(prev => {
+        const next = new Set(prev)
+        next.delete(targetId)
+        return next
+      })
     }
   }
 
@@ -2011,6 +2019,14 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
                         case "shop": {
                           let shopLogo = txn.shop_image_url;
+
+                          // ROLLOVER IMAGE OVERRIDE: If category is Rollover, use Category Image (takes precedence over Shop/Bank)
+                          if (txn.category_name === 'Rollover' || txn.category_id === '71e71711-83e5-47ba-8ff5-85590f45a70c') {
+                            const rolloverCat = categories.find(c => c.id === '71e71711-83e5-47ba-8ff5-85590f45a70c');
+                            if (rolloverCat?.image_url) {
+                              shopLogo = rolloverCat.image_url;
+                            }
+                          }
 
                           // Check if Shop Image is MISSING. If so, attempt to use Target Bank Image for relevant types.
                           if (!shopLogo) {

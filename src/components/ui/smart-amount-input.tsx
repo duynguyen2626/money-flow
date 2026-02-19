@@ -47,7 +47,7 @@ export function SmartAmountInput({
     // Sync internal string state with external number value
     React.useEffect(() => {
         if (!isFocused) {
-            setInputValue((value === 0 || value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) : '')
+            setInputValue((value === 0 || value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value)) : '')
         }
     }, [value, isFocused])
 
@@ -90,8 +90,9 @@ export function SmartAmountInput({
         if (/[+\-*/]/.test(rawInput)) {
             const result = evaluateMath(rawInput)
             if (result !== null && !isNaN(result)) {
-                onChange(result)
-                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(result))
+                const rounded = Math.round(result);
+                onChange(rounded)
+                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
             } else {
                 setMathError('Invalid calculation')
                 // Keep the input as is so user can fix it
@@ -100,8 +101,9 @@ export function SmartAmountInput({
             // Just a number
             const num = parseFloat(rawInput)
             if (!isNaN(num)) {
-                onChange(num)
-                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(num))
+                const rounded = Math.round(num);
+                onChange(rounded)
+                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
             } else {
                 onChange(undefined)
                 setInputValue('')
@@ -157,7 +159,7 @@ export function SmartAmountInput({
         // If it's a number, format it with commas
         if (raw && !isNaN(Number(raw))) {
             const num = parseFloat(raw)
-            onChange(num)
+            onChange(Math.round(num))
 
             // Realtime formatting for integers
             if (!val.includes('.') && !val.includes('e')) {
@@ -198,7 +200,7 @@ export function SmartAmountInput({
         const currentVal = isFocused ? evaluateMath(inputValue.replace(/,/g, '')) : value
         if (hideCurrencyText) return []
         if (unit === '%') {
-            return currentVal ? [{ value: new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(currentVal), unit: '%' }] : []
+            return currentVal ? [{ value: new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(currentVal)), unit: '%' }] : []
         }
         return formatVietnameseCurrencyText(currentVal ?? 0)
     }, [value, inputValue, isFocused, hideCurrencyText, unit])

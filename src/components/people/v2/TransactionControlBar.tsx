@@ -49,6 +49,8 @@ interface TransactionControlBarProps {
     isPending?: boolean
     initialSheetUrl?: string | null
     onRefresh?: () => void
+    setIsGlobalLoading?: (loading: boolean) => void
+    setLoadingMessage?: (msg: string | null) => void
 }
 
 import { useRouter } from 'next/navigation'
@@ -92,6 +94,8 @@ export function TransactionControlBar({
     isPending: isPendingProp,
     initialSheetUrl,
     onRefresh,
+    setIsGlobalLoading,
+    setLoadingMessage,
 }: TransactionControlBarProps) {
     const [popoverOpen, setPopoverOpen] = useState(false)
     const isSettled = Math.abs(activeCycle.remains) < 100
@@ -199,6 +203,8 @@ export function TransactionControlBar({
                         isSettled={isSettled}
                         activeCycleRemains={activeCycle.remains}
                         isPending={isPending}
+                        setIsGlobalLoading={setIsGlobalLoading}
+                        setLoadingMessage={setLoadingMessage}
                     />
                 </div>
 
@@ -267,7 +273,10 @@ export function TransactionControlBar({
                                         <RolloverDebtDialog
                                             personId={person.id}
                                             currentCycle={activeCycle.tag}
+                                            allCycles={allCycles}
                                             remains={activeCycle.remains}
+                                            setIsGlobalLoading={setIsGlobalLoading}
+                                            setLoadingMessage={setLoadingMessage}
                                             trigger={
                                                 <button
                                                     className="flex items-center gap-1.5 h-9 px-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-amber-100 transition-colors"

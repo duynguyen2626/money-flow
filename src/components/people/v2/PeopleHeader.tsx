@@ -16,6 +16,8 @@ interface PeopleHeaderProps {
             repay: number
             originalLend: number
             cashback: number
+            paidRollover: number
+            receiveRollover: number
         }
     }
     stats: {
@@ -24,6 +26,8 @@ interface PeopleHeaderProps {
         netLend: number
         repay: number
         remains: number
+        paidRollover: number
+        receiveRollover: number
     }
     selectedYear: string | null
     availableYears: string[]
@@ -121,6 +125,8 @@ export function PeopleHeader({
                                 netLend={currentCycleNetLend}
                                 repay={activeCycle.stats.repay}
                                 remains={activeCycle.remains}
+                                paidRollover={activeCycle.stats.paidRollover}
+                                receiveRollover={activeCycle.stats.receiveRollover}
                             >
                                 <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-amber-600 bg-white hover:bg-amber-50 transition-colors shadow-sm" title="Current cycle details">
                                     <Calendar className="h-3.5 w-3.5" />
@@ -138,11 +144,17 @@ export function PeopleHeader({
                                     )}>
                                         {activeCycle.tag}
                                     </span>
+                                    {activeCycle.tag !== new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit' }).format(new Date()) && (
+                                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[8px] font-black text-slate-500 uppercase tracking-tighter animate-in fade-in zoom-in duration-300">
+                                            <History className="h-2 w-2" />
+                                            Past
+                                        </div>
+                                    )}
                                     <span className="text-sm font-bold text-slate-900 ml-auto tabular-nums">
                                         {numberFormatter.format(currentCycleNetLend)}
                                     </span>
                                 </div>
-                                <div className="relative flex h-5 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner border border-slate-200/50">
+                                <div className="relative flex h-3.5 w-full overflow-hidden rounded-full bg-slate-100 shadow-inner border border-slate-200/50">
                                     <div
                                         className="bg-emerald-500 flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
                                         style={{ width: `${currentCycleRepayPercent}%` }}
@@ -161,24 +173,26 @@ export function PeopleHeader({
                     )}
 
                     {/* 3. Current Balance Section */}
-                    <div className="flex items-center gap-3 px-4 py-2 border border-slate-200 rounded-xl bg-slate-50/30 min-w-[280px]">
+                    <div className="flex items-center gap-3 px-4 py-2 border border-slate-200 rounded-xl bg-slate-50/30 min-w-[280px] group transition-all duration-300 hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-500/5">
                         <StatsPopover
                             originalLend={stats.originalLend}
                             cashback={stats.cashback}
                             netLend={stats.netLend}
                             repay={stats.repay}
                             remains={stats.remains}
+                            paidRollover={stats.paidRollover}
+                            receiveRollover={stats.receiveRollover}
                         >
-                            <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-emerald-600 bg-white hover:bg-emerald-50 transition-colors shadow-sm" title="Balance for entire selected year">
-                                <TrendingUp className="h-3.5 w-3.5" />
+                            <button className="flex items-center justify-center h-7 w-7 rounded-md border border-slate-200 text-emerald-600 bg-white hover:bg-emerald-50 transition-colors shadow-sm group-hover:scale-110 group-hover:bg-emerald-50 duration-300" title="Balance for entire selected year">
+                                <TrendingUp className="h-3.5 w-3.5 animate-pulse" />
                             </button>
                         </StatsPopover>
                         <div className="flex flex-col gap-1.5 flex-1">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Current Balance</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap group-hover:text-emerald-500 transition-colors">Current Balance</span>
                             <div className="flex items-center justify-between">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase">Status</span>
-                                <span className="text-xl font-bold tabular-nums ml-auto text-emerald-600">
-                                    {numberFormatter.format(stats.netLend)}
+                                <span className="text-xl font-bold tabular-nums ml-auto text-emerald-600 drop-shadow-[0_1px_1px_rgba(16,185,129,0.1)]">
+                                    {numberFormatter.format(stats.remains)}
                                 </span>
                             </div>
                         </div>

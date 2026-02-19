@@ -37,13 +37,16 @@ export function BasicInfoSection({ people, operationMode }: BasicInfoSectionProp
     const transactionType = useWatch({ control: form.control, name: "type" });
     const amount = useWatch({ control: form.control, name: "amount" });
 
-    // Sync Tag with Date
+    // Sync Tag with Date - ONLY if empty and in ADD mode
     const occurredAt = useWatch({ control: form.control, name: "occurred_at" });
     useEffect(() => {
-        if (occurredAt) {
-            form.setValue("tag", format(occurredAt, "yyyy-MM"));
+        if (occurredAt && operationMode === 'add') {
+            const currentTag = form.getValues("tag");
+            if (!currentTag) {
+                form.setValue("tag", format(occurredAt, "yyyy-MM"));
+            }
         }
-    }, [occurredAt, form]);
+    }, [occurredAt, form, operationMode]);
 
     return (
         <div className="space-y-3">
