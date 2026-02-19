@@ -24,11 +24,11 @@ export const metadata: Metadata = {
   description: 'Precision personal finance tracking with high-performance dashboards and Google Sheets sync.',
   icons: {
     icon: [
-      { url: '/favicon.ico?v=5', sizes: 'any' },
-      { url: '/icon.svg?v=5', type: 'image/svg+xml' },
+      { url: '/favicon.svg?v=6', type: 'image/svg+xml' },
+      { url: '/icon.svg?v=6', type: 'image/svg+xml' },
     ],
     apple: [
-      { url: '/icon.svg?v=5', type: 'image/svg+xml' },
+      { url: '/icon.svg?v=6', type: 'image/svg+xml' },
     ],
   },
   openGraph: {
