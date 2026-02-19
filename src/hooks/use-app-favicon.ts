@@ -12,21 +12,21 @@ const THEME = {
 }
 
 const ICONS: Record<string, string> = {
-    dashboard: `<rect x="10" y="10" width="35" height="35" rx="4" fill="currentColor"/><rect x="55" y="10" width="35" height="35" rx="4" fill="currentColor" opacity="0.8"/><rect x="10" y="55" width="35" height="35" rx="4" fill="currentColor" opacity="0.8"/><rect x="55" y="55" width="35" height="35" rx="4" fill="currentColor" opacity="0.6"/>`,
-    accounts: `<path d="M50 5 L10 30 L90 30 Z" fill="currentColor"/><rect x="15" y="35" width="15" height="40" fill="currentColor"/><rect x="42.5" y="35" width="15" height="40" fill="currentColor"/><rect x="70" y="35" width="15" height="40" fill="currentColor"/><rect x="5" y="80" width="90" height="15" rx="2" fill="currentColor"/>`,
-    transactions: `<path d="M15 35 L45 35 L45 20 L85 50 L45 80 L45 65 L15 65 Z" fill="currentColor" opacity="0.9"/><path d="M85 35 L55 35 L55 20 L15 50 L55 80 L55 65 L85 65 Z" fill="currentColor" opacity="0.5"/>`,
-    installments: `<path d="M20 10 L80 10 L80 30 C80 50 50 55 50 55 C50 55 20 50 20 30 Z M20 90 L80 90 L80 70 C80 50 50 45 50 45 C50 45 20 50 20 70 Z" fill="currentColor"/>`,
-    categories: `<path d="M50 10 L85 10 L85 45 L40 90 L10 60 Z" fill="currentColor"/><circle cx="65" cy="30" r="8" fill="white"/>`,
-    shops: `<path d="M10 30 L90 30 L95 50 L5 50 Z" fill="currentColor"/><rect x="15" y="50" width="70" height="40" fill="currentColor" opacity="0.8"/><path d="M30 30 Q 50 5 70 30" stroke="currentColor" stroke-width="8" fill="none"/>`,
-    people: `<circle cx="35" cy="35" r="20" fill="currentColor"/><path d="M10 85 C10 65 60 65 60 85 Z" fill="currentColor" opacity="0.8"/><circle cx="75" cy="45" r="15" fill="currentColor" opacity="0.6"/><path d="M60 85 C60 70 90 70 90 85 Z" fill="currentColor" opacity="0.5"/>`,
-    cashback: `<rect x="5" y="20" width="90" height="60" rx="8" fill="currentColor"/><circle cx="50" cy="50" r="20" stroke="white" stroke-width="4" fill="none"/><path d="M30 50 H70" stroke="white" stroke-width="4"/>`,
-    batch: `<ellipse cx="50" cy="25" rx="40" ry="15" fill="currentColor"/><path d="M10 25 V75 C10 85 50 90 90 75 V25 C90 35 50 40 10 25" fill="currentColor" opacity="0.8"/><path d="M10 50 C10 60 50 65 90 50" stroke="white" stroke-width="2" fill="none" opacity="0.5"/>`,
-    services: `<path d="M25 80 C10 80 5 70 5 60 C5 45 20 35 35 35 C40 20 60 15 75 25 C90 25 95 40 95 55 C95 75 80 80 75 80 Z" fill="currentColor"/>`,
-    refunds: `<path d="M90 50 Q 90 90 50 90 Q 10 90 10 50 Q 10 10 50 10 L 50 30 L 85 0 L 50 -30 V -10 Q 0 -10 0 50 Q 0 110 50 110 Q 100 110 100 50 Z" fill="currentColor" transform="scale(0.8) translate(10, 10)"/>`,
-    ai: `<path d="M50 5 L60 40 L95 50 L60 60 L50 95 L40 60 L5 50 L40 40 Z" fill="currentColor"/><path d="M20 15 L25 25 L35 20 L25 30 L30 45 L20 35 L10 40 L15 30 Z" fill="currentColor" opacity="0.6"/>`
+    dashboard: `<path d="M5 5 H45 V45 H5 Z M55 5 H95 V45 H55 Z M5 55 H45 V95 H5 Z M55 55 H95 V95 H55 Z" fill="currentColor"/>`,
+    accounts: ``, // Handled specifically to show money bag
+    transactions: `<path d="M5 35 H55 V15 L95 50 L55 85 V65 H5 Z" fill="currentColor" opacity="0.9"/><path d="M95 35 H45 V15 L5 50 L45 85 V65 H95 Z" fill="currentColor" opacity="0.5"/>`,
+    installments: `<rect x="15" y="5" width="70" height="90" rx="10" stroke="currentColor" stroke-width="8" fill="none"/><path d="M15 35 H85 M15 65 H85" stroke="currentColor" stroke-width="8"/>`,
+    categories: `<path d="M10 10 H60 L90 40 L40 90 L10 60 Z" fill="currentColor"/><circle cx="45" cy="35" r="10" fill="white"/>`,
+    shops: `<path d="M5 40 L95 40 L95 90 L5 90 Z" fill="currentColor"/><path d="M25 40 Q 50 5 75 40" stroke="currentColor" stroke-width="10" fill="none"/>`,
+    people: `<circle cx="50" cy="35" r="25" fill="currentColor"/><path d="M10 95 C10 65 90 65 90 95 Z" fill="currentColor" opacity="0.8"/>`,
+    cashback: `<rect x="5" y="20" width="90" height="60" rx="10" stroke="currentColor" stroke-width="8" fill="none"/><circle cx="50" cy="50" r="15" fill="currentColor"/>`,
+    batch: `<path d="M10 20 C10 10 90 10 90 20 V80 C90 90 10 90 10 80 Z" fill="currentColor" opacity="0.8"/><ellipse cx="50" cy="20" rx="40" ry="10" fill="currentColor"/><path d="M10 45 Q 50 55 90 45" stroke="white" stroke-width="4" fill="none"/>`,
+    services: `<path d="M25 85 C5 85 0 70 0 55 C0 35 25 25 40 25 C50 5 75 5 85 20 C100 20 100 45 100 60 C100 85 80 90 75 90 Z" fill="currentColor"/>`,
+    refunds: `<path d="M90 50 Q 90 95 50 95 Q 10 95 10 50 Q 10 5 50 5 L 50 30 L 95 0 L 50 -30 V 0 Q 0 0 0 50 Q 0 115 50 115 Q 100 115 100 50 Z" fill="currentColor" transform="scale(0.85) translate(10, 5)"/>`,
+    ai: `<path d="M50 0 L65 35 L100 50 L65 65 L50 100 L35 65 L0 50 L35 35 Z" fill="currentColor"/>`
 }
 
-export function useAppFavicon(isLoading: boolean) {
+export function useAppFavicon(isLoading: boolean, customIcon?: string) {
     const pathname = usePathname()
 
     useEffect(() => {
@@ -42,12 +42,16 @@ export function useAppFavicon(isLoading: boolean) {
         </svg>
       `
             const { cleanup } = updateFavicon(loadingSvg)
-            return () => {
-                cleanup()
-            }
+            return () => cleanup()
         }
 
-        // Priority 2: Page specific icon
+        // Priority 2: Custom Image (Cloudinary Profile/Logo)
+        if (customIcon) {
+            const { cleanup } = updateFavicon(customIcon, true)
+            return () => cleanup()
+        }
+
+        // Priority 3: Page specific icon
         let pageKey = 'dashboard'
         if (pathname) {
             if (pathname.includes('/accounts')) pageKey = 'accounts'
@@ -63,52 +67,63 @@ export function useAppFavicon(isLoading: boolean) {
             else if (pathname.includes('/settings/ai')) pageKey = 'ai'
         }
 
+        // SPECIFIC REQUEST: Accounts page keeps the golden bag
+        if (pageKey === 'accounts') {
+            const { cleanup } = updateFavicon('/favicon.svg?v=6', true)
+            return () => cleanup()
+        }
+
         const iconContent = ICONS[pageKey] || ICONS.dashboard
         const pageSvg = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="${THEME.blue}">
-        <rect width="100" height="100" rx="20" fill="#f8fafc"/>
-        <g transform="translate(15, 15) scale(0.7)">
+        <g transform="translate(5, 5) scale(0.9)">
           ${iconContent}
         </g>
       </svg>
     `
-        const { url, link, cleanup } = updateFavicon(pageSvg)
+        const { cleanup } = updateFavicon(pageSvg)
+        return () => cleanup()
 
-        return () => {
-            cleanup()
-        }
-    }, [isLoading, pathname])
+    }, [isLoading, pathname, customIcon])
 }
 
-function updateFavicon(svg: string) {
-    const blob = new Blob([svg], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
+function updateFavicon(content: string, isUrl: boolean = false) {
+    let url = content
+    let isBlob = false
+
+    if (!isUrl) {
+        const blob = new Blob([content], { type: 'image/svg+xml' })
+        url = URL.createObjectURL(blob)
+        isBlob = true
+    }
 
     const link = document.createElement('link')
     link.rel = 'icon'
     link.href = url
     link.id = 'dynamic-favicon'
 
-    // Remove existing favicons
-    const existingIcons = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"]')
-    existingIcons.forEach(icon => icon.parentNode?.removeChild(icon))
-
-    document.head.appendChild(link)
-
-    // Also update Apple Touch Icon
+    // Apple Touch Icon support
     const appleLink = document.createElement('link')
     appleLink.rel = 'apple-touch-icon'
     appleLink.href = url
     appleLink.id = 'dynamic-apple-icon'
+
+    // Remove existing favicons SAFELY
+    const existingIcons = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+    existingIcons.forEach(icon => {
+        if (icon.parentNode) {
+            icon.parentNode.removeChild(icon)
+        }
+    })
+
+    document.head.appendChild(link)
     document.head.appendChild(appleLink)
 
     return {
-        url,
-        link,
         cleanup: () => {
-            URL.revokeObjectURL(url)
-            link.parentNode?.removeChild(link)
-            appleLink.parentNode?.removeChild(appleLink)
+            if (isBlob) URL.revokeObjectURL(url)
+            if (link.parentNode) link.parentNode.removeChild(link)
+            if (appleLink.parentNode) appleLink.parentNode.removeChild(appleLink)
         }
     }
 }

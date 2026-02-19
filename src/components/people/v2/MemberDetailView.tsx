@@ -71,7 +71,8 @@ export function MemberDetailView({
     const [isPending, startTransition] = useTransition()
 
     // Browser Tab Spinner Enhancement (Overwrites page icon during active sync/rollover)
-    useAppFavicon(isSubmitting || isGlobalLoading || isPending)
+    // Also displays the person's profile image as the favicon when not loading
+    useAppFavicon(isSubmitting || isGlobalLoading || isPending, person.image_url ?? undefined)
 
     // Derive active month/year from URL (Single Source of Truth)
     const urlYear = searchParams.get('year')

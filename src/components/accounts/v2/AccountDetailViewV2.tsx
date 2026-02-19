@@ -20,6 +20,7 @@ import { useRecentItems } from '@/hooks/use-recent-items'
 import { Info } from 'lucide-react'
 import { AccountPendingItemsModal } from './AccountPendingItemsModal'
 import { useBreadcrumbs } from '@/context/breadcrumb-context'
+import { useAppFavicon } from '@/hooks/use-app-favicon'
 
 type PendingBatchItem = {
     id: string
@@ -49,6 +50,9 @@ export function AccountDetailViewV2({
     const router = useRouter()
     const searchParams = useSearchParams()
     const [isPending, startTransition] = useTransition()
+
+    // Dynamic Icon for Account Detail (Shows Bank Logo on Tab)
+    useAppFavicon(isPending, account.image_url ?? undefined)
 
 
 
