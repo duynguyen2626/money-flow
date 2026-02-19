@@ -21,7 +21,7 @@ import { parseISO, isWithinInterval } from 'date-fns'
 import { Info, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { useLoadingFavicon } from '@/hooks/use-loading-favicon'
+import { useAppFavicon } from '@/hooks/use-app-favicon'
 
 interface MemberDetailViewProps {
     person: Person
@@ -70,8 +70,8 @@ export function MemberDetailView({
 
     const [isPending, startTransition] = useTransition()
 
-    // Browser Tab Spinner Enhancement
-    useLoadingFavicon(isSubmitting || isGlobalLoading || isPending)
+    // Browser Tab Spinner Enhancement (Overwrites page icon during active sync/rollover)
+    useAppFavicon(isSubmitting || isGlobalLoading || isPending)
 
     // Derive active month/year from URL (Single Source of Truth)
     const urlYear = searchParams.get('year')
