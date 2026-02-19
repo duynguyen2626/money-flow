@@ -43,6 +43,7 @@ import { RecentPeopleList } from "@/components/navigation/RecentPeopleList"
 import { RecentAccountsList } from "@/components/navigation/RecentAccountsList"
 import { Breadcrumbs } from "@/components/navigation/Breadcrumbs"
 import { GlobalAI } from "@/components/ai/global-ai"
+import { useAppFavicon } from "@/hooks/use-app-favicon"
 
 interface NavItem {
   title: string
@@ -71,6 +72,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [expandedHrefs, setExpandedHrefs] = useState<string[]>([])
   const [recentHrefs, setRecentHrefs] = useState<string[]>([])
   const pathname = usePathname()
+
+  // Dynamic Favicon for Page Navigation
+  useAppFavicon(false)
 
   // Track navigation usage
   useEffect(() => {
