@@ -24,17 +24,17 @@ export const metadata: Metadata = {
   description: 'Precision personal finance tracking with high-performance dashboards and Google Sheets sync.',
   icons: {
     icon: [
-      { url: '/favicon.svg' },
-      { url: '/icon.png' },
+      { url: '/favicon.ico?v=3' },
+      { url: '/icon.png?v=3' },
     ],
     apple: [
-      { url: '/apple-icon.png' },
+      { url: '/apple-icon.png?v=3' },
     ],
   },
   openGraph: {
     title: 'Money Flow 3.0',
     description: 'Precision personal finance tracking.',
-    images: [{ url: '/og-image.png' }],
+    images: [{ url: '/og-image.png?v=3' }],
   },
 }
 
