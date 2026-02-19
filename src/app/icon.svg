@@ -1,28 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <!-- Money Bag Icon like 💰 -->
   <defs>
-    <linearGradient id="bagGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FFD700" />
-      <stop offset="100%" stop-color="#FFA500" />
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
     </linearGradient>
+    <linearGradient id="coinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
   </defs>
 
-  <!-- Bag body - round pouch -->
-  <circle cx="50" cy="55" r="35" fill="url(#bagGradient)" stroke="#D4AF37" stroke-width="2"/>
+  <!-- Background Circle with subtle border -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGradient)" stroke="#334155" stroke-width="1"/>
+  
+  <!-- Flow Lines -->
+  <path d="M 20 50 Q 50 20 80 50" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <animate attributeName="stroke-dasharray" values="0,100;100,0" dur="3s" repeatCount="indefinite" />
+  </path>
+  <path d="M 20 60 Q 50 90 80 60" stroke="#10b981" stroke-width="2" stroke-linecap="round" opacity="0.4">
+    <animate attributeName="stroke-dasharray" values="0,100;100,0" dur="2.5s" repeatCount="indefinite" />
+  </path>
 
-  <!-- Bag opening/top -->
-  <ellipse cx="50" cy="22" rx="28" ry="12" fill="#FFE55C" stroke="#D4AF37" stroke-width="2"/>
-  
-  <!-- String/rope left -->
-  <path d="M 35 22 Q 28 10 32 6" stroke="#8B4513" stroke-width="3" fill="none" stroke-linecap="round"/>
-  
-  <!-- String/rope right -->
-  <path d="M 65 22 Q 72 10 68 6" stroke="#8B4513" stroke-width="3" fill="none" stroke-linecap="round"/>
-  
-  <!-- String knot -->
-  <circle cx="50" cy="5" r="3" fill="#8B4513"/>
-
-  <!-- Dollar sign $ in center -->
-  <text x="50" y="62" font-size="48" font-weight="bold" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle" font-family="Arial, sans-serif">$</text>
+  <!-- Premium Money Bag -->
+  <g filter="url(#glow)">
+    <!-- Bag body -->
+    <path d="M 50 35 C 35 35 25 45 25 65 C 25 80 35 85 50 85 C 65 85 75 80 75 65 C 75 45 65 35 50 35 Z" fill="url(#coinGradient)" />
+    <!-- Bag neck/knot -->
+    <path d="M 40 35 L 60 35 L 65 25 L 35 25 Z" fill="#d97706" />
+    <path d="M 35 35 Q 50 40 65 35" stroke="#92400e" stroke-width="3" fill="none" />
+    
+    <!-- Dollar sign with depth -->
+    <text x="50" y="68" font-size="32" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="system-ui, sans-serif" style="text-shadow: 0 2px 4px rgba(0,0,0,0.3)">$</text>
+  </g>
 </svg>
-
