@@ -19,21 +19,17 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://money-flow-3.vercel.app'),
   title: 'Money Flow 3.0',
   description: 'Precision personal finance tracking with high-performance dashboards and Google Sheets sync.',
   icons: {
-    icon: [
-      { url: '/favicon.svg' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
+    icon: '/icon.svg',
+    apple: '/apple-icon.png',
   },
   openGraph: {
     title: 'Money Flow 3.0',
     description: 'Precision personal finance tracking.',
-    images: [{ url: '/icon.svg' }],
+    images: [{ url: '/og-image.png' }],
   },
 }
 
