@@ -83,7 +83,8 @@ export function SidebarNavV2({
       <div
         className={cn(
           'absolute left-full top-0 z-[999] ml-2',
-          'hidden group-hover:flex flex-col',
+          'flex flex-col transition-all duration-200',
+          'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
           'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
         )}
       >
@@ -117,9 +118,11 @@ export function SidebarNavV2({
       ) : null
 
     const wrapper = (
-      <div key={item.href} className="relative group">
-        {linkRow}
-        {flyout}
+      <div key={item.href} className="inline-flex flex-col">
+        <div className="relative group">
+          {linkRow}
+          {flyout}
+        </div>
         {subPageIndicator}
       </div>
     )

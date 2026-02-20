@@ -7,7 +7,7 @@ import { Account, Person } from '@/types/moneyflow.types'
 import { getRecentAccountsByTransactions } from '@/services/account.service'
 import { getRecentPeopleByTransactions } from '@/services/people.service'
 import { cn } from '@/lib/utils'
-import { Landmark, User, X } from 'lucide-react'
+import { Landmark, User } from 'lucide-react'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 interface UnifiedRecentSidebarProps {
@@ -15,9 +15,10 @@ interface UnifiedRecentSidebarProps {
   searchQuery?: string
 }
 
+// Use '_kind' to avoid collision with Account.type ('bank'|'cash'|...)
 type RecentItemType = 
-  | ({ type: 'account' } & Account)
-  | ({ type: 'person' } & Person)
+  | ({ _kind: 'account' } & Account)
+  | ({ _kind: 'person' } & Person)
 
 export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedRecentSidebarProps) {
   const [recentAccounts, setRecentAccounts] = useState<Account[]>([])
@@ -45,10 +46,10 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
   }, [])
 
   // Combine all items — search never filters, only highlights
-  const allRecentItems = [
-    ...recentAccounts.map(acc => ({ ...acc, type: 'account' as const })),
-    ...recentPeople.map(person => ({ ...person, type: 'person' as const }))
-  ] satisfies RecentItemType[]
+  const allRecentItems: RecentItemType[] = [
+    ...recentAccounts.map((acc): RecentItemType => ({ ...acc, _kind: 'account' as const })),
+    ...recentPeople.map((pers): RecentItemType => ({ ...pers, _kind: 'person' as const }))
+  ]
 
   // Always show all items; search query is only used for yellow highlight below
   const filteredItems = allRecentItems
@@ -70,12 +71,12 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
 
       <div className="space-y-0.5">
         {filteredItems.map(item => {
-            const href = item.type === 'account' ? `/accounts/${item.id}` : `/people/${item.id}`
+            const href = item._kind === 'account' ? `/accounts/${item.id}` : `/people/${item.id}`
             const isActive = pathname === href
             const label = item.name || 'Unknown'
             const image_url = (item as any).image_url
 
-            const icon = item.type === 'account' ? (
+            const icon = item._kind === 'account' ? (
               <Landmark className="h-3.5 w-3.5" />
             ) : (
               <User className="h-3.5 w-3.5" />
@@ -88,12 +89,12 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
 
             const content = (
               <Link
-                key={`${item.type}-${item.id}`}
+                key={`${item._kind}-${item.id}`}
                 href={href}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-2 py-1.5 transition-all group relative",
                   isActive
-                    ? item.type === 'account'
+                    ? item._kind === 'account'
                       ? "text-blue-700 font-bold bg-blue-50"
                       : "text-indigo-700 font-bold bg-indigo-50"
                     : `text-slate-500 hover:bg-slate-50 hover:text-slate-900 ${highlightClass}`,
@@ -104,8 +105,8 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
                 {!isCollapsed && (
                   <div className={cn(
                     "absolute -left-3 top-0 bottom-0 w-px bg-slate-100 group-hover:bg-blue-200 transition-colors",
-                    item.type === 'account' && isActive && "bg-blue-300",
-                    item.type === 'person' && isActive && "bg-indigo-300"
+                    item._kind === 'account' && isActive && "bg-blue-300",
+                    item._kind === 'person' && isActive && "bg-indigo-300"
                   )} />
                 )}
 
@@ -124,12 +125,12 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
                 {!isCollapsed && (
                   <span className="text-[10px] truncate leading-tight flex-1">{label}</span>
                 )}
-                {!isCollapsed && item.type === 'account' && (
+                {!isCollapsed && item._kind === 'account' && (
                   <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-medium ml-auto">
                     Account
                   </span>
                 )}
-                {!isCollapsed && item.type === 'person' && (
+                {!isCollapsed && item._kind === 'person' && (
                   <span className="text-[8px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-medium ml-auto">
                     Person
                   </span>
@@ -139,7 +140,7 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
 
             if (isCollapsed) {
               return (
-                <CustomTooltip key={`${item.type}-${item.id}`} content={label} side="right">
+                <CustomTooltip key={`${item._kind}-${item.id}`} content={label} side="right">
                   {content}
                 </CustomTooltip>
               )
