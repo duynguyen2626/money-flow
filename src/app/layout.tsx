@@ -52,6 +52,8 @@ export default function RootLayout({
           </BreadcrumbProvider>
           <Toaster position="top-right" richColors />
         </TooltipProvider>
+        <div id="portal-root" suppressHydrationWarning />
+        <div id="transition-root" suppressHydrationWarning />
       </body>
     </html>
   )

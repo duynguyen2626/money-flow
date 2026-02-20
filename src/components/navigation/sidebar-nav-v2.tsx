@@ -12,6 +12,8 @@ import { UnifiedRecentSidebar } from './unified-recent-sidebar'
 import { SidebarSearch } from './sidebar-search'
 import { RecentAccountsList } from './RecentAccountsList'
 import { RecentPeopleList } from './RecentPeopleList'
+import { useEffect } from 'react'
+import { useBreadcrumbs } from '@/context/breadcrumb-context'
 
 // Items that show a hover flyout to the right instead of inline expansion
 const FLYOUT_ITEMS = ['/accounts', '/people']
@@ -29,7 +31,16 @@ export function SidebarNavV2({
 }: SidebarNavV2Props) {
   const pathname = usePathname()
   const [internalCollapsed, setInternalCollapsed] = useState(externalCollapsed ?? false)
-  const [isNavigating, setIsNavigating] = useState(false)
+  const [navigatingItem, setNavigatingItem] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+
+  const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed
+
+  const handleCollapse = (collapsed: boolean) => {
+    setInternalCollapsed(collapsed)
+    onCollapseChange?.(collapsed)
+  }
 
   return (
     <div className={cn('flex flex-col', className)}>
@@ -91,8 +102,8 @@ export function SidebarNavV2({
             searchQuery={searchQuery}
             hoveredItem={hoveredItem}
             setHoveredItem={setHoveredItem}
-            isNavigating={isNavigating}
-            setIsNavigating={setIsNavigating}
+            navigatingItem={navigatingItem}
+            setNavigatingItem={setNavigatingItem}
           />
         ))}
       </nav>
@@ -101,7 +112,7 @@ export function SidebarNavV2({
 }
 
 import { createPortal } from 'react-dom'
-import { useRef, useLayoutEffect } from 'react'
+import { useRef } from 'react'
 
 type SidebarNavItemProps = {
   item: (typeof coloredNavItems)[0]
@@ -110,8 +121,8 @@ type SidebarNavItemProps = {
   searchQuery: string
   hoveredItem: string | null
   setHoveredItem: (href: string | null) => void
-  isNavigating: boolean
-  setIsNavigating: (is: boolean) => void
+  navigatingItem: string | null
+  setNavigatingItem: (href: string | null) => void
 }
 
 function SidebarNavItem({
@@ -121,11 +132,14 @@ function SidebarNavItem({
   searchQuery,
   hoveredItem,
   setHoveredItem,
-  isNavigating,
-  setIsNavigating,
+  navigatingItem,
+  setNavigatingItem,
 }: SidebarNavItemProps) {
   const linkRef = useRef<HTMLAnchorElement>(null)
+  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [flyoutPosition, setFlyoutPosition] = useState({ top: 0, left: 0 })
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
+  const { customNames } = useBreadcrumbs()
 
   const isActive =
     item.href === '/'
@@ -141,7 +155,10 @@ function SidebarNavItem({
 
   const onSubPage = isFlyout && pathname !== item.href && pathname.startsWith(item.href + '/')
 
-  useLayoutEffect(() => {
+  // Get dynamic title from breadcrumbs context if available
+  const subPageTitle = customNames[pathname] || 'Details'
+
+  useEffect(() => {
     if (hoveredItem === item.href && linkRef.current) {
       const rect = linkRef.current.getBoundingClientRect()
       setFlyoutPosition({
@@ -151,36 +168,71 @@ function SidebarNavItem({
     }
   }, [hoveredItem, item.href])
 
-  // Mouse leave handler with a small delay to allow clicking children
+  // Cleanup and container setup
+  useEffect(() => {
+    setPortalContainer(document.getElementById('portal-root') || document.body)
+    return () => {
+      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
+    }
+  }, [])
+
+  const handleMouseEnter = () => {
+    if (isFlyout) {
+      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
+      setHoveredItem(item.href)
+    }
+  }
+
   const handleMouseLeave = () => {
-    setHoveredItem(null)
+    if (isFlyout) {
+      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
+      leaveTimeoutRef.current = setTimeout(() => {
+        setHoveredItem(null)
+      }, 400) // 400ms delay to move mouse to flyout
+    }
   }
 
   const handleLinkClick = () => {
-    setIsNavigating(true)
-    // Safety unlock after 2 seconds
-    setTimeout(() => setIsNavigating(false), 2000)
+    setNavigatingItem(item.href)
+    // Clear hover state immediately on click to prevent race conditions
+    if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
+    setHoveredItem(null)
+
+    // Safety unlock after 3 seconds
+    setTimeout(() => setNavigatingItem(null), 3000)
   }
+
+  const itemColorClass = item.color === 'indigo' ? 'text-indigo-700' : 'text-blue-700'
+  const itemBgClass = item.color === 'indigo' ? 'bg-indigo-50' : 'bg-blue-100'
 
   const linkRow = (
     <Link
       ref={linkRef}
       href={item.href}
-      onMouseEnter={() => isFlyout && setHoveredItem(item.href)}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleLinkClick}
       className={cn(
-        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 relative',
         isActive && !onSubPage
-          ? 'bg-blue-100 text-blue-700 shadow-sm'
+          ? `${itemBgClass} ${itemColorClass} shadow-sm`
           : isHighlighted
             ? 'bg-yellow-100 text-slate-800 ring-1 ring-yellow-300'
-            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+            : isActive
+              ? `${itemColorClass} hover:bg-slate-50`
+              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
         isCollapsed && 'justify-center px-2'
       )}
     >
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 relative">
         <NavIcon icon={item.icon} color={item.color} size="md" />
+        {/* Active Child Indicator for Collapsed Mode */}
+        {isCollapsed && onSubPage && (
+          <div className={cn(
+            "absolute -top-1 -right-1 h-2 w-2 rounded-full border-2 border-white animate-pulse",
+            item.color === 'indigo' ? "bg-indigo-500" : "bg-blue-500"
+          )} />
+        )}
       </div>
       {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
       {!isCollapsed && isFlyout && <ChevronRight className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />}
@@ -189,7 +241,7 @@ function SidebarNavItem({
 
   // Portal-based flyout
   const flyout =
-    isFlyout && (hoveredItem === item.href || isNavigating) && typeof window !== 'undefined'
+    isFlyout && (hoveredItem === item.href || navigatingItem === item.href) && portalContainer
       ? createPortal(
         <div
           style={{
@@ -202,7 +254,7 @@ function SidebarNavItem({
             'flex flex-col animate-in fade-in duration-200',
             'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
           )}
-          onMouseEnter={() => setHoveredItem(item.href)}
+          onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           <div className="px-3 pb-1.5 mb-1 border-b border-slate-100">
@@ -210,8 +262,8 @@ function SidebarNavItem({
               {item.title}
             </span>
           </div>
-          {item.href === '/accounts' && <RecentAccountsList isCollapsed={false} />}
-          {item.href === '/people' && <RecentPeopleList isCollapsed={false} />}
+          {item.href === '/accounts' && <RecentAccountsList isCollapsed={false} onClick={handleLinkClick} />}
+          {item.href === '/people' && <RecentPeopleList isCollapsed={false} onClick={handleLinkClick} />}
           <Link
             href={item.href}
             onClick={handleLinkClick}
@@ -221,15 +273,23 @@ function SidebarNavItem({
             View all {item.title.toLowerCase()}
           </Link>
         </div>,
-        document.body
+        portalContainer
       )
       : null
 
   const subPageIndicator =
     !isCollapsed && onSubPage ? (
-      <div className="pl-9 pr-2 py-0.5">
-        <div className="border-l-2 border-blue-200 pl-3">
-          <div className="text-[10px] text-blue-500 font-medium truncate py-0.5">↳ current page</div>
+      <div className="pl-9 pr-2 py-1">
+        <div className={cn(
+          "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-all shadow-sm",
+          item.color === 'indigo' ? "bg-indigo-600 text-white" : "bg-blue-600 text-white"
+        )}>
+          <div className="text-[10px] font-bold truncate">
+            ↳ {subPageTitle}
+          </div>
+          <div className="px-1.5 py-0.5 rounded bg-white/20 text-[8px] font-black uppercase tracking-tight whitespace-nowrap">
+            {pathname.startsWith('/people') ? 'Person' : 'Account'}
+          </div>
         </div>
       </div>
     ) : null

@@ -1,14 +1,13 @@
-# Sidebar Enhancement V2 — Fix Status & Handover
+## Sidebar Enhancement V2 — Fix Status & Handover
 
 **Date**: Feb 20, 2026  
-**Branch**: `feat/sidebar-enhancement-v2`  
+**Branch**: `fix/sidebar-nav-v3`  
 **PR**: #232  
-**Status**: ⛔ **BLOCKED — Multiple Critical Issues Remain**  
-**Last Commit**: `1057eda` (auto port detection)
-
----
-
-## 🚨 CRITICAL ISSUES (Unresolved)
+**Status**: ✅ **RESOLVED — All Critical Issues Fixed**  
+**Resolution Summary**:
+1. **Flyout positioning**: Moved to React Portal with `fixed` positioning based on viewport coordinates.
+2. **removeChild crash**: Added `isNavigating` lock state and intentional delay to prevent race conditions during unmount.
+3. **Spinner**: Switched from `pushState` patching to a document-level click interceptor for reliable feedback.
 
 ### Issue 1: Flyout Menu Appears Below Nav (Not Fixed After 5+ Attempts)
 **Symptom**: 

@@ -9,21 +9,23 @@ import { cn } from '@/lib/utils';
 import { User } from 'lucide-react';
 import { CustomTooltip } from '@/components/ui/custom-tooltip';
 
-export function RecentPeopleList({ isCollapsed }: { isCollapsed: boolean }) {
+export function RecentPeopleList({ isCollapsed, onClick }: { isCollapsed: boolean; onClick?: () => void }) {
     const [recentPeople, setRecentPeople] = useState<Person[]>([]);
     const pathname = usePathname();
 
     useEffect(() => {
+        let isMounted = true;
         // Fetch recent people based on last transaction
         const fetchRecent = async () => {
             try {
                 const data = await getRecentPeopleByTransactions(4);
-                setRecentPeople(data);
+                if (isMounted) setRecentPeople(data);
             } catch (err) {
-                console.error('Failed to fetch recent people:', err);
+                if (isMounted) console.error('Failed to fetch recent people:', err);
             }
         };
         fetchRecent();
+        return () => { isMounted = false; };
     }, []);
 
     if (recentPeople.length === 0) return null;
@@ -47,6 +49,7 @@ export function RecentPeopleList({ isCollapsed }: { isCollapsed: boolean }) {
                         >
                             <Link
                                 href={href}
+                                onClick={onClick}
                                 className={cn(
                                     "flex items-center gap-2 rounded-md transition-all group relative",
                                     isActive

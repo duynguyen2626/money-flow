@@ -26,6 +26,8 @@ function getPageName(path: string): string {
   return 'Page'
 }
 
+import { createPortal } from 'react-dom'
+
 /**
  * PageTransitionOverlay
  *
@@ -36,6 +38,7 @@ function getPageName(path: string): string {
  */
 export function PageTransitionOverlay() {
   const [targetPage, setTargetPage] = useState<string | null>(null)
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
   const pathname = usePathname()
   const prevPathname = useRef(pathname)
   const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,6 +53,8 @@ export function PageTransitionOverlay() {
   }, [])
 
   useEffect(() => {
+    setPortalContainer(document.getElementById('transition-root') || document.body)
+
     const handleLinkClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const link = target.closest('a[href^="/"]') as HTMLAnchorElement | null
@@ -74,15 +79,15 @@ export function PageTransitionOverlay() {
   useEffect(() => {
     if (prevPathname.current !== pathname) {
       prevPathname.current = pathname
-      // Keep visible for a tiny bit to show we've "arrived"
+      // Keep visible for a tiny bit up to 300ms
       const t = setTimeout(() => setTargetPage(null), 300)
       return () => clearTimeout(t)
     }
   }, [pathname])
 
-  if (!targetPage) return null
+  if (!targetPage || !portalContainer) return null
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/75 backdrop-blur-sm pointer-events-all">
       <div className="flex flex-col items-center gap-5">
         {/* Spinner */}
@@ -98,6 +103,7 @@ export function PageTransitionOverlay() {
           <p className="text-xs text-slate-400">Please wait…</p>
         </div>
       </div>
-    </div>
+    </div>,
+    portalContainer
   )
 }

@@ -9,20 +9,22 @@ import { cn } from '@/lib/utils';
 import { Landmark } from 'lucide-react';
 import { CustomTooltip } from '@/components/ui/custom-tooltip';
 
-export function RecentAccountsList({ isCollapsed }: { isCollapsed: boolean }) {
+export function RecentAccountsList({ isCollapsed, onClick }: { isCollapsed: boolean; onClick?: () => void }) {
     const [recentAccounts, setRecentAccounts] = useState<Account[]>([]);
     const pathname = usePathname();
 
     useEffect(() => {
+        let isMounted = true;
         const fetchRecent = async () => {
             try {
                 const data = await getRecentAccountsByTransactions(4);
-                setRecentAccounts(data);
+                if (isMounted) setRecentAccounts(data);
             } catch (err) {
-                console.error('Failed to fetch recent accounts:', err);
+                if (isMounted) console.error('Failed to fetch recent accounts:', err);
             }
         };
         fetchRecent();
+        return () => { isMounted = false; };
     }, []);
 
     if (recentAccounts.length === 0) return null;
@@ -46,6 +48,7 @@ export function RecentAccountsList({ isCollapsed }: { isCollapsed: boolean }) {
                         >
                             <Link
                                 href={href}
+                                onClick={onClick}
                                 className={cn(
                                     "flex items-center gap-2 rounded-md transition-all group relative",
                                     isActive
