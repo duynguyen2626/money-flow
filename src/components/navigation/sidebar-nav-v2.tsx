@@ -78,15 +78,23 @@ export function SidebarNavV2({
       </Link>
     )
 
-    // Hover flyout panel — absolute, escapes via overflow-x-visible on scroll container
+    // Hover flyout panel — use fixed position to escape sidebar constraints
     const flyout = isFlyout ? (
       <div
         className={cn(
-          'absolute left-full top-0 z-[999] ml-2',
+          'fixed z-[9999]',
           'flex flex-col transition-all duration-200',
           'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
           'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
         )}
+        style={{
+          // Position at right edge of sidebar (260px collapsed, 256px+padding expanded)
+          left: isCollapsed ? '80px' : '256px',
+          // Position at top of the viewport
+          top: '0px',
+          maxHeight: '70vh',
+          overflowY: 'auto',
+        }}
       >
         <div className="px-3 pb-1.5 mb-1 border-b border-slate-100">
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -118,8 +126,8 @@ export function SidebarNavV2({
       ) : null
 
     const wrapper = (
-      <div key={item.href} className="inline-flex flex-col">
-        <div className="relative group">
+      <div key={item.href} className="w-full">
+        <div className="relative group w-full">
           {linkRow}
           {flyout}
         </div>
