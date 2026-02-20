@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { MonthTabs } from '@/components/batch/month-tabs'
 import { BatchList } from '@/components/batch/batch-list-simple'
 import { BatchDetail } from '@/components/batch/batch-detail'
 import { CreateMonthDialog } from '@/components/batch/create-month-dialog'
 import { QuickEntryModal } from '@/components/batch/quick-entry-modal'
 import { Button } from '@/components/ui/button'
-import { Settings, Sparkles, Database } from 'lucide-react'
+import { Settings, Sparkles, Database, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -42,6 +42,8 @@ export function BatchPageClientV2({
         monthYear: string
         monthName: string
     } | null>(null)
+
+    const [isPending, startTransition] = useTransition()
 
     // State for tabs
     const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active')
@@ -96,12 +98,16 @@ export function BatchPageClientV2({
     }
 
     function handleMonthSelect(month: string) {
-        router.push(`/batch/${bankType.toLowerCase()}?month=${month}&period=${currentPeriod}`)
+        startTransition(() => {
+            router.push(`/batch/${bankType.toLowerCase()}?month=${month}&period=${currentPeriod}`)
+        })
     }
 
     function handlePeriodSelect(period: string) {
         if (currentMonth) {
-            router.push(`/batch/${bankType.toLowerCase()}?month=${currentMonth}&period=${period}`)
+            startTransition(() => {
+                router.push(`/batch/${bankType.toLowerCase()}?month=${currentMonth}&period=${period}`)
+            })
         }
     }
 
@@ -196,6 +202,7 @@ export function BatchPageClientV2({
                                     <Button
                                         variant={currentPeriod === 'before' ? 'secondary' : 'ghost'}
                                         onClick={() => handlePeriodSelect('before')}
+                                        disabled={isPending}
                                         className={cn(
                                             "rounded-lg font-bold text-sm h-10 px-6 transition-all",
                                             currentPeriod === 'before' ? "bg-indigo-50 text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -203,12 +210,13 @@ export function BatchPageClientV2({
                                     >
                                         Before Cutoff
                                         <span className={cn("ml-2 text-[10px] uppercase font-black px-1.5 py-0.5 rounded-md", currentPeriod === 'before' ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-400")}>
-                                            1 - {cutoffDay}
+                                            {isPending && currentPeriod !== 'before' ? <Loader2 className="h-3 w-3 animate-spin" /> : `1 - ${cutoffDay}`}
                                         </span>
                                     </Button>
                                     <Button
                                         variant={currentPeriod === 'after' ? 'secondary' : 'ghost'}
                                         onClick={() => handlePeriodSelect('after')}
+                                        disabled={isPending}
                                         className={cn(
                                             "rounded-lg font-bold text-sm h-10 px-6 transition-all",
                                             currentPeriod === 'after' ? "bg-indigo-50 text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -216,7 +224,7 @@ export function BatchPageClientV2({
                                     >
                                         After Cutoff
                                         <span className={cn("ml-2 text-[10px] uppercase font-black px-1.5 py-0.5 rounded-md", currentPeriod === 'after' ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-400")}>
-                                            {cutoffDay + 1} - End
+                                            {isPending && currentPeriod !== 'after' ? <Loader2 className="h-3 w-3 animate-spin" /> : `${cutoffDay + 1} - END`}
                                         </span>
                                     </Button>
                                 </div>

@@ -44,6 +44,7 @@ interface BatchItemSlideProps {
     bankType?: 'VIB' | 'MBB'
     bankMappings?: any[]
     accounts: any[]
+    batch?: any
     onSuccess?: () => void
 }
 
@@ -55,6 +56,7 @@ export function BatchItemSlide({
     bankType = 'VIB',
     bankMappings = [],
     accounts,
+    batch,
     onSuccess,
 }: BatchItemSlideProps) {
     const [loading, setLoading] = useState(false)
@@ -127,9 +129,61 @@ export function BatchItemSlide({
             items: [{ value: 'none', label: 'None', description: 'Manual entry' }]
         },
         {
-            label: "Internal Accounts",
+            label: `Recommended (Cutoff: ${batch?.period === 'after' ? 'After 15' : 'Before 15'})`,
             items: accounts
-                .filter((a: any) => a.type !== 'debt' && a.type !== 'loan' && a.type !== 'savings')
+                .filter((a: any) => {
+                    if (a.type === 'debt' || a.type === 'loan' || a.type === 'savings') return false;
+                    // If batch is provided, filter based on statement_day or due_date
+                    if (batch?.period) {
+                        try {
+                            const config = a.cashback_config ? JSON.parse(a.cashback_config) : null;
+                            const statementDay = Number(a.statement_day || config?.program?.statementDay || 0);
+
+                            if (statementDay > 0) {
+                                // If statement day <= 15, assume it's in the "before" cutoff primarily
+                                const isBefore = statementDay <= 15;
+                                return batch.period === 'before' ? isBefore : !isBefore;
+                            }
+                        } catch (e) {
+                            // Fallback if JSON parse fails
+                        }
+                    }
+                    return false;
+                })
+                .map((a: any) => ({
+                    value: a.id,
+                    label: a.name,
+                    description: a.account_number || 'No account number',
+                    icon: a.image_url ? (
+                        <img src={a.image_url} alt="" className="w-4 h-4 rounded-none object-contain" />
+                    ) : (
+                        <div className="w-4 h-4 rounded-none bg-slate-900 flex items-center justify-center text-[8px] font-black text-white shrink-0 uppercase">
+                            {a.name?.[0]}
+                        </div>
+                    )
+                }))
+        },
+        {
+            label: "Other Internal Accounts",
+            items: accounts
+                .filter((a: any) => {
+                    if (a.type === 'debt' || a.type === 'loan' || a.type === 'savings') return false;
+
+                    if (batch?.period) {
+                        try {
+                            const config = a.cashback_config ? JSON.parse(a.cashback_config) : null;
+                            const statementDay = Number(a.statement_day || config?.program?.statementDay || 0);
+
+                            if (statementDay > 0) {
+                                const isBefore = statementDay <= 15;
+                                // Return true if it does NOT match the current period (it belongs in "Other")
+                                return batch.period === 'before' ? !isBefore : isBefore;
+                            }
+                        } catch (e) {
+                        }
+                    }
+                    return true;
+                })
                 .map((a: any) => ({
                     value: a.id,
                     label: a.name,
@@ -143,7 +197,7 @@ export function BatchItemSlide({
                     )
                 }))
         }
-    ]
+    ].filter(g => g.items.length > 0)
 
     useEffect(() => {
         if (bankCode && bankMappings.length > 0) {
@@ -466,10 +520,10 @@ export function BatchItemSlide({
                     <Button
                         onClick={form.handleSubmit(onSubmit)}
                         disabled={loading}
-                        className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold"
+                        className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold gap-2"
                     >
-                        {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        {isEditMode ? 'Update' : 'Add'} Item
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        <span>{isEditMode ? 'Update' : 'Add'} Item</span>
                     </Button>
                 </div>
             </div>

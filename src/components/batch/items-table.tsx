@@ -389,17 +389,16 @@ export function ItemsTable({
                                                         onSuccess={() => window.location.reload()}
                                                     />
                                                 )}
-
                                                 <Button
                                                     variant="ghost"
-                                                    size="icon"
+                                                    size="sm"
                                                     onClick={() => openTransferDialog(item)}
-                                                    className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                                                    className="h-8 px-3 text-emerald-600 hover:bg-emerald-50 rounded-lg font-bold text-[10px] uppercase gap-1.5"
                                                     title="Quick Confirm"
                                                 >
-                                                    <CheckCircle2 className="h-4 w-4" />
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    Confirm
                                                 </Button>
-
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:bg-slate-100 rounded-lg">

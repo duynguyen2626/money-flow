@@ -51,6 +51,7 @@ export function BatchDetail({
     const [bulkAction, setBulkAction] = useState<'confirm' | 'delete' | null>(null)
     const [itemSlideOpen, setItemSlideOpen] = useState(false)
     const [editingItem, setEditingItem] = useState<any>(null)
+    const [showFundDialog, setShowFundDialog] = useState(false)
 
     const router = useRouter()
 
@@ -213,11 +214,11 @@ export function BatchDetail({
                     <div>
                         <div className="flex items-baseline gap-2">
                             <h1 className="text-xl font-black text-slate-900 tracking-tight">{batch.name}</h1>
-                            <div className="flex flex-col">
-                                <span className="text-xl font-medium text-rose-600 tabular-nums">
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-[22px] font-black text-rose-600 tabular-nums">
                                     {new Intl.NumberFormat('en-US').format(totalAmount)}
                                 </span>
-                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-tighter">
+                                <span className="text-[11px] font-bold text-blue-600 uppercase tracking-tight">
                                     {formatShortVietnameseCurrency(totalAmount)}
                                 </span>
                             </div>
@@ -267,12 +268,36 @@ export function BatchDetail({
                                         <ExternalLink className="h-3.5 w-3.5" />
                                     </Button>
                                 )}
-                                <BatchSettingsDialog batch={batch} />
                             </div>
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-1.5 items-center">
+                    {/* Step 1: Fund Button */}
+                    <Button
+                        variant="default"
+                        className={cn(
+                            "gap-2 bg-slate-900 hover:bg-slate-800 text-white shadow-sm",
+                            funding || batch.batch_items.length === 0 ? 'opacity-50' : ''
+                        )}
+                        disabled={funding || batch.batch_items.length === 0}
+                        onClick={() => setShowFundDialog(true)}
+                    >
+                        {funding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                        <span className="font-semibold">Step 1: Fund</span>
+                    </Button>
+
+                    <ConfirmDialog
+                        open={showFundDialog}
+                        onOpenChange={setShowFundDialog}
+                        title="Step 1: Fund Batch"
+                        description={batch.status === 'funded'
+                            ? `This batch is already funded. Do you want to fund more? This will create an additional transaction of ${new Intl.NumberFormat('en-US').format(totalAmount)} from ${sourceAccount?.name || 'source'} to the clearing pool.`
+                            : `This will create a funding transaction of ${new Intl.NumberFormat('en-US').format(totalAmount)} from ${sourceAccount?.name || 'source'} to the clearing pool. Proceed?`
+                        }
+                        onConfirm={handleFund}
+                    />
+
                     {/* Step 2: Match Real Source Button with Icon + Text */}
                     {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && (
                         <TooltipProvider>
@@ -437,6 +462,7 @@ export function BatchDetail({
                 isOpen={itemSlideOpen}
                 onOpenChange={setItemSlideOpen}
                 batchId={batch.id}
+                batch={batch}
                 item={editingItem}
                 bankType={batch.bank_type || 'VIB'}
                 accounts={accounts}
