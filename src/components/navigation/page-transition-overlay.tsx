@@ -50,36 +50,32 @@ export function PageTransitionOverlay() {
   }, [])
 
   useEffect(() => {
-    const originalPushState = window.history.pushState.bind(window.history)
+    const handleLinkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const link = target.closest('a[href^="/"]') as HTMLAnchorElement | null
 
-    window.history.pushState = (data, unused, url) => {
-      const result = originalPushState(data, unused, url)
-      if (url) {
-        try {
-          const newPathname = new URL(String(url), window.location.origin).pathname
-          if (newPathname !== window.location.pathname) {
-            startNav(getPageName(newPathname))
-          }
-        } catch {
-          // ignore malformed URLs
+      if (link && !e.defaultPrevented && link.target !== '_blank') {
+        const href = link.getAttribute('href')
+        if (href && href !== pathname) {
+          startNav(getPageName(href))
         }
       }
-      return result
     }
 
+    document.addEventListener('click', handleLinkClick, true) // capture phase
     return () => {
-      window.history.pushState = originalPushState
+      document.removeEventListener('click', handleLinkClick, true)
       if (safetyTimer.current) clearTimeout(safetyTimer.current)
       if (startTimer.current) clearTimeout(startTimer.current)
     }
-  }, [startNav])
+  }, [pathname, startNav])
 
   // Hide once the new pathname is rendered by React
   useEffect(() => {
     if (prevPathname.current !== pathname) {
       prevPathname.current = pathname
-      // Small delay so server content is painted first
-      const t = setTimeout(() => setTargetPage(null), 120)
+      // Keep visible for a tiny bit to show we've "arrived"
+      const t = setTimeout(() => setTargetPage(null), 300)
       return () => clearTimeout(t)
     }
   }, [pathname])

@@ -29,118 +29,7 @@ export function SidebarNavV2({
 }: SidebarNavV2Props) {
   const pathname = usePathname()
   const [internalCollapsed, setInternalCollapsed] = useState(externalCollapsed ?? false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
-
-  const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed
-
-  const handleCollapse = (collapsed: boolean) => {
-    setInternalCollapsed(collapsed)
-    onCollapseChange?.(collapsed)
-  }
-
-  const renderNavItem = (item: (typeof coloredNavItems)[0]) => {
-    const isActive =
-      item.href === '/'
-        ? pathname === '/'
-        : pathname === item.href || pathname.startsWith(item.href + '/')
-    const isFlyout = FLYOUT_ITEMS.includes(item.href)
-
-    // Highlight if search matches — NEVER filter the list
-    const isHighlighted =
-      searchQuery.length > 0 &&
-      (item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
-
-    // On a sub-page of this item? (e.g. /accounts/123 under /accounts)
-    const onSubPage =
-      isFlyout && pathname !== item.href && pathname.startsWith(item.href + '/')
-
-    const linkRow = (
-      <Link
-        href={item.href}
-        onMouseEnter={() => isFlyout && setHoveredItem(item.href)}
-        onMouseLeave={() => setHoveredItem(null)}
-        className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
-          isActive && !onSubPage
-            ? 'bg-blue-100 text-blue-700 shadow-sm'
-            : isHighlighted
-              ? 'bg-yellow-100 text-slate-800 ring-1 ring-yellow-300'
-              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
-          isCollapsed && 'justify-center px-2'
-        )}
-      >
-        <div className="flex-shrink-0">
-          <NavIcon icon={item.icon} color={item.color} size="md" />
-        </div>
-        {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
-        {!isCollapsed && isFlyout && (
-          <ChevronRight className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />
-        )}
-      </Link>
-    )
-
-    // Hover flyout panel — render only when this item is hovered
-    const flyout = isFlyout && hoveredItem === item.href ? (
-      <div
-        className={cn(
-          'absolute right-0 top-0 -mr-2 translate-x-full z-[9999]',
-          'flex flex-col animate-in fade-in duration-200',
-          'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
-        )}
-        onMouseEnter={() => setHoveredItem(item.href)}
-        onMouseLeave={() => setHoveredItem(null)}
-      >
-        <div className="px-3 pb-1.5 mb-1 border-b border-slate-100">
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            {item.title}
-          </span>
-        </div>
-        {item.href === '/accounts' && <RecentAccountsList isCollapsed={false} />}
-        {item.href === '/people' && <RecentPeopleList isCollapsed={false} />}
-        <Link
-          href={item.href}
-          className="mt-1 mx-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50 hover:text-blue-700 transition-colors"
-        >
-          <ChevronRight className="h-3 w-3" />
-          View all {item.title.toLowerCase()}
-        </Link>
-      </div>
-    ) : null
-
-    // Inline active sub-page indicator (only when on a sub-route, e.g. /accounts/123)
-    const subPageIndicator =
-      !isCollapsed && onSubPage ? (
-        <div className="pl-9 pr-2 py-0.5">
-          <div className="border-l-2 border-blue-200 pl-3">
-            <div className="text-[10px] text-blue-500 font-medium truncate py-0.5">
-              ↳ current page
-            </div>
-          </div>
-        </div>
-      ) : null
-
-    const wrapper = (
-      <div key={item.href} className="w-full">
-        <div className="relative w-full">
-          {linkRow}
-          {flyout}
-        </div>
-        {subPageIndicator}
-      </div>
-    )
-
-    if (isCollapsed) {
-      return (
-        <CustomTooltip key={item.href} content={item.title} side="right">
-          {wrapper}
-        </CustomTooltip>
-      )
-    }
-
-    return wrapper
-  }
+  const [isNavigating, setIsNavigating] = useState(false)
 
   return (
     <div className={cn('flex flex-col', className)}>
@@ -193,8 +82,175 @@ export function SidebarNavV2({
 
       {/* ── All nav items — always shown, never filtered ── */}
       <nav className="flex-1 space-y-0.5">
-        {coloredNavItems.map((item) => renderNavItem(item))}
+        {coloredNavItems.map((item) => (
+          <SidebarNavItem
+            key={item.href}
+            item={item}
+            pathname={pathname}
+            isCollapsed={isCollapsed}
+            searchQuery={searchQuery}
+            hoveredItem={hoveredItem}
+            setHoveredItem={setHoveredItem}
+            isNavigating={isNavigating}
+            setIsNavigating={setIsNavigating}
+          />
+        ))}
       </nav>
     </div>
   )
+}
+
+import { createPortal } from 'react-dom'
+import { useRef, useLayoutEffect } from 'react'
+
+type SidebarNavItemProps = {
+  item: (typeof coloredNavItems)[0]
+  pathname: string
+  isCollapsed: boolean
+  searchQuery: string
+  hoveredItem: string | null
+  setHoveredItem: (href: string | null) => void
+  isNavigating: boolean
+  setIsNavigating: (is: boolean) => void
+}
+
+function SidebarNavItem({
+  item,
+  pathname,
+  isCollapsed,
+  searchQuery,
+  hoveredItem,
+  setHoveredItem,
+  isNavigating,
+  setIsNavigating,
+}: SidebarNavItemProps) {
+  const linkRef = useRef<HTMLAnchorElement>(null)
+  const [flyoutPosition, setFlyoutPosition] = useState({ top: 0, left: 0 })
+
+  const isActive =
+    item.href === '/'
+      ? pathname === '/'
+      : pathname === item.href || pathname.startsWith(item.href + '/')
+  const isFlyout = FLYOUT_ITEMS.includes(item.href)
+
+  // Highlight if search matches
+  const isHighlighted =
+    searchQuery.length > 0 &&
+    (item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
+
+  const onSubPage = isFlyout && pathname !== item.href && pathname.startsWith(item.href + '/')
+
+  useLayoutEffect(() => {
+    if (hoveredItem === item.href && linkRef.current) {
+      const rect = linkRef.current.getBoundingClientRect()
+      setFlyoutPosition({
+        top: rect.top,
+        left: rect.right + 8,
+      })
+    }
+  }, [hoveredItem, item.href])
+
+  // Mouse leave handler with a small delay to allow clicking children
+  const handleMouseLeave = () => {
+    setHoveredItem(null)
+  }
+
+  const handleLinkClick = () => {
+    setIsNavigating(true)
+    // Safety unlock after 2 seconds
+    setTimeout(() => setIsNavigating(false), 2000)
+  }
+
+  const linkRow = (
+    <Link
+      ref={linkRef}
+      href={item.href}
+      onMouseEnter={() => isFlyout && setHoveredItem(item.href)}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleLinkClick}
+      className={cn(
+        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+        isActive && !onSubPage
+          ? 'bg-blue-100 text-blue-700 shadow-sm'
+          : isHighlighted
+            ? 'bg-yellow-100 text-slate-800 ring-1 ring-yellow-300'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+        isCollapsed && 'justify-center px-2'
+      )}
+    >
+      <div className="flex-shrink-0">
+        <NavIcon icon={item.icon} color={item.color} size="md" />
+      </div>
+      {!isCollapsed && <span className="truncate flex-1">{item.title}</span>}
+      {!isCollapsed && isFlyout && <ChevronRight className="h-3.5 w-3.5 text-slate-300 flex-shrink-0" />}
+    </Link>
+  )
+
+  // Portal-based flyout
+  const flyout =
+    isFlyout && (hoveredItem === item.href || isNavigating) && typeof window !== 'undefined'
+      ? createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: `${flyoutPosition.top}px`,
+            left: `${flyoutPosition.left}px`,
+            zIndex: 10000,
+          }}
+          className={cn(
+            'flex flex-col animate-in fade-in duration-200',
+            'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
+          )}
+          onMouseEnter={() => setHoveredItem(item.href)}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div className="px-3 pb-1.5 mb-1 border-b border-slate-100">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {item.title}
+            </span>
+          </div>
+          {item.href === '/accounts' && <RecentAccountsList isCollapsed={false} />}
+          {item.href === '/people' && <RecentPeopleList isCollapsed={false} />}
+          <Link
+            href={item.href}
+            onClick={handleLinkClick}
+            className="mt-1 mx-2 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-50 hover:text-blue-700 transition-colors"
+          >
+            <ChevronRight className="h-3 w-3" />
+            View all {item.title.toLowerCase()}
+          </Link>
+        </div>,
+        document.body
+      )
+      : null
+
+  const subPageIndicator =
+    !isCollapsed && onSubPage ? (
+      <div className="pl-9 pr-2 py-0.5">
+        <div className="border-l-2 border-blue-200 pl-3">
+          <div className="text-[10px] text-blue-500 font-medium truncate py-0.5">↳ current page</div>
+        </div>
+      </div>
+    ) : null
+
+  const wrapper = (
+    <div className="w-full">
+      <div className="relative w-full">
+        {linkRow}
+        {flyout}
+      </div>
+      {subPageIndicator}
+    </div>
+  )
+
+  if (isCollapsed) {
+    return (
+      <CustomTooltip content={item.title} side="right">
+        {wrapper}
+      </CustomTooltip>
+    )
+  }
+
+  return wrapper
 }
