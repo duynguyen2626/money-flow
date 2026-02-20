@@ -30,6 +30,7 @@ export function SidebarNavV2({
   const pathname = usePathname()
   const [internalCollapsed, setInternalCollapsed] = useState(externalCollapsed ?? false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
 
   const isCollapsed = externalCollapsed !== undefined ? externalCollapsed : internalCollapsed
 
@@ -58,6 +59,8 @@ export function SidebarNavV2({
     const linkRow = (
       <Link
         href={item.href}
+        onMouseEnter={() => isFlyout && setHoveredItem(item.href)}
+        onMouseLeave={() => setHoveredItem(null)}
         className={cn(
           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
           isActive && !onSubPage
@@ -78,15 +81,16 @@ export function SidebarNavV2({
       </Link>
     )
 
-    // Hover flyout panel — absolute positioning, always rendered in DOM
-    const flyout = isFlyout ? (
+    // Hover flyout panel — render only when this item is hovered
+    const flyout = isFlyout && hoveredItem === item.href ? (
       <div
         className={cn(
           'absolute right-0 top-0 -mr-2 translate-x-full z-[9999]',
-          'flex flex-col transition-opacity duration-200',
-          'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+          'flex flex-col animate-in fade-in duration-200',
           'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
         )}
+        onMouseEnter={() => setHoveredItem(item.href)}
+        onMouseLeave={() => setHoveredItem(null)}
       >
         <div className="px-3 pb-1.5 mb-1 border-b border-slate-100">
           <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -119,7 +123,7 @@ export function SidebarNavV2({
 
     const wrapper = (
       <div key={item.href} className="w-full">
-        <div className="relative group w-full">
+        <div className="relative w-full">
           {linkRow}
           {flyout}
         </div>
