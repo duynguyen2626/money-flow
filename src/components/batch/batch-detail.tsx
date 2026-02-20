@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BatchItemSlide } from './batch-item-slide'
 import { ItemsTable } from './items-table'
-import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles, Archive, ArchiveRestore, HandCoins, WalletCards, Plus, Copy, MoreVertical } from 'lucide-react'
+import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles, Archive, ArchiveRestore, HandCoins, WalletCards, Plus, Copy, MoreVertical, Wallet, Info } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction, updateBatchCycleAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
@@ -16,12 +16,12 @@ import { BatchSettingsDialog } from './batch-settings-dialog'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { formatCurrency } from '@/lib/account-utils'
+import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
 import { ConfirmSourceDialog } from './confirm-source-dialog'
 import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 import { LinkSheetDialog } from './link-sheet-dialog'
 import { BatchAIImportDialog } from './batch-ai-import-dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { deleteBatchItemsBulkAction } from '@/actions/batch.actions'
 
@@ -55,6 +55,7 @@ export function BatchDetail({
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
+    const totalAmount = batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0)
     const filteredBankMappings = useMemo(
         () => (bankMappings || []).filter((b: any) => !b.bank_type || b.bank_type === (batch.bank_type || 'VIB')),
         [bankMappings, batch.bank_type]
@@ -196,100 +197,82 @@ export function BatchDetail({
         <div className="space-y-6">
             {/* Context Navigation - Tabs removed (moved to parent) */}
 
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    {/* Compact Title with Cycle Navigation */}
-                    <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('prev')} disabled={updatingCycle} className="h-8 w-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                    {/* Cycle Navigation */}
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('prev')} disabled={updatingCycle} className="h-8 w-8 hover:bg-white hover:shadow-sm transition-all">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <h1 className="text-xl font-bold text-slate-900">{batch.name}</h1>
-                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('next')} disabled={updatingCycle} className="h-8 w-8">
+                        <div className="h-8 w-px bg-slate-200 mx-1" />
+                        <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('next')} disabled={updatingCycle} className="h-8 w-8 hover:bg-white hover:shadow-sm transition-all">
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
 
-                    {/* Compact Total Badge */}
-                    <span className="inline-flex items-center rounded-md bg-rose-100 px-3 py-1 text-base font-bold text-rose-700 border border-rose-200">
-                        Total: {new Intl.NumberFormat('en-US').format(batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0))}
-                    </span>
+                    <div>
+                        <div className="flex items-baseline gap-2">
+                            <h1 className="text-xl font-black text-slate-900 tracking-tight">{batch.name}</h1>
+                            <div className="flex flex-col">
+                                <span className="text-xl font-medium text-rose-600 tabular-nums">
+                                    {new Intl.NumberFormat('en-US').format(totalAmount)}
+                                </span>
+                                <span className="text-[10px] font-bold text-rose-400 uppercase tracking-tighter">
+                                    {formatShortVietnameseCurrency(totalAmount)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                            <div className="flex items-center gap-1.5 p-1 px-2 bg-slate-50 border border-slate-100 rounded-md">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">Source:</span>
+                                {sourceAccount ? (
+                                    <Link href={`/accounts/${sourceAccount.id}`} className="flex items-center gap-1.5">
+                                        {sourceAccount.image_url ? (
+                                            <img src={sourceAccount.image_url} alt="" className="w-4 h-4 rounded-none object-contain" />
+                                        ) : (
+                                            <div className="w-4 h-4 rounded-none bg-slate-900 flex items-center justify-center text-[8px] font-black text-white shrink-0 uppercase">
+                                                {sourceAccount.name?.[0]}
+                                            </div>
+                                        )}
+                                        <span className="text-[11px] font-bold text-slate-700 hover:text-blue-600 transition-colors">
+                                            {sourceAccount.name}
+                                        </span>
+                                    </Link>
+                                ) : <span className="text-[11px] font-bold text-slate-400">N/A</span>}
 
-                    {/* Sheet Link Icon */}
-                    {batch.display_link && (
-                        <a
-                            href={batch.display_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors text-blue-600"
-                            title={batch.display_name || "Open Sheet"}
-                        >
-                            <ExternalLink className="h-4 w-4" />
-                        </a>
-                    )}
-                    {!batch.display_link && (
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-blue-600"
-                            onClick={() => setLinkDialogOpen(true)}
-                            title="Link Sheet"
-                        >
-                            <ExternalLink className="h-4 w-4" />
-                        </Button>
-                    )}
+                                {batch.status === 'funded' && (
+                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 ml-1" />
+                                )}
+                            </div>
 
-                    {/* Batch Settings Icon */}
-                    <BatchSettingsDialog batch={batch} />
-
-                    {/* Source Account Info */}
-                    <div className="text-sm text-muted-foreground flex items-center gap-2 px-3 py-1 rounded-md bg-slate-50 border border-slate-200">
-                        <span className="font-medium">Source:</span>
-                        {sourceAccount ? (
-                            <Link href={`/accounts/${sourceAccount.id}`} className="text-blue-600 hover:underline font-medium">
-                                {sourceAccount.name}
-                            </Link>
-                        ) : 'N/A'}
-                        {batch.status === 'funded' && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                                Funded
-                            </span>
-                        )}
+                            {/* Sheet Link & Settings */}
+                            <div className="flex items-center gap-1">
+                                {batch.display_link ? (
+                                    <a
+                                        href={batch.display_link}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-all text-blue-600"
+                                        title={batch.display_name || "Open Sheet"}
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                ) : (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-7 w-7 text-slate-400"
+                                        onClick={() => setLinkDialogOpen(true)}
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                    </Button>
+                                )}
+                                <BatchSettingsDialog batch={batch} />
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div className="flex gap-1.5 items-center">
-                    {/* Step 1: Fund Button with Icon + Text */}
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    onClick={() => {
-                                        if (batch.status === 'funded') {
-                                            if (confirm('Fund more money for this batch? This will create a new transaction from the source account to the clearing pool.')) {
-                                                handleFund()
-                                            }
-                                        } else {
-                                            handleFund()
-                                        }
-                                    }}
-                                    disabled={funding || batch.batch_items.length === 0}
-                                    variant="secondary"
-                                    className={cn(
-                                        "gap-2 border-amber-200 text-amber-700 hover:bg-amber-50",
-                                        batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                                    )}
-                                >
-                                    {funding ? <Loader2 className="h-4 w-4 animate-spin" /> : <WalletCards className="h-4 w-4" />}
-                                    <span className="font-semibold">Step 1: Fund</span>
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-[280px]">
-                                <div>
-                                    <p className="text-xs">Moves money from source to "Batch Clearing". If already funded 10M but items total 12M, adds remaining 2M.</p>
-                                </div>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-
                     {/* Step 2: Match Real Source Button with Icon + Text */}
                     {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && (
                         <TooltipProvider>
@@ -299,9 +282,9 @@ export function BatchDetail({
                                         "flex items-center",
                                         batch.status === 'funded' ? '' : 'opacity-50'
                                     )}>
-                                        <ConfirmSourceDialog 
-                                            batchId={batch.id} 
-                                            accounts={accounts} 
+                                        <ConfirmSourceDialog
+                                            batchId={batch.id}
+                                            accounts={accounts}
                                             disabled={batch.status !== 'funded'}
                                         />
                                     </div>
