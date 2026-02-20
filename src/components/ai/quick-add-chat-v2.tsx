@@ -293,16 +293,16 @@ export function QuickAddChatV2({
 
                 {/* Chat Dialog */}
                 {open && (
-                    <div className="fixed bottom-20 right-4 z-[40] flex h-[600px] w-[400px] flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+                    <div className="fixed bottom-20 right-4 z-[40] flex h-[600px] w-[400px] flex-col overflow-hidden rounded-3xl border border-zinc-700 bg-zinc-900 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
                         {/* Header */}
-                        <div className="flex items-center justify-between border-b border-slate-100 bg-white/80 px-4 py-3 backdrop-blur-md">
+                        <div className="flex items-center justify-between border-b border-amber-500 bg-amber-400 px-4 py-3">
                             <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-600 text-white shadow-lg shadow-amber-500/30">
                                     <Sparkles className="h-5 w-5" />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-bold text-slate-800">AI Assistant</h2>
-                                    <p className="text-[10px] text-slate-400 font-medium">Powered by Groq + Gemini</p>
+                                    <h2 className="text-sm font-bold text-zinc-900">AI Assistant</h2>
+                                    <p className="text-[10px] text-amber-800 font-medium">Powered by Groq + Gemini</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
@@ -310,7 +310,7 @@ export function QuickAddChatV2({
                                     variant="ghost"
                                     size="icon"
                                     onClick={clearHistory}
-                                    className="h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                                    className="h-8 w-8 text-amber-800 hover:text-zinc-900 hover:bg-amber-300"
                                     title="Clear history"
                                 >
                                     <RefreshCcw className="h-4 w-4" />
@@ -319,7 +319,7 @@ export function QuickAddChatV2({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setOpen(false)}
-                                    className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                                    className="h-8 w-8 text-amber-800 hover:text-zinc-900 hover:bg-amber-300 transition-colors"
                                 >
                                     <X className="h-5 w-5" />
                                 </Button>
@@ -330,11 +330,11 @@ export function QuickAddChatV2({
                         <div className="flex-1 space-y-3 overflow-y-auto p-4">
                             {messages.length === 0 && (
                                 <div className="flex h-full flex-col items-center justify-center text-center">
-                                    <Sparkles className="mb-3 h-12 w-12 text-slate-300" />
-                                    <p className="text-sm font-semibold text-slate-600">
+                                    <Sparkles className="mb-3 h-12 w-12 text-zinc-600" />
+                                    <p className="text-sm font-semibold text-zinc-300">
                                         Xin chào! Tôi là AI Assistant
                                     </p>
-                                    <p className="text-xs text-slate-400">
+                                    <p className="text-xs text-zinc-500">
                                         Nhập giao dịch bằng tiếng Việt tự nhiên
                                     </p>
                                 </div>
@@ -349,7 +349,7 @@ export function QuickAddChatV2({
                                     )}
                                 >
                                     {msg.role === "assistant" && (
-                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400/20 text-amber-400">
                                             <Sparkles className="h-4 w-4" />
                                         </div>
                                     )}
@@ -358,7 +358,7 @@ export function QuickAddChatV2({
                                             "max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm",
                                             msg.role === "user"
                                                 ? "rounded-br-none bg-blue-600 text-white"
-                                                : "rounded-bl-none border border-slate-100 bg-white text-slate-700"
+                                                : "rounded-bl-none border border-zinc-700 bg-zinc-800 text-zinc-100"
                                         )}
                                     >
                                         <div className="whitespace-pre-wrap break-words leading-relaxed">
@@ -367,7 +367,7 @@ export function QuickAddChatV2({
                                         {msg.metadata && (
                                             <div className={cn(
                                                 "mt-2 flex items-center gap-2 text-[9px] font-medium uppercase tracking-wider",
-                                                msg.role === "user" ? "text-blue-200" : "text-slate-400"
+                                                msg.role === "user" ? "text-blue-200" : "text-zinc-400"
                                             )}>
                                                 <span className="flex items-center gap-1">
                                                     <Zap className="h-2.5 w-2.5" />
@@ -378,7 +378,7 @@ export function QuickAddChatV2({
                                                     {msg.metadata.tokens} tokens
                                                 </span>
                                                 {msg.metadata.provider && (
-                                                    <span className="rounded-full bg-slate-100 px-1.5 py-0.5">
+                                                    <span className="rounded-full bg-zinc-700 px-1.5 py-0.5">
                                                         {msg.metadata.provider}
                                                     </span>
                                                 )}
@@ -404,13 +404,13 @@ export function QuickAddChatV2({
                         </div>
 
                         {/* Input */}
-                        <div className="border-t border-slate-200 p-4">
+                        <div className="border-t border-zinc-700 bg-zinc-900 p-4">
                             <div className="flex gap-2">
                                 <Textarea
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     placeholder="Ví dụ: Ăn sáng 50k thẻ MSB"
-                                    className="min-h-[60px] resize-none"
+                                    className="min-h-[60px] resize-none bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-amber-400"
                                     disabled={isParsing || isCreating}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
