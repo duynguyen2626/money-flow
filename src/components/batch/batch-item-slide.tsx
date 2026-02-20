@@ -21,6 +21,7 @@ import { addBatchItemAction, updateBatchItemAction } from '@/actions/batch.actio
 import { toast } from 'sonner'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
+import { cn } from '@/lib/utils'
 
 const formSchema = z.object({
     receiver_name: z.string().min(1, 'Receiver name is required'),
