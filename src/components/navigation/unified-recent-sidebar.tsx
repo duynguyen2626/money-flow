@@ -44,18 +44,14 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
     fetchRecent()
   }, [])
 
-  // Combine and filter items
-  const allRecentItems = [
+  // Combine all items — search never filters, only highlights
+  const allRecentItems: RecentItemType[] = [
     ...recentAccounts.map(acc => ({ ...acc, type: 'account' as const })),
     ...recentPeople.map(person => ({ ...person, type: 'person' as const }))
-  ] as const
+  ]
 
-  // Filter by search query
-  const filteredItems = searchQuery
-    ? allRecentItems.filter(item => 
-        (item.name || '').toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : allRecentItems
+  // Always show all items; search query is only used for yellow highlight below
+  const filteredItems = allRecentItems
 
   if (isLoading || allRecentItems.length === 0) return null
 
@@ -73,14 +69,7 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
       )}
 
       <div className="space-y-0.5">
-        {filteredItems.length === 0 ? (
-          !isCollapsed && (
-            <div className="px-3 py-2 text-[10px] text-slate-400">
-              No matching items
-            </div>
-          )
-        ) : (
-          filteredItems.map(item => {
+        {filteredItems.map(item => {
             const href = item.type === 'account' ? `/accounts/${item.id}` : `/people/${item.id}`
             const isActive = pathname === href
             const label = item.name || 'Unknown'
@@ -157,8 +146,7 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
             }
 
             return content
-          })
-        )}
+          })}
       </div>
     </div>
   )

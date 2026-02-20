@@ -1,4 +1,24 @@
 {
+  "workbench.colorCustomizations": {
+    "titleBar.activeBackground": "#fdf6d8",
+    "titleBar.activeForeground": "#6b5900",
+    "titleBar.inactiveBackground": "#fdf0c0",
+    "titleBar.inactiveForeground": "#a08020",
+    "activityBar.background": "#fef9e7",
+    "activityBar.foreground": "#92770a",
+    "activityBar.activeBorder": "#d4a000",
+    "activityBar.inactiveForeground": "#b89a20",
+    "sideBar.background": "#fefce8",
+    "sideBarTitle.foreground": "#9a7700",
+    "statusBar.background": "#e8c000",
+    "statusBar.foreground": "#3a3000",
+    "statusBar.noFolderBackground": "#e8c000",
+    "statusBarItem.hoverBackground": "#d4a80044",
+    "editorGroupHeader.tabsBackground": "#fefce8",
+    "tab.activeBackground": "#ffffff",
+    "tab.inactiveBackground": "#fef9e7",
+    "tab.hoverBackground": "#fdf3c0"
+  },
   "deno.enablePaths": [
     "supabase/functions"
   ],
