@@ -1,23 +1,62 @@
 {
   "workbench.colorCustomizations": {
-    "titleBar.activeBackground": "#fdf6d8",
-    "titleBar.activeForeground": "#6b5900",
-    "titleBar.inactiveBackground": "#fdf0c0",
-    "titleBar.inactiveForeground": "#a08020",
-    "activityBar.background": "#fef9e7",
-    "activityBar.foreground": "#92770a",
+    "titleBar.activeBackground": "#f5ce42",
+    "titleBar.activeForeground": "#2a1a00",
+    "titleBar.inactiveBackground": "#f0c030",
+    "titleBar.inactiveForeground": "#7a5a00",
+    "titleBar.border": "#c8a000",
+
+    "activityBar.background": "#fef3c0",
+    "activityBar.foreground": "#4a3200",
     "activityBar.activeBorder": "#d4a000",
-    "activityBar.inactiveForeground": "#b89a20",
+    "activityBar.activeBackground": "#f5e070",
+    "activityBar.inactiveForeground": "#9a7820",
+    "activityBar.border": "#e8cc60",
+
     "sideBar.background": "#fefce8",
-    "sideBarTitle.foreground": "#9a7700",
-    "statusBar.background": "#e8c000",
-    "statusBar.foreground": "#3a3000",
-    "statusBar.noFolderBackground": "#e8c000",
-    "statusBarItem.hoverBackground": "#d4a80044",
-    "editorGroupHeader.tabsBackground": "#fefce8",
+    "sideBar.foreground": "#2a2000",
+    "sideBar.border": "#e8d060",
+    "sideBarTitle.foreground": "#5a3f00",
+    "sideBarTitle.background": "#fef0a8",
+    "sideBarSectionHeader.background": "#fef0a0",
+    "sideBarSectionHeader.foreground": "#4a3200",
+    "sideBarSectionHeader.border": "#e8cc60",
+
+    "statusBar.background": "#d4a000",
+    "statusBar.foreground": "#1a1000",
+    "statusBar.border": "#b08000",
+    "statusBar.debuggingBackground": "#c47800",
+    "statusBar.noFolderBackground": "#d4a000",
+    "statusBarItem.hoverBackground": "#c49000",
+
+    "editorGroupHeader.tabsBackground": "#fef9dc",
     "tab.activeBackground": "#ffffff",
-    "tab.inactiveBackground": "#fef9e7",
-    "tab.hoverBackground": "#fdf3c0"
+    "tab.activeBorderTop": "#d4a000",
+    "tab.inactiveBackground": "#fef4c0",
+    "tab.hoverBackground": "#fef0a0",
+    "tab.unfocusedActiveBorderTop": "#e8cc60",
+
+    "panel.background": "#fffef0",
+    "panel.border": "#e8d458",
+    "panelTitle.activeBorder": "#d4a000",
+    "panelTitle.activeForeground": "#4a3200",
+    "panelTitle.inactiveForeground": "#9a8030",
+
+    "secondarySideBar.background": "#ffffff",
+    "secondarySideBar.foreground": "#1a1a1a",
+    "secondarySideBar.border": "#e0ddd0",
+    "secondarySideBarTitle.background": "#f8f8f8",
+
+    "breadcrumb.background": "#fefce8",
+    "breadcrumb.foreground": "#7a6000",
+    "breadcrumb.activeSelectionForeground": "#3a2800",
+    "breadcrumbPicker.background": "#fefce8",
+
+    "focusBorder": "#d4a000",
+    "selection.background": "#f5e07066",
+
+    "editor.background": "#ffffff",
+    "editorPane.background": "#ffffff"
   },
   "deno.enablePaths": [
     "supabase/functions"
