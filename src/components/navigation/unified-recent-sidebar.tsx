@@ -45,10 +45,10 @@ export function UnifiedRecentSidebar({ isCollapsed, searchQuery = '' }: UnifiedR
   }, [])
 
   // Combine all items — search never filters, only highlights
-  const allRecentItems: RecentItemType[] = [
+  const allRecentItems = [
     ...recentAccounts.map(acc => ({ ...acc, type: 'account' as const })),
     ...recentPeople.map(person => ({ ...person, type: 'person' as const }))
-  ]
+  ] satisfies RecentItemType[]
 
   // Always show all items; search query is only used for yellow highlight below
   const filteredItems = allRecentItems

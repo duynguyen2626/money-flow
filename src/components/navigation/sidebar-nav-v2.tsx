@@ -78,11 +78,11 @@ export function SidebarNavV2({
       </Link>
     )
 
-    // Hover flyout panel — appears to the right on hover
+    // Hover flyout panel — absolute, escapes via overflow-x-visible on scroll container
     const flyout = isFlyout ? (
       <div
         className={cn(
-          'absolute left-full top-0 z-50 ml-2',
+          'absolute left-full top-0 z-[999] ml-2',
           'hidden group-hover:flex flex-col',
           'w-52 rounded-xl border border-slate-200 bg-white shadow-xl py-2 px-1'
         )}
