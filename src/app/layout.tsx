@@ -4,7 +4,7 @@ import NextTopLoader from 'nextjs-toploader';
 
 import './globals.css'
 import { TooltipProvider } from '@/components/ui/custom-tooltip'
-import { AppLayout } from '@/components/moneyflow/app-layout'
+import { AppLayoutV2 as AppLayout } from '@/components/moneyflow/app-layout-v2'
 import { Toaster } from '@/components/ui/sonner'
 import { BreadcrumbProvider } from '@/context/breadcrumb-context'
 
