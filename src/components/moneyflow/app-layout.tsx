@@ -302,8 +302,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {renderNavItem(navItems[0])}
         </div>
 
-        {/* Navigation Section: Recent */}
-        {recentItems.length > 0 && (
+        {/* Navigation Section: Recent - Using Unified Recent Sidebar */}
+        {recentItems.length > 0 && !sidebarCollapsed && (
           <div className="mb-6 space-y-2">
             {!sidebarCollapsed && (
               <div className="px-3 mb-1">
