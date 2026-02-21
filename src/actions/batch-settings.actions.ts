@@ -9,6 +9,7 @@ export async function updateBatchSettingsAction(
         sheet_url?: string | null
         webhook_url?: string | null
         image_url?: string | null
+        cutoff_day?: number | null
     }
 ) {
     try {

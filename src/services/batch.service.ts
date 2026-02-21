@@ -76,12 +76,62 @@ export async function updateBatch(id: string, batch: Database['public']['Tables'
 
 export async function deleteBatch(id: string) {
     const supabase: any = createClient()
+
+    // 1. Fetch batch to get source account for balance recalculation
+    const { data: batch } = await supabase
+        .from('batches')
+        .select('source_account_id, funding_transaction_id')
+        .eq('id', id)
+        .single()
+
+    // 2. Delete linked transactions (funding and matches)
+    // Funding transaction is directly linked
+    const txnIdsToDelete = []
+    if (batch?.funding_transaction_id) txnIdsToDelete.push(batch.funding_transaction_id)
+
+    // Also delete any transaction that has this batch_id in metadata
+    const { data: moreTxns } = await supabase
+        .from('transactions')
+        .select('id, account_id, target_account_id')
+        .contains('metadata', { batch_id: id })
+
+    if (moreTxns) {
+        moreTxns.forEach((t: any) => {
+            if (!txnIdsToDelete.includes(t.id)) txnIdsToDelete.push(t.id)
+        })
+    }
+
+    if (txnIdsToDelete.length > 0) {
+        await supabase.from('transactions').delete().in('id', txnIdsToDelete)
+    }
+
+    // 3. Delete the batch (Cascade will handle items)
     const { error } = await supabase
         .from('batches')
         .delete()
         .eq('id', id)
 
     if (error) throw error
+
+    // 4. Recalculate balances
+    if (batch?.source_account_id) {
+        const { recalculateBalance } = await import('./account.service')
+        await recalculateBalance(batch.source_account_id)
+        await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
+    }
+
+    // Recalculate balances for all affected accounts in moreTxns
+    if (moreTxns) {
+        const { recalculateBalance } = await import('./account.service')
+        const accountIds = new Set<string>()
+        moreTxns.forEach((t: any) => {
+            if (t.account_id) accountIds.add(t.account_id)
+            if (t.target_account_id) accountIds.add(t.target_account_id)
+        })
+        for (const accountId of accountIds) {
+            await recalculateBalance(accountId)
+        }
+    }
 }
 
 export async function addBatchItem(item: Database['public']['Tables']['batch_items']['Insert']) {

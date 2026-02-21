@@ -56,10 +56,9 @@ export function MonthTabs({ batches, bankType, onCreateMonth, value, onValueChan
     }
 
     return (
-        <div className="border-b border-slate-200 bg-white sticky top-0 z-10">
-            <div className="container mx-auto px-4">
-                {/* Horizontal scrollable tabs */}
-                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-3">
+        <div className="bg-white border-b border-slate-200/60 sticky top-0 z-10 backdrop-blur-md bg-white/80">
+            <div className="container mx-auto px-6">
+                <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide py-4">
                     {sortedMonths.map((month) => {
                         const monthBatches = monthGroups[month]
                         const stats = getMonthStats(monthBatches)
@@ -70,39 +69,65 @@ export function MonthTabs({ batches, bankType, onCreateMonth, value, onValueChan
                                 key={month}
                                 onClick={() => onValueChange?.(month)}
                                 className={cn(
-                                    'flex-shrink-0 px-4 py-2.5 rounded-lg font-medium transition-all duration-200',
-                                    'hover:bg-slate-50 active:scale-95',
+                                    'flex-shrink-0 relative group px-5 py-3 rounded-xl transition-all duration-300',
                                     isActive
-                                        ? 'bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200'
-                                        : 'text-slate-600 hover:text-slate-900'
+                                        ? 'bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/80'
+                                        : 'hover:bg-slate-50'
                                 )}
                             >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold">
-                                        {formatMonth(month)}
-                                    </span>
-                                    <span className={cn(
-                                        'text-xs px-2 py-0.5 rounded-full',
-                                        isActive
-                                            ? 'bg-indigo-100 text-indigo-700'
-                                            : 'bg-slate-100 text-slate-600'
-                                    )}>
-                                        {stats.confirmedItems}/{stats.totalItems}
-                                    </span>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex flex-col items-start">
+                                        <span className={cn(
+                                            "text-[10px] font-black uppercase tracking-widest",
+                                            isActive ? (bankType === 'MBB' ? "text-blue-500" : "text-purple-500") : "text-slate-400"
+                                        )}>
+                                            {month.split('-')[0]}
+                                        </span>
+                                        <span className={cn(
+                                            "text-sm font-bold",
+                                            isActive ? "text-slate-900" : "text-slate-600 group-hover:text-slate-900"
+                                        )}>
+                                            {formatMonth(month).split(' ')[0]}
+                                        </span>
+                                    </div>
+
+                                    <div className={cn(
+                                        "h-8 w-px bg-slate-100",
+                                        isActive && "bg-slate-200"
+                                    )} />
+
+                                    <div className="flex flex-col items-end">
+                                        <div className={cn(
+                                            "text-xs font-black",
+                                            isActive ? "text-slate-900" : "text-slate-400"
+                                        )}>
+                                            {stats.confirmedItems}
+                                            <span className="text-slate-300 mx-0.5">/</span>
+                                            {stats.totalItems}
+                                        </div>
+                                        <div className="text-[10px] font-medium text-slate-400">Items</div>
+                                    </div>
                                 </div>
+
+                                {isActive && (
+                                    <div className={cn(
+                                        "absolute bottom-0 left-6 right-6 h-0.5 rounded-full",
+                                        bankType === 'MBB' ? "bg-blue-600" : "bg-purple-600"
+                                    )} />
+                                )}
                             </button>
                         )
                     })}
 
-                    {/* Create New Month Button */}
+                    <div className="h-10 w-px bg-slate-200 mx-2" />
+
                     <Button
-                        variant="outline"
-                        size="sm"
+                        variant="ghost"
                         onClick={onCreateMonth}
-                        className="flex-shrink-0 border-dashed border-2 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700"
+                        className="flex-shrink-0 h-14 px-6 rounded-xl border border-dashed border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-500 hover:text-slate-900 gap-2 font-bold transition-all"
                     >
-                        <Plus className="h-4 w-4 mr-1" />
-                        New Month
+                        <Plus className="h-4 w-4" />
+                        <span>Add Month</span>
                     </Button>
                 </div>
             </div>

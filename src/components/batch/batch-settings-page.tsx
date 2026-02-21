@@ -18,12 +18,14 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
     const [vibImageUrl, setVibImageUrl] = useState('')
     const [mbbWebhookUrl, setMbbWebhookUrl] = useState('')
     const [vibWebhookUrl, setVibWebhookUrl] = useState('')
+    const [mbbCutoffDay, setMbbCutoffDay] = useState<number>(15)
+    const [vibCutoffDay, setVibCutoffDay] = useState<number>(15)
     const [loading, setLoading] = useState(false)
     const [initialLoading, setInitialLoading] = useState(true)
 
     // Track original values to detect changes
-    const [originalMBB, setOriginalMBB] = useState({ sheet: '', image: '', webhook: '' })
-    const [originalVIB, setOriginalVIB] = useState({ sheet: '', image: '', webhook: '' })
+    const [originalMBB, setOriginalMBB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15 })
+    const [originalVIB, setOriginalVIB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15 })
 
     // Load settings on mount
     useEffect(() => {
@@ -42,10 +44,12 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 setMbbSheetUrl(mbbData.sheet_url || '')
                 setMbbImageUrl(mbbData.image_url || '')
                 setMbbWebhookUrl(mbbData.webhook_url || '')
+                setMbbCutoffDay(mbbData.cutoff_day || 15)
                 setOriginalMBB({
                     sheet: mbbData.sheet_url || '',
                     image: mbbData.image_url || '',
-                    webhook: mbbData.webhook_url || ''
+                    webhook: mbbData.webhook_url || '',
+                    cutoff: mbbData.cutoff_day || 15
                 })
             }
 
@@ -54,10 +58,12 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 setVibSheetUrl(vibData.sheet_url || '')
                 setVibImageUrl(vibData.image_url || '')
                 setVibWebhookUrl(vibData.webhook_url || '')
+                setVibCutoffDay(vibData.cutoff_day || 15)
                 setOriginalVIB({
                     sheet: vibData.sheet_url || '',
                     image: vibData.image_url || '',
-                    webhook: vibData.webhook_url || ''
+                    webhook: vibData.webhook_url || '',
+                    cutoff: vibData.cutoff_day || 15
                 })
             }
         } catch (error) {
@@ -74,7 +80,8 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
             const result = await updateBatchSettingsAction('MBB', {
                 sheet_url: mbbSheetUrl || null,
                 webhook_url: mbbWebhookUrl || null,
-                image_url: mbbImageUrl || null
+                image_url: mbbImageUrl || null,
+                cutoff_day: mbbCutoffDay
             })
 
             if (result.success) {
@@ -96,7 +103,8 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
             const result = await updateBatchSettingsAction('VIB', {
                 sheet_url: vibSheetUrl || null,
                 webhook_url: vibWebhookUrl || null,
-                image_url: vibImageUrl || null
+                image_url: vibImageUrl || null,
+                cutoff_day: vibCutoffDay
             })
 
             if (result.success) {
@@ -116,12 +124,14 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
     const mbbHasChanges =
         mbbSheetUrl !== originalMBB.sheet ||
         mbbImageUrl !== originalMBB.image ||
-        mbbWebhookUrl !== originalMBB.webhook
+        mbbWebhookUrl !== originalMBB.webhook ||
+        mbbCutoffDay !== originalMBB.cutoff
 
     const vibHasChanges =
         vibSheetUrl !== originalVIB.sheet ||
         vibImageUrl !== originalVIB.image ||
-        vibWebhookUrl !== originalVIB.webhook
+        vibWebhookUrl !== originalVIB.webhook ||
+        vibCutoffDay !== originalVIB.cutoff
 
     if (initialLoading) {
         return (
@@ -203,6 +213,22 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                                     </p>
                                 </div>
 
+                                <div className="space-y-2">
+                                    <Label htmlFor="mbb-cutoff">Cutoff Day</Label>
+                                    <Input
+                                        id="mbb-cutoff"
+                                        type="number"
+                                        placeholder="15"
+                                        value={mbbCutoffDay === 0 ? '' : mbbCutoffDay}
+                                        onChange={(e) => setMbbCutoffDay(Number(e.target.value))}
+                                        min={1}
+                                        max={31}
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                        💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
+                                    </p>
+                                </div>
+
                                 <Button onClick={handleSaveMBB} disabled={loading || !mbbHasChanges} className="w-full">
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     {!loading && <Save className="mr-2 h-4 w-4" />}
@@ -257,6 +283,22 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                                     />
                                     <p className="text-xs text-slate-500">
                                         💡 Paste image URL for VIB icon (displayed on landing page)
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="vib-cutoff">Cutoff Day</Label>
+                                    <Input
+                                        id="vib-cutoff"
+                                        type="number"
+                                        placeholder="15"
+                                        value={vibCutoffDay === 0 ? '' : vibCutoffDay}
+                                        onChange={(e) => setVibCutoffDay(Number(e.target.value))}
+                                        min={1}
+                                        max={31}
+                                    />
+                                    <p className="text-xs text-slate-500">
+                                        💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
                                     </p>
                                 </div>
 
