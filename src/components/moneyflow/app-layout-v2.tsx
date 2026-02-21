@@ -73,10 +73,15 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
       <aside
         suppressHydrationWarning
         className={cn(
-          "flex-none h-full flex-col border-r border-slate-200 bg-card py-8 transition-all duration-300 z-20 shadow-sm overflow-y-auto custom-scrollbar hidden md:flex",
-          sidebarCollapsed ? "w-16 px-1" : "w-64 px-6"
+          "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
+          sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
+        {/* Inner scroll container — overflow-y-auto is here, not on aside */}
+        <div className={cn(
+          "flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-8",
+          sidebarCollapsed ? "px-1" : "px-6"
+        )}>
         {/* Header / Logo Area */}
         <div suppressHydrationWarning className={cn(
           "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
@@ -114,6 +119,7 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           )}
+        </div>
         </div>
       </aside>
 
