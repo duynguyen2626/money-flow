@@ -9,21 +9,32 @@ import { BatchPageClientV2 } from '@/components/batch/batch-page-client-v2'
 export default async function VIBBatchPage({
     searchParams
 }: {
-    searchParams: Promise<{ month?: string }>
+    searchParams: Promise<{ month?: string, period?: string }>
 }) {
     const { month } = await searchParams
     const bankType = 'VIB'
 
-    const { getBatchesByType, getBatchById } = await import('@/services/batch.service')
+    const { getBatchesByType, getBatchById, getBatchSettings } = await import('@/services/batch.service')
     const batches = await getBatchesByType(bankType)
+    const settings = await getBatchSettings(bankType)
+    const cutoffDay = settings?.cutoff_day || 15
+
+    const { period = 'before' } = await searchParams
 
     let activeBatch = null
     const visibleBatches = batches.filter((b: any) => !b.is_archived)
 
     let targetBatchId = null
     if (month) {
-        const found = batches.find((b: any) => b.month_year === month)
-        if (found) targetBatchId = found.id
+        // Try to find batch for the selected month AND period
+        const found = batches.find((b: any) => b.month_year === month && (b.period === period || (!b.period && period === 'before')))
+        if (found) {
+            targetBatchId = found.id
+        } else {
+            // Fallback to any batch in that month
+            const anyInMonth = batches.find((b: any) => b.month_year === month)
+            if (anyInMonth) targetBatchId = anyInMonth.id
+        }
     } else if (visibleBatches.length > 0) {
         const sorted = [...visibleBatches].sort((a: any, b: any) => {
             const tagA = a.month_year || ''
@@ -52,6 +63,7 @@ export default async function VIBBatchPage({
             bankType={bankType}
             activeBatch={activeBatch}
             activeInstallmentAccounts={activeInstallmentAccounts}
+            cutoffDay={cutoffDay}
         />
     )
 }
