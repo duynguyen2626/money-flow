@@ -334,6 +334,11 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     return false;
   }
 
+  const metaData = (existing as any).metadata as Record<string, unknown> | null;
+  if (metaData?.type === 'batch_funding' || metaData?.type === 'batch_funding_additional') {
+    throw new Error(`BATCH_LOCKED:${metaData.batch_id}`);
+  }
+
   // GUARD / CASCADE: Check for linked transactions
   // User Request: If deleting one of a pair, delete/void the other.
 
@@ -682,6 +687,11 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   if (existingError || !existingData) {
     console.error('Failed to fetch transaction before update:', existingError);
     return false;
+  }
+
+  const metaData = (existingData as any).metadata as Record<string, unknown> | null;
+  if (metaData?.type === 'batch_funding' || metaData?.type === 'batch_funding_additional') {
+    throw new Error(`BATCH_LOCKED:${metaData.batch_id}`);
   }
 
   const tag = normalizeMonthTag(input.tag) ?? input.tag;

@@ -32,8 +32,19 @@ export async function generateMetadata({
   if (!account) return { title: 'Account Not Found' }
 
   const tabName = tab === 'cashback' ? 'Cashback' : 'Transactions'
+  const icons = account.image_url ? {
+    icon: [
+      { url: account.image_url, type: 'image/webp' },
+      { url: '/favicon.svg?v=6', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: account.image_url, type: 'image/webp' },
+    ],
+  } : undefined
+
   return {
     title: `${account.name} ${tabName}`,
+    icons,
   }
 }
 

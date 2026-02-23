@@ -24,7 +24,10 @@ import {
     Loader2,
     Sparkles,
     ShieldCheck,
-    Target
+    Target,
+    ArrowUpRight,
+    ArrowDownRight,
+    RefreshCw
 } from 'lucide-react'
 import { cn, formatMoneyVND } from '@/lib/utils'
 import { Account, Category, Transaction } from '@/types/moneyflow.types'
@@ -103,6 +106,7 @@ export function AccountDetailHeaderV2({
     const [isSlideOpen, setIsSlideOpen] = React.useState(false)
     const [dynamicCashbackStats, setDynamicCashbackStats] = React.useState<AccountSpendingStats | null>(cashbackStats)
     const [isCashbackLoading, setIsCashbackLoading] = React.useState(false)
+    const [isSyncing, setIsSyncing] = React.useState(false)
 
     // Sync selected year with URL
     React.useEffect(() => {
@@ -283,10 +287,8 @@ export function AccountDetailHeaderV2({
                 }
             }
         } else {
-            const config = typeof account.cashback_config === 'string'
-                ? JSON.parse(account.cashback_config)
-                : account.cashback_config;
-            const rawDueDay = account.credit_card_info?.payment_due_day || config?.dueDate || config?.program?.dueDate;
+            const config = normalizeCashbackConfig(account.cashback_config, account);
+            const rawDueDay = account.due_date || account.credit_card_info?.payment_due_day || config?.dueDate;
 
             if (rawDueDay) {
                 const d = new Date();
@@ -1330,6 +1332,22 @@ export function AccountDetailHeaderV2({
 
             {/* Tools Area */}
             <div className="flex flex-col justify-center gap-2 min-w-0 md:min-w-[120px] border-l border-slate-100 pl-6 ml-2">
+                <button
+                    onClick={() => {
+                        setIsSyncing(true);
+                        router.refresh();
+                        setTimeout(() => {
+                            setIsSyncing(false);
+                            toast.success("Database synced successfully");
+                        }, 800);
+                    }}
+                    disabled={isSyncing}
+                    className="flex items-center justify-center gap-1.5 w-full py-1 bg-white border border-slate-200 text-slate-500 rounded hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 transition-all text-[8px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-wait"
+                >
+                    {isSyncing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <RefreshCw className="w-2.5 h-2.5" />}
+                    {isSyncing ? "Syncing..." : "Sync DB"}
+                </button>
+
                 <button
                     onClick={() => setIsSlideOpen(true)}
                     className="flex items-center justify-center gap-1.5 w-full py-1 bg-white border border-slate-200 text-slate-500 rounded hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all text-[8px] font-black uppercase tracking-widest"

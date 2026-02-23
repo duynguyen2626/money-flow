@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { X, Loader2, Plus, Edit } from 'lucide-react'
+import { X, Loader2, Plus, Edit, Info } from 'lucide-react'
 import { AccountSlideV2 } from '@/components/accounts/v2/AccountSlideV2'
 import { Button } from '@/components/ui/button'
 import {
@@ -45,6 +45,7 @@ interface BatchItemSlideProps {
     bankMappings?: any[]
     accounts: any[]
     batch?: any
+    cutoffDay?: number
     onSuccess?: () => void
 }
 
@@ -57,6 +58,7 @@ export function BatchItemSlide({
     bankMappings = [],
     accounts,
     batch,
+    cutoffDay = 15,
     onSuccess,
 }: BatchItemSlideProps) {
     const [loading, setLoading] = useState(false)
@@ -129,31 +131,29 @@ export function BatchItemSlide({
             items: [{ value: 'none', label: 'None', description: 'Manual entry' }]
         },
         {
-            label: `Recommended (Cutoff: ${batch?.period === 'after' ? 'After 15' : 'Before 15'})`,
+            label: `Recommended (Cutoff: ${cutoffDay})`,
             items: accounts
                 .filter((a: any) => {
                     if (a.type === 'debt' || a.type === 'loan' || a.type === 'savings') return false;
-                    // If batch is provided, filter based on statement_day or due_date
+                    // If batch is provided, filter based on due_date primarily, then statement_day
                     if (batch?.period) {
                         try {
                             const config = a.cashback_config ? JSON.parse(a.cashback_config) : null;
-                            const statementDay = Number(a.statement_day || config?.program?.statementDay || 0);
+                            const effectiveDay = Number(a.due_date || a.statement_day || config?.program?.statementDay || 0);
 
-                            if (statementDay > 0) {
-                                // If statement day <= 15, assume it's in the "before" cutoff primarily
-                                const isBefore = statementDay <= 15;
+                            if (effectiveDay > 0) {
+                                // If effective day <= cutoffDay, it belongs to "before"
+                                const isBefore = effectiveDay <= cutoffDay;
                                 return batch.period === 'before' ? isBefore : !isBefore;
                             }
-                        } catch (e) {
-                            // Fallback if JSON parse fails
-                        }
+                        } catch (e) { }
                     }
                     return false;
                 })
                 .map((a: any) => ({
                     value: a.id,
                     label: a.name,
-                    description: a.account_number || 'No account number',
+                    description: `${a.due_date ? `Due: ${a.due_date}` : (a.statement_day ? `Stmt: ${a.statement_day}` : 'No date')}`,
                     icon: a.image_url ? (
                         <img src={a.image_url} alt="" className="w-4 h-4 rounded-none object-contain" />
                     ) : (
@@ -172,22 +172,21 @@ export function BatchItemSlide({
                     if (batch?.period) {
                         try {
                             const config = a.cashback_config ? JSON.parse(a.cashback_config) : null;
-                            const statementDay = Number(a.statement_day || config?.program?.statementDay || 0);
+                            const effectiveDay = Number(a.due_date || a.statement_day || config?.program?.statementDay || 0);
 
-                            if (statementDay > 0) {
-                                const isBefore = statementDay <= 15;
+                            if (effectiveDay > 0) {
+                                const isBefore = effectiveDay <= cutoffDay;
                                 // Return true if it does NOT match the current period (it belongs in "Other")
                                 return batch.period === 'before' ? !isBefore : isBefore;
                             }
-                        } catch (e) {
-                        }
+                        } catch (e) { }
                     }
                     return true;
                 })
                 .map((a: any) => ({
                     value: a.id,
                     label: a.name,
-                    description: a.account_number || 'No account number',
+                    description: `${a.due_date ? `Due: ${a.due_date}` : (a.statement_day ? `Stmt: ${a.statement_day}` : 'No date')}`,
                     icon: a.image_url ? (
                         <img src={a.image_url} alt="" className="w-4 h-4 rounded-none object-contain" />
                     ) : (
@@ -216,24 +215,111 @@ export function BatchItemSlide({
             if (target.account_number) form.setValue('bank_number', target.account_number)
             if (target.name) {
                 form.setValue('card_name', target.name)
-                const date = new Date()
-                const month = date.toLocaleString('en-US', { month: 'short' })
-                const year = date.getFullYear().toString().slice(-2)
-                form.setValue('note', `${target.name} ${month}${year}`)
+                form.setValue('note', target.name)
             }
         }
     }, [accounts, form, targetAccountId])
 
-    const bankOptions = bankMappings.map((b) => ({
-        label: `${b.bank_code} - ${b.bank_name}`,
-        value: b.bank_code,
-    }))
+    // Grouping for Account Number Suggestions
+    const accountNoItems = useMemo(() => {
+        const uniqueNos = new Map<string, any>()
+        accounts.forEach(a => {
+            if (a.account_number && !uniqueNos.has(a.account_number)) {
+                uniqueNos.set(a.account_number, {
+                    value: a.account_number,
+                    label: a.account_number,
+                    description: `${a.bank_name || ''} - ${a.name || ''}`,
+                    receiver_name: a.receiver_name
+                })
+            }
+        })
+        return Array.from(uniqueNos.values())
+    }, [accounts])
 
     // Convert to Combobox items format
-    const bankItems = bankMappings.map((b) => ({
-        label: `${b.bank_code} - ${b.bank_name}`,
-        value: b.bank_code,
-    }))
+    // Grouping for Bank Mappings (Mapped vs All)
+    const bankGroups: ComboboxGroup[] = useMemo(() => {
+        if (!bankMappings) return []
+
+        // Deduplicate bankMappings by bank_code to avoid unique key errors in Combobox
+        const uniqueBankMappings = Array.from(
+            bankMappings.reduce((map, bank) => {
+                const bankCode = (bank as any).bank_code
+                if (bankCode && !map.has(bankCode)) {
+                    map.set(bankCode, bank)
+                }
+                return map
+            }, new Map<string, any>()).values()
+        )
+
+        const targetAccountId = form.watch('target_account_id')
+        const selectedAccount = accounts.find(a => a.id === targetAccountId)
+
+        let recommendedCodes: string[] = []
+        if (selectedAccount?.bank_name) {
+            const search = selectedAccount.bank_name.toLowerCase()
+            recommendedCodes = uniqueBankMappings
+                .filter(b =>
+                    (b as any).bank_code.toLowerCase().includes(search) ||
+                    (b as any).short_name?.toLowerCase().includes(search) ||
+                    (b as any).bank_name.toLowerCase().includes(search)
+                )
+                .map(b => (b as any).bank_code)
+        }
+
+        const mappedBanks = uniqueBankMappings.filter(b => recommendedCodes.includes((b as any).bank_code))
+        const otherBanks = uniqueBankMappings.filter(b => !recommendedCodes.includes((b as any).bank_code))
+
+        const groups: ComboboxGroup[] = []
+
+        if (mappedBanks.length > 0) {
+            groups.push({
+                label: "Mapped Bank",
+                items: mappedBanks.map(b => ({
+                    label: `${(b as any).bank_code} - ${(b as any).bank_name}`,
+                    value: (b as any).bank_code,
+                    description: (b as any).short_name,
+                    icon: (
+                        <div className="w-6 h-4 rounded-sm bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[7px] font-black text-indigo-600 uppercase">
+                            {(b as any).bank_code}
+                        </div>
+                    )
+                }))
+            })
+        }
+
+        groups.push({
+            label: "All bank",
+            items: otherBanks.map(b => ({
+                label: `${(b as any).bank_code} - ${(b as any).bank_name}`,
+                value: (b as any).bank_code,
+                description: (b as any).short_name,
+                icon: (
+                    <div className="w-6 h-4 rounded-sm bg-slate-50 border border-slate-100 flex items-center justify-center text-[7px] font-black text-slate-400 uppercase">
+                        {(b as any).bank_code}
+                    </div>
+                )
+            }))
+        })
+
+        return groups
+    }, [bankMappings, accounts, form.watch('target_account_id')])
+
+    // Grouping for Receiver Suggestions
+    const receiverItems = useMemo(() => {
+        const uniqueReceivers = new Map<string, any>()
+        accounts.forEach(a => {
+            if (a.receiver_name && !uniqueReceivers.has(a.receiver_name)) {
+                uniqueReceivers.set(a.receiver_name, {
+                    value: a.receiver_name,
+                    label: a.receiver_name,
+                    description: `${a.bank_name || ''} ${a.account_number || ''}`,
+                    bank_number: a.account_number
+                })
+            }
+        })
+        return Array.from(uniqueReceivers.values())
+    }, [accounts])
 
     async function onSubmit(values: FormValues) {
         setLoading(true)
@@ -325,135 +411,190 @@ export function BatchItemSlide({
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                            {/* Target Account */}
-                            <FormField
-                                control={form.control}
-                                name="target_account_id"
-                                render={({ field }) => {
-                                    const selectedAccount = accounts.find(a => a.id === field.value)
-                                    return (
-                                        <FormItem className="space-y-1.5">
-                                            <div className="flex items-center justify-between">
-                                                <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                    Target Internal Account
+                            {/* SECTION 1: Internal Connection */}
+                            <div className="space-y-4 pt-2">
+                                <div className="flex items-center gap-2 px-1">
+                                    <div className="h-px flex-1 bg-slate-100" />
+                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Bank Connection</span>
+                                    <div className="h-px flex-1 bg-slate-100" />
+                                </div>
+
+                                <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/20 space-y-6 shadow-sm">
+                                    <FormField
+                                        control={form.control}
+                                        name="target_account_id"
+                                        render={({ field }) => {
+                                            const selectedAccount = accounts.find(a => a.id === field.value)
+                                            const effectiveDay = selectedAccount ? Number(selectedAccount.due_date || selectedAccount.statement_day || 0) : 0;
+                                            const isWrongPeriod = effectiveDay > 0 && (
+                                                batch?.period === 'before' ? effectiveDay > cutoffDay : effectiveDay <= cutoffDay
+                                            );
+
+                                            return (
+                                                <FormItem className="space-y-1.5">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                            Target Internal Account
+                                                        </FormLabel>
+                                                        {field.value && field.value !== 'none' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedAccountForEdit(selectedAccount)
+                                                                    setIsAccountSlideOpen(true)
+                                                                }}
+                                                                className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                                            >
+                                                                <Edit className="h-3 w-3" /> EDIT INFO
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <FormControl>
+                                                        <div className="space-y-2">
+                                                            <Combobox
+                                                                groups={accountGroups}
+                                                                value={field.value || 'none'}
+                                                                onValueChange={(val) => field.onChange(val ?? 'none')}
+                                                                placeholder="Select internal account"
+                                                                inputPlaceholder="Search accounts..."
+                                                                className={cn(
+                                                                    "h-12 border-slate-200 bg-white shadow-sm",
+                                                                    isWrongPeriod ? "border-amber-200 bg-amber-50/20" : selectedAccount ? "border-emerald-100 bg-emerald-50/20" : ""
+                                                                )}
+                                                            />
+                                                            {isWrongPeriod && (
+                                                                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 items-start animate-in fade-in slide-in-from-top-1">
+                                                                    <div className="p-1 bg-amber-100 rounded-full">
+                                                                        <Info className="h-3 w-3 text-amber-600" />
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <p className="text-[11px] leading-tight font-medium text-amber-800">
+                                                                            This account has a {selectedAccount.due_date ? 'due date' : 'statement day'} of <span className="font-black">{effectiveDay}</span>, which belongs to the <span className="font-black italic uppercase">{batch?.period === 'before' ? 'After' : 'Before'} {cutoffDay}</span> cutoff.
+                                                                        </p>
+                                                                        <p className="text-[10px] text-amber-600 mt-1 font-bold">
+                                                                            Consider moving this item to the {batch?.period === 'before' ? 'After' : 'Before'} tab.
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )
+                                        }}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="bank_code"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-1.5">
+                                                <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                                                    Bank Mapping
                                                 </FormLabel>
-                                                {field.value && field.value !== 'none' && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedAccountForEdit(selectedAccount)
-                                                            setIsAccountSlideOpen(true)
-                                                        }}
-                                                        className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
-                                                    >
-                                                        <Edit className="h-3 w-3" /> EDIT INFO
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <FormControl>
-                                                <Combobox
-                                                    groups={accountGroups}
-                                                    value={field.value || 'none'}
-                                                    onValueChange={(val) => field.onChange(val ?? 'none')}
-                                                    placeholder="Select internal account"
-                                                    inputPlaceholder="Search accounts..."
-                                                    className="h-11 shadow-sm"
-                                                    triggerClassName={selectedAccount ? "border-emerald-100 bg-emerald-50/20" : ""}
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )
-                                }}
-                            />
-
-                            <div className="grid grid-cols-1 gap-6 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                                {/* Receiver Name */}
-                                <FormField
-                                    control={form.control}
-                                    name="receiver_name"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1.5">
-                                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Receiver Name
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="e.g., John Doe"
-                                                    {...field}
-                                                    className="h-11 bg-white border-slate-200"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                {/* Card Name */}
-                                <FormField
-                                    control={form.control}
-                                    name="card_name"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1.5">
-                                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-slate-400">
-                                                Card Name (Legacy Label)
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="e.g., Diamond, Platinum"
-                                                    {...field}
-                                                    className="h-11 bg-white border-slate-200"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                                <FormControl>
+                                                    <Combobox
+                                                        groups={bankGroups}
+                                                        value={field.value || ''}
+                                                        onValueChange={field.onChange}
+                                                        placeholder="Bank"
+                                                        className="h-12 border-slate-200 bg-white"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                             </div>
 
-                            {/* Bank Selection & Number */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name="bank_code"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1.5">
-                                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Bank
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Combobox
-                                                    items={bankItems}
-                                                    value={field.value || ''}
-                                                    onValueChange={field.onChange}
-                                                    placeholder="Bank"
-                                                    className="h-11 bg-white"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                            {/* SECTION 2: Target Identity */}
+                            <div className="space-y-4 pt-2">
+                                <div className="flex items-center gap-2 px-1">
+                                    <div className="h-px flex-1 bg-slate-100" />
+                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Target Identity</span>
+                                    <div className="h-px flex-1 bg-slate-100" />
+                                </div>
 
-                                <FormField
-                                    control={form.control}
-                                    name="bank_number"
-                                    render={({ field }) => (
-                                        <FormItem className="space-y-1.5">
-                                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                Account No
-                                            </FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="1234..."
-                                                    {...field}
-                                                    className="h-11 bg-white"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+                                <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/20 space-y-6 shadow-sm">
+                                    <FormField
+                                        control={form.control}
+                                        name="receiver_name"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-1.5">
+                                                <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                                                    Receiver Name
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Combobox
+                                                        items={receiverItems}
+                                                        value={field.value}
+                                                        onValueChange={(val) => {
+                                                            field.onChange(val)
+                                                            const match = receiverItems.find((r: any) => r.value === val)
+                                                            if (match?.bank_number) {
+                                                                form.setValue('bank_number', match.bank_number)
+                                                            }
+                                                        }}
+                                                        placeholder="Receiver Name..."
+                                                        className="h-12 border-slate-200 bg-white"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="bank_number"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-1.5">
+                                                <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">
+                                                    Account No
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Combobox
+                                                        items={accountNoItems}
+                                                        value={field.value}
+                                                        onValueChange={(val) => {
+                                                            field.onChange(val)
+                                                            const match = accountNoItems.find((r: any) => r.value === val)
+                                                            if (match?.receiver_name) {
+                                                                form.setValue('receiver_name', match.receiver_name)
+                                                            }
+                                                        }}
+                                                        placeholder="01234..."
+                                                        className="h-12 border-slate-200 bg-white tabular-nums font-bold"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    {/* Card Name hidden or minimized? User didn't ask but it was there */}
+                                    <FormField
+                                        control={form.control}
+                                        name="card_name"
+                                        render={({ field }) => (
+                                            <FormItem className="space-y-1.5">
+                                                <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-slate-400 px-1">
+                                                    Card Name (Legacy Label)
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        placeholder="e.g., Diamond, Platinum"
+                                                        {...field}
+                                                        className="h-11 bg-white border-slate-200 font-medium"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
                             </div>
 
                             {/* Amount */}

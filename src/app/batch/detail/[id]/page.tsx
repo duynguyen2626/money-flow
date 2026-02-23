@@ -8,7 +8,7 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     const { id } = await params
     const batch = await getBatchByIdAction(id)
     const accounts = await getAccounts()
-    const bankMappings = await getBankMappings()
+    const bankMappings = await getBankMappings(batch.bank_type || 'MBB')
     const webhookLinks = await getSheetWebhookLinks()
     const { getAccountsWithActiveInstallments } = await import('@/services/installment.service')
     const activeInstallmentAccounts = await getAccountsWithActiveInstallments()

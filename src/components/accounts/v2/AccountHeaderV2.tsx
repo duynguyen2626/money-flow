@@ -27,14 +27,15 @@ export interface AdvancedFilters {
 interface AccountHeaderProps {
     searchQuery: string;
     onSearchChange: (query: string) => void;
-    activeFilter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed';
-    onFilterChange: (filter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed') => void;
+    activeFilter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed' | 'system';
+    onFilterChange: (filter: 'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed' | 'system') => void;
     onAdd: () => void;
     viewMode: 'table' | 'grid';
     onViewModeChange: (mode: 'table' | 'grid') => void;
     activeCount: number;
     debtCount: number;
     closedCount: number;
+    systemCount: number;
     categories?: Category[];
     selectedCategory?: string | null;
     onCategoryChange?: (categoryId: string | undefined) => void;
@@ -57,6 +58,7 @@ export function AccountHeaderV2({
     activeCount,
     debtCount,
     closedCount,
+    systemCount,
     categories = [],
     selectedCategory,
     onCategoryChange,
@@ -69,6 +71,7 @@ export function AccountHeaderV2({
         { id: 'credit' as const, label: 'Credit' },
         { id: 'savings' as const, label: 'Savings' },
         { id: 'debt' as const, label: 'Debt' },
+        { id: 'system' as const, label: `System` },
         { id: 'closed' as const, label: `Closed` },
     ];
 

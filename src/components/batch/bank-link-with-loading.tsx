@@ -6,10 +6,11 @@ import { Loader2 } from 'lucide-react'
 
 interface BankLinkWithLoadingProps {
     href: string
+    target?: string
     children: React.ReactNode
 }
 
-export function BankLinkWithLoading({ href, children }: BankLinkWithLoadingProps) {
+export function BankLinkWithLoading({ href, target, children }: BankLinkWithLoadingProps) {
     const [isPending, startTransition] = useTransition()
 
     const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -20,7 +21,7 @@ export function BankLinkWithLoading({ href, children }: BankLinkWithLoadingProps
 
     return (
         <div className="relative">
-            <Link href={href} onClick={handleClick}>
+            <Link href={href} onClick={handleClick} target={target} rel={target === '_blank' ? 'noopener noreferrer' : undefined}>
                 {children}
             </Link>
             {isPending && (

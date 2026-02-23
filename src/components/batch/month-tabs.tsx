@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -65,57 +66,54 @@ export function MonthTabs({ batches, bankType, onCreateMonth, value, onValueChan
                         const isActive = month === activeMonth
 
                         return (
-                            <button
-                                key={month}
-                                onClick={() => onValueChange?.(month)}
-                                className={cn(
-                                    'flex-shrink-0 relative group px-5 py-3 rounded-xl transition-all duration-300',
-                                    isActive
-                                        ? 'bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/80'
-                                        : 'hover:bg-slate-50'
-                                )}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="flex flex-col items-start">
-                                        <span className={cn(
-                                            "text-[10px] font-black uppercase tracking-widest",
-                                            isActive ? (bankType === 'MBB' ? "text-blue-500" : "text-purple-500") : "text-slate-400"
-                                        )}>
-                                            {month.split('-')[0]}
-                                        </span>
-                                        <span className={cn(
-                                            "text-sm font-bold",
-                                            isActive ? "text-slate-900" : "text-slate-600 group-hover:text-slate-900"
-                                        )}>
-                                            {formatMonth(month).split(' ')[0]}
-                                        </span>
-                                    </div>
+                            <TooltipProvider key={month}>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={() => onValueChange?.(month)}
+                                            className={cn(
+                                                'flex-shrink-0 relative group px-5 py-3 rounded-xl transition-all duration-300',
+                                                isActive
+                                                    ? 'bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/80'
+                                                    : 'hover:bg-slate-50'
+                                            )}
+                                        >
+                                            <div className="flex flex-col items-start gap-0.5">
+                                                <span className={cn(
+                                                    "text-[14px] font-black tracking-tight",
+                                                    isActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-900"
+                                                )}>
+                                                    {formatMonth(month)}
+                                                </span>
+                                                <div className={cn(
+                                                    "flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-slate-100",
+                                                    isActive ? (bankType === 'MBB' ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600") : "text-slate-400"
+                                                )}>
+                                                    {stats.confirmedItems} <span className="text-[8px] opacity-50">/</span> {stats.totalItems} Items
+                                                </div>
+                                            </div>
 
-                                    <div className={cn(
-                                        "h-8 w-px bg-slate-100",
-                                        isActive && "bg-slate-200"
-                                    )} />
-
-                                    <div className="flex flex-col items-end">
-                                        <div className={cn(
-                                            "text-xs font-black",
-                                            isActive ? "text-slate-900" : "text-slate-400"
-                                        )}>
-                                            {stats.confirmedItems}
-                                            <span className="text-slate-300 mx-0.5">/</span>
-                                            {stats.totalItems}
+                                            {isActive && (
+                                                <div className={cn(
+                                                    "absolute bottom-0 left-6 right-6 h-0.5 rounded-full",
+                                                    bankType === 'MBB' ? "bg-blue-600" : "bg-purple-600"
+                                                )} />
+                                            )}
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent sideOffset={8} className="bg-slate-900 border-none text-white rounded-xl shadow-xl p-4 min-w-[140px] z-50">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</span>
+                                            <div className="flex items-baseline gap-1.5">
+                                                <span className="text-xl font-black text-emerald-400">{stats.confirmedItems}</span>
+                                                <span className="text-slate-500 font-bold text-sm">/</span>
+                                                <span className="text-base font-bold text-white">{stats.totalItems}</span>
+                                            </div>
+                                            <span className="text-[10px] font-medium text-slate-400 mt-1">Confirmed / Total Items</span>
                                         </div>
-                                        <div className="text-[10px] font-medium text-slate-400">Items</div>
-                                    </div>
-                                </div>
-
-                                {isActive && (
-                                    <div className={cn(
-                                        "absolute bottom-0 left-6 right-6 h-0.5 rounded-full",
-                                        bankType === 'MBB' ? "bg-blue-600" : "bg-purple-600"
-                                    )} />
-                                )}
-                            </button>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         )
                     })}
 

@@ -172,6 +172,18 @@ export function UnifiedTransactionsPage({
                 console.error("❌ Failed to parse deep link draft:", e);
             }
         }
+
+        // Handle highlight search
+        const highlightId = urlParams.get('highlight');
+        if (highlightId && highlightId !== 'undefined') {
+            setSearch(highlightId);
+            // Switch to All Time to ensure the transaction is visible
+            setDateMode('all');
+
+            // Clear the param to avoid re-triggering on manual reset
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        }
     }, [accounts]);
 
     useEffect(() => {

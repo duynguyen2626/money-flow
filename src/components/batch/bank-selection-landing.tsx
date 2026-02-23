@@ -99,7 +99,7 @@ export async function BankSelectionLanding() {
                 {/* Bank Cards Grid */}
                 <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
                     {banks.map((bank) => (
-                        <BankLinkWithLoading key={bank.id} href={bank.href}>
+                        <BankLinkWithLoading key={bank.id} href={bank.href} target="_blank">
                             <Card className="group relative overflow-hidden h-full border-none shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer bg-white">
                                 <CardContent className="p-0 flex flex-col h-full">
                                     {/* Visual Header */}
