@@ -35,8 +35,19 @@ export async function generateMetadata({
   if (tab === 'history') tabName = 'History'
   if (tab === 'split-bill') tabName = 'Split Bill'
 
+  const icons = person.image_url ? {
+    icon: [
+      { url: person.image_url, type: 'image/webp' },
+      { url: '/favicon.svg?v=6', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: person.image_url, type: 'image/webp' },
+    ],
+  } : undefined
+
   return {
     title: `${person.name} ${tabName} | Money Flow`,
+    icons,
   }
 }
 

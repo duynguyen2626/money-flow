@@ -738,6 +738,11 @@ export async function updateTransaction(
     return false;
   }
 
+  // Phase 75: Batch constraints
+  if (meta.type === 'batch_funding' || meta.type === 'batch_funding_additional') {
+    throw new Error(`BATCH_LOCKED:${meta.batch_id}`);
+  }
+
   let normalized: NormalizedTransaction | null;
   try {
     normalized = await normalizeInput(input);
@@ -1196,6 +1201,12 @@ export async function voidTransaction(id: string): Promise<boolean> {
     throw new Error(
       "Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.",
     );
+  }
+
+  // Phase 75: Batch constraints
+  const batchMeta = ((existing as any)?.metadata || {}) as any;
+  if (batchMeta.type === 'batch_funding' || batchMeta.type === 'batch_funding_additional') {
+    throw new Error(`BATCH_LOCKED:${batchMeta.batch_id}`);
   }
 
   // 2. Log History

@@ -9,23 +9,32 @@ import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { updateBatchSettingsAction, getBatchSettingsAction } from '@/actions/batch-settings.actions'
+import { getAccountsAction } from '@/actions/account-actions'
+import { BatchMasterManager } from './BatchMasterManager'
 import { toast } from 'sonner'
 
-export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean } = {}) {
+export function BatchSettingsPage({ hideHeader = false, onSuccess }: { hideHeader?: boolean, onSuccess?: () => void } = {}) {
     const [mbbSheetUrl, setMbbSheetUrl] = useState('')
     const [vibSheetUrl, setVibSheetUrl] = useState('')
     const [mbbImageUrl, setMbbImageUrl] = useState('')
     const [vibImageUrl, setVibImageUrl] = useState('')
     const [mbbWebhookUrl, setMbbWebhookUrl] = useState('')
     const [vibWebhookUrl, setVibWebhookUrl] = useState('')
+    const [mbbDisplaySheetUrl, setMbbDisplaySheetUrl] = useState('')
+    const [vibDisplaySheetUrl, setVibDisplaySheetUrl] = useState('')
+    const [mbbDisplaySheetName, setMbbDisplaySheetName] = useState('')
+    const [vibDisplaySheetName, setVibDisplaySheetName] = useState('')
+    const [mbbTabName, setMbbTabName] = useState('')
+    const [vibTabName, setVibTabName] = useState('')
     const [mbbCutoffDay, setMbbCutoffDay] = useState<number>(15)
     const [vibCutoffDay, setVibCutoffDay] = useState<number>(15)
     const [loading, setLoading] = useState(false)
     const [initialLoading, setInitialLoading] = useState(true)
+    const [accounts, setAccounts] = useState<any[]>([])
 
     // Track original values to detect changes
-    const [originalMBB, setOriginalMBB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15 })
-    const [originalVIB, setOriginalVIB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15 })
+    const [originalMBB, setOriginalMBB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15, displaySheetUrl: '', displaySheetName: '', tabName: '' })
+    const [originalVIB, setOriginalVIB] = useState({ sheet: '', image: '', webhook: '', cutoff: 15, displaySheetUrl: '', displaySheetName: '', tabName: '' })
 
     // Load settings on mount
     useEffect(() => {
@@ -34,10 +43,15 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
 
     async function loadSettings() {
         try {
-            const [mbbResult, vibResult] = await Promise.all([
+            const [mbbResult, vibResult, accountsResult] = await Promise.all([
                 getBatchSettingsAction('MBB'),
-                getBatchSettingsAction('VIB')
+                getBatchSettingsAction('VIB'),
+                getAccountsAction()
             ])
+
+            if (Array.isArray(accountsResult)) {
+                setAccounts(accountsResult)
+            }
 
             if (mbbResult.success && (mbbResult as any).data) {
                 const mbbData = (mbbResult as any).data
@@ -45,11 +59,17 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 setMbbImageUrl(mbbData.image_url || '')
                 setMbbWebhookUrl(mbbData.webhook_url || '')
                 setMbbCutoffDay(mbbData.cutoff_day || 15)
+                setMbbDisplaySheetUrl(mbbData.display_sheet_url || '')
+                setMbbDisplaySheetName(mbbData.display_sheet_name || '')
+                setMbbTabName(mbbData.sheet_name || '')
                 setOriginalMBB({
                     sheet: mbbData.sheet_url || '',
                     image: mbbData.image_url || '',
                     webhook: mbbData.webhook_url || '',
-                    cutoff: mbbData.cutoff_day || 15
+                    cutoff: mbbData.cutoff_day || 15,
+                    displaySheetUrl: mbbData.display_sheet_url || '',
+                    displaySheetName: mbbData.display_sheet_name || '',
+                    tabName: mbbData.sheet_name || ''
                 })
             }
 
@@ -59,11 +79,17 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 setVibImageUrl(vibData.image_url || '')
                 setVibWebhookUrl(vibData.webhook_url || '')
                 setVibCutoffDay(vibData.cutoff_day || 15)
+                setVibDisplaySheetUrl(vibData.display_sheet_url || '')
+                setVibDisplaySheetName(vibData.display_sheet_name || '')
+                setVibTabName(vibData.sheet_name || '')
                 setOriginalVIB({
                     sheet: vibData.sheet_url || '',
                     image: vibData.image_url || '',
                     webhook: vibData.webhook_url || '',
-                    cutoff: vibData.cutoff_day || 15
+                    cutoff: vibData.cutoff_day || 15,
+                    displaySheetUrl: vibData.display_sheet_url || '',
+                    displaySheetName: vibData.display_sheet_name || '',
+                    tabName: vibData.sheet_name || ''
                 })
             }
         } catch (error) {
@@ -81,11 +107,15 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 sheet_url: mbbSheetUrl || null,
                 webhook_url: mbbWebhookUrl || null,
                 image_url: mbbImageUrl || null,
-                cutoff_day: mbbCutoffDay
+                cutoff_day: mbbCutoffDay,
+                display_sheet_url: mbbDisplaySheetUrl || null,
+                display_sheet_name: mbbDisplaySheetName || null,
+                sheet_name: mbbTabName || null
             })
 
             if (result.success) {
                 toast.success('MBB settings saved successfully!')
+                if (onSuccess) onSuccess()
             } else {
                 toast.error(result.error || 'Failed to save MBB settings')
             }
@@ -104,11 +134,15 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                 sheet_url: vibSheetUrl || null,
                 webhook_url: vibWebhookUrl || null,
                 image_url: vibImageUrl || null,
-                cutoff_day: vibCutoffDay
+                cutoff_day: vibCutoffDay,
+                display_sheet_url: vibDisplaySheetUrl || null,
+                display_sheet_name: vibDisplaySheetName || null,
+                sheet_name: vibTabName || null
             })
 
             if (result.success) {
                 toast.success('VIB settings saved successfully!')
+                if (onSuccess) onSuccess()
             } else {
                 toast.error(result.error || 'Failed to save VIB settings')
             }
@@ -125,24 +159,39 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
         mbbSheetUrl !== originalMBB.sheet ||
         mbbImageUrl !== originalMBB.image ||
         mbbWebhookUrl !== originalMBB.webhook ||
-        mbbCutoffDay !== originalMBB.cutoff
+        mbbCutoffDay !== originalMBB.cutoff ||
+        mbbDisplaySheetUrl !== originalMBB.displaySheetUrl ||
+        mbbDisplaySheetName !== originalMBB.displaySheetName ||
+        mbbTabName !== originalMBB.tabName
 
     const vibHasChanges =
         vibSheetUrl !== originalVIB.sheet ||
         vibImageUrl !== originalVIB.image ||
         vibWebhookUrl !== originalVIB.webhook ||
-        vibCutoffDay !== originalVIB.cutoff
+        vibCutoffDay !== originalVIB.cutoff ||
+        vibDisplaySheetUrl !== originalVIB.displaySheetUrl ||
+        vibDisplaySheetName !== originalVIB.displaySheetName ||
+        vibTabName !== originalVIB.tabName
 
     if (initialLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="bg-slate-50 flex flex-col items-center justify-center p-20 space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Settings...</p>
             </div>
         )
     }
 
     return (
-        <div className={hideHeader ? 'bg-white' : 'min-h-screen bg-slate-50'}>
+        <div className={hideHeader ? 'bg-white relative' : 'min-h-screen bg-slate-50'}>
+            {loading && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex items-center justify-center">
+                    <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-3 border border-slate-100">
+                        <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+                        <span className="text-sm font-black text-slate-900 uppercase tracking-tighter">Saving Changes...</span>
+                    </div>
+                </div>
+            )}
             <div className={hideHeader ? 'px-6 py-6' : 'container mx-auto px-4 py-8 max-w-4xl'}>
                 {/* Header */}
                 {!hideHeader && (
@@ -213,21 +262,53 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                                     </p>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="mbb-cutoff">Cutoff Day</Label>
-                                    <Input
-                                        id="mbb-cutoff"
-                                        type="number"
-                                        placeholder="15"
-                                        value={mbbCutoffDay === 0 ? '' : mbbCutoffDay}
-                                        onChange={(e) => setMbbCutoffDay(Number(e.target.value))}
-                                        min={1}
-                                        max={31}
-                                    />
-                                    <p className="text-xs text-slate-500">
-                                        💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
-                                    </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="mbb-display-sheet-url">Google Sheet URL (Display)</Label>
+                                        <Input
+                                            id="mbb-display-sheet-url"
+                                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                                            value={mbbDisplaySheetUrl}
+                                            onChange={(e) => setMbbDisplaySheetUrl(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="mbb-display-sheet-name">Display Name</Label>
+                                        <Input
+                                            id="mbb-display-sheet-name"
+                                            placeholder="e.g. Master MBB Sheet"
+                                            value={mbbDisplaySheetName}
+                                            onChange={(e) => setMbbDisplaySheetName(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="mbb-tab-name">Sheet Tab Name</Label>
+                                        <Input
+                                            id="mbb-tab-name"
+                                            placeholder="eMB_BulkPayment"
+                                            value={mbbTabName}
+                                            onChange={(e) => setMbbTabName(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="mbb-cutoff">Cutoff Day</Label>
+                                        <Input
+                                            id="mbb-cutoff"
+                                            type="number"
+                                            placeholder="15"
+                                            value={mbbCutoffDay === 0 ? '' : mbbCutoffDay}
+                                            onChange={(e) => setMbbCutoffDay(Number(e.target.value))}
+                                            min={1}
+                                            max={31}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
+                                </p>
 
                                 <Button onClick={handleSaveMBB} disabled={loading || !mbbHasChanges} className="w-full">
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -239,6 +320,7 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                     </TabsContent>
 
                     <TabsContent value="vib">
+                        {/* Existing VIB Content */}
                         <Card>
                             <CardHeader>
                                 <CardTitle>VIB Settings</CardTitle>
@@ -286,21 +368,53 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                                     </p>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="vib-cutoff">Cutoff Day</Label>
-                                    <Input
-                                        id="vib-cutoff"
-                                        type="number"
-                                        placeholder="15"
-                                        value={vibCutoffDay === 0 ? '' : vibCutoffDay}
-                                        onChange={(e) => setVibCutoffDay(Number(e.target.value))}
-                                        min={1}
-                                        max={31}
-                                    />
-                                    <p className="text-xs text-slate-500">
-                                        💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
-                                    </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="vib-display-sheet-url">Google Sheet URL (Display)</Label>
+                                        <Input
+                                            id="vib-display-sheet-url"
+                                            placeholder="https://docs.google.com/spreadsheets/d/..."
+                                            value={vibDisplaySheetUrl}
+                                            onChange={(e) => setVibDisplaySheetUrl(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="vib-display-sheet-name">Display Name</Label>
+                                        <Input
+                                            id="vib-display-sheet-name"
+                                            placeholder="e.g. Master VIB Sheet"
+                                            value={vibDisplaySheetName}
+                                            onChange={(e) => setVibDisplaySheetName(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="vib-tab-name">Sheet Tab Name</Label>
+                                        <Input
+                                            id="vib-tab-name"
+                                            placeholder="Danh sách chuyển tiền"
+                                            value={vibTabName}
+                                            onChange={(e) => setVibTabName(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="vib-cutoff">Cutoff Day</Label>
+                                        <Input
+                                            id="vib-cutoff"
+                                            type="number"
+                                            placeholder="15"
+                                            value={vibCutoffDay === 0 ? '' : vibCutoffDay}
+                                            onChange={(e) => setVibCutoffDay(Number(e.target.value))}
+                                            min={1}
+                                            max={31}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    💡 The day of the month that separates 'Before' and 'After' tabs for this bank.
+                                </p>
 
                                 <Button onClick={handleSaveVIB} disabled={loading || !vibHasChanges} className="w-full">
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -310,6 +424,8 @@ export function BatchSettingsPage({ hideHeader = false }: { hideHeader?: boolean
                             </CardContent>
                         </Card>
                     </TabsContent>
+
+
                 </Tabs>
             </div>
         </div>

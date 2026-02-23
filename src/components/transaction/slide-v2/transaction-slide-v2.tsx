@@ -142,14 +142,15 @@ export function TransactionSlideV2({
                 // Do NOT append #Clone to note - the table shows a CLONE badge instead
             }
 
+            const isIncome = type === 'income' || type === 'repayment';
             const values: SingleTransactionFormValues = {
                 type,
                 category_id: initialData.category_id ?? null,
                 occurred_at: occurredAt,
                 amount: Math.round(Math.abs(initialData.amount ?? 0)),
                 note: note,
-                source_account_id: initialData.source_account_id ?? null,
-                target_account_id: initialData.target_account_id ?? null,
+                source_account_id: isIncome ? null : initialData.source_account_id ?? null,
+                target_account_id: isIncome ? (initialData.source_account_id ?? initialData.target_account_id ?? null) : (initialData.target_account_id ?? null),
                 shop_id: initialData.shop_id ?? null,
                 person_id: initialData.person_id ?? null,
                 tag: initialData.tag ?? null,
@@ -370,6 +371,7 @@ export function TransactionSlideV2({
 
     // Watch for cashback auto-expand and reset special modes when person selected
     const sourceAccId = useWatch({ control: singleForm.control, name: "source_account_id" });
+    const targetAccId = useWatch({ control: singleForm.control, name: "target_account_id" });
     const currentTxnType = useWatch({ control: singleForm.control, name: "type" });
     const currentPersonId = useWatch({ control: singleForm.control, name: "person_id" });
 
@@ -399,6 +401,34 @@ export function TransactionSlideV2({
         }
     }, [currentTxnType, open, operationMode, accounts, singleForm, sourceAccId]);
 
+    // MF5.5: Account selector logic to move IDs instead of clearing when switching flow types
+    useEffect(() => {
+        if (!open) return;
+        const type = singleForm.getValues('type');
+        const sourceId = singleForm.getValues('source_account_id');
+        const targetId = singleForm.getValues('target_account_id');
+
+        // Only apply this logic if not in transfer/credit_pay mode, as they use both
+        const isSpecialMode = ['transfer', 'credit_pay'].includes(type);
+        if (isSpecialMode) return;
+
+        if (['income', 'repayment'].includes(type)) {
+            // For income/repayment, source_account_id is the "to" account, target_account_id is null
+            // If sourceId is set and targetId is not, move sourceId to targetId and clear sourceId
+            if (sourceId && !targetId) {
+                singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
+                singleForm.setValue('source_account_id', null, { shouldDirty: true });
+            }
+        } else if (['expense', 'debt'].includes(type)) {
+            // For expense/debt, source_account_id is the "from" account, target_account_id is null
+            // If targetId is set and sourceId is not, move targetId to sourceId and clear targetId
+            if (targetId && !sourceId) {
+                singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
+                singleForm.setValue('target_account_id', null, { shouldDirty: true });
+            }
+        }
+    }, [currentTxnType, open, singleForm, sourceAccId, targetAccId]); // Depend on type and current IDs to trigger
+
     useEffect(() => {
         // Only auto-expand cashback for new transactions, not edit/duplicate
         if (!open || operationMode === 'edit' || operationMode === 'duplicate') return;
@@ -423,22 +453,22 @@ export function TransactionSlideV2({
             import("@/services/transaction.service").then(({ loadTransactions }) => {
                 loadTransactions({ transactionId: editingId, limit: 1 }).then(([txn]) => {
                     if (txn) {
+                        const isIncome = txn.type === 'income' || txn.type === 'repayment';
                         const formVal: SingleTransactionFormValues = {
                             type: (txn.type as any) || "expense",
                             amount: txn.original_amount ?? Math.abs(txn.amount),
                             occurred_at: new Date(txn.occurred_at),
                             note: txn.note || "",
-                            source_account_id: txn.account_id,
-                            target_account_id: txn.target_account_id || undefined,
-                            category_id: txn.category_id || undefined,
-                            shop_id: txn.shop_id || undefined,
-                            person_id: txn.person_id || undefined,
-                            tag: txn.tag || undefined,
+                            source_account_id: isIncome ? null : txn.account_id,
+                            target_account_id: isIncome ? txn.account_id : (txn.target_account_id || null),
+                            category_id: txn.category_id || null,
+                            shop_id: txn.shop_id || null,
+                            person_id: txn.person_id || null,
+                            tag: txn.tag || null,
                             cashback_mode: txn.cashback_mode || "none_back",
-                            // Convert DB decimal (0.2) to UI percentage (20)
-                            cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : undefined,
-                            cashback_share_fixed: txn.cashback_share_fixed || undefined,
-                            ui_is_cashback_expanded: !!txn.cashback_mode && txn.cashback_mode !== 'none_back',
+                            cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : null,
+                            cashback_share_fixed: txn.cashback_share_fixed || null,
+                            ui_is_cashback_expanded: !!txn.is_installment || (!!txn.cashback_mode && txn.cashback_mode !== 'none_back'),
                             is_installment: !!txn.is_installment,
                             service_fee: txn.metadata?.service_fee ? Number(txn.metadata.service_fee) : null,
                         };
@@ -461,6 +491,15 @@ export function TransactionSlideV2({
             toast.error("Form data is empty. Please try again.");
             return;
         }
+
+        console.log("✅ onSingleSubmit triggered:", {
+            type: data.type,
+            category_id: data.category_id,
+            account_id: data.source_account_id,
+            target_account_id: data.target_account_id,
+            amount: data.amount,
+            mode: operationMode
+        });
 
         console.log("✅ onSingleSubmit called - Form validation PASSED");
         console.log("📋 Form data raw:", data);
@@ -550,7 +589,25 @@ export function TransactionSlideV2({
                 message: error instanceof Error ? error.message : String(error),
                 stack: error instanceof Error ? error.stack : undefined,
             });
-            toast.error("An error occurred. Please try again.");
+
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            if (errorMsg.includes('BATCH_LOCKED:')) {
+                const batchId = errorMsg.split('BATCH_LOCKED:')[1]?.trim();
+                toast.error(
+                    <div className="flex flex-col gap-1">
+                        <span className="font-bold">Giao dịch Bot Batch</span>
+                        <span className="text-xs">Không được sửa tại đây để tránh lệch Data.</span>
+                        {batchId && (
+                            <a href={`/batch/detail/${batchId}`} target="_blank" rel="noopener noreferrer" className="font-bold underline text-indigo-400 mt-1">
+                                Mở trang Batch để Unconfirm
+                            </a>
+                        )}
+                    </div>,
+                    { duration: 8000 }
+                );
+            } else {
+                toast.error(errorMsg || "An error occurred. Please try again.");
+            }
         } finally {
             if (onSubmissionEnd) {
                 onSubmissionEnd();

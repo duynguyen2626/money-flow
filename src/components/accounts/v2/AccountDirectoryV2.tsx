@@ -42,7 +42,7 @@ export function AccountDirectoryV2({
     console.log('AccountDirectoryV2: initialAccounts count', initialAccounts?.length);
     console.log('AccountDirectoryV2: sample account', initialAccounts?.find(a => a.name === 'Exim Violet'));
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeFilter, setActiveFilter] = useState<'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed'>('accounts_cards');
+    const [activeFilter, setActiveFilter] = useState<'accounts_cards' | 'credit' | 'savings' | 'debt' | 'closed' | 'system'>('accounts_cards');
     const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
         family: false,
         dueSoon: false,
@@ -93,6 +93,8 @@ export function AccountDirectoryV2({
             result = result.filter(a => a.type === 'debt' && a.is_active !== false);
         } else if (activeFilter === 'closed') {
             result = result.filter(a => a.is_active === false);
+        } else if (activeFilter === 'system') {
+            result = result.filter(a => a.type === 'system');
         }
 
         // --- Advanced Filter Logic ---
@@ -149,6 +151,7 @@ export function AccountDirectoryV2({
     const activeCount = initialAccounts.filter(a => a.is_active !== false && a.type !== 'debt').length;
     const debtCount = initialAccounts.filter(a => a.type === 'debt' && a.is_active !== false).length;
     const closedCount = initialAccounts.filter(a => a.is_active === false).length;
+    const systemCount = initialAccounts.filter(a => a.type === 'system' && a.is_active !== false).length;
 
     const othersStats = useMemo(() => {
         const otherAccounts = initialAccounts.filter(a => a.holder_type && a.holder_type !== 'me' && a.is_active !== false);
@@ -270,6 +273,7 @@ export function AccountDirectoryV2({
                 activeCount={activeCount}
                 debtCount={debtCount}
                 closedCount={closedCount}
+                systemCount={systemCount}
                 categories={categories}
                 selectedCategory={selectedCategory}
                 onCategoryChange={handleCategoryChange}

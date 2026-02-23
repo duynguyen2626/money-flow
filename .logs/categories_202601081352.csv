@@ -1,0 +1,18 @@
+"id","name","type","icon","mcc_codes","image_url","parent_id","created_at"
+e0000000-0000-0000-0000-000000000090,Transfer,transfer,💸,,https://img.icons8.com/color/48/switch.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000091,Credit Payment,transfer,💳,,https://img.icons8.com/color/48/credit-card.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000080,Money Transfer,transfer,💸,,https://img.icons8.com/fluency/48/money-transfer.png,,2025-12-23 15:42:31.330 +0700
+dac6e2f4-12a0-41f2-89dd-8d597854bbe6,Subscriptions,expense,,,,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000099,Other Expense,expense,📝,,,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000002,Utilities,expense,,,https://img.icons8.com/color/48/electricity.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000098,Adjustment,expense,🎁,,https://img.icons8.com/color/48/request-money.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000001,Food & Drink,expense,,"{5812,5814}",https://img.icons8.com/color/48/hamburger.png,,2025-12-23 15:42:31.330 +0700
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99,Shopping,expense,🛍️,,https://img.icons8.com/fluency/48/shopping-bag.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000003,Income,income,,,https://img.icons8.com/color/48/money-bag.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000088,Online Services,expense,☁️,,https://img.icons8.com/fluency/48/cloud-sync.png,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000092,Hoàn tiền (Cashback),income,💰,,,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000095,Refund,income,↩️,,https://cdn-icons-png.flaticon.com/128/1585/1585145.png,,2025-12-23 15:42:31.330 +0700
+aac49051-7231-471e-a3ae-7925c78afa7d,EDUCATION,expense,"",,https://tse3.mm.bing.net/th/id/OIP.AV1XZBTIUlxxsm6htBbRMQHaHa?cb=ucfimg2&ucfimg=1&rs=1&pid=ImgDetMain&o=7&rm=3,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000089,Lending,expense,💸,,https://img.icons8.com/color/48/borrow-book.png,,2025-12-23 15:42:31.330 +0700
+"405a25bf-f106-41aa-9414-b1a8c9862069",Repayment,income,,,,,2025-12-23 15:42:31.330 +0700
+e0000000-0000-0000-0000-000000000096,Debt Repayment,income,🤝,,https://img.icons8.com/fluency/48/handshake.png,,2025-12-23 15:42:31.330 +0700

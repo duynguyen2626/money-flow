@@ -235,9 +235,15 @@ export function ItemsTable({
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
-                                                {item.bank_name}
-                                            </span>
+                                            {item.bank_code ? (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-none bg-indigo-600 text-[9px] font-black text-white uppercase tracking-tighter">
+                                                    {item.bank_code}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-[10px] font-bold text-slate-600 uppercase">
+                                                    {item.bank_name}
+                                                </span>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <span className="text-sm font-black text-slate-900">
@@ -282,7 +288,14 @@ export function ItemsTable({
                                     <>
                                         <TableCell>
                                             <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-900 leading-tight">{item.receiver_name || 'Unknown'}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-bold text-slate-900 leading-tight">{item.receiver_name || 'Unknown'}</span>
+                                                    {item.bank_code && (
+                                                        <span className="px-1 py-0.5 rounded-none bg-indigo-600 text-[8px] font-black text-white uppercase tracking-tighter">
+                                                            {item.bank_code}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <span className="text-xs font-medium text-slate-400">{item.bank_number || '-'}</span>
                                             </div>
                                         </TableCell>
@@ -337,10 +350,15 @@ export function ItemsTable({
                                         {item.target_account_id ? (
                                             <Link href={`/accounts/${item.target_account_id}`}>
                                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 rounded-md border border-blue-100 hover:border-blue-300 transition-colors">
-                                                    {/* ROUNDED NONE for account icon */}
-                                                    <div className="w-5 h-5 rounded-none bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shrink-0 uppercase">
-                                                        {item.target_account?.name?.[0] || 'A'}
-                                                    </div>
+                                                    {item.target_account?.image_url ? (
+                                                        <div className="w-5 h-5 rounded-none overflow-hidden border border-blue-200 bg-white">
+                                                            <img src={item.target_account.image_url} alt="" className="w-full h-full object-contain rounded-none" />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-5 h-5 rounded-none bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shrink-0 uppercase">
+                                                            {item.target_account?.name?.[0] || 'A'}
+                                                        </div>
+                                                    )}
                                                     <span className="text-[10px] font-black text-blue-700 whitespace-nowrap">
                                                         {item.target_account?.name || 'Account'}
                                                     </span>
@@ -357,21 +375,25 @@ export function ItemsTable({
                                 <TableCell>
                                     <div className="flex items-center gap-1.5">
                                         {item.status === 'confirmed' ? (
-                                            <div className="flex items-center gap-1 text-emerald-600 font-bold text-[10px] uppercase tracking-wider bg-emerald-50 px-2 py-1 rounded border border-emerald-100">
+                                            <Link
+                                                href={`/transactions?highlight=${item.transaction_id}`}
+                                                target="_blank"
+                                                className="flex items-center gap-1 text-emerald-600 font-bold text-[10px] uppercase tracking-wider bg-emerald-50 px-2 py-1 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors"
+                                            >
                                                 <CheckCircle2 className="h-3 w-3" />
-                                                Done
-                                            </div>
+                                                <span>Done</span>
+                                            </Link>
                                         ) : (
                                             <div className="flex items-center gap-1 text-amber-600 font-bold text-[10px] uppercase tracking-wider bg-amber-50 px-2 py-1 rounded border border-amber-100">
                                                 <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                Pending
+                                                <span>Pending</span>
                                             </div>
                                         )}
 
                                         {item.is_installment_payment && (
                                             <div className="flex items-center gap-1 text-indigo-600 font-bold text-[10px] uppercase tracking-wider bg-indigo-50 px-2 py-1 rounded border border-indigo-100">
                                                 <CreditCard className="h-3 w-3" />
-                                                PP
+                                                <span>PP</span>
                                             </div>
                                         )}
                                     </div>
@@ -397,7 +419,7 @@ export function ItemsTable({
                                                     title="Quick Confirm"
                                                 >
                                                     <CheckCircle2 className="h-3.5 w-3.5" />
-                                                    Confirm
+                                                    <span>Confirm</span>
                                                 </Button>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -429,7 +451,7 @@ export function ItemsTable({
                                                 className="h-8 px-3 text-orange-600 hover:bg-orange-50 font-bold text-[10px] uppercase gap-1.5"
                                             >
                                                 <Ban className="h-3.5 w-3.5" />
-                                                Void
+                                                <span>Void</span>
                                             </Button>
                                         )}
                                     </div>

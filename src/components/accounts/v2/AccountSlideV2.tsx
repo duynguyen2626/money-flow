@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2, Sparkles, X, Infinity, Building2, Calendar } from "lucide-react";
+import { Wallet, Info, Trash2, Banknote, CreditCard, Building, Coins, HandCoins, PiggyBank, Receipt, DollarSign, Plus, Copy, ChevronLeft, CheckCircle2, Check, ChevronsUpDown, RotateCcw, Loader2, Sparkles, X, Infinity, Building2, Calendar, CalendarClock, FileText } from "lucide-react";
 import { updateAccountConfig } from "@/services/account.service";
 import { createAccount } from "@/actions/account-actions";
 import { toast } from "sonner";
@@ -129,9 +129,7 @@ export function AccountSlideV2({
     const [cycleType, setCycleType] = useState<CashbackProgram['cycleType']>('calendar_month');
     const [statementDay, setStatementDay] = useState<number | null>(null);
     const [dueDate, setDueDate] = useState<number | null>(null);
-    const [minSpendTarget, setMinSpendTarget] = useState<number | undefined>(undefined);
     const [isAdvancedCashback, setIsAdvancedCashback] = useState(false);
-    const [defaultRate, setDefaultRate] = useState<number>(0); // Added back to satisfy existing refs
 
     // Category Rules State
     interface RuleState {
@@ -267,7 +265,6 @@ export function AccountSlideV2({
 
         setStatementDay(acc.statement_day ?? cb.statementDay ?? null);
         setDueDate(acc.due_date ?? cb.dueDate ?? null);
-        setMinSpendTarget(cb.minSpendTarget ?? undefined);
         setIsAdvancedCashback(effectiveCbType === 'tiered');
 
         // Restore missing fields from previous backup
@@ -310,9 +307,6 @@ export function AccountSlideV2({
             setCycleType('calendar_month');
             setStatementDay(null);
             setDueDate(null);
-            setMinSpendTarget(undefined);
-            setDefaultRate(0);
-            setMaxCashback(undefined);
             setAnnualFee(0);
             setReceiverName("");
             setSecuredById("none");
@@ -356,7 +350,7 @@ export function AccountSlideV2({
                 defaultRate: 0,
                 rules: [{
                     categoryIds: [...restrictedCategoryIds].sort(),
-                    rate: defaultRate,
+                    rate: cbBaseRate,
                     maxReward: null,
                     description: undefined
                 }]
@@ -385,12 +379,11 @@ export function AccountSlideV2({
             cycleType,
             statementDay,
             dueDate,
-            minSpendTarget,
-            defaultRate: isCategoryRestricted ? 0 : defaultRate,
-            maxCashback,
+            defaultRate: cbBaseRate,
+            maxCashback: cbMaxBudget,
             levels: effectiveLevels
         });
-    }, [name, type, accountNumber, creditLimit, isActive, imageUrl, annualFee, receiverName, parentAccountId, securedById, isCollateralLinked, cycleType, statementDay, dueDate, minSpendTarget, defaultRate, maxCashback, levels, isCategoryRestricted, restrictedCategoryIds, isAdvancedCashback]);
+    }, [name, type, accountNumber, creditLimit, isActive, imageUrl, annualFee, receiverName, parentAccountId, securedById, isCollateralLinked, cycleType, statementDay, dueDate, cbBaseRate, cbMaxBudget, cbMinSpend, levels, isCategoryRestricted, restrictedCategoryIds, isAdvancedCashback]);
 
     // Set initial state once when opening
     useEffect(() => {
@@ -420,12 +413,12 @@ export function AccountSlideV2({
                 receiverName: account.receiver_name || "",
                 parentAccountId: account.parent_account_id || null,
                 securedById: account.secured_by_account_id || "none",
-                cycleType: cb.cycleType || 'calendar_month',
+                cb_cycle_type: cb.cycleType || 'calendar_month',
                 statementDay: cb.statementDay,
                 dueDate: cb.dueDate,
-                minSpendTarget: cb.minSpendTarget,
-                defaultRate: cb.defaultRate || 0,
-                maxCashback: cb.maxBudget || null,
+                cb_min_spend: cb.minSpendTarget,
+                cb_base_rate: (cb.defaultRate || 0) * 100,
+                cb_max_budget: cb.maxBudget || null,
                 levels: initLevels
             }));
         } else if (open && !account) {
@@ -441,12 +434,12 @@ export function AccountSlideV2({
                 receiverName: "",
                 parentAccountId: null,
                 securedById: "none",
-                cycleType: 'calendar_month',
+                cb_cycle_type: 'calendar_month',
                 statementDay: null,
                 dueDate: null,
-                minSpendTarget: null,
-                defaultRate: 0,
-                maxCashback: null,
+                cb_min_spend: 0,
+                cb_base_rate: 0,
+                cb_max_budget: null,
                 levels: []
             }));
         }
@@ -531,7 +524,7 @@ export function AccountSlideV2({
                             rules: [{
                                 id: 'rule_1',
                                 categoryIds: restrictedCategoryIds,
-                                rate: defaultRate,
+                                rate: cbBaseRate,
                                 maxReward: null,
                                 description: undefined
                             }]
@@ -678,7 +671,22 @@ export function AccountSlideV2({
                     handleAttemptClose();
                 }
             }}>
-                <SheetContent side="right" className={cn("w-full transition-all duration-300 ease-in-out p-0 flex flex-col gap-0 border-l border-slate-200", isAdvancedCashback ? "sm:!max-w-[900px]" : "sm:!max-w-[700px]")}>
+                <SheetContent
+                    side="right"
+                    className={cn("w-full transition-all duration-300 ease-in-out p-0 flex flex-col gap-0 border-l border-slate-200", isAdvancedCashback ? "sm:!max-w-[900px]" : "sm:!max-w-[700px]")}
+                    onPointerDownOutside={(e) => {
+                        if (currentState !== initialState) {
+                            e.preventDefault();
+                            handleAttemptClose();
+                        }
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (currentState !== initialState) {
+                            e.preventDefault();
+                            handleAttemptClose();
+                        }
+                    }}
+                >
                     <div className="p-6 bg-slate-50/50 border-b border-slate-200">
                         <SheetHeader className="text-left">
                             <div className="flex items-center gap-3 mb-2">
@@ -1492,6 +1500,7 @@ export function AccountSlideV2({
                                             cb_max_budget={cbMaxBudget}
                                             cb_is_unlimited={cbIsUnlimited}
                                             cb_rules_json={cbRulesJson}
+                                            cb_cycle_type={cycleType || 'calendar_month'}
                                             cb_min_spend={cbMinSpend}
                                             categories={categories}
                                             onOpenCategoryCreator={(callback?: (categoryId: string) => void) => {
@@ -1508,6 +1517,7 @@ export function AccountSlideV2({
                                                 if (updates.cb_is_unlimited !== undefined) setCbIsUnlimited(updates.cb_is_unlimited);
                                                 if (updates.cb_rules_json !== undefined) setCbRulesJson(updates.cb_rules_json);
                                                 if (updates.cb_min_spend !== undefined) setCbMinSpend(updates.cb_min_spend);
+                                                if (updates.cb_cycle_type !== undefined) setCycleType(updates.cb_cycle_type);
                                             }}
                                         />
                                     </div>
@@ -1532,30 +1542,13 @@ export function AccountSlideV2({
                                         </div>
 
                                         <div className="space-y-4">
-                                            {/* Cycle Type Toggle */}
-                                            <div className="flex items-center justify-between p-3 bg-slate-50/50 border border-slate-200 rounded-lg">
-                                                <div className="space-y-0.5">
-                                                    <Label className="text-xs font-bold text-slate-700">Statement Cycle</Label>
-                                                    <p className="text-[10px] text-slate-500">
-                                                        {cycleType === 'statement_cycle'
-                                                            ? "Using custom statement dates"
-                                                            : "Standard Calendar Month (1st - End)"}
-                                                    </p>
-                                                </div>
-                                                <Switch
-                                                    checked={cycleType === 'statement_cycle'}
-                                                    onCheckedChange={(checked) => setCycleType(checked ? 'statement_cycle' : 'calendar_month')}
-                                                />
-                                            </div>
-
                                             {/* Payment Due Day (Moved up) */}
-                                            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                                            <div className="space-y-1.5 pt-2">
                                                 <div className="flex items-center gap-1.5">
-                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Payment Due Day</Label>
-                                                    <CustomTooltip content="The deadline for paying your credit card balance.">
-                                                        <Info className="h-3 w-3 text-slate-300 cursor-help" />
-                                                    </CustomTooltip>
+                                                    <CalendarClock className="h-3.5 w-3.5 text-rose-600" />
+                                                    <Label className="text-[10px] font-black uppercase text-rose-600 tracking-wider">Payment Due Day</Label>
                                                 </div>
+                                                <div className="text-[10px] text-slate-500 font-medium">The deadline for paying your credit card balance.</div>
                                                 <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                                                     <DayOfMonthPicker
                                                         value={dueDate}
@@ -1568,24 +1561,17 @@ export function AccountSlideV2({
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                                            <div className="space-y-1.5 pt-2 animate-in fade-in slide-in-from-top-1">
                                                 <div className="flex items-center gap-1.5">
-                                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Statement Day</Label>
-                                                    <CustomTooltip content="The day your bank generates the monthly statement.">
-                                                        <Info className="h-3 w-3 text-slate-300 cursor-help" />
-                                                    </CustomTooltip>
+                                                    <FileText className="h-3.5 w-3.5 text-blue-600" />
+                                                    <Label className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Statement Day</Label>
                                                 </div>
-                                                {cycleType === 'statement_cycle' ? (
-                                                    <DayOfMonthPicker
-                                                        value={statementDay}
-                                                        onChange={setStatementDay}
-                                                        className="h-9 w-full"
-                                                    />
-                                                ) : (
-                                                    <div className="h-9 w-full flex items-center px-3 bg-slate-50 border border-slate-100 rounded-md text-[11px] font-bold text-slate-400 italic">
-                                                        Day 1 (Calendar Month)
-                                                    </div>
-                                                )}
+                                                <div className="text-[10px] text-slate-500 font-medium">The day your bank generates the monthly statement.</div>
+                                                <DayOfMonthPicker
+                                                    value={statementDay}
+                                                    onChange={setStatementDay}
+                                                    className="h-9 w-full"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -1617,63 +1603,8 @@ export function AccountSlideV2({
                                 </Button>
                             </div>
 
-                            <ConfirmationModal
-                                isOpen={showCloseConfirm}
-                                onClose={() => setShowCloseConfirm(false)}
-                                onConfirm={async () => {
-                                    setIsActive(false);
-                                    if (isEdit && account) {
-                                        setLoading(true);
-                                        try {
-                                            const success = await updateAccountConfig(account.id, { is_active: false });
-                                            if (success) {
-                                                toast.success("Account closed");
-                                                onOpenChange(false);
-                                                router.refresh();
-                                            }
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    }
-                                }}
-                                title="Close Account?"
-                                description="This will hide the account from active lists. You can still reactivate it later."
-                                confirmText="Yes, Close it"
-                                variant="destructive"
-                            />
-
-                            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
-                                <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
-                                    <div className="p-6 space-y-4">
-                                        <SheetHeader className="space-y-2 text-left">
-                                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
-                                                <Trash2 className="h-5 w-5" />
-                                                Unsaved Changes
-                                            </SheetTitle>
-                                            <SheetDescription className="text-sm font-medium text-slate-500">
-                                                You have made changes to this account. Navigating away will discard these changes correctly.
-                                            </SheetDescription>
-                                        </SheetHeader>
-                                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => setShowUnsavedConfirm(false)}
-                                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
-                                            >
-                                                Keep Editing
-                                            </Button>
-                                            <Button
-                                                variant="destructive"
-                                                onClick={confirmAction}
-                                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
-                                            >
-                                                Discard Changes
-                                            </Button>
-                                        </SheetFooter>
-                                    </div>
-                                </SheetContent>
-                            </Sheet>
                         </div>
+
                     </div>
 
                     <SheetFooter className="p-6 bg-white border-t border-slate-200 sm:justify-end gap-3">
@@ -1700,6 +1631,63 @@ export function AccountSlideV2({
                     subscriptions={subscriptions}
                     onSuccess={handlePersonCreated}
                 />
+            </Sheet>
+
+            <ConfirmationModal
+                isOpen={showCloseConfirm}
+                onClose={() => setShowCloseConfirm(false)}
+                onConfirm={async () => {
+                    setIsActive(false);
+                    if (isEdit && account) {
+                        setLoading(true);
+                        try {
+                            const success = await updateAccountConfig(account.id, { is_active: false });
+                            if (success) {
+                                toast.success("Account closed");
+                                onOpenChange(false);
+                                router.refresh();
+                            }
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }}
+                title="Close Account?"
+                description="This will hide the account from active lists. You can still reactivate it later."
+                confirmText="Yes, Close it"
+                variant="destructive"
+            />
+
+            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
+                <SheetContent side="right" showClose={false} className="w-full sm:max-w-md rounded-l-2xl border-l border-slate-200 p-0 shadow-2xl">
+                    <div className="p-6 space-y-4">
+                        <SheetHeader className="space-y-2 text-left">
+                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
+                                <Trash2 className="h-5 w-5" />
+                                Unsaved Changes
+                            </SheetTitle>
+                            <SheetDescription className="text-sm font-medium text-slate-500">
+                                You have made changes to this account. Navigating away will discard these changes correctly.
+                            </SheetDescription>
+                        </SheetHeader>
+                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowUnsavedConfirm(false)}
+                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
+                            >
+                                Keep Editing
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={confirmAction}
+                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
+                            >
+                                Discard Changes
+                            </Button>
+                        </SheetFooter>
+                    </div>
+                </SheetContent>
             </Sheet>
 
             <CategorySlide

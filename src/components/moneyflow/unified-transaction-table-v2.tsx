@@ -686,7 +686,22 @@ export function UnifiedTransactionTableV2({
         router.refresh()
       })
       .catch(err => {
-        if (err.message && err.message.includes('void the confirmation transaction first')) {
+        if (err.message && err.message.includes('BATCH_LOCKED:')) {
+          const batchId = err.message.split('BATCH_LOCKED:')[1]?.trim();
+          toast.error(
+            <div className="flex flex-col gap-1">
+              <span className="font-bold">Giao dịch Bot Batch</span>
+              <span className="text-xs">Không được xóa tại đây để tránh lệch Data.</span>
+              {batchId && (
+                <a href={`/batch/detail/${batchId}`} target="_blank" rel="noopener noreferrer" className="font-bold underline text-indigo-400 mt-1">
+                  Mở trang Batch để Unconfirm
+                </a>
+              )}
+            </div>,
+            { duration: 8000 }
+          );
+          closeVoidDialog();
+        } else if (err.message && err.message.includes('void the confirmation transaction first')) {
           toast.error("Please void the Confirmation Transaction (GD3) first.", {
             description: "Linked confirmation exists."
           });
@@ -1419,7 +1434,7 @@ export function UnifiedTransactionTableV2({
                             </button>
                           </div>
                         ) : col.key === 'amount' ? (
-                          <CustomTooltip 
+                          <CustomTooltip
                             content={sortState.key === 'amount' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
                             side="top"
                           >
@@ -1444,7 +1459,7 @@ export function UnifiedTransactionTableV2({
                             </button>
                           </CustomTooltip>
                         ) : col.key === 'final_price' ? (
-                          <CustomTooltip 
+                          <CustomTooltip
                             content={sortState.key === 'final_price' ? (sortState.dir === 'asc' ? 'Sorted: Low to High' : 'Sorted: High to Low') : 'Click to sort'}
                             side="top"
                           >

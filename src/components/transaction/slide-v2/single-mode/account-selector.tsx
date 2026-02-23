@@ -15,6 +15,7 @@ import { SingleTransactionFormValues } from "../types";
 import { Account, Person } from "@/types/moneyflow.types";
 import { Combobox, ComboboxGroup } from "@/components/ui/combobox";
 import { PersonAvatar } from "@/components/ui/person-avatar";
+import { getLastTransactionPersonId } from "@/actions/account-actions";
 
 type AccountSelectorProps = {
     accounts: Account[];
@@ -29,6 +30,19 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const personId = useWatch({ control: form.control, name: "person_id" });
     const sourceId = useWatch({ control: form.control, name: "source_account_id" });
     const targetId = useWatch({ control: form.control, name: "target_account_id" });
+
+    // MF5.5: Recent People Optimization
+    const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
+    const [lastClickedPersonId, setLastClickedPersonId] = useState<string | null>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('mf_last_clicked_person_id');
+        }
+        return null;
+    });
+
+    useEffect(() => {
+        getLastTransactionPersonId().then(setLastSubmittedPersonId);
+    }, []);
 
     const selectedPerson = useMemo(() => people.find(p => p.id === personId), [people, personId]);
 
@@ -86,16 +100,30 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
         ];
     };
 
-    const peopleGroups: ComboboxGroup[] = [
-        {
-            label: "All People",
-            items: people.map(p => ({
-                value: p.id,
-                label: p.name,
-                icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
-            }))
-        }
-    ];
+    const peopleGroups: ComboboxGroup[] = useMemo(() => {
+        const recentIds = Array.from(new Set([lastClickedPersonId, lastSubmittedPersonId].filter(Boolean))) as string[];
+        const recentPeopleList = people.filter(p => recentIds.includes(p.id));
+        const allOtherPeople = people.filter(p => !recentIds.includes(p.id));
+
+        return [
+            ...(recentPeopleList.length > 0 ? [{
+                label: "Recent Involved",
+                items: recentPeopleList.map(p => ({
+                    value: p.id,
+                    label: p.name,
+                    icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
+                }))
+            }] : []),
+            {
+                label: "All People",
+                items: allOtherPeople.map(p => ({
+                    value: p.id,
+                    label: p.name,
+                    icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
+                }))
+            }
+        ];
+    }, [people, lastClickedPersonId, lastSubmittedPersonId]);
 
     const isIncomeFlow = !sourceId && !!targetId;
     const isExpenseFlow = !!sourceId && !targetId;
@@ -134,7 +162,13 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                 <Combobox
                                     groups={peopleGroups}
                                     value={field.value ?? undefined}
-                                    onValueChange={field.onChange}
+                                    onValueChange={(val) => {
+                                        field.onChange(val);
+                                        if (val) {
+                                            setLastClickedPersonId(val);
+                                            localStorage.setItem('mf_last_clicked_person_id', val);
+                                        }
+                                    }}
                                     placeholder="Personal Flow (No one)"
                                     className="w-full h-11 bg-white border-slate-200 shadow-sm transition-all hover:bg-slate-50/50"
                                     onAddNew={onAddNewPerson}

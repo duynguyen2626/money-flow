@@ -331,8 +331,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
   }, [])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 110, minWidth: 90 },
-    { key: "shop", label: "Notes Flow", defaultWidth: 360, minWidth: 280 },
-    { key: "account", label: "Flow", defaultWidth: 300, minWidth: 280 },
+    { key: "shop", label: "Notes Flow", defaultWidth: 420, minWidth: 320 },
+    { key: "account", label: "Flow", defaultWidth: 240, minWidth: 180 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
     { key: "total_back", label: "Total Back", defaultWidth: 120, minWidth: 100 },
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
@@ -794,7 +794,22 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       window.dispatchEvent(new CustomEvent('refresh-account-data'))
       router.refresh()
     } catch (err: any) {
-      if (err.message && err.message.includes('void the confirmation transaction first')) {
+      if (err.message && err.message.includes('BATCH_LOCKED:')) {
+        const batchId = err.message.split('BATCH_LOCKED:')[1]?.trim();
+        toast.error(
+          <div className="flex flex-col gap-1">
+            <span className="font-bold">Giao dịch Bot Batch</span>
+            <span className="text-xs">Không được xóa tại đây để tránh lệch Data.</span>
+            {batchId && (
+              <a href={`/batch/detail/${batchId}`} target="_blank" rel="noopener noreferrer" className="font-bold underline text-indigo-400 mt-1">
+                Mở trang Batch để Unconfirm
+              </a>
+            )}
+          </div>,
+          { duration: 8000 }
+        );
+        closeVoidDialog();
+      } else if (err.message && err.message.includes('void the confirmation transaction first')) {
         toast.error("Please void the Confirmation Transaction (GD3) first.", {
           description: "Linked confirmation exists."
         });
@@ -2208,18 +2223,26 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                     </button>
                                   </CustomTooltip>
 
-                                  {txn.note ? (
-                                    <CustomTooltip content={txn.note}>
-                                      <span
-                                        className="text-slate-900 font-black truncate cursor-help block flex-1"
-                                        style={{ fontSize: `1.15em` }}
-                                      >
-                                        {txn.note}
-                                      </span>
-                                    </CustomTooltip>
-                                  ) : (
-                                    <span className="text-slate-400 italic text-[0.9em]">No note</span>
-                                  )}
+                                  {(() => {
+                                    const note = txn.note || '';
+                                    const isConfirmed = note.startsWith('[C] ');
+                                    const displayNote = isConfirmed ? note.substring(4) : note;
+
+                                    if (!note) {
+                                      return <span className="text-slate-400 italic text-[0.9em]">No note</span>;
+                                    }
+
+                                    return (
+                                      <CustomTooltip content={note}>
+                                        <span
+                                          className="text-slate-900 font-black truncate cursor-help block flex-1"
+                                          style={{ fontSize: `1.15em` }}
+                                        >
+                                          {displayNote}
+                                        </span>
+                                      </CustomTooltip>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* Right: All Badges in Single Row */}
@@ -2279,7 +2302,38 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                     </CustomTooltip>
                                   ) : null;
 
-                                  const showBadges = currentInstallmentBadge || refundBadge || confirmRefundBadge || splitBadge || duplicationBadge || hasBulkDebts;
+                                  const batchId = metadata?.batch_id;
+                                  const batchType = metadata?.type;
+                                  let batchBadge = null;
+                                  if (batchId || batchType === 'batch_funding') {
+                                    batchBadge = (
+                                      <CustomTooltip content={`Batch: ${batchId || 'System Funding'}`}>
+                                        <Link
+                                          href={batchId ? `/batch/detail/${batchId}` : `/batch`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="inline-flex items-center gap-1.5 px-2 h-[22px] min-w-[70px] justify-center rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 text-[10px] font-bold whitespace-nowrap transition-all duration-200 shadow-sm hover:bg-indigo-100"
+                                        >
+                                          <ShoppingBag className="h-3 w-3" />
+                                          BATCH
+                                        </Link>
+                                      </CustomTooltip>
+                                    );
+                                  }
+
+                                  const isConfirmed = txn.note?.startsWith('[C] ');
+                                  let confirmedBadge = null;
+                                  if (isConfirmed) {
+                                    confirmedBadge = (
+                                      <CustomTooltip content="Batch Item Confirmed">
+                                        <div className="inline-flex items-center gap-1.5 px-2 h-[22px] justify-center rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px] font-black whitespace-nowrap shadow-sm">
+                                          <Check className="h-3 w-3" />
+                                          CONFIRMED
+                                        </div>
+                                      </CustomTooltip>
+                                    );
+                                  }
+
+                                  const showBadges = currentInstallmentBadge || refundBadge || confirmRefundBadge || splitBadge || duplicationBadge || hasBulkDebts || batchBadge || confirmedBadge;
 
                                   if (!showBadges) return null;
 
@@ -2290,6 +2344,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                       {confirmRefundBadge}
                                       {splitBadge}
                                       {duplicationBadge}
+                                      {batchBadge}
+                                      {confirmedBadge}
                                       {hasBulkDebts && (() => {
                                         const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
 
@@ -2364,7 +2420,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                   className="text-slate-900 font-bold truncate cursor-help block flex-1"
                                   style={{ fontSize: `0.9em` }}
                                 >
-                                  {txn.note}
+                                  {txn.note?.startsWith('[C] ') ? txn.note.substring(4) : txn.note}
                                 </span>
 
                                 {txn.note && (
@@ -2410,7 +2466,6 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           const isInternal = actualCategory?.kind === 'internal';
                           const kindLabel = isInternal ? 'internal' : 'external';
                           const KindIcon = isInternal ? User : Users2;
-
                           return (
                             <div className="flex items-center gap-2 min-w-0">
                               {/* Icon Container (Square as per rules) */}
@@ -2651,8 +2706,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                           </div>
                                         )}
                                       </div>
-                                      <div className="flex-1 min-w-0">
-                                        <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
+                                      <div className="flex-1 min-w-0 overflow-hidden">
+                                        <span className="block text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
                                           {displayName}
                                         </span>
                                       </div>
@@ -2709,7 +2764,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           // Helper to render entity with badge
                           const renderFlowEntity = (entity: typeof sourceEntity, badges: React.ReactNode[], isTarget: boolean) => (
                             <div
-                              className="flex-1 min-w-0 max-w-[44%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
+                              className="flex-1 min-w-0 max-w-[42%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm"
                             >
                               {/* Avatar + Name area */}
                               <CustomTooltip content={`Open ${entity.name} in new tab`}>
@@ -2731,8 +2786,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                                       </div>
                                     )}
                                   </div>
-                                  <div className="flex-1 min-w-0">
-                                    <span className="text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
+                                  <div className="flex-1 min-w-0 overflow-hidden">
+                                    <span className="block text-sm font-bold text-slate-700 truncate group-hover/pill:text-blue-600 transition-colors">
                                       {entity.name}
                                     </span>
                                   </div>
@@ -3316,6 +3371,17 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                 <p className="mt-2 text-sm text-slate-600">
                   This transaction will be marked as <span className="font-bold text-rose-600">VOID</span>. It will not be deleted, but it will be hidden from default views and excluded from calculations.
                 </p>
+
+                {/* Specific warning for batch confirmed items */}
+                {(confirmVoidTarget.note?.includes('[C]') || (typeof confirmVoidTarget.metadata === 'string' && confirmVoidTarget.metadata?.includes('batch_id')) || (confirmVoidTarget.metadata as any)?.batch_id) && (
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-lg flex gap-3">
+                    <Zap className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="text-[11px] font-medium text-amber-800 leading-normal">
+                      <strong className="block text-amber-900 mb-0.5 uppercase tracking-wider">Confirmed Transaction Detected</strong>
+                      This transaction is part of a BATCH. Voiding it here will automatically UNCHECK (revert) the corresponding item in the Batch Checklist.
+                    </div>
+                  </div>
+                )}
                 {voidError && (
                   <p className="mt-2 text-sm text-red-600">{voidError}</p>
                 )}

@@ -294,10 +294,10 @@ export function AccountDetailTransactions({
 
         transactions.forEach(t => {
             // If source = current account, target is the other side
-            if (t.source_account_id === account.id && t.target_account_id) {
+            if (t.account_id === account.id && t.target_account_id) {
                 targetIds.add(`account-${t.target_account_id}`)
-            } else if (t.target_account_id === account.id && t.source_account_id) {
-                targetIds.add(`account-${t.source_account_id}`)
+            } else if (t.target_account_id === account.id && t.account_id) {
+                targetIds.add(`account-${t.account_id}`)
             }
 
             // People involved
@@ -381,7 +381,7 @@ export function AccountDetailTransactions({
                 result = result.filter(t => {
                     if (selectedTargetId.startsWith('account-')) {
                         const targetAccountId = selectedTargetId.replace('account-', '')
-                        return t.source_account_id === targetAccountId || t.target_account_id === targetAccountId
+                        return t.account_id === targetAccountId || t.target_account_id === targetAccountId
                     } else if (selectedTargetId.startsWith('person-')) {
                         const targetPersonId = selectedTargetId.replace('person-', '')
                         return t.person_id === targetPersonId

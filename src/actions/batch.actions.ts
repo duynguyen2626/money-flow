@@ -87,8 +87,8 @@ export async function getBatchByIdAction(id: string) {
     return await getBatchById(id)
 }
 
-export async function fundBatchAction(batchId: string) {
-    const result = await fundBatch(batchId)
+export async function fundBatchAction(batchId: string, sourceAccountId?: string) {
+    const result = await fundBatch(batchId, sourceAccountId)
     revalidatePath('/batch')
     revalidatePath(`/batch/detail/${batchId}`)
     revalidatePath('/accounts')
@@ -189,4 +189,11 @@ export async function restoreBatchAction(batchId: string) {
     await restoreBatch(batchId)
     revalidatePath('/batch')
     revalidatePath(`/batch/detail/${batchId}`)
+}
+
+export async function syncMasterOldBatchesAction() {
+    const { syncMasterOldBatches } = await import('@/services/batch.service')
+    const result = await syncMasterOldBatches()
+    revalidatePath('/batch')
+    return result
 }

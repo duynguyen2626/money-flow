@@ -13,7 +13,7 @@ const THEME = {
 
 const ICONS: Record<string, string> = {
     dashboard: `<path d="M5 5 H45 V45 H5 Z M55 5 H95 V45 H55 Z M5 55 H45 V95 H5 Z M55 55 H95 V95 H55 Z" fill="currentColor"/>`,
-    accounts: ``, // Handled specifically to show money bag
+    accounts: `<path d="M5 90 H95" stroke="currentColor" stroke-width="8"/><path d="M10 90 V45 L50 10 L90 45 V90" stroke="currentColor" stroke-width="8" fill="none"/><path d="M35 90 V60 M50 90 V60 M65 90 V60" stroke="currentColor" stroke-width="8"/>`, // Bank building icon
     transactions: `<path d="M5 35 H55 V15 L95 50 L55 85 V65 H5 Z" fill="currentColor" opacity="0.9"/><path d="M95 35 H45 V15 L5 50 L45 85 V65 H95 Z" fill="currentColor" opacity="0.5"/>`,
     installments: `<rect x="15" y="5" width="70" height="90" rx="10" stroke="currentColor" stroke-width="8" fill="none"/><path d="M15 35 H85 M15 65 H85" stroke="currentColor" stroke-width="8"/>`,
     categories: `<path d="M10 10 H60 L90 40 L40 90 L10 60 Z" fill="currentColor"/><circle cx="45" cy="35" r="10" fill="white"/>`,
@@ -30,58 +30,58 @@ export function useAppFavicon(isLoading: boolean, customIcon?: string) {
     const pathname = usePathname()
 
     useEffect(() => {
-        // Priority 1: Loading Spinner
+        // Prepare target URL and isUrl flag
+        let targetUrl = '';
+        let isCustomUrl = false;
+        let svgContent = '';
+
         if (isLoading) {
-            const loadingSvg = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="42" stroke="${THEME.blue}" stroke-width="10" fill="none" stroke-dasharray="160 100" opacity="0.8">
-            <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="0.8s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="50" cy="50" r="28" fill="${THEME.gold}" stroke="${THEME.goldDark}" stroke-width="2" />
-          <text x="50" y="60" font-size="32" font-weight="950" fill="white" text-anchor="middle" font-family="Arial">$</text>
-        </svg>
-      `
-            const { cleanup } = updateFavicon(loadingSvg)
-            return () => cleanup()
+            svgContent = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="42" stroke="${THEME.blue}" stroke-width="10" fill="none" stroke-dasharray="160 100" opacity="0.8">
+                    <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="0.8s" repeatCount="indefinite" />
+                  </circle>
+                  <circle cx="50" cy="50" r="28" fill="${THEME.gold}" stroke="${THEME.goldDark}" stroke-width="2" />
+                  <text x="50" y="60" font-size="32" font-weight="950" fill="white" text-anchor="middle" font-family="Arial">$</text>
+                </svg>
+            `;
+        } else if (customIcon) {
+            targetUrl = customIcon;
+            isCustomUrl = true;
+        } else {
+            // Page specific icon
+            let pageKey = 'dashboard'
+            if (pathname) {
+                if (pathname === '/accounts') pageKey = 'accounts'
+                else if (pathname.includes('/accounts/')) pageKey = 'accounts_detail' // Detail pages don't auto-override to bag if no customIcon
+                else if (pathname.includes('/transactions')) pageKey = 'transactions'
+                else if (pathname.includes('/installments')) pageKey = 'installments'
+                else if (pathname.includes('/categories')) pageKey = 'categories'
+                else if (pathname.includes('/shops')) pageKey = 'shops'
+                else if (pathname.includes('/people')) pageKey = 'people'
+                else if (pathname.includes('/cashback')) pageKey = 'cashback'
+                else if (pathname.includes('/batch')) pageKey = 'batch'
+                else if (pathname.includes('/services')) pageKey = 'services'
+                else if (pathname.includes('/refunds')) pageKey = 'refunds'
+                else if (pathname.includes('/settings/ai')) pageKey = 'ai'
+            }
+
+            if (pageKey === 'accounts') {
+                targetUrl = '/favicon.svg?v=6';
+                isCustomUrl = true;
+            } else {
+                const iconContent = ICONS[pageKey === 'accounts_detail' ? 'accounts' : pageKey] || ICONS.dashboard
+                svgContent = `
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="${THEME.blue}">
+                    <g transform="translate(5, 5) scale(0.9)">
+                      ${iconContent}
+                    </g>
+                  </svg>
+                `;
+            }
         }
 
-        // Priority 2: Custom Image (Cloudinary Profile/Logo)
-        if (customIcon) {
-            const { cleanup } = updateFavicon(customIcon, true)
-            return () => cleanup()
-        }
-
-        // Priority 3: Page specific icon
-        let pageKey = 'dashboard'
-        if (pathname) {
-            if (pathname.includes('/accounts')) pageKey = 'accounts'
-            else if (pathname.includes('/transactions')) pageKey = 'transactions'
-            else if (pathname.includes('/installments')) pageKey = 'installments'
-            else if (pathname.includes('/categories')) pageKey = 'categories'
-            else if (pathname.includes('/shops')) pageKey = 'shops'
-            else if (pathname.includes('/people')) pageKey = 'people'
-            else if (pathname.includes('/cashback')) pageKey = 'cashback'
-            else if (pathname.includes('/batch')) pageKey = 'batch'
-            else if (pathname.includes('/services')) pageKey = 'services'
-            else if (pathname.includes('/refunds')) pageKey = 'refunds'
-            else if (pathname.includes('/settings/ai')) pageKey = 'ai'
-        }
-
-        // SPECIFIC REQUEST: Accounts page keeps the golden bag
-        if (pageKey === 'accounts') {
-            const { cleanup } = updateFavicon('/favicon.svg?v=6', true)
-            return () => cleanup()
-        }
-
-        const iconContent = ICONS[pageKey] || ICONS.dashboard
-        const pageSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="${THEME.blue}">
-        <g transform="translate(5, 5) scale(0.9)">
-          ${iconContent}
-        </g>
-      </svg>
-    `
-        const { cleanup } = updateFavicon(pageSvg)
+        const { cleanup } = updateFavicon(isCustomUrl ? targetUrl : svgContent, isCustomUrl);
         return () => cleanup()
 
     }, [isLoading, pathname, customIcon])

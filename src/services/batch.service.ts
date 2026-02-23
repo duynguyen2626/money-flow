@@ -86,7 +86,7 @@ export async function deleteBatch(id: string) {
 
     // 2. Delete linked transactions (funding and matches)
     // Funding transaction is directly linked
-    const txnIdsToDelete = []
+    const txnIdsToDelete: string[] = []
     if (batch?.funding_transaction_id) txnIdsToDelete.push(batch.funding_transaction_id)
 
     // Also delete any transaction that has this batch_id in metadata
@@ -148,6 +148,25 @@ export async function addBatchItem(item: Database['public']['Tables']['batch_ite
 
 export async function updateBatchItem(id: string, item: Database['public']['Tables']['batch_items']['Update']) {
     const supabase: any = createClient()
+
+    // Safety check: Prevent changing core fields of a confirmed item
+    if (item.amount !== undefined || item.target_account_id !== undefined) {
+        const { data: existing, error: fetchErr } = await supabase
+            .from('batch_items')
+            .select('status, amount, target_account_id')
+            .eq('id', id)
+            .single()
+
+        if (!fetchErr && existing?.status === 'confirmed') {
+            const amountChanged = item.amount !== undefined && existing.amount !== item.amount
+            const targetChanged = item.target_account_id !== undefined && existing.target_account_id !== item.target_account_id
+
+            if (amountChanged || targetChanged) {
+                throw new Error('Cannot change Amount or Target Account of a confirmed item. Uncheck it first to prevent data inconsistency.')
+            }
+        }
+    }
+
     const { data, error } = await supabase
         .from('batch_items')
         .update(item as any)
@@ -234,8 +253,8 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
     const finalTargetId = targetAccountId || item.target_account_id;
     if (!finalTargetId) throw new Error('No target account specified');
 
-    // Set category: Default to Credit Payment, override to Online Services if note matches
-    let categoryId = SYSTEM_CATEGORIES.CREDIT_PAYMENT;
+    // Set category: Default to Transfer, override if note matches online service
+    let categoryId = SYSTEM_CATEGORIES.MONEY_TRANSFER;
     const noteLower = item.note?.toLowerCase() || '';
     if (noteLower.includes('online service')) {
         categoryId = SYSTEM_CATEGORIES.ONLINE_SERVICES;
@@ -301,7 +320,7 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
         .from('transactions')
         .insert({
             occurred_at: new Date().toISOString(),
-            note: item.note,
+            note: `${item.batch.name} - ${item.note}`,
             status: 'posted',
             tag: 'BATCH_AUTO',
             created_by: userId,
@@ -312,7 +331,8 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
             amount: Math.abs(item.amount),
             type: 'transfer',
             is_installment: isInstallment,
-            installment_plan_id: installmentPlanId
+            installment_plan_id: installmentPlanId,
+            metadata: { type: 'batch_funding', batch_id: item.batch_id, batch_item_id: item.id } as any
         })
         .select()
         .single()
@@ -614,7 +634,7 @@ export async function importBatchItemsFromExcel(
     return results
 }
 
-export async function fundBatch(batchId: string): Promise<FundBatchResult> {
+export async function fundBatch(batchId: string, overrideSourceAccountId?: string): Promise<FundBatchResult> {
     const supabase: any = createClient()
 
     // 1. Fetch Batch Details (to get Source Account and Name)
@@ -625,7 +645,28 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
         .single()
 
     if (batchError || !batch) throw new Error('Batch not found')
-    if (!batch.source_account_id) throw new Error('Batch has no source account')
+
+    let sourceAccountId = overrideSourceAccountId || batch.source_account_id
+
+    // Auto-discover source account if not set (e.g., from MBB/VIB UI)
+    if (!sourceAccountId) {
+        // Find default account based on Bank Type
+        const { data: matchedAccounts } = await supabase
+            .from('accounts')
+            .select('id')
+            .ilike('name', `%${batch.bank_type}%`)
+            .eq('type', 'bank')
+            .order('created_at', { ascending: true })
+            .limit(1)
+
+        if (matchedAccounts && matchedAccounts.length > 0) {
+            sourceAccountId = matchedAccounts[0].id
+            // Update the batch with this source account
+            await supabase.from('batches').update({ source_account_id: sourceAccountId }).eq('id', batchId)
+        } else {
+            throw new Error(`Please select a source account first, or create a Bank account with name containing ${batch.bank_type}`)
+        }
+    }
 
     const batchItems = Array.isArray(batch.batch_items) ? batch.batch_items : []
     if (batchItems.length === 0) throw new Error('Batch has no items to fund')
@@ -640,29 +681,57 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
     const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
 
     // 3. Check if already funded and if we need to update
-    if (batch.status === 'funded') {
-        // Calculate how much is already funded
-        // We can check all transactions linked to this batch?
-        // Or just check the 'funding_transaction_id' if we only support one?
-        // The current schema has 'funding_transaction_id' on the batch.
-        // If we want to support multiple, we might need to query transactions by note or tag?
-        // For now, let's assume we just want to ADD the difference.
+    let isFunded = batch.status === 'funded';
+    let currentFundedAmount = 0;
 
-        // [Single-Table Migration] Get amount directly from funding transaction
-        let currentFundedAmount = 0;
-        if (batch.funding_transaction_id) {
-            const { data: fundingTxn } = await supabase
+    if (batch.funding_transaction_id) {
+        const { data: fundingTxn } = await supabase
+            .from('transactions')
+            .select('amount, status')
+            .eq('id', batch.funding_transaction_id)
+            .single();
+
+        if (fundingTxn && fundingTxn.status !== 'void') {
+            currentFundedAmount = Math.abs(fundingTxn.amount || 0);
+        } else {
+            // The funding transaction was voided or deleted
+            isFunded = false;
+        }
+    } else {
+        isFunded = false;
+    }
+
+    if (isFunded) {
+        const diff = totalAmount - currentFundedAmount;
+
+        // If amount changed (up or down), try to update the original funding txn first
+        if (diff !== 0 && batch.funding_transaction_id) {
+            const { data: updatedTxn, error: updateErr } = await supabase
                 .from('transactions')
-                .select('amount')
+                .update({
+                    amount: totalAmount,
+                    note: `Transfer to ${batch.bank_type} Clearing - ${batch.name}`
+                })
                 .eq('id', batch.funding_transaction_id)
+                .select()
                 .single();
 
-            if (fundingTxn) {
-                currentFundedAmount = Math.abs(fundingTxn.amount || 0);
+            if (!updateErr) {
+                // Recalculate balances
+                const { recalculateBalance } = await import('./account.service')
+                await recalculateBalance(batch.source_account_id)
+                await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
+
+                return {
+                    transactionId: updatedTxn.id,
+                    totalAmount,
+                    fundedAmount: totalAmount,
+                    createdTransaction: false,
+                    status: 'updated_funding',
+                    sourceAccountId: batch.source_account_id
+                }
             }
         }
-
-        const diff = totalAmount - currentFundedAmount;
 
         if (diff <= 0) {
             return {
@@ -685,12 +754,13 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
             .from('transactions')
             .insert({
                 occurred_at: new Date().toISOString(),
-                note: `[Waiting] Fund More Batch: ${batch.name} (Additional ${diff})`,
+                note: `[Waiting] Re-calculate Batch [${batch.bank_type}]: ${batch.name} (Diff: ${diff})`,
                 status: 'posted',
                 tag: tag,
                 created_by: userId,
                 account_id: batch.source_account_id,
                 target_account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+                category_id: SYSTEM_CATEGORIES.MONEY_TRANSFER,
                 amount: diff,
                 type: 'transfer',
                 metadata: metadata
@@ -700,7 +770,7 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
 
         if (txnError) throw txnError
 
-        if (!batch.funding_transaction_id) {
+        if (!batch.funding_transaction_id || currentFundedAmount === 0) {
             await supabase
                 .from('batches')
                 .update({ funding_transaction_id: txn.id })
@@ -718,7 +788,7 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
             fundedAmount: diff,
             createdTransaction: true,
             status: 'additional_funded',
-            sourceAccountId: batch.source_account_id
+            sourceAccountId: sourceAccountId
         }
     }
 
@@ -735,12 +805,13 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
         .from('transactions')
         .insert({
             occurred_at: new Date().toISOString(),
-            note: `Transfer to Trung gian CKL - ${batch.name}`,
+            note: `Transfer to Trung gian CKL [${batch.bank_type}] - ${batch.name}`,
             status: 'posted',
             tag: tag,
             created_by: userId,
-            account_id: batch.source_account_id,
+            account_id: sourceAccountId,
             target_account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+            category_id: SYSTEM_CATEGORIES.MONEY_TRANSFER,
             amount: totalAmount,
             type: 'transfer',
             metadata: metadata
@@ -763,7 +834,7 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
 
     // 6. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
-    await recalculateBalance(batch.source_account_id)
+    await recalculateBalance(sourceAccountId)
     await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
 
     return {
@@ -772,7 +843,7 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
         fundedAmount: totalAmount,
         createdTransaction: true,
         status: 'funded',
-        sourceAccountId: batch.source_account_id
+        sourceAccountId: sourceAccountId
     }
 }
 
@@ -818,14 +889,45 @@ export async function sendBatchToSheet(batchId: string) {
 
     const { data: batch, error: batchError } = await supabase
         .from('batches')
-        .select('*, batch_items(*)')
+        .select(`
+            *,
+            batch_items (
+                *,
+                accounts:target_account_id(name)
+            )
+        `)
         .eq('id', batchId)
         .single()
 
     if (batchError || !batch) throw new Error('Batch not found')
-    if (!batch.sheet_link) throw new Error('No sheet link configured')
 
-    const items = (batch.batch_items || []).filter((item: any) => item.status === 'pending')
+    let effectiveSheetLink = batch.sheet_link
+    let targetSpreadsheetUrl = batch.sheet_link
+
+    // Fallback to global settings if missing
+    const { data: globalSettings } = await supabase
+        .from('batch_settings')
+        .select('sheet_url, display_sheet_url')
+        .eq('bank_type', batch.bank_type || 'VIB')
+        .single()
+
+    if (!effectiveSheetLink && globalSettings?.sheet_url) {
+        effectiveSheetLink = globalSettings.sheet_url
+    }
+
+    // The deployed web app (effectiveSheetLink) needs the target google sheet (targetSpreadsheetUrl)
+    if (globalSettings?.display_sheet_url) {
+        targetSpreadsheetUrl = globalSettings.display_sheet_url
+    }
+
+    if (!effectiveSheetLink) throw new Error('No Apps Script link configured for this bank type')
+
+    // Send all items regardless of confirmed/pending status as requested by user
+    const items = batch.batch_items || []
+
+    console.log(`[Batch Service] Sending ${items.length} items to Google Sheets via GAS`)
+    console.log(`[Batch Service] Effective GAS Link: ${effectiveSheetLink}`)
+    console.log(`[Batch Service] Target Sheet URL: ${targetSpreadsheetUrl}`)
 
     // Fetch bank mappings to lookup codes - FILTER BY BANK_TYPE
     const { data: bankMappings } = await supabase
@@ -844,6 +946,7 @@ export async function sendBatchToSheet(batchId: string) {
     const payload = {
         bank_type: (batch.bank_type || 'VIB').toUpperCase(),
         sheet_name: batch.sheet_name,
+        spreadsheet_url: targetSpreadsheetUrl, // Provide sheet URL for GAS to open
         items: items.map((item: any) => {
             let bankName = item.bank_name || ''
             // Only try to format if it doesn't look like it's already formatted
@@ -869,18 +972,37 @@ export async function sendBatchToSheet(batchId: string) {
                 }
             }
 
+            // Parse note fallback "Vcb Signature Before Feb2026 by Mbb"
+            let finalNote = item.note || ''
+            if (!finalNote) {
+                const accountName = item.accounts?.name || 'Unknown'
+                const isBefore = batch.period === 'before' || batch.name?.toLowerCase().includes('early')
+                const periodStr = isBefore ? 'Before' : 'After'
+
+                const [year, month] = (batch.month_year || '').split('-')
+                let monthYearStr = ''
+                if (year && month) {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                    monthYearStr = `${monthNames[parseInt(month, 10) - 1]}${year}` // e.g. Feb2026
+                }
+                const bankTypeName = batch.bank_type === 'MBB' ? 'Mbb' : 'Vib'
+                finalNote = `${accountName} ${periodStr} ${monthYearStr} by ${bankTypeName}`
+            }
+
             return {
                 receiver_name: item.receiver_name || '',
                 bank_number: item.bank_number || '',
                 amount: item.amount || 0,
-                note: item.note || '',
+                note: finalNote,
                 bank_name: bankName
             }
         })
     }
 
+    console.log(`[Batch Service] Final Payload:`, JSON.stringify({ ...payload, items: `[${payload.items.length} items hidden for log]` }))
+
     try {
-        const response = await fetch(batch.sheet_link, {
+        const response = await fetch(effectiveSheetLink, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1361,3 +1483,70 @@ export function getNextMonthYear(currentMonth?: string): string {
     return `${nextYear}-${nextMonth}`
 }
 
+
+export async function syncMasterOldBatches() {
+    const supabase = createClient()
+    const { data: batchesRaw } = await supabase.from('batches').select('id, name, bank_type')
+    const batches = batchesRaw as any[] | null
+    if (!batches) return { success: false, message: 'No batches' }
+
+    let processedFunds = 0
+    let processedItems = 0
+
+    for (const batch of batches) {
+        // Sync fund transactions
+        const { data: fundTxnsRaw } = await supabase
+            .from('transactions')
+            .select('id, metadata')
+            .eq('target_account_id', SYSTEM_ACCOUNTS.BATCH_CLEARING)
+            .ilike('note', `%${batch.name}%`)
+
+        const fundTxns = fundTxnsRaw as any[] | null
+
+        if (fundTxns) {
+            for (const txn of fundTxns) {
+                const meta = txn.metadata as any || {}
+                if (!meta.type) {
+                    await supabase.from('transactions').update({
+                        category_id: SYSTEM_CATEGORIES.MONEY_TRANSFER,
+                        metadata: { ...meta, type: 'batch_funding', batch_id: batch.id } as any
+                    }).eq('id', txn.id)
+                    processedFunds++
+                }
+            }
+        }
+
+        // Sync batch items
+        const { data: itemsRaw } = await supabase
+            .from('batch_items')
+            .select('id, transaction_id, batch_id')
+            .eq('batch_id', batch.id)
+            .not('transaction_id', 'is', null)
+
+        const items = itemsRaw as any[] | null
+
+        if (items) {
+            for (const item of items) {
+                const { data: itemTxnRaw } = await supabase.from('transactions').select('id, metadata, note').eq('id', item.transaction_id).maybeSingle()
+                const itemTxn = itemTxnRaw as any
+                if (itemTxn) {
+                    const meta = itemTxn.metadata as any || {}
+                    if (!meta.type) {
+                        const newNote = itemTxn.note.includes(`${batch.name}`)
+                            ? itemTxn.note
+                            : `${batch.name} - ${itemTxn.note}`
+
+                        await supabase.from('transactions').update({
+                            category_id: SYSTEM_CATEGORIES.MONEY_TRANSFER,
+                            note: newNote,
+                            metadata: { ...meta, type: 'batch_funding', batch_id: item.batch_id, batch_item_id: item.id } as any
+                        }).eq('id', itemTxn.id)
+                        processedItems++
+                    }
+                }
+            }
+        }
+    }
+
+    return { success: true, processedFunds, processedItems }
+}

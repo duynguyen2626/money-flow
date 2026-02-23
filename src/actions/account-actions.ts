@@ -226,3 +226,25 @@ export async function getLastTransactionAccountId() {
     return null
   }
 }
+
+export async function getLastTransactionPersonId() {
+  const supabase = await createClient()
+
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('person_id')
+      .not('person_id', 'is', null)
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle() as any
+
+    if (error) throw error
+    return data?.person_id || null
+  } catch (error) {
+    console.error('Failed to fetch last transaction person', error)
+    return null
+  }
+}

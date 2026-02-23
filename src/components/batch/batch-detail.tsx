@@ -32,12 +32,18 @@ export function BatchDetail({
     bankMappings,
     webhookLinks = [],
     activeInstallmentAccounts = [],
+    cutoffDay = 15,
+    globalSheetUrl = null,
+    globalSheetName = null,
 }: {
     batch: any,
     accounts: any[],
     bankMappings?: any[],
     webhookLinks?: any[],
-    activeInstallmentAccounts?: string[]
+    activeInstallmentAccounts?: string[],
+    cutoffDay?: number,
+    globalSheetUrl?: string | null,
+    globalSheetName?: string | null
 }) {
     const [sending, setSending] = useState(false)
     const [funding, setFunding] = useState(false)
@@ -248,13 +254,16 @@ export function BatchDetail({
 
                             {/* Sheet Link & Settings */}
                             <div className="flex items-center gap-1">
-                                {batch.display_link ? (
+                                {(batch.display_link || globalSheetUrl) ? (
                                     <a
-                                        href={batch.display_link}
+                                        href={batch.display_link || globalSheetUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 transition-all text-blue-600"
-                                        title={batch.display_name || "Open Sheet"}
+                                        className={cn(
+                                            "h-7 w-7 flex items-center justify-center rounded-md border transition-all",
+                                            batch.display_link ? "border-slate-200 bg-white hover:bg-blue-50 hover:border-blue-300 text-blue-600" : "border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-600"
+                                        )}
+                                        title={batch.display_name || globalSheetName || "Open Sheet"}
                                     >
                                         <ExternalLink className="h-3.5 w-3.5" />
                                     </a>
@@ -291,8 +300,8 @@ export function BatchDetail({
                         open={showFundDialog}
                         onOpenChange={setShowFundDialog}
                         title="Step 1: Fund Batch"
-                        description={batch.status === 'funded'
-                            ? `This batch is already funded. Do you want to fund more? This will create an additional transaction of ${new Intl.NumberFormat('en-US').format(totalAmount)} from ${sourceAccount?.name || 'source'} to the clearing pool.`
+                        description={batch.status === 'funded' || batch.status === 'additional_funded'
+                            ? `This batch is already funded. Do you want to re-calculate? This will create an additional transaction bridging the difference of the new total from ${sourceAccount?.name || 'source'} to the clearing pool.`
                             : `This will create a funding transaction of ${new Intl.NumberFormat('en-US').format(totalAmount)} from ${sourceAccount?.name || 'source'} to the clearing pool. Proceed?`
                         }
                         onConfirm={handleFund}
@@ -467,6 +476,7 @@ export function BatchDetail({
                 bankType={batch.bank_type || 'VIB'}
                 accounts={accounts}
                 bankMappings={filteredBankMappings}
+                cutoffDay={cutoffDay}
                 onSuccess={() => {
                     router.refresh()
                     setEditingItem(null)
@@ -500,7 +510,7 @@ export function BatchDetail({
                                     >
                                         {deleting && (bulkAction === 'delete') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         <Trash2 className="h-4 w-4 mr-1" />
-                                        Delete ({selectedItemIds.length})
+                                        <span>Delete ({selectedItemIds.length})</span>
                                     </Button>
                                     <Button
                                         onClick={handleBulkConfirm}
@@ -510,7 +520,7 @@ export function BatchDetail({
                                     >
                                         {confirming && (bulkAction === 'confirm') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         <CheckCircle2 className="mr-2 h-4 w-4" />
-                                        Confirm ({selectedItemIds.length})
+                                        <span>Confirm ({selectedItemIds.length})</span>
                                     </Button>
                                     <Button
                                         variant="ghost"
@@ -518,7 +528,7 @@ export function BatchDetail({
                                         className="h-8 text-slate-500"
                                         onClick={() => setSelectedItemIds([])}
                                     >
-                                        Clear
+                                        <span>Clear</span>
                                     </Button>
                                 </div>
                             )}
