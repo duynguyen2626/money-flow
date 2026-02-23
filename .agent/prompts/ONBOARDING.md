@@ -125,5 +125,12 @@ When starting a new session or task, use these templates:
 
 ---
 
-**Last Updated**: 2026-02-17  
+### 4. **Accounts & Cashback Refinement (Phase 16)**
+- **Focus**: Cycle logic stabilization, unified configuration UI, and enhanced batch processing.
+- **Reference**: `.agent/prompts/HANDOVER_ACCOUNTS_CASHBACK.md`
+
+---
+
+**Last Updated**: 2026-02-23  
 **Maintained By**: Money Flow 3 Team
+

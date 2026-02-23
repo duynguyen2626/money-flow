@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,8 +12,10 @@ import { getChecklistDataAction } from '@/actions/batch-checklist.actions'
 import { upsertBatchItemAmountAction, bulkInitializeFromMasterAction, toggleBatchItemConfirmAction, bulkConfirmBatchItemsAction, bulkUnconfirmBatchItemsAction } from '@/actions/batch-speed.actions'
 import { fundBatchAction, sendBatchToSheetAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
+import { formatShortVietnameseCurrency, formatVietnameseCurrencyText } from '@/lib/number-to-text'
+import { useRouter } from 'next/navigation'
 import { Combobox } from '@/components/ui/combobox'
 import Link from 'next/link'
 
@@ -25,6 +27,7 @@ interface BatchMasterChecklistProps {
 }
 
 export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: BatchMasterChecklistProps) {
+    const router = useRouter()
     const currentYear = new Date().getFullYear()
     const currentMonth = new Date().getMonth() + 1 // 1-12
     const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
@@ -98,6 +101,7 @@ export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: 
     }
 
     async function handleFastRefresh() {
+        router.refresh()
         const result = await getChecklistDataAction(bankType, currentYear)
         if (result.success && result.data) {
             setMasterItems(result.data.masterItems || [])
@@ -377,67 +381,91 @@ export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: 
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                        <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500 overflow-hidden shrink-0">
+                            <Combobox
+                                value={fundSourceAccountId}
+                                onValueChange={(val) => val && setFundSourceAccountId(val)}
+                                items={bankAccounts.map((a: any) => ({
+                                    value: a.id,
+                                    label: a.name,
+                                    icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 rounded-none object-contain" /> : <Wallet className="w-4 h-4 text-slate-400" />
+                                }))}
+                                triggerClassName="h-11 border-none shadow-none rounded-none focus:ring-0 min-w-[180px] text-[11px] font-bold"
+                                disabled={performingAction}
+                            />
+                            {fundSourceAccountId && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Link
+                                            href={`/accounts/${fundSourceAccountId}`}
+                                            target="_blank"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex items-center justify-center px-2 hover:bg-slate-50 border-l border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
+                                        >
+                                            <ExternalLink className="h-4 w-4" />
+                                        </Link>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Open Funding Account Detail</TooltipContent>
+                                </Tooltip>
+                            )}
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={requestGlobalFund}
+                                        disabled={performingAction || !fundSourceAccountId}
+                                        className="h-11 px-4 rounded-none font-black text-[11px] uppercase tracking-widest gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-l border-slate-100"
+                                    >
+                                        <Wallet className="h-4 w-4" />
+                                        <span>Step 1 <span className="text-[10px] opacity-60 ml-1 font-bold">Fund {phaseNameText}</span></span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Step 1: Perform Funding Transaction (Bank → Clearing)</TooltipContent>
+                            </Tooltip>
+                        </div>
 
-                    <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500 overflow-hidden shrink-0">
-                        <Combobox
-                            value={fundSourceAccountId}
-                            onValueChange={(val) => val && setFundSourceAccountId(val)}
-                            items={bankAccounts.map((a: any) => ({
-                                value: a.id,
-                                label: a.name,
-                                icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 rounded-none object-contain" /> : <Wallet className="w-4 h-4 text-slate-400" />
-                            }))}
-                            triggerClassName="h-11 border-none shadow-none rounded-none focus:ring-0 min-w-[180px] text-[11px] font-bold"
-                            disabled={performingAction}
-                        />
-                        {fundSourceAccountId && (
-                            <Link
-                                href={`/accounts/${fundSourceAccountId}`}
-                                target="_blank"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center justify-center px-2 hover:bg-slate-50 border-l border-slate-100 text-slate-400 hover:text-indigo-600 transition-colors"
-                                title="Open Funding Account"
-                            >
-                                <ExternalLink className="h-4 w-4" />
-                            </Link>
-                        )}
-                        <Button
-                            onClick={requestGlobalFund}
-                            disabled={performingAction || !fundSourceAccountId}
-                            className="h-11 px-4 rounded-none font-black text-[11px] uppercase tracking-widest gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-l border-slate-100"
-                            title="Fund Group using the selected account"
-                        >
-                            <Wallet className="h-4 w-4" />
-                            Step 1: Fund {phaseNameText}
-                        </Button>
-                    </div>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={handleGlobalToSheet}
+                                    disabled={performingAction}
+                                    className="h-11 px-6 rounded-xl font-black text-[11px] uppercase tracking-widest gap-2 bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
+                                >
+                                    {performingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+                                    <span>Step 2 <span className="text-[10px] opacity-60 ml-1 font-bold">To Sheet ({phaseNameText})</span></span>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Step 2: Sync list to Google Sheet for Auto-transfer</TooltipContent>
+                        </Tooltip>
 
-                    <Button
-                        onClick={handleGlobalToSheet}
-                        disabled={performingAction}
-                        className="h-11 px-6 rounded-xl font-black text-[11px] uppercase tracking-widest gap-2 bg-indigo-600 text-white hover:bg-indigo-700 shadow-md"
-                    >
-                        {performingAction ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                        Step 2: To Sheet ({phaseNameText})
-                    </Button>
-                    <div className="flex bg-emerald-600 rounded-xl shadow-md overflow-hidden">
-                        <Button
-                            onClick={requestGlobalConfirm}
-                            disabled={performingAction}
-                            className="h-11 px-4 rounded-none font-black text-[11px] uppercase tracking-widest gap-2 bg-transparent text-white hover:bg-emerald-700 border-r border-emerald-500"
-                        >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Step 3: Confirm ({phaseNameText})
-                        </Button>
-                        <Button
-                            onClick={handleGlobalUnconfirm}
-                            disabled={performingAction}
-                            title="Reset all items to Pending (Uncheck) and remove from Target Accounts"
-                            className="h-11 px-3 rounded-none bg-transparent hover:bg-emerald-700 text-emerald-100"
-                        >
-                            <XCircle className="h-4 w-4" />
-                        </Button>
-                    </div>
+                        <div className="flex bg-emerald-600 rounded-xl shadow-md overflow-hidden">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={requestGlobalConfirm}
+                                        disabled={performingAction}
+                                        className="h-11 px-4 rounded-none font-black text-[11px] uppercase tracking-widest gap-2 bg-transparent text-white hover:bg-emerald-700 border-r border-emerald-500"
+                                    >
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        <span>Step 3 <span className="text-[10px] opacity-80 ml-1 font-bold">Confirm ({phaseNameText})</span></span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Step 3: Bulk Confirm (Match/Verify Transfer Status)</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        onClick={handleGlobalUnconfirm}
+                                        disabled={performingAction}
+                                        className="h-11 px-3 rounded-none bg-transparent hover:bg-emerald-700 text-emerald-100"
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Reset / Undo all Step 3 confirmations</TooltipContent>
+                            </Tooltip>
+                        </div>
+                    </TooltipProvider>
                 </div>
             </div>
 
@@ -545,86 +573,97 @@ function PeriodSection({ title, subtitle, items, monthYear, period, bankType, on
                 isSelected ? "bg-white border-indigo-100 shadow-sm" : "bg-slate-50 border-transparent grayscale-[0.3]"
             )}
         >
-            <div className="flex items-end justify-between px-2">
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                        <div className={cn(
-                            "h-7 w-7 rounded-xl border-2 flex items-center justify-center transition-all",
-                            isSelected ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-50" : "bg-white border-slate-200"
-                        )}>
-                            {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-3 w-3 text-slate-300" />}
-                        </div>
-
-                        {isSelected && items.length > 0 && (
-                            <div
-                                className="h-7 w-px bg-slate-200 mx-1"
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                        )}
-
-                        {isSelected && items.length > 0 && (
-                            <div
-                                className="flex items-center justify-center h-7 w-7 rounded-lg hover:bg-slate-100 transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                                title="Select All Pending"
-                            >
-                                <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shadow-sm transition-transform active:scale-90"
-                                    checked={items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').length > 0 &&
-                                        items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').every((i: any) => selectedItemIds.has(i.batch_item_id))}
-                                    onChange={(e) => {
-                                        const pendingIds = items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').map((i: any) => i.batch_item_id);
-                                        const next = new Set(selectedItemIds);
-                                        if (e.target.checked) {
-                                            pendingIds.forEach((id: string) => next.add(id));
-                                        } else {
-                                            pendingIds.forEach((id: string) => next.delete(id));
-                                        }
-                                        setSelectedItemIds(next);
-                                    }}
-                                />
+            <div className="flex flex-col gap-1.5 px-2">
+                {/* Line 1: Status Icon + Title + Amount + Progress Count */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                            <div className={cn(
+                                "h-7 w-7 rounded-xl border-2 flex items-center justify-center transition-all",
+                                isSelected ? "bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-100 ring-2 ring-indigo-50" : "bg-white border-slate-200"
+                            )}>
+                                {isSelected ? <CheckCircle2 className="h-4 w-4 text-white" /> : <Circle className="h-3 w-3 text-slate-300" />}
                             </div>
-                        )}
-                    </div>
-                    <div>
-                        <h3 className="flex items-center gap-2 font-black text-slate-900 tracking-tight text-lg leading-tight">
-                            {title}
-                            {items[0]?.batch_id && (
-                                <Link
-                                    href={`/batch/detail/${items[0].batch_id}`}
-                                    target="_blank"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors"
-                                    title="Open Phase Details"
-                                >
-                                    <ExternalLink className="h-4 w-4" />
-                                </Link>
-                            )}
-                        </h3>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{subtitle}</p>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <span className="text-2xl font-black text-slate-900">{totalConfirmed}</span>
-                    <span className="text-slate-300 font-bold mx-1">/</span>
-                    <span className="text-sm font-bold text-slate-400">{items.length}</span>
-                </div>
-            </div>
 
-            <div className="flex items-center justify-between px-2 pt-2">
-                <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                    Total Amount
-                </div>
-                <div className="text-right flex flex-col items-end">
-                    <div className="text-base font-black text-slate-900 tracking-tight">
-                        {totalAmount === 0 ? '0 ₫' : totalAmount.toLocaleString() + ' ₫'}
-                    </div>
-                    {totalAmount > 0 && (
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                            {formatShortVietnameseCurrency(totalAmount)}
+                            {isSelected && items.length > 0 && (
+                                <div
+                                    className="h-7 w-px bg-slate-200 mx-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            )}
+
+                            {isSelected && items.length > 0 && (
+                                <div
+                                    className="flex items-center justify-center h-7 w-7 rounded-lg hover:bg-slate-100 transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="Select All Pending"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shadow-sm transition-transform active:scale-90"
+                                        checked={items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').length > 0 &&
+                                            items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').every((i: any) => selectedItemIds.has(i.batch_item_id))}
+                                        onChange={(e) => {
+                                            const pendingIds = items.filter((i: any) => i.batch_item_id && i.status !== 'confirmed').map((i: any) => i.batch_item_id);
+                                            const next = new Set(selectedItemIds);
+                                            if (e.target.checked) {
+                                                pendingIds.forEach((id: string) => next.add(id));
+                                            } else {
+                                                pendingIds.forEach((id: string) => next.delete(id));
+                                            }
+                                            setSelectedItemIds(next);
+                                        }}
+                                    />
+                                </div>
+                            )}
                         </div>
-                    )}
+                        <div>
+                            <h3 className="flex items-center gap-2 font-black text-slate-900 tracking-tight text-lg leading-tight">
+                                {title}
+                                {items[0]?.batch_id && (
+                                    <Link
+                                        href={`/batch/detail/${items[0].batch_id}`}
+                                        target="_blank"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 transition-colors shrink-0"
+                                        title="Open Phase Details"
+                                    >
+                                        <ExternalLink className="h-4 w-4" />
+                                    </Link>
+                                )}
+                                <div className="ml-2 scale-90 origin-left">
+                                    <StyledVietnameseCurrency amount={totalAmount} />
+                                </div>
+                                {items.length > 0 && totalConfirmed < items.length && (
+                                    <Badge variant="destructive" className="ml-auto h-6 px-2 rounded-full text-[10px] font-black shadow-sm bg-rose-500 hover:bg-rose-600 text-white animate-pulse">
+                                        {items.length - totalConfirmed} left
+                                    </Badge>
+                                )}
+                            </h3>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onUpdate}
+                            className="h-8 w-8 p-0 rounded-full hover:bg-slate-200 text-slate-400 hover:text-indigo-600 transition-all hover:rotate-180 duration-500"
+                            title="Force Refresh Data"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <div className="text-right">
+                            <span className="text-xl font-black text-slate-900">{totalConfirmed}</span>
+                            <span className="text-slate-300 font-bold mx-1">/</span>
+                            <span className="text-xs font-bold text-slate-400">{items.length}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Line 2: Subtitle + Styled Text Amount */}
+                <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{subtitle}</p>
                 </div>
             </div>
 
@@ -819,34 +858,51 @@ function ChecklistItemRow({ item, monthYear, period, bankType, onUpdate, isHighl
 
             {/* Status Icon - Toggle Confirm */}
             {item.status === 'confirmed' && item.transaction_id ? (
-                <Link
-                    href={`/transactions?highlight=${item.transaction_id}`}
-                    target="_blank"
-                    className="shrink-0 outline-none flex items-center justify-center p-1 rounded-full hover:bg-indigo-50 transition-colors"
-                >
-                    <div className="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200 ring-2 ring-indigo-50">
-                        <CheckCircle2 className="h-4 w-4 text-white" />
-                    </div>
-                </Link>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Link
+                                href={`/transactions?highlight=${item.transaction_id}`}
+                                target="_blank"
+                                className="shrink-0 outline-none flex items-center justify-center p-1 rounded-full hover:bg-emerald-50 transition-colors"
+                            >
+                                <div className="h-6 w-6 rounded-full bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-200 ring-2 ring-emerald-50">
+                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                </div>
+                            </Link>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            Item Confirmed. Click to view transaction detail.
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             ) : (
-                <button
-                    onClick={handleToggleConfirm}
-                    disabled={saving}
-                    className="shrink-0 outline-none flex items-center justify-center p-1 rounded-full hover:bg-slate-50 transition-colors"
-                    title={item.status === 'confirmed' ? "Item Confirmed. Click to Uncheck/Revert." : "Item Pending. Click to Quick Confirm."}
-                >
-                    {saving ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
-                    ) : item.status === 'confirmed' ? (
-                        <div className="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200 ring-2 ring-indigo-50">
-                            <CheckCircle2 className="h-4 w-4 text-white" />
-                        </div>
-                    ) : (
-                        <div className="h-6 w-6 rounded-full border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 flex items-center justify-center transition-all bg-white group-hover:border-slate-400">
-                            <CheckCircle2 className="h-4 w-4 text-slate-200 group-hover:text-slate-300 transition-colors" />
-                        </div>
-                    )}
-                </button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={handleToggleConfirm}
+                                disabled={saving}
+                                className="shrink-0 outline-none flex items-center justify-center p-1 rounded-full hover:bg-slate-50 transition-colors"
+                            >
+                                {saving ? (
+                                    <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                                ) : item.status === 'confirmed' ? (
+                                    <div className="h-6 w-6 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200 ring-2 ring-indigo-50">
+                                        <CheckCircle2 className="h-4 w-4 text-white" />
+                                    </div>
+                                ) : (
+                                    <div className="h-6 w-6 rounded-full border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 flex items-center justify-center transition-all bg-white group-hover:border-slate-400">
+                                        <CheckCircle2 className="h-4 w-4 text-slate-200 group-hover:text-slate-300 transition-colors" />
+                                    </div>
+                                )}
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {item.status === 'confirmed' ? "Item Confirmed. Click to Uncheck/Revert." : "Item Pending. Click to Quick Confirm (Single Mode)."}
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             )}
 
             {item.accounts?.image_url ? (
@@ -1043,3 +1099,28 @@ function BatchFlowGuide({ currentPhaseItems, batches, selectedMonth, selectedPha
     )
 }
 
+
+function StyledVietnameseCurrency({ amount }: { amount: number }) {
+    if (!amount) return null
+    const parts = formatVietnameseCurrencyText(amount)
+    return (
+        <div className="flex flex-col items-start leading-none gap-0.5">
+            <div className="text-[14px] font-medium text-rose-600 tracking-tight">
+                {amount.toLocaleString()} <span className="text-[11px] opacity-70">₫</span>
+            </div>
+            <div className="flex items-center gap-0.5 text-[8px] font-bold uppercase tracking-tight opacity-60">
+                <span className="text-slate-400 mr-0.5">(</span>
+                {parts.map((p, i) => (
+                    <React.Fragment key={i}>
+                        <span className="text-rose-600">{p.value}</span>
+                        {p.unit !== 'đồng' && (
+                            <span className="text-blue-500 ml-0.5 mr-1 lowercase">{p.unit}</span>
+                        )}
+                        {p.unit === 'đồng' && i === parts.length - 1 && parts.length > 1 && <span className="mx-0.5"></span>}
+                    </React.Fragment>
+                ))}
+                <span className="text-slate-400 ml-0.5">)</span>
+            </div>
+        </div>
+    )
+}

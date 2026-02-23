@@ -166,65 +166,116 @@ export function BatchPageClientV2({
 
     return (
         <div className="h-full flex flex-col bg-slate-50/50">
-            {/* Premium Header */}
-            <div className="bg-white border-b border-slate-200">
-                <div className="container mx-auto px-6 py-4">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="flex items-center gap-4">
-                            <div className={cn(
-                                "p-2 rounded-xl",
-                                bankType === 'MBB' ? "bg-blue-100" : "bg-purple-100"
-                            )}>
-                                <Database className={cn(
-                                    "h-6 w-6",
-                                    bankType === 'MBB' ? "text-blue-600" : "text-purple-600"
-                                )} />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2 text-nowrap">
-                                    {bankType} <span className="text-slate-300 font-light">/</span> {currentMonth ? formatMonthTitle(currentMonth) : 'Overview'}
+            {/* Premium Header - Non-sticky as requested */}
+            <div className="bg-white border-b border-slate-200 z-50 shadow-sm">
+                <div className="w-full px-6 py-3">
+                    <div className="flex items-center justify-between gap-4">
+                        {/* LEFT: LOGO, BANK TYPE & PROGRESS */}
+                        <div className="flex items-center gap-6 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className={cn(
+                                    "p-2 rounded-xl shadow-sm border",
+                                    bankType === 'MBB' ? "bg-blue-50 border-blue-100 text-blue-600" : "bg-purple-50 border-purple-100 text-purple-600"
+                                )}>
+                                    <Database className="h-5 w-5" />
+                                </div>
+                                <h1 className="text-lg font-black text-slate-900 tracking-tight leading-none uppercase">
+                                    {bankType} Batch
                                 </h1>
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                                    Batch Processing
-                                </p>
+                            </div>
+
+                            <div className="h-8 w-px bg-slate-100 mx-2 hidden md:block" />
+
+                            <div className="bg-indigo-50/50 px-3 py-1.5 rounded-xl border border-indigo-100/50 flex items-center gap-3">
+                                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none">Total Progress</span>
+                                <span className="text-sm font-black text-indigo-700 leading-none">
+                                    {batches.reduce((acc, b) => acc + (b.confirmed_items || 0), 0)}/{batches.reduce((acc, b) => acc + (b.total_items || 0), 0)}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3">
-                            <div className="bg-slate-50 p-1 rounded-xl border border-slate-200 flex">
-                                <Button
-                                    variant={activeTab === 'active' ? 'secondary' : 'ghost'}
-                                    onClick={() => setActiveTab('active')}
-                                    size="sm"
-                                    className={cn(
-                                        "rounded-lg font-bold text-xs h-9 px-4 transition-all",
-                                        activeTab === 'active' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"
-                                    )}
-                                >
-                                    Active
-                                </Button>
-                                <Button
-                                    variant={activeTab === 'archived' ? 'secondary' : 'ghost'}
-                                    onClick={() => setActiveTab('archived')}
-                                    size="sm"
-                                    className={cn(
-                                        "rounded-lg font-bold text-xs h-9 px-4 transition-all",
-                                        activeTab === 'archived' ? "bg-white shadow-sm text-indigo-600" : "text-slate-500"
-                                    )}
-                                >
-                                    Archived
-                                </Button>
+                        {/* RIGHT: MONTH TABS & ACTIONS */}
+                        <div className="flex items-center gap-4 flex-1 justify-end min-w-0">
+                            <div className="flex gap-1 py-1 pr-4 border-r border-slate-100 overflow-x-auto no-scrollbar">
+                                {Array.from({ length: 12 }).map((_, i) => {
+                                    const monthNum = i + 1
+                                    const year = new Date().getFullYear()
+                                    const mStr = `${year}-${String(monthNum).padStart(2, '0')}`
+                                    const isActive = optimisticMonth === mStr
+                                    const isCurrent = new Date().getMonth() + 1 === monthNum
+
+                                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                                    const isLoading = loadingMonth === mStr
+
+                                    const monthBatchesStats = batches.filter(b => b.month_year === mStr)
+                                    const mTotal = monthBatchesStats.reduce((acc, b) => acc + (b.total_items || 0), 0)
+                                    const mConfirmed = monthBatchesStats.reduce((acc, b) => acc + (b.confirmed_items || 0), 0)
+
+                                    return (
+                                        <button
+                                            key={mStr}
+                                            onClick={() => handleMonthSelect(mStr)}
+                                            className={cn(
+                                                "flex flex-col items-center justify-center min-w-[48px] h-11 rounded-lg transition-all border shrink-0",
+                                                isActive
+                                                    ? "bg-slate-900 border-slate-900 text-white shadow-md"
+                                                    : isCurrent
+                                                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                                                        : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50 hover:text-slate-900"
+                                            )}
+                                        >
+                                            <span className={cn(
+                                                "text-[7px] font-black tracking-widest uppercase mb-0.5",
+                                                isActive ? "text-slate-400" : "text-blue-500/80"
+                                            )}>
+                                                {year}
+                                            </span>
+                                            <span className="text-[11px] font-black tracking-tight leading-none flex items-center gap-1">
+                                                {isLoading && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                                                {monthNames[monthNum - 1]}
+                                            </span>
+                                            {mTotal > 0 && (
+                                                <div className={cn(
+                                                    "text-[6px] font-black mt-1 px-1 rounded-sm",
+                                                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+                                                )}>
+                                                    {mConfirmed}/{mTotal}
+                                                </div>
+                                            )}
+                                        </button>
+                                    )
+                                })}
                             </div>
 
-                            <Button onClick={() => setTemplateOpen(true)} variant="outline" className="h-11 rounded-xl border-slate-200 hover:bg-slate-50 font-bold gap-2 text-indigo-600 bg-indigo-50/10 border-indigo-100">
-                                <Sparkles className="h-4 w-4" />
-                                <span>Master List</span>
-                            </Button>
-
-                            <Button onClick={() => setSettingsOpen(true)} variant="outline" className="h-11 rounded-xl border-slate-200 hover:bg-slate-50 font-bold gap-2">
-                                <Settings className="h-4 w-4 text-slate-400" />
-                                <span>Settings</span>
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                {globalSheetUrl && (
+                                    <a
+                                        href={globalSheetUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="h-10 px-3 flex items-center gap-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-all font-black text-[9px] uppercase tracking-widest shadow-sm shrink-0"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                        <span>Sheet</span>
+                                    </a>
+                                )}
+                                <Button
+                                    onClick={() => setTemplateOpen(true)}
+                                    variant="outline"
+                                    className="h-10 px-3 rounded-xl border-slate-200 hover:bg-slate-50 font-black text-[9px] uppercase tracking-widest gap-2 text-indigo-600 bg-indigo-50/10 border-indigo-100 shrink-0"
+                                >
+                                    <Sparkles className="h-4 w-4" />
+                                    <span>Masters</span>
+                                </Button>
+                                <Button
+                                    onClick={() => setSettingsOpen(true)}
+                                    variant="outline"
+                                    className="h-10 px-3 rounded-xl border-slate-200 hover:bg-slate-50 font-black text-[9px] uppercase tracking-widest gap-2 shrink-0"
+                                >
+                                    <Settings className="h-4 w-4 text-slate-400" />
+                                    <span>Config</span>
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -234,83 +285,6 @@ export function BatchPageClientV2({
             <div className="flex-1 overflow-auto bg-slate-50">
                 {activeTab === 'active' ? (
                     <div className="mx-auto px-6 py-6 max-w-[1600px] w-full">
-                        {(bankType === 'MBB' || bankType === 'VIB') && (
-                            <div className="bg-white p-2 rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar shadow-sm mb-8">
-                                <div className="flex gap-1 min-w-max">
-                                    {Array.from({ length: 12 }).map((_, i) => {
-                                        const monthNum = i + 1
-                                        const year = new Date().getFullYear()
-                                        const mStr = `${year}-${String(monthNum).padStart(2, '0')}`
-                                        const isActive = optimisticMonth === mStr
-                                        const isCurrent = new Date().getMonth() + 1 === monthNum
-
-                                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-                                        const monthBatchesStats = batches.filter(b => b.month_year === mStr)
-                                        const mTotal = monthBatchesStats.reduce((acc, b) => acc + (b.total_items || 0), 0)
-                                        const mConfirmed = monthBatchesStats.reduce((acc, b) => acc + (b.confirmed_items || 0), 0)
-                                        const isLoading = loadingMonth === mStr
-
-                                        return (
-                                            <button
-                                                key={mStr}
-                                                onClick={() => handleMonthSelect(mStr)}
-                                                className={cn(
-                                                    "flex flex-col items-center justify-center py-2 px-3 rounded-xl transition-all min-w-[80px]",
-                                                    isActive ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100 ring-2 ring-indigo-600 ring-offset-2" : "bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900 border border-transparent",
-                                                    isCurrent && !isActive && "border-indigo-100 bg-indigo-50/20"
-                                                )}
-                                            >
-                                                <span className={cn(
-                                                    "text-[9px] font-black tracking-widest uppercase mb-0.5",
-                                                    isActive ? "text-indigo-200" : "text-slate-400"
-                                                )}>
-                                                    {year}
-                                                </span>
-                                                <span className={cn(
-                                                    "flex items-center justify-center gap-1 text-sm font-black tracking-tight leading-none",
-                                                    isActive ? "text-white" : "text-slate-900"
-                                                )}>
-                                                    {isLoading && <Loader2 className="h-3 w-3 animate-spin text-current opacity-70" />}
-                                                    {monthNames[monthNum - 1]}
-                                                </span>
-                                                {mTotal > 0 ? (
-                                                    <span className={cn(
-                                                        "text-[9px] font-bold mt-1 tracking-tight leading-none",
-                                                        isActive ? "text-indigo-200" : "text-slate-400"
-                                                    )}>
-                                                        {mConfirmed}/{mTotal} items
-                                                    </span>
-                                                ) : (
-                                                    <span className={cn(
-                                                        "text-[9px] font-medium mt-1 tracking-tight leading-none opacity-50",
-                                                        isActive ? "text-indigo-200" : "text-slate-400"
-                                                    )}>
-                                                        -
-                                                    </span>
-                                                )}
-                                            </button>
-                                        )
-                                    })}
-
-                                    <div className="w-px h-10 bg-slate-200 mx-2 self-center shrink-0" />
-                                    {globalSheetUrl && (
-                                        <a
-                                            href={globalSheetUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex flex-col items-center justify-center py-2 px-6 rounded-xl transition-all min-w-[120px] bg-slate-50 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 border border-dashed border-slate-200 group relative overflow-hidden"
-                                        >
-                                            <div className="absolute inset-0 bg-emerald-100/50 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                                            <span className="relative z-10 flex items-center gap-2 text-xs font-black tracking-widest uppercase text-slate-600 group-hover:text-emerald-700">
-                                                <ExternalLink className="h-4 w-4" />
-                                                Sheet Data
-                                            </span>
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-                        )}
                         {(bankType === 'MBB' || bankType === 'VIB') ? (
                             <div className="space-y-6">
                                 {isPending ? (

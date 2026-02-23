@@ -12,15 +12,15 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 
 ---
 
-## 🚀 Current Milestone: Phase 15 (Feb 2026)
-**Focus**: Account Intelligence & UI Refinements
+## 🚀 Current Milestone: Phase 16 (Feb 2026)
+**Focus**: Accounts & Cashback Refinement
 
 ### Key Deliverables:
-- ✅ **Account Table Intelligence**: Implemented Intelligence Legend row with amount color-coding (Red > 100M, Orange 50-100M, Green < 50M).
-- ✅ **Coverage Insight**: Added "Coverage" hover-card to track external credit exposure (total limit vs. debt for non-primary holders).
-- ✅ **UX Refinements**: Fixed all sticky header offsets and scroll blurring. Added "Reset Sort" and "Clear Search" functionality.
-- ✅ **Sanitized Documentation**: Moved all legacy phase plans and handovers to `.agent/archive/`.
-- ✅ **Standardized Workflows**: Implemented dynamic context-loading prompts for smarter AI agent onboarding.
+- ✅ **Unified Cycle Logic**: Merged reward/calculation cycles into a single stable configuration.
+- ✅ **Statement Cycle Support**: Verified accurate calculation for statement-based bank cycles (e.g., Techcombank).
+- ✅ **Batch UI Overhaul**: Consolidated header and optimized progress display for multi-month processing.
+- ✅ **Currency Readability**: Enhanced numerical display for large transaction values in checklists.
+- ✅ **Deterministic Cashback**: Aligned SQL backend with frontend configuration for real-time accuracy.
 
 ---
 
@@ -30,6 +30,8 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 1. **[MASTER_CONTEXT_LOAD.md](./.agent/prompts/MASTER_CONTEXT_LOAD.md)**: Run this first to initialize your session with full repo context.
 2. **[TASK_TEMPLATE.md](./.agent/prompts/TASK_TEMPLATE.md)**: Use this template for defining and executing specific tasks.
 3. **[ONBOARDING.md](./.agent/prompts/ONBOARDING.md)**: Core onboarding guide and reading list.
+4. **[HANDOVER_ACCOUNTS_CASHBACK.md](./.agent/prompts/HANDOVER_ACCOUNTS_CASHBACK.md)**: Latest phase handover notes.
+
 
 ### 📖 For Developers & Users
 - **[AGENT_CONTEXT.md](./.agent/AGENT_CONTEXT.md)**: Single source of truth for current project state and technical architecture.
@@ -71,6 +73,6 @@ pnpm build
 
 ---
 
-**Version**: 3.1.0 (Phase 15)  
-**Last Updated**: Feb 17, 2026  
+**Version**: 3.2.0 (Phase 16)  
+**Last Updated**: Feb 23, 2026  
 **License**: Internal project - Money Flow 3

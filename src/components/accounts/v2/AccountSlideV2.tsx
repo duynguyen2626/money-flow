@@ -1603,63 +1603,8 @@ export function AccountSlideV2({
                                 </Button>
                             </div>
 
-                            <ConfirmationModal
-                                isOpen={showCloseConfirm}
-                                onClose={() => setShowCloseConfirm(false)}
-                                onConfirm={async () => {
-                                    setIsActive(false);
-                                    if (isEdit && account) {
-                                        setLoading(true);
-                                        try {
-                                            const success = await updateAccountConfig(account.id, { is_active: false });
-                                            if (success) {
-                                                toast.success("Account closed");
-                                                onOpenChange(false);
-                                                router.refresh();
-                                            }
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    }
-                                }}
-                                title="Close Account?"
-                                description="This will hide the account from active lists. You can still reactivate it later."
-                                confirmText="Yes, Close it"
-                                variant="destructive"
-                            />
-
-                            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
-                                <SheetContent side="bottom" showClose={false} className="rounded-t-2xl border-t border-slate-200 p-0 sm:max-w-xl mx-auto shadow-2xl">
-                                    <div className="p-6 space-y-4">
-                                        <SheetHeader className="space-y-2 text-left">
-                                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
-                                                <Trash2 className="h-5 w-5" />
-                                                Unsaved Changes
-                                            </SheetTitle>
-                                            <SheetDescription className="text-sm font-medium text-slate-500">
-                                                You have made changes to this account. Navigating away will discard these changes correctly.
-                                            </SheetDescription>
-                                        </SheetHeader>
-                                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => setShowUnsavedConfirm(false)}
-                                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
-                                            >
-                                                Keep Editing
-                                            </Button>
-                                            <Button
-                                                variant="destructive"
-                                                onClick={confirmAction}
-                                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
-                                            >
-                                                Discard Changes
-                                            </Button>
-                                        </SheetFooter>
-                                    </div>
-                                </SheetContent>
-                            </Sheet>
                         </div>
+
                     </div>
 
                     <SheetFooter className="p-6 bg-white border-t border-slate-200 sm:justify-end gap-3">
@@ -1686,6 +1631,63 @@ export function AccountSlideV2({
                     subscriptions={subscriptions}
                     onSuccess={handlePersonCreated}
                 />
+            </Sheet>
+
+            <ConfirmationModal
+                isOpen={showCloseConfirm}
+                onClose={() => setShowCloseConfirm(false)}
+                onConfirm={async () => {
+                    setIsActive(false);
+                    if (isEdit && account) {
+                        setLoading(true);
+                        try {
+                            const success = await updateAccountConfig(account.id, { is_active: false });
+                            if (success) {
+                                toast.success("Account closed");
+                                onOpenChange(false);
+                                router.refresh();
+                            }
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }}
+                title="Close Account?"
+                description="This will hide the account from active lists. You can still reactivate it later."
+                confirmText="Yes, Close it"
+                variant="destructive"
+            />
+
+            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
+                <SheetContent side="right" showClose={false} className="w-full sm:max-w-md rounded-l-2xl border-l border-slate-200 p-0 shadow-2xl">
+                    <div className="p-6 space-y-4">
+                        <SheetHeader className="space-y-2 text-left">
+                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
+                                <Trash2 className="h-5 w-5" />
+                                Unsaved Changes
+                            </SheetTitle>
+                            <SheetDescription className="text-sm font-medium text-slate-500">
+                                You have made changes to this account. Navigating away will discard these changes correctly.
+                            </SheetDescription>
+                        </SheetHeader>
+                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowUnsavedConfirm(false)}
+                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
+                            >
+                                Keep Editing
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={confirmAction}
+                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
+                            >
+                                Discard Changes
+                            </Button>
+                        </SheetFooter>
+                    </div>
+                </SheetContent>
             </Sheet>
 
             <CategorySlide

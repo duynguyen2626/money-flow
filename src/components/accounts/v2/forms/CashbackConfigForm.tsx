@@ -80,7 +80,7 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                         <Command
                             className="rounded-xl overflow-hidden"
                             filter={(value, search) => {
-                                const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+                                const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase()
                                 if (normalize(value).includes(normalize(search))) return 1
                                 return 0
                             }}
@@ -380,6 +380,7 @@ export function CashbackConfigForm({
                         </button>
                     </div>
                 </div>
+
                 <div className="text-[10px] text-slate-500 font-medium px-1">
                     Chọn "Simple" cho mức cơ bản, "Tiered" cho thẻ có nhiều mức hoàn tiền.
                 </div>
@@ -452,25 +453,27 @@ export function CashbackConfigForm({
                             <div className="text-[10px] text-slate-500 font-medium mt-1">Hạn mức hoàn tiền tối đa mỗi tháng (nhập 0 ngàn nếu không giới hạn).</div>
                         </div>
 
-                        {/* Cashback Cycle Selection */}
-                        <div className="col-span-2 pt-3 mt-1 border-t border-slate-200/50">
+                        {/* Unified Calculation Cycle Selection */}
+                        <div className="col-span-2 pt-4 mt-2 border-t border-slate-200">
                             <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <Calendar className="h-3 w-3 text-slate-400" />
-                                        <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Calculation Cycle</Label>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="bg-blue-50 p-1 rounded-lg">
+                                            <Calendar className="h-4 w-4 text-blue-500" />
+                                        </div>
+                                        <Label className="text-[11px] font-black uppercase text-slate-700 tracking-wider">Calculation Cycle</Label>
                                     </div>
-                                    <p className="text-[10px] text-slate-500 font-medium">
+                                    <p className="text-[12px] text-indigo-700 font-bold ml-7">
                                         {cb_cycle_type === 'statement_cycle' ? "Follows card statement day" : "Standard Calendar Month"}
                                     </p>
                                 </div>
-                                <div className="flex bg-slate-200/50 p-0.5 rounded-lg scale-90 origin-right">
+                                <div className="flex bg-slate-200/60 p-1 rounded-xl shadow-inner">
                                     <button
                                         type="button"
                                         onClick={() => onChange({ cb_cycle_type: 'calendar_month' })}
                                         className={cn(
-                                            "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
-                                            cb_cycle_type === 'calendar_month' ? "bg-white text-amber-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                            "px-4 py-1.5 text-[10px] font-black rounded-lg transition-all",
+                                            cb_cycle_type === 'calendar_month' ? "bg-white text-amber-600 shadow-md" : "text-slate-500 hover:text-slate-700"
                                         )}
                                     >
                                         Month
@@ -479,8 +482,8 @@ export function CashbackConfigForm({
                                         type="button"
                                         onClick={() => onChange({ cb_cycle_type: 'statement_cycle' })}
                                         className={cn(
-                                            "px-3 py-1 text-[10px] font-bold rounded-md transition-all",
-                                            cb_cycle_type === 'statement_cycle' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                            "px-4 py-1.5 text-[10px] font-black rounded-lg transition-all",
+                                            cb_cycle_type === 'statement_cycle' ? "bg-white text-indigo-600 shadow-md" : "text-slate-500 hover:text-slate-700"
                                         )}
                                     >
                                         Statement
