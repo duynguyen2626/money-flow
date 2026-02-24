@@ -138,7 +138,6 @@ function SidebarNavItem({
   const linkRef = useRef<HTMLAnchorElement>(null)
   const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [flyoutPosition, setFlyoutPosition] = useState({ top: 0, left: 0 })
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
   const { customNames } = useBreadcrumbs()
 
   const isActive =
@@ -170,7 +169,6 @@ function SidebarNavItem({
 
   // Cleanup and container setup
   useEffect(() => {
-    setPortalContainer(document.getElementById('portal-root') || document.body)
     return () => {
       if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
     }
@@ -241,7 +239,7 @@ function SidebarNavItem({
 
   // Portal-based flyout
   const flyout =
-    isFlyout && (hoveredItem === item.href || navigatingItem === item.href) && portalContainer
+    isFlyout && (hoveredItem === item.href || navigatingItem === item.href) && typeof document !== 'undefined'
       ? createPortal(
         <div
           style={{
@@ -273,7 +271,7 @@ function SidebarNavItem({
             View all {item.title.toLowerCase()}
           </Link>
         </div>,
-        portalContainer
+        document.body
       )
       : null
 

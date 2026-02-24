@@ -81,8 +81,7 @@ export function useAppFavicon(isLoading: boolean, customIcon?: string) {
             }
         }
 
-        const { cleanup } = updateFavicon(isCustomUrl ? targetUrl : svgContent, isCustomUrl);
-        return () => cleanup()
+        updateFavicon(isCustomUrl ? targetUrl : svgContent, isCustomUrl)
 
     }, [isLoading, pathname, customIcon])
 }
@@ -97,33 +96,38 @@ function updateFavicon(content: string, isUrl: boolean = false) {
         isBlob = true
     }
 
-    const link = document.createElement('link')
-    link.rel = 'icon'
+    const faviconId = 'dynamic-favicon'
+    const appleIconId = 'dynamic-apple-icon'
+
+    let link = document.getElementById(faviconId) as HTMLLinkElement | null
+    if (!link) {
+        link = document.createElement('link')
+        link.id = faviconId
+        link.rel = 'icon'
+        document.head.appendChild(link)
+    }
     link.href = url
-    link.id = 'dynamic-favicon'
 
-    // Apple Touch Icon support
-    const appleLink = document.createElement('link')
-    appleLink.rel = 'apple-touch-icon'
+    let appleLink = document.getElementById(appleIconId) as HTMLLinkElement | null
+    if (!appleLink) {
+        appleLink = document.createElement('link')
+        appleLink.id = appleIconId
+        appleLink.rel = 'apple-touch-icon'
+        document.head.appendChild(appleLink)
+    }
     appleLink.href = url
-    appleLink.id = 'dynamic-apple-icon'
 
-    // Remove existing favicons SAFELY
-    const existingIcons = document.querySelectorAll('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
-    existingIcons.forEach(icon => {
-        if (icon.parentNode) {
-            icon.parentNode.removeChild(icon)
+    if (isBlob) {
+        const previousBlobUrl = link.dataset.blobUrl
+        if (previousBlobUrl && previousBlobUrl !== url) {
+            URL.revokeObjectURL(previousBlobUrl)
         }
-    })
-
-    document.head.appendChild(link)
-    document.head.appendChild(appleLink)
-
-    return {
-        cleanup: () => {
-            if (isBlob) URL.revokeObjectURL(url)
-            if (link.parentNode) link.parentNode.removeChild(link)
-            if (appleLink.parentNode) appleLink.parentNode.removeChild(appleLink)
+        link.dataset.blobUrl = url
+    } else {
+        const previousBlobUrl = link.dataset.blobUrl
+        if (previousBlobUrl) {
+            URL.revokeObjectURL(previousBlobUrl)
+            delete link.dataset.blobUrl
         }
     }
 }

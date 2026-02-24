@@ -1,11 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import React, { useState, useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   Menu,
-  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -22,20 +20,15 @@ import { SidebarNavV2 } from '@/components/navigation/sidebar-nav-v2'
 import { coloredNavItems } from '@/components/navigation/nav-icon-system'
 
 export function AppLayoutV2({ children }: { children: React.ReactNode }) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    const savedState = localStorage.getItem('sidebar-collapsed-v2')
+    return savedState ? JSON.parse(savedState) : false
+  })
   const pathname = usePathname()
 
   // Dynamic Favicon for Page Navigation
   useAppFavicon(false)
-
-  useEffect(() => {
-    setIsMounted(true)
-    const savedState = localStorage.getItem('sidebar-collapsed-v2')
-    if (savedState) {
-      setSidebarCollapsed(JSON.parse(savedState))
-    }
-  }, [])
 
   const toggleSidebar = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed)
@@ -61,10 +54,6 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     )
-  }
-
-  if (!isMounted) {
-    return <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning />
   }
 
   return (
