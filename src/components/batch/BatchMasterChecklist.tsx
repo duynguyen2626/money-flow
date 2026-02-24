@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RotateCcw, CheckCircle2, Circle, Loader2, Calendar, ArrowRight, Wallet, ShoppingBag, Edit2, XCircle, Info, ExternalLink, ThumbsUp, MapPin, RefreshCw, FileSpreadsheet, Search, ChevronDown, ChevronRight, Check, AlertCircle, Settings, Plus } from 'lucide-react'
+import { RotateCcw, CheckCircle2, Circle, Loader2, Calendar, ArrowRight, Wallet, ShoppingBag, Edit2, XCircle, Info, ExternalLink, ThumbsUp, MapPin, RefreshCw, FileSpreadsheet, Search, ChevronDown, ChevronRight, Check, AlertCircle, Settings, Plus, List } from 'lucide-react'
 import { getChecklistDataAction } from '@/actions/batch-checklist.actions'
 import { upsertBatchItemAmountAction, bulkInitializeFromMasterAction, toggleBatchItemConfirmAction, bulkConfirmBatchItemsAction, bulkUnconfirmBatchItemsAction } from '@/actions/batch-speed.actions'
 import { fundBatchAction, sendBatchToSheetAction } from '@/actions/batch.actions'
@@ -549,7 +549,21 @@ export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: 
             {showPhaseSetup && (
                 <PhaseSetupPanel
                     bankType={bankType}
-                    onSaved={() => { setShowPhaseSetup(false); loadData() }}
+                    itemsByPhase={itemsByPhase}
+                    onSaved={(newPhaseId?: string) => { 
+                        setShowPhaseSetup(false)
+                        loadData().then(() => {
+                            // Auto-select new phase if provided
+                            if (newPhaseId) {
+                                setSelectedPhaseId(newPhaseId)
+                                setOpenPhaseId(newPhaseId)
+                            }
+                        })
+                    }}
+                    onNavigateToPhase={(phaseId: string) => {
+                        setSelectedPhaseId(phaseId)
+                        setOpenPhaseId(phaseId)
+                    }}
                 />
             )}
 
@@ -1439,9 +1453,11 @@ function StyledVietnameseCurrency({ amount }: { amount: number }) {
     )
 }
 
-function PhaseSetupPanel({ bankType, onSaved }: {
+function PhaseSetupPanel({ bankType, itemsByPhase, onSaved, onNavigateToPhase }: {
     bankType: 'MBB' | 'VIB'
-    onSaved: () => void
+    itemsByPhase: Record<string, any[]>
+    onSaved: (newPhaseId?: string) => void
+    onNavigateToPhase: (phaseId: string) => void
 }) {
     const [dlPhases, setDlPhases] = useState<any[]>([])
     const [dlLoading, setDlLoading] = useState(true)
@@ -1476,6 +1492,13 @@ function PhaseSetupPanel({ bankType, onSaved }: {
             setNewPeriodType('before')
             setNewCutoffDay(15)
             await loadPhases()
+            // Auto-select new phase and navigate to it
+            const newPhaseId = (result as any).data?.id
+            if (newPhaseId) {
+                onSaved(newPhaseId)
+            } else {
+                onSaved()
+            }
         } else {
             toast.error('Tạo phase thất bại — kiểm tra migration đã được apply chưa')
         }
@@ -1483,11 +1506,19 @@ function PhaseSetupPanel({ bankType, onSaved }: {
     }
 
     async function handleDelete(id: string, label: string) {
+        // Check if phase has items
+        const phaseItems = itemsByPhase[id] || []
+        if (phaseItems.length > 0) {
+            toast.error(`Không thể xóa phase "${label}" vì còn ${phaseItems.length} items. Xóa items trước trong Master list.`)
+            return
+        }
+        
         if (!window.confirm(`Xoá phase "${label}"?`)) return
         const result = await deleteBatchPhaseAction(id)
         if (result.success) {
             toast.success(`Đã xoá "${label}"`)
             await loadPhases()
+            onSaved()
         } else {
             toast.error('Xoá thất bại')
         }
@@ -1523,25 +1554,65 @@ function PhaseSetupPanel({ bankType, onSaved }: {
                     </div>
                 ) : dlPhases.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                        {dlPhases.map((p: any) => (
-                            <div key={p.id} className={cn(
-                                "inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl border",
-                                p.is_active ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100 opacity-50"
-                            )}>
-                                <span className={cn(
-                                    "h-2 w-2 rounded-full shrink-0",
-                                    p.period_type === 'before' ? "bg-blue-500" : "bg-orange-500"
-                                )} />
-                                <span className="font-black text-xs text-slate-800">{p.label}</span>
-                                <span className="text-[9px] font-bold text-slate-400">Day {p.cutoff_day}</span>
-                                <button
-                                    onClick={() => handleDelete(p.id, p.label)}
-                                    className="h-5 w-5 rounded-md flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
-                                >
-                                    <XCircle className="h-3 w-3" />
-                                </button>
-                            </div>
-                        ))}
+                        {dlPhases.map((p: any) => {
+                            const phaseItemCount = (itemsByPhase[p.id] || []).length
+                            const hasItems = phaseItemCount > 0
+                            return (
+                                <div key={p.id} className={cn(
+                                    "inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-xl border",
+                                    p.is_active ? "bg-white border-slate-200" : "bg-slate-50 border-slate-100 opacity-50"
+                                )}>
+                                    <span className={cn(
+                                        "h-2 w-2 rounded-full shrink-0",
+                                        p.period_type === 'before' ? "bg-blue-500" : "bg-orange-500"
+                                    )} />
+                                    <span className="font-black text-xs text-slate-800">{p.label}</span>
+                                    <span className="text-[9px] font-bold text-slate-400">Day {p.cutoff_day}</span>
+                                    {hasItems && (
+                                        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">({phaseItemCount})</span>
+                                    )}
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    onClick={() => {
+                                                        onNavigateToPhase(p.id)
+                                                        onSaved()
+                                                    }}
+                                                    className="h-5 w-5 rounded-md flex items-center justify-center text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                                >
+                                                    <List className="h-3 w-3" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="text-xs">
+                                                {hasItems ? `Xem ${phaseItemCount} items trong Master list` : 'Phase chưa có items'}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <button
+                                                    onClick={() => handleDelete(p.id, p.label)}
+                                                    disabled={hasItems}
+                                                    className={cn(
+                                                        "h-5 w-5 rounded-md flex items-center justify-center transition-colors",
+                                                        hasItems 
+                                                            ? "text-slate-200 cursor-not-allowed" 
+                                                            : "text-slate-300 hover:text-rose-500 hover:bg-rose-50"
+                                                    )}
+                                                >
+                                                    <XCircle className="h-3 w-3" />
+                                                </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="text-xs">
+                                                {hasItems ? `Xóa ${phaseItemCount} items trước` : 'Xóa phase'}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            )
+                        })}
                     </div>
                 ) : (
                     <p className="text-xs text-slate-400 font-medium text-center py-2">Chưa có phase nào. Thêm ít nhất 2 phase (Before + After).</p>
@@ -1559,14 +1630,14 @@ function PhaseSetupPanel({ bankType, onSaved }: {
                             className="h-9 rounded-xl text-sm font-medium"
                         />
                     </div>
-                    <div className="w-[130px]">
+                    <div className="w-[110px] shrink-0">
                         <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Loại</label>
                         <Select
                             value={newPeriodType}
                             onValueChange={(val) => val && setNewPeriodType(val)}
                             items={[
-                                { value: 'before', label: 'Before (trước)' },
-                                { value: 'after', label: 'After (sau)' }
+                                { value: 'before', label: 'Before' },
+                                { value: 'after', label: 'After' }
                             ]}
                             placeholder="Chọn..."
                             className="h-9 rounded-xl text-xs font-bold"
