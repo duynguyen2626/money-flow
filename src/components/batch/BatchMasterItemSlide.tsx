@@ -27,6 +27,7 @@ const formSchema = z.object({
     bank_code: z.string().optional(),
     target_account_id: z.string().optional(),
     cutoff_period: z.enum(['before', 'after']),
+    phase_id: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -39,6 +40,7 @@ interface BatchMasterItemSlideProps {
     bankMappings: any[]
     item?: any // For edit mode
     onSuccess?: () => void
+    phases?: any[] // Dynamic phases
 }
 
 export function BatchMasterItemSlide({
@@ -49,6 +51,7 @@ export function BatchMasterItemSlide({
     bankMappings,
     item,
     onSuccess,
+    phases = [],
 }: BatchMasterItemSlideProps) {
     const [loading, setLoading] = useState(false)
     const [isAccountSlideOpen, setIsAccountSlideOpen] = useState(false)
@@ -65,6 +68,7 @@ export function BatchMasterItemSlide({
             bank_code: item?.bank_code || '',
             target_account_id: item?.target_account_id || 'none',
             cutoff_period: item?.cutoff_period || 'before',
+            phase_id: item?.phase_id || phases[0]?.id || '',
         },
     })
 
@@ -84,6 +88,7 @@ export function BatchMasterItemSlide({
                     bank_code: item.bank_code || '',
                     target_account_id: item.target_account_id || 'none',
                     cutoff_period: item.cutoff_period || 'before',
+                    phase_id: item.phase_id || phases[0]?.id || '',
                 })
             } else {
                 form.reset({
@@ -93,6 +98,7 @@ export function BatchMasterItemSlide({
                     bank_code: '',
                     target_account_id: 'none',
                     cutoff_period: 'before',
+                    phase_id: phases[0]?.id || '',
                 })
             }
         }
@@ -106,11 +112,19 @@ export function BatchMasterItemSlide({
             if (target.receiver_name) form.setValue('receiver_name', target.receiver_name)
             if (target.account_number) form.setValue('bank_number', target.account_number)
 
-            // Auto-suggest Cutoff Period
+            // Auto-suggest Cutoff Period and Phase
             const dueDay = target.due_date || target.statement_day
             if (dueDay) {
-                // If dueDay <= 15 (cutoffDay), suggest 'before', else 'after'
-                form.setValue('cutoff_period', dueDay <= 15 ? 'before' : 'after')
+                // Find the best matching phase based on due_date
+                if (phases.length > 0) {
+                    const matchedPhase = phases.find(p =>
+                        p.period_type === 'before' ? dueDay <= p.cutoff_day : dueDay > p.cutoff_day
+                    ) || phases[0]
+                    form.setValue('cutoff_period', matchedPhase.period_type)
+                    form.setValue('phase_id', matchedPhase.id)
+                } else {
+                    form.setValue('cutoff_period', dueDay <= 15 ? 'before' : 'after')
+                }
             }
 
             // Try to auto-select bank_code if it matches the account's bank_name
@@ -268,6 +282,7 @@ export function BatchMasterItemSlide({
                 ...(isEditMode ? { id: item.id } : {}),
                 ...values,
                 target_account_id: values.target_account_id === 'none' ? null : values.target_account_id,
+                phase_id: values.phase_id || null,
                 bank_type: bankType,
                 sort_order: isEditMode ? item.sort_order : 0
             })
@@ -286,10 +301,11 @@ export function BatchMasterItemSlide({
         }
     }
 
-    const cutoffDay = 15;
+    const selectedPhaseObj = phases.find(p => p.id === form.watch('phase_id'))
+    const cutoffDay = selectedPhaseObj?.cutoff_day || 15;
     const effectiveDay = selectedAccount ? Number(selectedAccount.due_date || selectedAccount.statement_day || 0) : 0;
-    const isWrongPeriod = effectiveDay > 0 && (
-        cutoffPeriod === 'before' ? effectiveDay > cutoffDay : effectiveDay <= cutoffDay
+    const isWrongPeriod = effectiveDay > 0 && selectedPhaseObj && (
+        selectedPhaseObj.period_type === 'before' ? effectiveDay > selectedPhaseObj.cutoff_day : effectiveDay <= selectedPhaseObj.cutoff_day
     );
 
     return (
@@ -393,7 +409,7 @@ export function BatchMasterItemSlide({
                                                                 </div>
                                                                 <div className="flex-1">
                                                                     <p className="text-[11px] leading-tight font-medium text-amber-800">
-                                                                        This account has a {selectedAccount.due_date ? 'due date' : 'statement day'} of <span className="font-black">{effectiveDay}</span>, which belongs to the <span className="font-black italic uppercase">{cutoffPeriod === 'before' ? 'After' : 'Before'} {cutoffDay}</span> cutoff.
+                                                                        This account has a {selectedAccount.due_date ? 'due date' : 'statement day'} of <span className="font-black">{effectiveDay}</span>, which may not match the <span className="font-black italic uppercase">{selectedPhaseObj?.label || cutoffPeriod}</span> phase.
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -510,34 +526,54 @@ export function BatchMasterItemSlide({
 
                                 <FormField
                                     control={form.control}
-                                    name="cutoff_period"
+                                    name="phase_id"
                                     render={({ field }) => (
                                         <FormItem className="space-y-2">
-                                            <div className="flex gap-2 p-1 bg-slate-50 rounded-xl border border-slate-200">
-                                                <Button
-                                                    type="button"
-                                                    variant={field.value === 'before' ? 'default' : 'ghost'}
-                                                    className={cn(
-                                                        "flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all",
-                                                        field.value === 'before' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 hover:bg-white" : "text-slate-400"
-                                                    )}
-                                                    onClick={() => field.onChange('before')}
-                                                >
-                                                    Day 1 - 15
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant={field.value === 'after' ? 'default' : 'ghost'}
-                                                    className={cn(
-                                                        "flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all",
-                                                        field.value === 'after' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 hover:bg-white" : "text-slate-400"
-                                                    )}
-                                                    onClick={() => field.onChange('after')}
-                                                >
-                                                    Day 16 - END
-                                                </Button>
+                                            <div className={cn("flex gap-2 p-1 bg-slate-50 rounded-xl border border-slate-200", phases.length > 2 ? "flex-wrap" : "")}>
+                                                {phases.length > 0 ? phases.map((phase) => (
+                                                    <Button
+                                                        key={phase.id}
+                                                        type="button"
+                                                        variant={field.value === phase.id ? 'default' : 'ghost'}
+                                                        className={cn(
+                                                            "flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all",
+                                                            field.value === phase.id ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 hover:bg-white" : "text-slate-400"
+                                                        )}
+                                                        onClick={() => {
+                                                            field.onChange(phase.id)
+                                                            form.setValue('cutoff_period', phase.period_type)
+                                                        }}
+                                                    >
+                                                        {phase.label}
+                                                    </Button>
+                                                )) : (
+                                                    <>
+                                                        <Button
+                                                            type="button"
+                                                            variant={cutoffPeriod === 'before' ? 'default' : 'ghost'}
+                                                            className={cn(
+                                                                "flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all",
+                                                                cutoffPeriod === 'before' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 hover:bg-white" : "text-slate-400"
+                                                            )}
+                                                            onClick={() => form.setValue('cutoff_period', 'before')}
+                                                        >
+                                                            Day 1 - 15
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant={cutoffPeriod === 'after' ? 'default' : 'ghost'}
+                                                            className={cn(
+                                                                "flex-1 h-11 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all",
+                                                                cutoffPeriod === 'after' ? "bg-white text-indigo-600 shadow-sm ring-1 ring-indigo-100 hover:bg-white" : "text-slate-400"
+                                                            )}
+                                                            onClick={() => form.setValue('cutoff_period', 'after')}
+                                                        >
+                                                            Day 16 - END
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
-                                            <p className="text-[9px] font-bold text-slate-400 text-center uppercase tracking-widest">Determines which period section this target appears in</p>
+                                            <p className="text-[9px] font-bold text-slate-400 text-center uppercase tracking-widest">Determines which phase section this target appears in</p>
                                             <FormMessage />
                                         </FormItem>
                                     )}

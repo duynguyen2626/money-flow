@@ -15,6 +15,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { syncMasterOldBatchesAction } from '@/actions/batch.actions'
+import { bulkInitializeFromMasterAction } from '@/actions/batch-speed.actions'
+import { Combobox } from '@/components/ui/combobox'
 
 interface BatchPageClientV2Props {
     batches: any[]
@@ -59,9 +61,13 @@ export function BatchPageClientV2({
     const currentPeriod = activeBatch ? (activeBatch.period || 'before') : selectedPeriodParam
 
     const [optimisticMonth, setOptimisticMonth] = useState<string | null>(currentMonth)
+    const [selectedYear, setSelectedYear] = useState(() =>
+        currentMonth ? currentMonth.split('-')[0] : String(new Date().getFullYear())
+    )
 
     useEffect(() => {
         setOptimisticMonth(currentMonth)
+        if (currentMonth) setSelectedYear(currentMonth.split('-')[0])
     }, [currentMonth])
 
     useEffect(() => {
@@ -164,6 +170,63 @@ export function BatchPageClientV2({
         }
     }
 
+    async function handleSyncCurrentPhase() {
+        if (!currentMonth) {
+            toast.error('Select a month first')
+            return
+        }
+        setIsSyncingMaster(true)
+        try {
+            const result = await bulkInitializeFromMasterAction({
+                monthYear: currentMonth,
+                period: currentPeriod as 'before' | 'after',
+                bankType: bankType as 'MBB' | 'VIB'
+            })
+            if (result.success) {
+                toast.success(`Synced ${result.initializedCount ?? 0} items`)
+                router.refresh()
+            } else {
+                toast.error('Sync failed')
+            }
+        } catch (e: any) {
+            toast.error(e.message || 'Sync failed')
+        } finally {
+            setIsSyncingMaster(false)
+        }
+    }
+
+    const calendarYear = new Date().getFullYear()
+    const calendarMonth = new Date().getMonth() + 1
+    const yearSelectorItems = [calendarYear, calendarYear - 1, calendarYear - 2].map(y => ({
+        value: String(y), label: String(y)
+    }))
+    const MONTH_NAMES_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthSelectorItems = MONTH_NAMES_FULL.map((name, i) => {
+        const monthNum = i + 1
+        const mStr = `${selectedYear}-${String(monthNum).padStart(2, '0')}`
+        const monthStats = batches.filter(b => b.month_year === mStr)
+        const mTotal = monthStats.reduce((acc, b) => acc + (b.total_items || 0), 0)
+        const mConfirmed = monthStats.reduce((acc, b) => acc + (b.confirmed_items || 0), 0)
+        const isCurrent = String(calendarYear) === selectedYear && calendarMonth === monthNum
+        const isActive = optimisticMonth === mStr
+        return {
+            value: mStr,
+            label: name,
+            searchValue: `${monthNum} ${name} ${MONTH_NAMES_SHORT[i]}`,
+            description: mTotal > 0 ? `${mConfirmed}/${mTotal} confirmed` : undefined,
+            icon: (
+                <div className={cn(
+                    "w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-black shrink-0",
+                    isActive ? "bg-slate-900 text-white" :
+                    isCurrent ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"
+                )}>
+                    {loadingMonth === mStr ? <Loader2 className="h-3 w-3 animate-spin" /> : monthNum}
+                </div>
+            )
+        }
+    })
+
     return (
         <div className="h-full flex flex-col bg-slate-50/50">
             {/* Premium Header - Non-sticky as requested */}
@@ -196,55 +259,36 @@ export function BatchPageClientV2({
 
                         {/* RIGHT: MONTH TABS & ACTIONS */}
                         <div className="flex items-center gap-4 flex-1 justify-end min-w-0">
-                            <div className="flex gap-1 py-1 pr-4 border-r border-slate-100 overflow-x-auto no-scrollbar">
-                                {Array.from({ length: 12 }).map((_, i) => {
-                                    const monthNum = i + 1
-                                    const year = new Date().getFullYear()
-                                    const mStr = `${year}-${String(monthNum).padStart(2, '0')}`
-                                    const isActive = optimisticMonth === mStr
-                                    const isCurrent = new Date().getMonth() + 1 === monthNum
-
-                                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                                    const isLoading = loadingMonth === mStr
-
-                                    const monthBatchesStats = batches.filter(b => b.month_year === mStr)
-                                    const mTotal = monthBatchesStats.reduce((acc, b) => acc + (b.total_items || 0), 0)
-                                    const mConfirmed = monthBatchesStats.reduce((acc, b) => acc + (b.confirmed_items || 0), 0)
-
-                                    return (
-                                        <button
-                                            key={mStr}
-                                            onClick={() => handleMonthSelect(mStr)}
-                                            className={cn(
-                                                "flex flex-col items-center justify-center min-w-[48px] h-11 rounded-lg transition-all border shrink-0",
-                                                isActive
-                                                    ? "bg-slate-900 border-slate-900 text-white shadow-md"
-                                                    : isCurrent
-                                                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
-                                                        : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50 hover:text-slate-900"
-                                            )}
-                                        >
-                                            <span className={cn(
-                                                "text-[7px] font-black tracking-widest uppercase mb-0.5",
-                                                isActive ? "text-slate-400" : "text-blue-500/80"
-                                            )}>
-                                                {year}
-                                            </span>
-                                            <span className="text-[11px] font-black tracking-tight leading-none flex items-center gap-1">
-                                                {isLoading && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                                                {monthNames[monthNum - 1]}
-                                            </span>
-                                            {mTotal > 0 && (
-                                                <div className={cn(
-                                                    "text-[6px] font-black mt-1 px-1 rounded-sm",
-                                                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
-                                                )}>
-                                                    {mConfirmed}/{mTotal}
-                                                </div>
-                                            )}
-                                        </button>
-                                    )
-                                })}
+                            <div className="flex items-center gap-2 py-1 pr-4 border-r border-slate-100">
+                                <Button
+                                    onClick={handleSyncCurrentPhase}
+                                    disabled={isSyncingMaster || isPending}
+                                    variant="outline"
+                                    className="h-10 px-3 rounded-xl border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 font-black text-[9px] uppercase tracking-widest gap-2 shrink-0"
+                                >
+                                    {isSyncingMaster ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 text-slate-400" />}
+                                    <span>Sync</span>
+                                </Button>
+                                <div className="w-[130px] shrink-0">
+                                    <Combobox
+                                        value={selectedYear}
+                                        onValueChange={(v) => v && setSelectedYear(v)}
+                                        items={yearSelectorItems}
+                                        placeholder="Year"
+                                        inputPlaceholder="Year..."
+                                        triggerClassName="h-10 border-slate-200 rounded-xl text-xs font-black"
+                                    />
+                                </div>
+                                <div className="w-[210px] shrink-0">
+                                    <Combobox
+                                        value={optimisticMonth || undefined}
+                                        onValueChange={(v) => v && handleMonthSelect(v)}
+                                        items={monthSelectorItems}
+                                        placeholder="Select month"
+                                        inputPlaceholder="Search month..."
+                                        triggerClassName="h-10 border-slate-200 rounded-xl text-xs font-black"
+                                    />
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -286,19 +330,20 @@ export function BatchPageClientV2({
                 {activeTab === 'active' ? (
                     <div className="mx-auto px-6 py-6 max-w-[1600px] w-full">
                         {(bankType === 'MBB' || bankType === 'VIB') ? (
-                            <div className="space-y-6">
-                                {isPending ? (
-                                    <div className="flex flex-col items-center justify-center py-32 text-slate-400">
+                            <div className="relative space-y-6">
+                                {isPending && (
+                                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-50/80 py-32 text-slate-400">
                                         <Loader2 className="h-8 w-8 animate-spin mb-4" />
                                         <p className="font-medium text-sm">Loading data for {optimisticMonth}...</p>
                                     </div>
-                                ) : (
+                                )}
+                                <div className={isPending ? 'pointer-events-none opacity-40' : undefined}>
                                     <BatchMasterChecklist
                                         bankType={bankType as 'MBB' | 'VIB'}
                                         accounts={accounts}
                                         monthYear={currentMonth || ''}
                                     />
-                                )}
+                                </div>
                             </div>
                         ) : (
                             <div className="space-y-6">

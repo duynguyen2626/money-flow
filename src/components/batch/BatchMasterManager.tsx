@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Plus, Trash2, Edit2, Loader2, AlertCircle, Search } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { deleteBatchMasterItemAction, getBatchMasterItemsAction } from '@/actions/batch-master.actions'
+import { listBatchPhasesAction } from '@/actions/batch-phases.actions'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { BatchMasterItemSlide } from './BatchMasterItemSlide'
@@ -19,6 +20,7 @@ interface BatchMasterManagerProps {
 
 export function BatchMasterManager({ bankType, accounts, bankMappings }: BatchMasterManagerProps) {
     const [items, setItems] = useState<any[]>([])
+    const [phases, setPhases] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [isSlideOpen, setIsSlideOpen] = useState(false)
     const [selectedItem, setSelectedItem] = useState<any | null>(null)
@@ -42,9 +44,15 @@ export function BatchMasterManager({ bankType, accounts, bankMappings }: BatchMa
     async function loadItems() {
         setLoading(true)
         try {
-            const result = await getBatchMasterItemsAction(bankType)
-            if (result.success) {
-                setItems(result.data || [])
+            const [itemsResult, phasesResult] = await Promise.all([
+                getBatchMasterItemsAction(bankType),
+                listBatchPhasesAction(bankType)
+            ])
+            if (itemsResult.success) {
+                setItems(itemsResult.data || [])
+            }
+            if (phasesResult.success) {
+                setPhases(phasesResult.data || [])
             }
         } catch (error) {
             console.error('Info: Failed to load master items', error)
@@ -115,31 +123,42 @@ export function BatchMasterManager({ bankType, accounts, bankMappings }: BatchMa
                 </div>
             </div>
 
-            <Tabs defaultValue="before" className="w-full">
-                <TabsList className="bg-slate-100 p-1 rounded-2xl h-14 w-full md:w-auto shadow-sm">
-                    <TabsTrigger
-                        value="before"
-                        className="rounded-xl px-12 h-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black text-xs uppercase tracking-widest transition-all"
-                    >
-                        Phase 1: Before
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="after"
-                        className="rounded-xl px-12 h-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black text-xs uppercase tracking-widest transition-all"
-                    >
-                        Phase 2: After
-                    </TabsTrigger>
+            <Tabs defaultValue={phases[0]?.id || 'before'} className="w-full">
+                <TabsList className="bg-slate-100 p-1 rounded-2xl h-14 w-full md:w-auto shadow-sm flex-wrap">
+                    {phases.length > 0 ? phases.map((phase) => (
+                        <TabsTrigger
+                            key={phase.id}
+                            value={phase.id}
+                            className="rounded-xl px-8 h-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black text-xs uppercase tracking-widest transition-all"
+                        >
+                            {phase.label}
+                        </TabsTrigger>
+                    )) : ['before', 'after'].map(p => (
+                        <TabsTrigger
+                            key={p}
+                            value={p}
+                            className="rounded-xl px-12 h-full data-[state=active]:bg-indigo-600 data-[state=active]:text-white font-black text-xs uppercase tracking-widest transition-all"
+                        >
+                            {p === 'before' ? 'Phase 1: Before' : 'Phase 2: After'}
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
 
-                {['before', 'after'].map(p => (
-                    <TabsContent key={p} value={p} className="mt-6 space-y-6">
+                {(phases.length > 0 ? phases : [{ id: 'before', period_type: 'before' }, { id: 'after', period_type: 'after' }]).map((phase: any) => (
+                    <TabsContent key={phase.id} value={phase.id} className="mt-6 space-y-6">
                         <div className="space-y-3">
-                            {filteredItems.filter(i => i.cutoff_period === p).length === 0 ? (
+                            {filteredItems.filter(i => phases.length > 0
+                                ? (i.phase_id === phase.id || (!i.phase_id && i.cutoff_period === phase.period_type))
+                                : i.cutoff_period === phase.period_type
+                            ).length === 0 ? (
                                 <div className="text-center py-16 border-2 border-dashed rounded-3xl border-slate-100 bg-slate-50/50 col-span-2">
                                     <p className="text-sm font-bold text-slate-400">No items found for this phase.</p>
                                 </div>
                             ) : (
-                                filteredItems.filter(i => i.cutoff_period === p).map(item => (
+                                filteredItems.filter(i => phases.length > 0
+                                    ? (i.phase_id === phase.id || (!i.phase_id && i.cutoff_period === phase.period_type))
+                                    : i.cutoff_period === phase.period_type
+                                ).map(item => (
                                     <div
                                         key={item.id}
                                         className="group flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl hover:border-indigo-200 hover:shadow-md transition-all"
@@ -200,6 +219,7 @@ export function BatchMasterManager({ bankType, accounts, bankMappings }: BatchMa
                 bankMappings={bankMappings}
                 item={selectedItem}
                 onSuccess={loadItems}
+                phases={phases}
             />
         </div>
     )

@@ -9,6 +9,7 @@ export type BatchMasterItem = {
     bank_code?: string | null
     target_account_id: string | null
     cutoff_period: 'before' | 'after'
+    phase_id?: string | null
     sort_order: number
     is_active: boolean
     category_id: string | null
