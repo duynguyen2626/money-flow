@@ -21,7 +21,6 @@ import { coloredNavItems } from '@/components/navigation/nav-icon-system'
 
 export function AppLayoutV2({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [isHydrated, setIsHydrated] = useState(false)
   const pathname = usePathname()
 
   // Dynamic Favicon for Page Navigation
@@ -33,7 +32,6 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
     if (savedState) {
       setSidebarCollapsed(JSON.parse(savedState))
     }
-    setIsHydrated(true)
   }, [])
 
   const toggleSidebar = (collapsed: boolean) => {
@@ -68,20 +66,20 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
       <aside
         className={cn(
           "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
-          isHydrated && sidebarCollapsed ? "w-16" : "w-64"
+          sidebarCollapsed ? "w-16" : "w-64"
         )}
       >
         {/* Inner scroll container — overflow-y-auto is here, not on aside */}
         <div className={cn(
           "flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-8",
-          isHydrated && sidebarCollapsed ? "px-1" : "px-6"
-        )}>
+          sidebarCollapsed ? "px-1" : "px-6"
+        )}>  
         {/* Header / Logo Area */}
         <div className={cn(
           "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
-          isHydrated && sidebarCollapsed ? "justify-center" : "px-0"
+          sidebarCollapsed ? "justify-center" : "px-0"
         )}>
-          {(!isHydrated || !sidebarCollapsed) && (
+          {!sidebarCollapsed && (
             <span className="text-xl font-bold text-slate-800 tracking-tight pl-2">
               {currentPageTitle}
             </span>
@@ -96,7 +94,7 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
 
         {/* Footer / User Area */}
         <div className="mt-auto pt-8 border-t border-slate-200">
-          {(!isHydrated || !sidebarCollapsed) ? (
+          {!sidebarCollapsed ? (
             <div className="flex items-center gap-3 px-2">
               <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
                 U
