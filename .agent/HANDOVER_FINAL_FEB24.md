@@ -2,8 +2,13 @@
 
 **Date:** February 24, 2026  
 **Branch:** `fix/p0-removechild-navigation`  
-**Commit:** 65b6137  
+**Commit:** 0e0edc8  
 **Status:** ✅ Ready for Migration
+
+**Updates:**
+- ✅ removeChild errors fixed (5 fixes implemented)
+- ✅ Batch phase migration ready with conditional checks
+- ✅ Phase management removed from settings page (now only in batch checklist)
 
 ---
 
@@ -71,13 +76,19 @@ pnpm dev
 # Navigate to http://localhost:3000/batch/mbb
 ```
 
+**Phase Management Location:**
+- ✅ Phase setup is ONLY in batch checklist page (via "Phases" button)
+- ❌ Settings page NO LONGER has phase management (removed to avoid UI clutter)
+- Each bank type (MBB/VIB) manages phases independently from batch page
+
 **Test Checklist:**
 - [ ] Phase tabs display (Phase 1: Before 15, Phase 2: After 15)
-- [ ] Click "Phases" button → Setup panel opens
+- [ ] Click "Phases" button → Setup panel opens with custom Radix UI dropdown
 - [ ] Create new phase → Appears as new tab
 - [ ] Delete phase → Disappears from tabs
 - [ ] Click "Global Sync" → Items distribute to phases
 - [ ] No console errors during any action
+- [ ] Settings page (/batch/settings) shows NO phase management section
 
 ---
 
