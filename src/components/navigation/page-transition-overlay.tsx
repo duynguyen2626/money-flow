@@ -38,7 +38,6 @@ import { createPortal } from 'react-dom'
  */
 export function PageTransitionOverlay() {
   const [targetPage, setTargetPage] = useState<string | null>(null)
-  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
   const pathname = usePathname()
   const prevPathname = useRef(pathname)
   const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,8 +52,6 @@ export function PageTransitionOverlay() {
   }, [])
 
   useEffect(() => {
-    setPortalContainer(document.getElementById('transition-root') || document.body)
-
     const handleLinkClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const link = target.closest('a[href^="/"]') as HTMLAnchorElement | null
@@ -85,7 +82,7 @@ export function PageTransitionOverlay() {
     }
   }, [pathname])
 
-  if (!targetPage || !portalContainer) return null
+  if (!targetPage || typeof document === 'undefined') return null
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/75 backdrop-blur-sm pointer-events-all">
@@ -104,6 +101,6 @@ export function PageTransitionOverlay() {
         </div>
       </div>
     </div>,
-    portalContainer
+    document.body
   )
 }

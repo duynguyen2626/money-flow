@@ -128,10 +128,17 @@ export function BatchPageClientV2({
         }
     }
 
+    function closeTransientPortals() {
+        const activeElement = document.activeElement as HTMLElement | null
+        activeElement?.blur()
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    }
+
     function handleMonthSelect(month: string) {
         if (month === currentMonth) return;
         setLoadingMonth(month)
         setOptimisticMonth(month)
+        closeTransientPortals()
         startTransition(() => {
             router.push(`/batch/${bankType.toLowerCase()}?month=${month}&period=${currentPeriod}`)
         })
@@ -139,6 +146,7 @@ export function BatchPageClientV2({
 
     function handlePeriodSelect(period: string) {
         if (currentMonth) {
+            closeTransientPortals()
             startTransition(() => {
                 router.push(`/batch/${bankType.toLowerCase()}?month=${currentMonth}&period=${period}`)
             })

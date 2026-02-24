@@ -39,7 +39,7 @@ export async function listBatchPhasesAction(bankType: 'MBB' | 'VIB') {
 }
 
 /**
- * List ALL phases (including inactive) for settings management
+ * List ALL active phases for settings management
  */
 export async function listAllBatchPhasesAction(bankType: 'MBB' | 'VIB') {
     try {
@@ -49,6 +49,7 @@ export async function listAllBatchPhasesAction(bankType: 'MBB' | 'VIB') {
             .from('batch_phases')
             .select('*')
             .eq('bank_type', bankType)
+            .eq('is_active', true)
             .order('sort_order', { ascending: true })
 
         if (error) throw error
@@ -155,7 +156,7 @@ export async function updateBatchPhaseAction(
 /**
  * Soft-delete a batch phase (set is_active = false)
  */
-export async function deleteBatchPhaseAction(id: string) {
+export async function deleteBatchPhaseAction(id: string, options?: { revalidate?: boolean }) {
     try {
         const supabase: any = await createClient()
 
@@ -168,8 +169,11 @@ export async function deleteBatchPhaseAction(id: string) {
 
         if (error) throw error
 
-        revalidatePath('/batch')
-        revalidatePath('/batch/settings')
+        // Only revalidate if explicitly requested (default true for backward compatibility)
+        if (options?.revalidate !== false) {
+            revalidatePath('/batch')
+            revalidatePath('/batch/settings')
+        }
 
         return { success: true, data }
     } catch (error: any) {

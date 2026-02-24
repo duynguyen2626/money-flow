@@ -14,55 +14,50 @@ CREATE TABLE IF NOT EXISTS batch_phases (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Seed default phases from existing batch_settings
+-- 2. Seed default phases (4 phases: MBB before/after 15, VIB before/after 15)
 INSERT INTO batch_phases (bank_type, label, period_type, cutoff_day, sort_order)
-SELECT
-    bs.bank_type,
-    'Before ' || COALESCE(bs.cutoff_day, 15),
-    'before',
-    COALESCE(bs.cutoff_day, 15),
-    0
-FROM batch_settings bs
+VALUES
+    ('MBB', 'Before 15', 'before', 15, 0),
+    ('MBB', 'After 15', 'after', 15, 1),
+    ('VIB', 'Before 15', 'before', 15, 0),
+    ('VIB', 'After 15', 'after', 15, 1)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO batch_phases (bank_type, label, period_type, cutoff_day, sort_order)
-SELECT
-    bs.bank_type,
-    'After ' || COALESCE(bs.cutoff_day, 15),
-    'after',
-    COALESCE(bs.cutoff_day, 15),
-    1
-FROM batch_settings bs
-ON CONFLICT DO NOTHING;
+-- 3. Add phase_id FK to batches (only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'batches') THEN
+        ALTER TABLE batches ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES batch_phases(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
--- 3. Add phase_id FK to batch_master_items
-ALTER TABLE batch_master_items
-ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES batch_phases(id) ON DELETE SET NULL;
+-- 4. Backfill batches.phase_id from period (only if both table and column exist)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'batches' 
+        AND column_name = 'period'
+    ) THEN
+        UPDATE batches b
+        SET phase_id = bp.id
+        FROM batch_phases bp
+        WHERE bp.bank_type = b.bank_type
+          AND bp.period_type = b.period
+          AND b.phase_id IS NULL;
+    END IF;
+END $$;
 
--- 4. Add phase_id FK to batches
-ALTER TABLE batches
-ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES batch_phases(id) ON DELETE SET NULL;
-
--- 5. Backfill batch_master_items.phase_id from cutoff_period
-UPDATE batch_master_items bmi
-SET phase_id = bp.id
-FROM batch_phases bp
-WHERE bp.bank_type = bmi.bank_type
-  AND bp.period_type = bmi.cutoff_period
-  AND bmi.phase_id IS NULL;
-
--- 6. Backfill batches.phase_id from period
-UPDATE batches b
-SET phase_id = bp.id
-FROM batch_phases bp
-WHERE bp.bank_type = b.bank_type
-  AND bp.period_type = b.period
-  AND b.phase_id IS NULL;
-
--- 7. Indexes
+-- 5. Indexes
 CREATE INDEX IF NOT EXISTS idx_batch_phases_bank ON batch_phases(bank_type, is_active, sort_order);
-CREATE INDEX IF NOT EXISTS idx_batch_master_items_phase ON batch_master_items(phase_id);
-CREATE INDEX IF NOT EXISTS idx_batches_phase ON batches(phase_id);
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'batches') THEN
+        CREATE INDEX IF NOT EXISTS idx_batches_phase ON batches(phase_id);
+    END IF;
+END $$;
 
 -- 8. Enable RLS
 ALTER TABLE batch_phases ENABLE ROW LEVEL SECURITY;
@@ -84,5 +79,9 @@ CREATE TRIGGER trigger_batch_phases_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_batch_phases_updated_at();
 
--- NOTE: Keep old columns (cutoff_period on batch_master_items, period on batches)
--- for backward compatibility during transition.
+-- NOTE: This migration is forward-compatible and works regardless of whether:
+-- - batches table exists
+-- - batches.period column exists
+-- - batch_master_items table exists (future enhancement)
+--
+-- The migration uses conditional checks to prevent errors if tables/columns don't exist yet.

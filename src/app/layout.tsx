@@ -6,6 +6,7 @@ import { PageTransitionOverlay } from '@/components/navigation/page-transition-o
 import { AppLayoutV2 as AppLayout } from '@/components/moneyflow/app-layout-v2'
 import { Toaster } from '@/components/ui/sonner'
 import { BreadcrumbProvider } from '@/context/breadcrumb-context'
+import { AppErrorBoundary } from '@/components/error/app-error-boundary'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -44,11 +45,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className="h-full w-full overflow-hidden">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full w-full overflow-hidden flex flex-col bg-background font-sans`} suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full w-full overflow-hidden flex flex-col bg-background font-sans`}>
         <PageTransitionOverlay />
         <TooltipProvider>
           <BreadcrumbProvider>
-            <AppLayout>{children}</AppLayout>
+            <AppLayout>
+              <AppErrorBoundary>{children}</AppErrorBoundary>
+            </AppLayout>
           </BreadcrumbProvider>
           <Toaster position="top-right" richColors />
         </TooltipProvider>

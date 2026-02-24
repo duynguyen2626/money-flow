@@ -1,11 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import React, { useState, useMemo, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   Menu,
-  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -23,14 +21,13 @@ import { coloredNavItems } from '@/components/navigation/nav-icon-system'
 
 export function AppLayoutV2({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
 
   // Dynamic Favicon for Page Navigation
   useAppFavicon(false)
 
+  // Load sidebar state after mount
   useEffect(() => {
-    setIsMounted(true)
     const savedState = localStorage.getItem('sidebar-collapsed-v2')
     if (savedState) {
       setSidebarCollapsed(JSON.parse(savedState))
@@ -63,15 +60,10 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!isMounted) {
-    return <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning />
-  }
-
   return (
-    <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
+    <div className="flex h-full w-full overflow-hidden">
       {/* Desktop Sidebar */}
       <aside
-        suppressHydrationWarning
         className={cn(
           "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
           sidebarCollapsed ? "w-16" : "w-64"
@@ -81,9 +73,9 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
         <div className={cn(
           "flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-8",
           sidebarCollapsed ? "px-1" : "px-6"
-        )}>
+        )}>  
         {/* Header / Logo Area */}
-        <div suppressHydrationWarning className={cn(
+        <div className={cn(
           "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
           sidebarCollapsed ? "justify-center" : "px-0"
         )}>
@@ -101,7 +93,7 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
         />
 
         {/* Footer / User Area */}
-        <div className="mt-auto pt-8 border-t border-slate-200" suppressHydrationWarning>
+        <div className="mt-auto pt-8 border-t border-slate-200">
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3 px-2">
               <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">

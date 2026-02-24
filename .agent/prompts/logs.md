@@ -1,80 +1,96 @@
 ## Error Type
-Console RangeError
+Recoverable Error
 
 ## Error Message
-Maximum call stack size exceeded
+Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HTTPAccessFallbackErrorBoundary pathname="/batch/mbb" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+      <RedirectBoundary>
+        <RedirectErrorBoundary router={{...}}>
+          <Head>
+          <__next_root_layout_boundary__>
+            <SegmentViewNode type="layout" pagePath="layout.tsx">
+              <SegmentTrieNode>
+              <link>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <script>
+              <RootLayout>
+                <html lang="en" suppressHydrationWarning={true} className="h-full w-f...">
+                  <body className="geist_a715...">
+                    <PageTransitionOverlay>
+                    <TooltipProvider>
+                      <TooltipProviderProvider scope={undefined} isOpenDelayedRef={{current:true}} delayDuration={700} ...>
+                        <BreadcrumbProvider>
+                          <AppLayoutV2>
+                            <div className="flex h-ful..." suppressHydrationWarning={true}>
++                             <aside
++                               suppressHydrationWarning={true}
++                               className="flex-none h-full flex-col border-r border-slate-200 bg-card transition-all ..."
++                             >
+                              ...
+                        ...
+                    ...
+          ...
 
 
-    at Map.set (<anonymous>:1:16)
-    at resolveErrorDev (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1882:106)
-    at getOutlinedModel (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1434:28)
-    at parseModelString (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1548:50)
-    at Object.<anonymous> (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2475:51)
-    at JSON.parse (<anonymous>:null:null)
-    at initializeModelChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1053:30)
-    at getOutlinedModel (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1372:17)
-    at parseModelString (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1602:50)
-    at Array.<anonymous> (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2475:51)
-    at JSON.parse (<anonymous>:null:null)
-    at initializeModelChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:1053:30)
-    at resolveConsoleEntry (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2008:96)
-    at processFullStringRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2409:17)
-    at processFullBinaryRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2349:9)
-    at processBinaryChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2459:98)
-    at progress (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2628:13)
+
+    at throwOnHydrationMismatch (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:3342:56)
+    at beginWork (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:6769:918)
+    at runWithFiberInDEV (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:959:74)
+    at performUnitOfWork (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9556:97)
+    at workLoopConcurrentByScheduler (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9552:58)
+    at renderRootConcurrent (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9535:71)
+    at performWorkOnRoot (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9062:150)
+    at performWorkOnRootViaSchedulerTask (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:10224:9)
+    at MessagePort.performWorkUntilDeadline (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_a0775dff._.js:2647:64)
+    at aside (<anonymous>:null:null)
+    at AppLayoutV2 (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_18aadbd0._.js:1145:326)
+    at RootLayout (src\app\layout.tsx:52:13)
+
+## Code Frame
+  50 |         <TooltipProvider>
+  51 |           <BreadcrumbProvider>
+> 52 |             <AppLayout>
+     |             ^
+  53 |               <AppErrorBoundary>{children}</AppErrorBoundary>
+  54 |             </AppLayout>
+  55 |           </BreadcrumbProvider>
 
 Next.js version: 16.0.10 (Turbopack)
 ## Error Type
-Console Error
+Runtime TypeError
 
 ## Error Message
-C:\Users\nam.thanhnguyen\Personal Project\money-flow-3\node_modules\.pnpm\next@16.0.10_@babel+core@7._59b2c4e49353e66c503ff99109bd4451\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
-
-
-    at createConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2189:71)
-    at handleConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2970:54)
-    at console.error (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:3114:57)
-    at Object.react_stack_bottom_frame (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2719:45)
-    at resolveConsoleEntry (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2008:170)
-    at processFullStringRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2409:17)
-    at processFullBinaryRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2349:9)
-    at processBinaryChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2459:98)
-    at progress (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2628:13)
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
- [31m[1m⨯[22m[39m "unhandledRejection:" RangeError: Maximum call stack size exceeded
-
-
-    at createConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2189:71)
-    at handleConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2970:54)
-    at console.error (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:3114:57)
-    at Object.react_stack_bottom_frame (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2719:45)
-    at resolveConsoleEntry (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2008:170)
-    at processFullStringRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2409:17)
-    at processFullBinaryRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2349:9)
-    at processBinaryChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2459:98)
-    at progress (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2628:13)
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
- [31m[1m⨯[22m[39m "unhandledRejection: " RangeError: Maximum call stack size exceeded
-
-
-    at createConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2189:71)
-    at handleConsoleError (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:2970:54)
-    at console.error (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_a4c916e9._.js:3114:57)
-    at Object.react_stack_bottom_frame (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2719:45)
-    at resolveConsoleEntry (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2008:170)
-    at processFullStringRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2409:17)
-    at processFullBinaryRow (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2349:9)
-    at processBinaryChunk (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2459:98)
-    at progress (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-server-dom-turbopack_5cbbb3cd._.js:2628:13)
+Cannot read properties of null (reading 'parentNode')
 
 Next.js version: 16.0.10 (Turbopack)

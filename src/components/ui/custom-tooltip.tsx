@@ -44,22 +44,14 @@ export function CustomTooltip({
   delayDuration = 200,
   disabled = false,
 }: CustomTooltipProps) {
-  const [isMounted, setIsMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setIsMounted(true)
-  }, [])
-
   if (disabled) return <>{children}</>
 
   return (
     <Tooltip delayDuration={delayDuration}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      {isMounted && (
-        <TooltipContent side={side}>
-          {content}
-        </TooltipContent>
-      )}
+      <TooltipContent side={side}>
+        {content}
+      </TooltipContent>
     </Tooltip>
   )
 }
