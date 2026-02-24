@@ -14,25 +14,13 @@ CREATE TABLE IF NOT EXISTS batch_phases (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Seed default phases from existing batch_settings
+-- 2. Seed default phases (4 phases: MBB before/after 15, VIB before/after 15)
 INSERT INTO batch_phases (bank_type, label, period_type, cutoff_day, sort_order)
-SELECT
-    bs.bank_type,
-    'Before ' || COALESCE(bs.cutoff_day, 15),
-    'before',
-    COALESCE(bs.cutoff_day, 15),
-    0
-FROM batch_settings bs
-ON CONFLICT DO NOTHING;
-
-INSERT INTO batch_phases (bank_type, label, period_type, cutoff_day, sort_order)
-SELECT
-    bs.bank_type,
-    'After ' || COALESCE(bs.cutoff_day, 15),
-    'after',
-    COALESCE(bs.cutoff_day, 15),
-    1
-FROM batch_settings bs
+VALUES
+    ('MBB', 'Before 15', 'before', 15, 0),
+    ('MBB', 'After 15', 'after', 15, 1),
+    ('VIB', 'Before 15', 'before', 15, 0),
+    ('VIB', 'After 15', 'after', 15, 1)
 ON CONFLICT DO NOTHING;
 
 -- 3. Add phase_id FK to batch_master_items

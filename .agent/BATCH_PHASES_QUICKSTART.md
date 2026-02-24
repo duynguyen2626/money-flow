@@ -30,7 +30,8 @@ INSERT INTO batch_phases (bank_type, label, period_type, cutoff_day, sort_order)
 ('MBB', 'Before 15', 'before', 15, 0),
 ('MBB', 'After 15', 'after', 15, 1),
 ('VIB', 'Before 15', 'before', 15, 0),
-('VIB', 'After 15', 'after', 15, 1);
+('VIB', 'After 15', 'after', 15, 1)
+ON CONFLICT DO NOTHING;
 
 -- Add phase_id columns
 ALTER TABLE batch_master_items ADD COLUMN IF NOT EXISTS phase_id UUID REFERENCES batch_phases(id) ON DELETE SET NULL;
