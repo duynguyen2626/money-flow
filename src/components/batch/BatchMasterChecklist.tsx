@@ -11,9 +11,6 @@ import { RotateCcw, CheckCircle2, Circle, Loader2, Calendar, ArrowRight, Wallet,
 import { getChecklistDataAction } from '@/actions/batch-checklist.actions'
 import { upsertBatchItemAmountAction, bulkInitializeFromMasterAction, toggleBatchItemConfirmAction, bulkConfirmBatchItemsAction, bulkUnconfirmBatchItemsAction } from '@/actions/batch-speed.actions'
 import { fundBatchAction, sendBatchToSheetAction } from '@/actions/batch.actions'
-import { listAllBatchPhasesAction, createBatchPhaseAction, deleteBatchPhaseAction } from '@/actions/batch-phases.actions'
-import { Select } from '@/components/ui/select'
-import { DayOfMonthPicker } from '@/components/ui/day-of-month-picker'
 import { toast } from 'sonner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -59,7 +56,7 @@ export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: 
                     setBatches(result.data.batches || [])
                     setPhases(result.data.phases || [])
                 }
-            }).catch(() => {})
+            }).catch(() => { })
         }
         window.addEventListener('focus', handleFocus)
         return () => window.removeEventListener('focus', handleFocus)
@@ -1069,9 +1066,9 @@ function ChecklistItemRow({ item, phase, monthYear, period, bankType, onUpdate, 
             "group relative flex items-center gap-3 p-3 border rounded-2xl transition-all",
             isHighlighted ? "bg-yellow-50 border-yellow-300 shadow-sm" :
                 item.status === 'confirmed' ? "bg-indigo-50/10 border-indigo-200 shadow-indigo-100/20 shadow-md" :
-                dueBadge && dueBadge.daysLeft <= 3 ? "bg-white border-rose-200 shadow-rose-100/40 shadow-md ring-1 ring-rose-100" :
-                dueBadge && dueBadge.daysLeft <= 7 ? "bg-white border-amber-200 shadow-amber-50/30 shadow-sm" :
-                "bg-white border-slate-100 hover:border-slate-300 shadow-sm",
+                    dueBadge && dueBadge.daysLeft <= 3 ? "bg-white border-rose-200 shadow-rose-100/40 shadow-md ring-1 ring-rose-100" :
+                        dueBadge && dueBadge.daysLeft <= 7 ? "bg-white border-amber-200 shadow-amber-50/30 shadow-sm" :
+                            "bg-white border-slate-100 hover:border-slate-300 shadow-sm",
             isSearchActive && !isHighlighted && "opacity-30 grayscale"
         )}>
             {/* Checkbox for Bulk Actions */}
@@ -1163,10 +1160,10 @@ function ChecklistItemRow({ item, phase, monthYear, period, bankType, onUpdate, 
                             isDueMismatch
                                 ? "bg-amber-50 text-amber-500 border border-amber-200"
                                 : dueBadge.daysLeft <= 3
-                                ? "bg-rose-50 text-rose-500 border border-rose-200 animate-pulse"
-                                : dueBadge.daysLeft <= 7
-                                ? "bg-amber-50 text-amber-600 border border-amber-200"
-                                : "bg-slate-50 text-slate-400 border border-slate-100"
+                                    ? "bg-rose-50 text-rose-500 border border-rose-200 animate-pulse"
+                                    : dueBadge.daysLeft <= 7
+                                        ? "bg-amber-50 text-amber-600 border border-amber-200"
+                                        : "bg-slate-50 text-slate-400 border border-slate-100"
                         )}>
                             <Calendar className="h-2.5 w-2.5" />
                             {dueBadge.label} · {dueBadge.daysLeft}d
