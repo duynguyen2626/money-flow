@@ -113,17 +113,25 @@ export async function bulkInitializeFromMasterAction(params: {
     monthYear: string
     period: 'before' | 'after'
     bankType: 'MBB' | 'VIB'
+    phaseId?: string
 }) {
     try {
         const supabase: any = await createClient()
 
-        // 1. Fetch all active master items
-        const { data: masterItems, error: masterError } = await supabase
+        // 1. Fetch all active master items (prefer phase_id, fallback to cutoff_period)
+        let masterQuery = supabase
             .from('batch_master_items')
             .select('*')
             .eq('bank_type', params.bankType)
-            .eq('cutoff_period', params.period)
             .eq('is_active', true)
+
+        if (params.phaseId) {
+            masterQuery = masterQuery.eq('phase_id', params.phaseId)
+        } else {
+            masterQuery = masterQuery.eq('cutoff_period', params.period)
+        }
+
+        const { data: masterItems, error: masterError } = await masterQuery
 
         if (masterError) throw masterError
         if (!masterItems || masterItems.length === 0) {
@@ -161,7 +169,7 @@ export async function bulkInitializeFromMasterAction(params: {
             try {
                 const { data: newBatch, error: createError } = await supabase
                     .from('batches')
-                    .insert({ ...insertData, period: params.period })
+                    .insert({ ...insertData, period: params.period, phase_id: params.phaseId || null })
                     .select()
                     .single()
 

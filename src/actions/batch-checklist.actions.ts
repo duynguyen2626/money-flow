@@ -40,6 +40,25 @@ export async function getChecklistDataAction(bankType: 'MBB' | 'VIB', year: numb
 
         if (batchError) throw batchError
 
+        // 3. Fetch active phases for this bank type (isolated — must never block main data)
+        let phases: any[] = []
+        try {
+            const { data: phasesData, error: phasesError } = await (supabase as any)
+                .from('batch_phases')
+                .select('*')
+                .eq('bank_type', bankType)
+                .eq('is_active', true)
+                .order('sort_order', { ascending: true })
+
+            if (phasesError) {
+                console.warn('batch_phases query error (non-fatal):', phasesError.message)
+            } else {
+                phases = phasesData || []
+            }
+        } catch (phaseErr: any) {
+            console.warn('batch_phases fetch failed (non-fatal):', phaseErr?.message)
+        }
+
         // Fetch Funding Txns
         const fundingTxnIds = batches?.map((b: any) => b.funding_transaction_id).filter(Boolean) || []
         let fundingTxns: any[] = []
@@ -66,7 +85,8 @@ export async function getChecklistDataAction(bankType: 'MBB' | 'VIB', year: numb
             success: true,
             data: {
                 masterItems,
-                batches: enrichedBatches
+                batches: enrichedBatches,
+                phases: phases || []
             }
         }
     } catch (error: any) {
