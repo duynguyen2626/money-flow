@@ -9,7 +9,6 @@ import { ArrowLeft, Save, Loader2, Plus, Trash2, GripVertical } from 'lucide-rea
 import Link from 'next/link'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { updateBatchSettingsAction, getBatchSettingsAction } from '@/actions/batch-settings.actions'
-import { listAllBatchPhasesAction, createBatchPhaseAction, updateBatchPhaseAction, deleteBatchPhaseAction } from '@/actions/batch-phases.actions'
 import { getAccountsAction } from '@/actions/account-actions'
 import { BatchMasterManager } from './BatchMasterManager'
 import { toast } from 'sonner'
@@ -318,8 +317,6 @@ export function BatchSettingsPage({ hideHeader = false, onSuccess }: { hideHeade
                                 </Button>
                             </CardContent>
                         </Card>
-
-                        <PhaseManager bankType="MBB" />
                     </TabsContent>
 
                     <TabsContent value="vib">
@@ -426,206 +423,9 @@ export function BatchSettingsPage({ hideHeader = false, onSuccess }: { hideHeade
                                 </Button>
                             </CardContent>
                         </Card>
-
-                        <PhaseManager bankType="VIB" />
                     </TabsContent>
-
-
                 </Tabs>
             </div>
         </div>
-    )
-}
-
-function PhaseManager({ bankType }: { bankType: 'MBB' | 'VIB' }) {
-    const [phases, setPhases] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
-    const [adding, setAdding] = useState(false)
-    const [newLabel, setNewLabel] = useState('')
-    const [newPeriodType, setNewPeriodType] = useState<'before' | 'after'>('before')
-    const [newCutoffDay, setNewCutoffDay] = useState(15)
-
-    useEffect(() => {
-        loadPhases()
-    }, [bankType])
-
-    async function loadPhases() {
-        setLoading(true)
-        try {
-            const result = await listAllBatchPhasesAction(bankType)
-            if (result.success) setPhases(result.data || [])
-        } catch (e) {
-            console.error('Failed to load phases', e)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    async function handleAdd() {
-        if (!newLabel.trim()) {
-            toast.error('Phase label is required')
-            return
-        }
-        setAdding(true)
-        try {
-            const result = await createBatchPhaseAction({
-                bankType,
-                label: newLabel.trim(),
-                periodType: newPeriodType,
-                cutoffDay: newCutoffDay
-            })
-            if (result.success) {
-                toast.success('Phase created')
-                setNewLabel('')
-                setNewCutoffDay(15)
-                loadPhases()
-            } else {
-                toast.error(result.error || 'Failed to create phase')
-            }
-        } catch (e: any) {
-            toast.error(e.message || 'Error creating phase')
-        } finally {
-            setAdding(false)
-        }
-    }
-
-    async function handleToggleActive(id: string, isActive: boolean) {
-        const result = await updateBatchPhaseAction(id, { isActive: !isActive })
-        if (result.success) {
-            toast.success(isActive ? 'Phase deactivated' : 'Phase activated')
-            loadPhases()
-        }
-    }
-
-    async function handleDelete(id: string) {
-        if (!confirm('Soft-delete this phase? Items will remain but unlinked.')) return
-        const result = await deleteBatchPhaseAction(id)
-        if (result.success) {
-            toast.success('Phase removed')
-            loadPhases()
-        }
-    }
-
-    async function handleUpdateField(id: string, field: string, value: any) {
-        const updates: any = {}
-        if (field === 'label') updates.label = value
-        if (field === 'cutoffDay') updates.cutoffDay = Number(value)
-        if (field === 'periodType') updates.periodType = value
-
-        const result = await updateBatchPhaseAction(id, updates)
-        if (result.success) {
-            toast.success('Phase updated')
-            loadPhases()
-        }
-    }
-
-    return (
-        <Card className="mt-4">
-            <CardHeader>
-                <CardTitle className="text-base">Batch Phases ({bankType})</CardTitle>
-                <CardDescription>
-                    Manage payment phases. Each phase defines a cutoff boundary for grouping master items.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {loading ? (
-                    <div className="flex items-center justify-center py-8">
-                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {phases.map((phase) => (
-                            <div key={phase.id} className={`flex items-center gap-3 p-3 rounded-xl border ${phase.is_active ? 'bg-white border-slate-200' : 'bg-slate-50 border-slate-100 opacity-60'}`}>
-                                <GripVertical className="h-4 w-4 text-slate-300 shrink-0" />
-                                <Input
-                                    defaultValue={phase.label}
-                                    className="h-9 text-sm font-bold flex-1"
-                                    onBlur={(e) => {
-                                        if (e.target.value !== phase.label) handleUpdateField(phase.id, 'label', e.target.value)
-                                    }}
-                                />
-                                <select
-                                    defaultValue={phase.period_type}
-                                    className="h-9 px-2 text-xs font-bold border border-slate-200 rounded-lg bg-white"
-                                    onChange={(e) => handleUpdateField(phase.id, 'periodType', e.target.value)}
-                                >
-                                    <option value="before">Before</option>
-                                    <option value="after">After</option>
-                                </select>
-                                <Input
-                                    type="number"
-                                    defaultValue={phase.cutoff_day}
-                                    className="h-9 w-16 text-sm text-center"
-                                    min={1}
-                                    max={31}
-                                    onBlur={(e) => {
-                                        if (Number(e.target.value) !== phase.cutoff_day) handleUpdateField(phase.id, 'cutoffDay', e.target.value)
-                                    }}
-                                />
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className={`h-9 text-xs font-bold ${phase.is_active ? 'text-emerald-600' : 'text-slate-400'}`}
-                                    onClick={() => handleToggleActive(phase.id, phase.is_active)}
-                                >
-                                    {phase.is_active ? 'Active' : 'Inactive'}
-                                </Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-9 w-9 text-slate-300 hover:text-red-500"
-                                    onClick={() => handleDelete(phase.id)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ))}
-
-                        {phases.length === 0 && (
-                            <p className="text-sm text-slate-400 text-center py-4">No phases configured. Add one below.</p>
-                        )}
-                    </div>
-                )}
-
-                {/* Add new phase */}
-                <div className="flex items-end gap-3 pt-2 border-t border-slate-100">
-                    <div className="flex-1 space-y-1">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase">Label</Label>
-                        <Input
-                            placeholder="e.g. Before 10"
-                            value={newLabel}
-                            onChange={(e) => setNewLabel(e.target.value)}
-                            className="h-9 text-sm"
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase">Type</Label>
-                        <select
-                            value={newPeriodType}
-                            onChange={(e) => setNewPeriodType(e.target.value as 'before' | 'after')}
-                            className="h-9 px-2 text-xs font-bold border border-slate-200 rounded-lg bg-white"
-                        >
-                            <option value="before">Before</option>
-                            <option value="after">After</option>
-                        </select>
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-[10px] font-bold text-slate-400 uppercase">Day</Label>
-                        <Input
-                            type="number"
-                            value={newCutoffDay}
-                            onChange={(e) => setNewCutoffDay(Number(e.target.value))}
-                            className="h-9 w-16 text-sm text-center"
-                            min={1}
-                            max={31}
-                        />
-                    </div>
-                    <Button onClick={handleAdd} disabled={adding} size="sm" className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700">
-                        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-                        Add
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
     )
 }
