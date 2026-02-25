@@ -913,7 +913,8 @@ export function TransactionSlideV2({
                     <AddShopDialog
                         open={isShopDialogOpen}
                         onOpenChange={setIsShopDialogOpen}
-                        categories={categories}
+                        categories={localCategories}
+                        preselectedCategoryId={singleForm.getValues('category_id') || undefined}
                     />
 
                 </SheetContent>

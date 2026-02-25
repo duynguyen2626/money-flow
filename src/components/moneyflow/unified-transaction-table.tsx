@@ -1512,6 +1512,18 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
           </button>
         </CustomTooltip>
 
+        <CustomTooltip content="Open in new tab">
+          <button
+            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(`/transactions?highlight=${txn.id}`, '_blank');
+            }}
+          >
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        </CustomTooltip>
+
         {/* More Actions Menu */}
         <Popover open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
           <PopoverTrigger asChild>
