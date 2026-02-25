@@ -37,11 +37,16 @@ import { createPortal } from 'react-dom'
  * - setState is always deferred via setTimeout to avoid useInsertionEffect error
  */
 export function PageTransitionOverlay() {
+  const [mounted, setMounted] = useState(false)
   const [targetPage, setTargetPage] = useState<string | null>(null)
   const pathname = usePathname()
   const prevPathname = useRef(pathname)
   const safetyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const startTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Stable setter — deferred so it never runs inside React's commit phase
   const startNav = useCallback((pageName: string) => {
@@ -82,11 +87,14 @@ export function PageTransitionOverlay() {
     }
   }, [pathname])
 
-  if (!targetPage || typeof document === 'undefined') return null
+  if (!mounted || !targetPage) return null
 
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/75 backdrop-blur-sm pointer-events-all">
-      <div className="flex flex-col items-center gap-5">
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/75 backdrop-blur-sm pointer-events-all"
+      suppressHydrationWarning
+    >
+      <div className="flex flex-col items-center gap-5" suppressHydrationWarning>
         {/* Spinner */}
         <div className="relative h-14 w-14">
           <div className="absolute inset-0 rounded-full border-[3px] border-slate-200" />
@@ -100,7 +108,6 @@ export function PageTransitionOverlay() {
           <p className="text-xs text-slate-400">Please wait…</p>
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   )
 }

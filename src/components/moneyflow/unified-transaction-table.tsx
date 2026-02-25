@@ -312,11 +312,14 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
         textarea.value = value
         textarea.style.position = 'fixed'
         textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
+        const container = document.getElementById('portal-root') || document.body
+        container.appendChild(textarea)
         textarea.focus()
         textarea.select()
         document.execCommand('copy')
-        document.body.removeChild(textarea)
+        if (textarea.parentNode) {
+          textarea.parentNode.removeChild(textarea)
+        }
       }
 
       if (successLabel) {

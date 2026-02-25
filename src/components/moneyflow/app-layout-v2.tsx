@@ -20,6 +20,7 @@ import { SidebarNavV2 } from '@/components/navigation/sidebar-nav-v2'
 import { coloredNavItems } from '@/components/navigation/nav-icon-system'
 
 export function AppLayoutV2({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pathname = usePathname()
 
@@ -28,6 +29,7 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
 
   // Load sidebar state after mount
   useEffect(() => {
+    setMounted(true)
     const savedState = localStorage.getItem('sidebar-collapsed-v2')
     if (savedState) {
       setSidebarCollapsed(JSON.parse(savedState))
@@ -61,57 +63,59 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
       {/* Desktop Sidebar */}
       <aside
+        suppressHydrationWarning
         className={cn(
           "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
-          sidebarCollapsed ? "w-16" : "w-64"
+          // Use a fixed width during hydration to match server exactly
+          !mounted ? "w-64" : (sidebarCollapsed ? "w-16" : "w-64")
         )}
       >
         {/* Inner scroll container — overflow-y-auto is here, not on aside */}
         <div className={cn(
           "flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-8",
           sidebarCollapsed ? "px-1" : "px-6"
-        )}>  
-        {/* Header / Logo Area */}
-        <div className={cn(
-          "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
-          sidebarCollapsed ? "justify-center" : "px-0"
         )}>
-          {!sidebarCollapsed && (
-            <span className="text-xl font-bold text-slate-800 tracking-tight pl-2">
-              {currentPageTitle}
-            </span>
-          )}
-        </div>
+          {/* Header / Logo Area */}
+          <div className={cn(
+            "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
+            sidebarCollapsed ? "justify-center" : "px-0"
+          )}>
+            {!sidebarCollapsed && (
+              <span className="text-xl font-bold text-slate-800 tracking-tight pl-2">
+                {currentPageTitle}
+              </span>
+            )}
+          </div>
 
-        {/* Sidebar Navigation */}
-        <SidebarNavV2 
-          isCollapsed={sidebarCollapsed}
-          onCollapseChange={toggleSidebar}
-        />
+          {/* Sidebar Navigation */}
+          <SidebarNavV2
+            isCollapsed={sidebarCollapsed}
+            onCollapseChange={toggleSidebar}
+          />
 
-        {/* Footer / User Area */}
-        <div className="mt-auto pt-8 border-t border-slate-200">
-          {!sidebarCollapsed ? (
-            <div className="flex items-center gap-3 px-2">
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                U
+          {/* Footer / User Area */}
+          <div className="mt-auto pt-8 border-t border-slate-200">
+            {!sidebarCollapsed ? (
+              <div className="flex items-center gap-3 px-2">
+                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+                  U
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-slate-700">User</span>
+                  <span className="text-xs text-slate-500">Admin</span>
+                </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-slate-700">User</span>
-                <span className="text-xs text-slate-500">Admin</span>
+            ) : (
+              <div className="flex justify-center">
+                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
+                  U
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex justify-center">
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                U
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </div>
       </aside>
 
