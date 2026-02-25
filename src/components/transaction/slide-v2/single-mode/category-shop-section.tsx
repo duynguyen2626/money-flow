@@ -16,7 +16,8 @@ import { SingleTransactionFormValues } from "../types";
 import { Shop, Category } from "@/types/moneyflow.types";
 import { Combobox } from "@/components/ui/combobox";
 
-import { getRecentShopByCategoryId } from "@/actions/transaction-actions";
+import { getRecentShopByCategoryId, getRecentCategoriesByShopId, getRecentShopIdsByCategoryId } from "@/actions/transaction-actions";
+import { useState } from "react";
 
 type CategoryShopSectionProps = {
     shops: Shop[];
@@ -30,6 +31,11 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const categoryId = useWatch({ control: form.control, name: "category_id" });
+    const shopId = useWatch({ control: form.control, name: "shop_id" });
+
+    // Track historical relationships to support many-to-many
+    const [shopHistoricalCategoryIds, setShopHistoricalCategoryIds] = useState<string[]>([]);
+    const [categoryHistoricalShopIds, setCategoryHistoricalShopIds] = useState<string[]>([]);
 
     // Filter categories based on transaction type
     const filteredCategories = useMemo(() => {
@@ -57,6 +63,39 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         }
     };
 
+    // 2. Derive many-to-many relationship for shops (CASCADE)
+    // If a category is selected, prioritize shops that belong to it or have been used with it.
+    const sortedShopOptions = useMemo(() => {
+        if (!categoryId) {
+            return shops.map(s => ({
+                value: s.id,
+                label: s.name,
+                icon: isValidUrl(s.image_url) ? (
+                    <Image src={s.image_url} alt={s.name} width={24} height={24} className="object-contain rounded-none" />
+                ) : <Store className="w-4 h-4 text-slate-400" />
+            }));
+        }
+
+        const historicalSet = new Set(categoryHistoricalShopIds);
+
+        // Filter and sort:
+        // 1. Matches via default_category_id or History
+        // 2. Others below
+        return [...shops].sort((a, b) => {
+            const aMatch = a.default_category_id === categoryId || historicalSet.has(a.id);
+            const bMatch = b.default_category_id === categoryId || historicalSet.has(b.id);
+            if (aMatch && !bMatch) return -1;
+            if (!aMatch && bMatch) return 1;
+            return 0;
+        }).map(s => ({
+            value: s.id,
+            label: s.name,
+            icon: isValidUrl(s.image_url) ? (
+                <Image src={s.image_url} alt={s.name} width={24} height={24} className="object-contain rounded-none" />
+            ) : <Store className="w-4 h-4 text-slate-400" />
+        }));
+    }, [shops, categoryId, categoryHistoricalShopIds]);
+
     const categoryOptions = filteredCategories.map(c => ({
         value: c.id,
         label: c.name,
@@ -69,33 +108,80 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         )
     }));
 
-    const shopOptions = shops.map(s => ({
-        value: s.id,
-        label: s.name,
-        icon: isValidUrl(s.image_url) ? (
-            <Image src={s.image_url} alt={s.name} width={24} height={24} className="object-contain rounded-none" />
-        ) : <Store className="w-4 h-4 text-slate-400" />
-    }));
+    // Prioritize categories that this shop has been used with (many-to-many relationship support)
+    const sortedCategoryOptions = useMemo(() => {
+        if (!shopId || shopHistoricalCategoryIds.length === 0) return categoryOptions;
 
-    // Auto-select shop based on recently used for selected category
+        const historicalSet = new Set(shopHistoricalCategoryIds);
+        return [...categoryOptions].sort((a, b) => {
+            const aIsHist = historicalSet.has(a.value);
+            const bIsHist = historicalSet.has(b.value);
+            if (aIsHist && !bIsHist) return -1;
+            if (!aIsHist && bIsHist) return 1;
+            return 0;
+        });
+    }, [categoryOptions, shopId, shopHistoricalCategoryIds]);
+
+    // CASCADE: Select Category -> Suggest Shop
     useEffect(() => {
-        if (!categoryId) return;
+        if (!categoryId) {
+            setCategoryHistoricalShopIds([]);
+            return;
+        }
 
-        // Don't auto-set if shop is already selected (prevent overwriting user selection if they just picked one)
-        // BUT if it's the very first time category is selected (form is clean), we should auto-set
         const currentShopId = form.getValues('shop_id');
 
-        // We use a small flag or check if it's "clean"
-        // Actually, usually users want smart suggestion if they just changed category
-        const fetchRecent = async () => {
-            const recentShopId = await getRecentShopByCategoryId(categoryId);
-            if (recentShopId && !currentShopId) {
-                form.setValue('shop_id', recentShopId);
+        const fetchShops = async () => {
+            // Fetch multiple historical shops to improve the dropdown sorting
+            const recentShopIds = await getRecentShopIdsByCategoryId(categoryId);
+            setCategoryHistoricalShopIds(recentShopIds);
+
+            // Auto-select the most recent one if no shop is selected
+            if (recentShopIds.length > 0 && !currentShopId) {
+                form.setValue('shop_id', recentShopIds[0], { shouldDirty: true });
+            } else if (!currentShopId) {
+                // Fallback to the single most recent shop logic (already robust)
+                const recentShopId = await getRecentShopByCategoryId(categoryId);
+                if (recentShopId) {
+                    form.setValue('shop_id', recentShopId, { shouldDirty: true });
+                }
             }
         };
 
-        fetchRecent();
+        fetchShops();
     }, [categoryId, form]);
+
+    // CASCADE: Select Shop -> Auto-set Category
+    useEffect(() => {
+        if (!shopId) {
+            setShopHistoricalCategoryIds([]);
+            return;
+        }
+
+        const currentCategoryId = form.getValues('category_id');
+        const selectedShop = shops.find(s => s.id === shopId);
+
+        const applyCategory = async () => {
+            // 1. Try default category from shop definition
+            if (selectedShop?.default_category_id) {
+                if (!currentCategoryId) {
+                    form.setValue('category_id', selectedShop.default_category_id, { shouldDirty: true });
+                }
+                return;
+            }
+
+            // 2. Fetch historical categories for this shop
+            const recentCategoryIds = await getRecentCategoriesByShopId(shopId);
+            setShopHistoricalCategoryIds(recentCategoryIds);
+
+            // 3. Auto-set the most recent one if nothing is selected
+            if (recentCategoryIds.length > 0 && !currentCategoryId) {
+                form.setValue('category_id', recentCategoryIds[0], { shouldDirty: true });
+            }
+        };
+
+        applyCategory();
+    }, [shopId, form, shops]);
 
     // Auto-select defaults logic
     useEffect(() => {
@@ -145,7 +231,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
                             </FormLabel>
                             <FormControl>
                                 <Combobox
-                                    items={categoryOptions}
+                                    items={sortedCategoryOptions}
                                     value={field.value || undefined}
                                     onValueChange={field.onChange}
                                     placeholder="Select Category"
@@ -172,7 +258,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
                                 </FormLabel>
                                 <FormControl>
                                     <Combobox
-                                        items={shopOptions}
+                                        items={sortedShopOptions}
                                         value={field.value || undefined}
                                         onValueChange={field.onChange}
                                         placeholder="External Source"
