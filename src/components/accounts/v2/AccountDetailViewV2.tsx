@@ -54,8 +54,6 @@ export function AccountDetailViewV2({
     // Dynamic Icon for Account Detail (Shows Bank Logo on Tab)
     useAppFavicon(isPending, account.image_url ?? undefined)
 
-
-
     // Year Filter State (for header)
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
 
@@ -70,8 +68,9 @@ export function AccountDetailViewV2({
     const [isLoadingPending, setIsLoadingPending] = useState(true)
 
     const summary = useMemo(() => {
-        const targetYear = selectedYear ? parseInt(selectedYear) : new Date().getFullYear();
+        const targetYear = selectedYear ? parseInt(selectedYear) : (selectedCycle && selectedCycle !== 'all' ? parseInt(selectedCycle.split('-')[0]) : new Date().getFullYear());
         const categoryMap = new Map(categories.map(c => [c.id, c]))
+
         let cardYearlyCashbackTotal = 0;
         let cardYearlyCashbackGivenTotal = 0;
         let yearDebtTotal = 0;
@@ -108,23 +107,38 @@ export function AccountDetailViewV2({
                 if (type === 'income') {
                     yearPureIncomeTotal += amount
 
-                    // Yearly Cashback Total
+                    // Yearly ACTUAL Claimed Cashback (Income)
                     const categoryId = tx?.category_id
                     const category = categoryId ? categoryMap.get(categoryId) : null
                     const categoryName = category?.name?.toLowerCase() || ''
                     if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
-                        cardYearlyCashbackTotal += amount
+                        cashbackTotal += amount
                     }
                 }
-                if (type === 'expense') {
-                    yearPureExpenseTotal += amount
 
-                    // Yearly Shared/Given Cashback
-                    const categoryId = tx?.category_id
-                    const category = categoryId ? categoryMap.get(categoryId) : null
-                    const categoryName = category?.name?.toLowerCase() || ''
-                    if (categoryName.includes('shared') || categoryName.includes('chia sẻ cashback')) {
-                        cardYearlyCashbackGivenTotal += amount
+                if (type === 'expense' || type === 'debt') {
+                    if (type === 'expense') yearPureExpenseTotal += amount
+
+                    // Yearly ESTIMATED Cashback (from Transactions)
+                    const bankBack = Number(tx?.bank_back || 0)
+                    const sharedAmount = Number(tx?.cashback_share_amount || 0)
+
+                    if (bankBack > 0) {
+                        cardYearlyCashbackTotal += bankBack
+                    } else if (account.type === 'credit_card') {
+                        const baseRate = (account.cb_base_rate || 0) / 100
+                        cardYearlyCashbackTotal += amount * baseRate
+                    }
+
+                    if (sharedAmount > 0) {
+                        cardYearlyCashbackGivenTotal += sharedAmount
+                    } else {
+                        const categoryId = tx?.category_id
+                        const category = categoryId ? categoryMap.get(categoryId) : null
+                        const categoryName = category?.name?.toLowerCase() || ''
+                        if (categoryName.includes('shared') || categoryName.includes('chia sẻ cashback')) {
+                            cardYearlyCashbackGivenTotal += amount
+                        }
                     }
                 }
             }
@@ -140,17 +154,6 @@ export function AccountDetailViewV2({
                 expensesTotal += amount
                 if (year === targetYear) {
                     yearExpensesTotal += amount
-                }
-            }
-
-            if (type === 'income') {
-                const categoryId = tx?.category_id
-                const category = categoryId ? categoryMap.get(categoryId) : null
-                const categoryName = category?.name?.toLowerCase() || ''
-                if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
-                    if (!selectedYear || year === targetYear) {
-                        cashbackTotal += amount
-                    }
                 }
             }
         })
@@ -173,7 +176,7 @@ export function AccountDetailViewV2({
             netProfitYearly,
             pendingCount: pendingItems.length + pendingRefundCount
         }
-    }, [initialTransactions, categories, selectedYear, pendingItems.length, pendingRefundCount])
+    }, [initialTransactions, categories, selectedYear, pendingItems.length, pendingRefundCount, selectedCycle])
 
     useEffect(() => {
         document.title = `${account.name} History`
@@ -291,8 +294,6 @@ export function AccountDetailViewV2({
             setIsConfirmingPending(false)
         }
     }
-
-
 
     const availableYears = React.useMemo(() => {
         const years = new Set<string>()

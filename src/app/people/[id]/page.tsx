@@ -35,18 +35,17 @@ export async function generateMetadata({
   if (tab === 'history') tabName = 'History'
   if (tab === 'split-bill') tabName = 'Split Bill'
 
-  const icons = person.image_url ? {
-    icon: [
-      { url: person.image_url, type: 'image/webp' },
-      { url: '/favicon.svg?v=6', type: 'image/svg+xml' },
-    ],
-    apple: [
-      { url: person.image_url, type: 'image/webp' },
-    ],
-  } : undefined
+  const icons: Metadata['icons'] = person.image_url ? {
+    icon: person.image_url,
+    shortcut: person.image_url,
+    apple: person.image_url,
+  } : {
+    icon: '/favicon.svg?v=6',
+    apple: '/icon.svg?v=6',
+  }
 
   return {
-    title: `${person.name} ${tabName} | Money Flow`,
+    title: person.name,
     icons,
   }
 }

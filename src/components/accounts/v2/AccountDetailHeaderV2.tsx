@@ -81,9 +81,9 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 
 const formatVNShort = (amount: number) => {
     const absAmount = Math.abs(amount)
-    if (absAmount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)}B`
-    if (absAmount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`
-    if (absAmount >= 1_000) return `${(amount / 1_000).toFixed(0)}k`
+    if (absAmount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)} B`
+    if (absAmount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)} M`
+    if (absAmount >= 1_000) return `${(amount / 1_000).toFixed(0)} k`
     return amount.toString()
 }
 
@@ -122,7 +122,7 @@ export function AccountDetailHeaderV2({
             const params = new URLSearchParams(searchParams.toString())
             if (year) params.set('year', year)
             else params.delete('year')
-            router.push(`?${params.toString()}`, { scroll: false })
+            router.push(`? ${params.toString()} `, { scroll: false })
             router.refresh()
         })
     }
@@ -159,15 +159,15 @@ export function AccountDetailHeaderV2({
                 const month = parseInt(monthStr, 10)
 
                 if (isNaN(year) || isNaN(month)) {
-                    throw new Error(`Invalid cycle selected: ${selectedCycle}`)
+                    throw new Error(`Invalid cycle selected: ${selectedCycle} `)
                 }
 
                 const cycleDate = new Date(year, month - 1, 10)
                 if (isNaN(cycleDate.getTime())) {
-                    throw new Error(`Invalid cycle date: ${selectedCycle}`)
+                    throw new Error(`Invalid cycle date: ${selectedCycle} `)
                 }
 
-                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&date=${cycleDate.toISOString()}`)
+                const response = await fetch(`/ api / cashback / stats ? accountId = ${account.id}& date=${cycleDate.toISOString()} `)
                 if (response.ok) {
                     const data = await response.json()
                     setDynamicCashbackStats(data)
@@ -188,7 +188,7 @@ export function AccountDetailHeaderV2({
         if (searchParams.has('tab')) {
             const params = new URLSearchParams(searchParams.toString());
             params.delete('tab');
-            router.replace(`?${params.toString()}`, { scroll: false });
+            router.replace(`? ${params.toString()} `, { scroll: false });
         }
     }, [searchParams, router]);
 
@@ -343,7 +343,7 @@ export function AccountDetailHeaderV2({
             />
 
             {/* Section 1: Account Identity */}
-            <HeaderSection label="Account" className="min-w-0 sm:min-w-[300px] gap-2">
+            <HeaderSection label="Account" className="min-w-0 sm:min-w-[300px] gap-1 !h-[105px] justify-center pt-2">
                 <div className="flex items-center gap-3">
                     <Link
                         href="/accounts"
@@ -353,10 +353,10 @@ export function AccountDetailHeaderV2({
                     </Link>
 
                     <div className="relative shrink-0">
-                        <div className="w-12 h-12 overflow-hidden flex items-center justify-center">
+                        <div className="w-12 h-12 overflow-hidden flex items-center justify-center aspect-square border border-slate-100 bg-white">
                             {account.image_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={account.image_url} alt="" className="w-full h-full object-contain" />
+                                <img src={account.image_url} alt="" className="w-full h-full object-contain rounded-none aspect-square" />
                             ) : (
                                 <div className="text-xl font-bold text-slate-400 capitalize">{account.name.charAt(0)}</div>
                             )}
@@ -365,7 +365,7 @@ export function AccountDetailHeaderV2({
 
                     <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5">
-                            <h1 className="text-base font-black text-slate-900 leading-none truncate" title={account.name}>
+                            <h1 className="text-xs font-black text-slate-900 leading-none truncate" title={account.name}>
                                 {account.name}
                             </h1>
                             <Popover open={isEditPopoverOpen} onOpenChange={setIsEditPopoverOpen}>
@@ -421,9 +421,9 @@ export function AccountDetailHeaderV2({
                                 )}
                             </div>
                             {account.receiver_name && (
-                                <div className="flex items-center gap-1.5 pl-0.5 pt-1 border-t border-slate-100 min-w-0">
-                                    <User className="h-3 w-3 text-slate-300 shrink-0" />
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none truncate whitespace-nowrap block">
+                                <div className="flex items-center gap-1 pl-0.5 pt-1.5 border-t border-slate-100 min-w-0">
+                                    <User className="h-2.5 w-2.5 text-slate-300 shrink-0" />
+                                    <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest leading-none truncate whitespace-nowrap block">
                                         {account.receiver_name}
                                     </span>
                                 </div>
@@ -433,7 +433,7 @@ export function AccountDetailHeaderV2({
                 </div>
 
                 {rewardsCount > 0 && (
-                    <div className="flex items-center gap-1.5 pl-0.5 mt-1.5 w-fit">
+                    <div className="flex items-center gap-1.5 pl-0.5 mt-1 w-fit">
                         <HoverCard openDelay={0} closeDelay={150}>
                             <HoverCardTrigger asChild>
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-100 rounded-md text-amber-700 cursor-help active:scale-95 transition-transform hover:bg-amber-100 hover:border-amber-200 shadow-sm group/badge">
@@ -471,7 +471,7 @@ export function AccountDetailHeaderV2({
                                             return (
                                                 <div className="flex items-center gap-2">
                                                     {Array.from(uniqueCatsMap.values()).slice(0, 2).map((cat, idx) => (
-                                                        <React.Fragment key={`${cat.id}-${idx}`}>
+                                                        <React.Fragment key={`${cat.id} -${idx} `}>
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-[10px] font-black uppercase tracking-tight truncate max-w-[200px]">{cat.name}</span>
                                                                 {cat.mcc_codes && cat.mcc_codes.length > 0 && (
@@ -499,106 +499,108 @@ export function AccountDetailHeaderV2({
                                 </div>
                             </HoverCardTrigger>
                             <HoverCardContent className="w-[340px] p-0 overflow-hidden border-none shadow-2xl" align="start">
-                                <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 flex justify-between items-center text-white">
-                                    <div className="flex items-center gap-2">
-                                        <Zap className="h-4 w-4 fill-white/20" />
-                                        <span className="text-xs font-black uppercase tracking-widest">Active Rewards</span>
+                                <div className="bg-white">
+                                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 flex justify-between items-center text-white">
+                                        <div className="flex items-center gap-2">
+                                            <Zap className="h-4 w-4 fill-white/20" />
+                                            <span className="text-xs font-black uppercase tracking-widest">Active Rewards</span>
+                                        </div>
+                                        {/* Calculate count again for header */}
+                                        {(() => {
+                                            const program = normalizeCashbackConfig(account.cashback_config, account);
+                                            const rules = (program.levels || []).flatMap((l: any) => l.rules || []);
+                                            return <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-bold text-white uppercase">{rules.length} Rules</span>
+                                        })()}
                                     </div>
-                                    {/* Calculate count again for header */}
-                                    {(() => {
-                                        const program = normalizeCashbackConfig(account.cashback_config, account);
-                                        const rules = (program.levels || []).flatMap((l: any) => l.rules || []);
-                                        return <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[9px] font-bold text-white uppercase">{rules.length} Rules</span>
-                                    })()}
-                                </div>
 
-                                <div className="bg-white max-h-[300px] overflow-y-auto">
-                                    {(() => {
-                                        try {
-                                            const config = normalizeCashbackConfig(account.cashback_config, account);
-                                            const levels = config.levels || [];
-                                            const rules: any[] = levels.flatMap((lvl: any) => lvl.rules || []);
+                                    <div className="bg-white max-h-[300px] overflow-y-auto">
+                                        {(() => {
+                                            try {
+                                                const config = normalizeCashbackConfig(account.cashback_config, account);
+                                                const levels = config.levels || [];
+                                                const rules: any[] = levels.flatMap((lvl: any) => lvl.rules || []);
 
-                                            if (rules.length === 0 && config.defaultRate > 0) {
-                                                return (
-                                                    <div className="p-4 flex items-center gap-3">
-                                                        <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                                                            <span className="text-lg">🌍</span>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-sm font-bold text-slate-800">Flat Rate</div>
-                                                            <div className="text-xs text-slate-500">All Purchases</div>
-                                                        </div>
-                                                        <div className="ml-auto text-xl font-black text-emerald-600">
-                                                            {(config.defaultRate * 100).toFixed(1)}%
-                                                        </div>
-                                                    </div>
-                                                )
-                                            }
-
-                                            return (
-                                                <div className="divide-y divide-slate-100">
-                                                    {rules.map((rule, idx) => {
-                                                        const catIds: string[] = [];
-                                                        if (Array.isArray(rule.categoryIds)) rule.categoryIds.forEach((id: string) => catIds.push(id));
-                                                        if (rule.categoryId) catIds.push(rule.categoryId);
-                                                        // Dedupe
-                                                        const uniqueCatIds = Array.from(new Set(catIds));
-
-                                                        const desc = rule.description || (uniqueCatIds.length > 0 ? 'Specific Categories' : 'Bonus Rule');
-
-                                                        return (
-                                                            <div key={idx} className="p-3 hover:bg-slate-50 transition-colors">
-                                                                <div className="flex justify-between items-start mb-2">
-                                                                    <span className="text-[11px] font-black uppercase text-slate-700 tracking-wide">{desc}</span>
-                                                                    <span className="text-sm font-black text-emerald-600">{(rule.rate * 100).toFixed(1)}%</span>
-                                                                </div>
-
-                                                                {uniqueCatIds.length > 0 && (
-                                                                    <div className="space-y-2">
-                                                                        {uniqueCatIds.map(cid => {
-                                                                            const cat = categories.find(c => c.id === cid || c.name === cid);
-                                                                            if (!cat) return null;
-                                                                            return (
-                                                                                <div key={cid} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded px-2 py-1.5">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <span className="text-base">{cat.icon || '🏷️'}</span>
-                                                                                        <span className="text-[10px] font-bold text-slate-600 uppercase">{cat.name}</span>
-                                                                                    </div>
-                                                                                    {cat.mcc_codes && cat.mcc_codes.length > 0 && (
-                                                                                        <div className="flex gap-1">
-                                                                                            {Array.from(new Set(cat.mcc_codes)).map(mcc => (
-                                                                                                <code key={mcc} className="text-[9px] font-mono font-bold bg-white border border-slate-200 px-1 rounded text-slate-500">
-                                                                                                    {mcc}
-                                                                                                </code>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            )
-                                                                        })}
-                                                                    </div>
-                                                                )}
-                                                                {rule.maxReward && (
-                                                                    <div className="mt-2 flex items-center gap-1 text-[9px] text-amber-600 font-medium italic">
-                                                                        <Info className="h-3 w-3" />
-                                                                        Cap: {formatVNShort(rule.maxReward)}
-                                                                    </div>
-                                                                )}
+                                                if (rules.length === 0 && config.defaultRate > 0) {
+                                                    return (
+                                                        <div className="p-4 flex items-center gap-3">
+                                                            <div className="h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                                                                <span className="text-lg">🌍</span>
                                                             </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            );
-                                        } catch (e) {
-                                            return <p className="p-4 text-xs text-slate-400 italic text-center">Config data unavailable.</p>;
-                                        }
-                                    })()}
-                                </div>
-                                <div className="bg-slate-50 p-2 text-center border-t border-slate-100">
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase italic">
-                                        Detailed MCC matching required
-                                    </p>
+                                                            <div>
+                                                                <div className="text-sm font-bold text-slate-800">Flat Rate</div>
+                                                                <div className="text-xs text-slate-500">All Purchases</div>
+                                                            </div>
+                                                            <div className="ml-auto text-xl font-black text-emerald-600">
+                                                                {(config.defaultRate * 100).toFixed(1)}%
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                }
+
+                                                return (
+                                                    <div className="divide-y divide-slate-100">
+                                                        {rules.map((rule, idx) => {
+                                                            const catIds: string[] = [];
+                                                            if (Array.isArray(rule.categoryIds)) rule.categoryIds.forEach((id: string) => catIds.push(id));
+                                                            if (rule.categoryId) catIds.push(rule.categoryId);
+                                                            // Dedupe
+                                                            const uniqueCatIds = Array.from(new Set(catIds));
+
+                                                            const desc = rule.description || (uniqueCatIds.length > 0 ? 'Specific Categories' : 'Bonus Rule');
+
+                                                            return (
+                                                                <div key={idx} className="p-3 hover:bg-slate-50 transition-colors">
+                                                                    <div className="flex justify-between items-start mb-2">
+                                                                        <span className="text-[11px] font-black uppercase text-slate-700 tracking-wide">{desc}</span>
+                                                                        <span className="text-sm font-black text-emerald-600">{(rule.rate * 100).toFixed(1)}%</span>
+                                                                    </div>
+
+                                                                    {uniqueCatIds.length > 0 && (
+                                                                        <div className="space-y-2">
+                                                                            {uniqueCatIds.map(cid => {
+                                                                                const cat = categories.find(c => c.id === cid || c.name === cid);
+                                                                                if (!cat) return null;
+                                                                                return (
+                                                                                    <div key={cid} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded px-2 py-1.5">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="text-base">{cat.icon || '🏷️'}</span>
+                                                                                            <span className="text-[10px] font-bold text-slate-600 uppercase">{cat.name}</span>
+                                                                                        </div>
+                                                                                        {cat.mcc_codes && cat.mcc_codes.length > 0 && (
+                                                                                            <div className="flex gap-1">
+                                                                                                {Array.from(new Set(cat.mcc_codes)).map(mcc => (
+                                                                                                    <code key={mcc} className="text-[9px] font-mono font-bold bg-white border border-slate-200 px-1 rounded text-slate-500">
+                                                                                                        {mcc}
+                                                                                                    </code>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                    {rule.maxReward && (
+                                                                        <div className="mt-2 flex items-center gap-1 text-[9px] text-amber-600 font-medium italic">
+                                                                            <Info className="h-3 w-3" />
+                                                                            Cap: {formatVNShort(rule.maxReward)}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                );
+                                            } catch (e) {
+                                                return <p className="p-4 text-xs text-slate-400 italic text-center">Config data unavailable.</p>;
+                                            }
+                                        })()}
+                                    </div>
+                                    <div className="bg-slate-50 p-2 text-center border-t border-slate-100">
+                                        <p className="text-[9px] font-bold text-slate-400 uppercase italic">
+                                            Detailed MCC matching required
+                                        </p>
+                                    </div>
                                 </div>
                             </HoverCardContent>
                         </HoverCard>
@@ -614,7 +616,7 @@ export function AccountDetailHeaderV2({
                                 <HeaderSection
                                     label="Credit Health"
                                     borderColor="border-indigo-100"
-                                    className="flex-[5] min-w-[420px] bg-indigo-50/10 cursor-help !h-[136px]"
+                                    className="flex-[5] min-w-[420px] bg-indigo-50/10 cursor-help !h-[105px]"
                                 >
                                     <div className="flex flex-col h-full">
                                         {/* Row 1: Metrics (H-61px to ensure Bar Top is at 73px) */}
@@ -647,93 +649,91 @@ export function AccountDetailHeaderV2({
                                             </div>
                                         </div>
 
-                                        {/* Row 2: Progress Bar (H-24px) */}
-                                        <div className="w-full h-[24px] flex items-center">
+                                        {/* Row 2: Progress Bar (Smaller H) */}
+                                        <div className="w-full h-[32px] flex items-end relative pb-1">
                                             {(() => {
                                                 const limit = account.credit_limit || 0
-                                                const usage = limit > 0 ? Math.min((outstandingBalance / limit) * 100, 100) : 0
-                                                const isDanger = usage > 90
-
-                                                // Annual Fee Waiver Stats
-                                                const waiverTarget = account.annual_fee_waiver_target
-                                                const spent = summary?.yearExpensesTotal || 0
-                                                const needsWaiver = waiverTarget ? Math.max(0, waiverTarget - spent) : 0
-                                                const waiverProgress = waiverTarget ? Math.min(100, (spent / waiverTarget) * 100) : 0
-
-                                                const badges = [
-                                                    {
-                                                        icon: <Hash className="h-3 w-3" />,
-                                                        label: "Usage",
-                                                        value: formatMoneyVND(Math.ceil(outstandingBalance)),
-                                                        theme: isDanger ? "text-rose-700 bg-rose-50 border-rose-200" : "text-slate-700 bg-slate-50/80 border-slate-200"
-                                                    },
-                                                    {
-                                                        icon: <TrendingUp className="h-3 w-3" />,
-                                                        label: needsWaiver > 0 ? "Missing" : "Waiver",
-                                                        value: needsWaiver > 0 ? formatMoneyVND(Math.ceil(needsWaiver)) : "MET",
-                                                        theme: needsWaiver > 0
-                                                            ? "text-rose-700 bg-rose-50 border-rose-200 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.2)]"
-                                                            : "text-emerald-700 bg-emerald-50/90 border-emerald-200"
-                                                    }
-                                                ];
+                                                const usagePercent = limit > 0 ? Math.min((outstandingBalance / limit) * 100, 100) : 0
+                                                const isDanger = usagePercent > 90
 
                                                 return (
-                                                    <div className="relative h-5 w-full rounded-lg shadow-inner group/health-bar">
-                                                        <div className="absolute inset-0 bg-slate-100/50 rounded-lg border border-slate-200/60 overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]">
-                                                            <div
-                                                                className={cn("h-full transition-all duration-700 rounded-sm shadow-sm", isDanger ? "bg-rose-500" : "bg-indigo-600")}
-                                                                style={{ width: `${usage}%` }}
-                                                            />
-                                                        </div>
-
-                                                        {/* Center Badge System */}
-                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                                                            <div className="flex items-center gap-2 h-7 translate-y-[0px]">
-                                                                {badges.map((badge, idx) => (
-                                                                    <div
-                                                                        key={idx}
-                                                                        className={cn(
-                                                                            "px-3 py-1 rounded-full border shadow-sm flex items-center gap-2 h-7 whitespace-nowrap bg-white/95 backdrop-blur-md transition-all group-hover/health-bar:scale-105",
-                                                                            badge.theme
-                                                                        )}
-                                                                    >
-                                                                        {badge.icon}
-                                                                        <div className="flex items-baseline gap-1.5 leading-none">
-                                                                            <span className="text-[8px] font-bold uppercase tracking-tight opacity-40">{badge.label}</span>
-                                                                            <span className="text-[12px] font-black tabular-nums tracking-tighter">{badge.value}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-
-                                                                {/* Percentage Badge */}
-                                                                <div className="px-2.5 py-1 rounded-full border border-slate-900 bg-slate-900 shadow-lg flex items-center h-7 ml-1">
-                                                                    <span className="text-[12px] font-black text-white tabular-nums tracking-tighter leading-none">{Math.round(usage)}%</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                    <div className="relative h-1.5 w-full bg-slate-100 rounded-full overflow-visible border border-slate-200/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+                                                        <div
+                                                            className={cn("h-full transition-all duration-700 rounded-full shadow-sm", isDanger ? "bg-rose-500" : "bg-indigo-600")}
+                                                            style={{ width: `${usagePercent}% ` }}
+                                                        />
                                                     </div>
                                                 );
                                             })()}
                                         </div>
 
-                                        {/* Row 3: Footer Items as Badges */}
+                                        {/* Row 3: Metrics & Badges (Footer) */}
                                         <div className="flex items-center gap-2 pb-1 px-0.5 mt-auto h-[28px]">
-                                            <div className="bg-slate-50 px-2 py-1 rounded border border-slate-200 flex items-center gap-1.5 shadow-sm h-6">
-                                                <div className="h-1 w-1 rounded-full bg-slate-400" />
-                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">Limits Tracked</span>
-                                            </div>
+                                            {(() => {
+                                                const limit = account.credit_limit || 0
+                                                const usagePercent = limit > 0 ? Math.min((outstandingBalance / limit) * 100, 100) : 0
+                                                const isDanger = usagePercent > 90
 
-                                            <div className="bg-indigo-50 px-2 py-1 rounded border border-indigo-100 flex items-center gap-2 shadow-sm h-6">
-                                                <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">LIMIT</span>
-                                                <span className="text-[10px] font-black text-indigo-900 tabular-nums leading-none">{formatMoneyVND(Math.ceil(account.credit_limit || 0))}</span>
-                                            </div>
+                                                // STANDALONE PERCENTAGE BADGE
+                                                const usageBadge = (
+                                                    <div className={cn(
+                                                        "px-1.5 py-0.5 rounded border shadow-sm flex items-center h-5.5",
+                                                        isDanger ? "bg-rose-500 text-white border-rose-600" : "bg-indigo-600 text-white border-indigo-700"
+                                                    )}>
+                                                        <span className="text-[9px] font-black tabular-nums">
+                                                            {Math.round(usagePercent)}%
+                                                        </span>
+                                                    </div>
+                                                );
 
-                                            {!!account.annual_fee_waiver_target && (
-                                                <div className="bg-amber-50 px-2 py-1 rounded border border-amber-100 flex items-center gap-2 shadow-sm h-6 ml-auto">
-                                                    <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">TARGET</span>
-                                                    <span className="text-[10px] font-black text-amber-900 tabular-nums leading-none">{formatMoneyVND(account.annual_fee_waiver_target)}</span>
-                                                </div>
-                                            )}
+                                                const waiverTarget = account.annual_fee_waiver_target
+                                                const spent = summary?.yearExpensesTotal || 0
+                                                const needsWaiver = waiverTarget ? Math.max(0, waiverTarget - spent) : 0
+
+                                                return (
+                                                    <>
+                                                        {usageBadge}
+                                                        {/* Usage & Limit Metrics Aligned Left */}
+                                                        <div className={cn(
+                                                            "px-2 py-1 rounded border shadow-sm flex items-center gap-2 h-6",
+                                                            isDanger ? "text-rose-700 bg-rose-50 border-rose-200" : "text-slate-700 bg-slate-50 border-slate-200"
+                                                        )}>
+                                                            <Hash className="h-2.5 w-2.5 text-slate-400" />
+                                                            <div className="flex items-baseline gap-1.5">
+                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Usage</span>
+                                                                <span className="text-[10px] font-black tabular-nums leading-none">{formatMoneyVND(Math.ceil(outstandingBalance))}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Merged Waiver + Limits Tracked + Limit */}
+                                                        <div className={cn(
+                                                            "px-2 py-1 rounded border shadow-sm flex items-center gap-3 h-6",
+                                                            needsWaiver > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"
+                                                        )}>
+                                                            <div className="flex items-center gap-1.5 pr-2 border-r border-slate-200/50">
+                                                                {needsWaiver > 0 ? <TrendingUp className="h-2.5 w-2.5 text-amber-500 animate-pulse" /> : <ShieldCheck className="h-2.5 w-2.5 text-emerald-500" />}
+                                                                <span className={cn("text-[8px] font-black uppercase tracking-widest", needsWaiver > 0 ? "text-amber-600" : "text-emerald-700")}>
+                                                                    {needsWaiver > 0 ? `WAIVER NEED: ${formatVNShort(needsWaiver)} ` : "WAIVER MET"}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Limits Tracked</span>
+                                                                <span className="text-slate-200">|</span>
+                                                                <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">LIMIT</span>
+                                                                <span className="text-[10px] font-black text-indigo-900 tabular-nums leading-none">{formatMoneyVND(Math.ceil(account.credit_limit || 0))}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {!!account.annual_fee_waiver_target && (
+                                                            <div className="bg-amber-50/50 px-2 py-1 rounded border border-amber-100/50 flex items-center gap-2 h-6 ml-auto">
+                                                                <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">TARGET</span>
+                                                                <span className="text-[10px] font-black text-amber-900 tabular-nums leading-none">{formatMoneyVND(account.annual_fee_waiver_target)}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )
+                                            })()}
                                         </div>
                                     </div>
                                 </HeaderSection>
@@ -855,7 +855,7 @@ export function AccountDetailHeaderV2({
                                     <HeaderSection
                                         label="Cash Flow"
                                         borderColor="border-sky-100"
-                                        className="flex-1 min-w-[280px] bg-sky-50/10 cursor-help !h-[136px]"
+                                        className="flex-1 min-w-[280px] bg-sky-50/10 cursor-help !h-[105px]"
                                     >
                                         <div className="flex flex-col h-full justify-between py-1">
                                             <div className="flex justify-between items-center px-1">
@@ -927,7 +927,7 @@ export function AccountDetailHeaderV2({
                                     <HeaderSection
                                         label="Debt Manage"
                                         borderColor="border-amber-100"
-                                        className="flex-1 min-w-[280px] bg-amber-50/10 cursor-help !h-[136px]"
+                                        className="flex-1 min-w-[280px] bg-amber-50/10 cursor-help !h-[105px]"
                                     >
                                         <div className="flex flex-col h-full justify-between py-1">
                                             <div className="flex justify-between items-center px-1">
@@ -955,7 +955,7 @@ export function AccountDetailHeaderV2({
                                                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200/50">
                                                     <div
                                                         className="h-full bg-amber-500 transition-all duration-1000 ease-out"
-                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}%` }}
+                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}% ` }}
                                                     />
                                                 </div>
                                             </div>
@@ -989,7 +989,7 @@ export function AccountDetailHeaderV2({
                                                 <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-gradient-to-r from-amber-600 to-amber-400"
-                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}%` }}
+                                                        style={{ width: `${Math.min(100, (summary?.yearLentTotal ? ((summary?.yearRepaidTotal || 0) / summary.yearLentTotal) * 100 : 0))}% ` }}
                                                     />
                                                 </div>
                                             </div>
@@ -999,7 +999,7 @@ export function AccountDetailHeaderV2({
                             </Tooltip>
                         </TooltipProvider>
 
-                        <HeaderSection label="Account Balance" className="flex-1 min-w-[200px] bg-slate-50/10">
+                        <HeaderSection label="Account Balance" className="flex-1 min-w-[200px] bg-slate-50/10 !h-[105px]">
                             <div className="flex flex-col h-full justify-between py-1">
                                 <div className="flex justify-between items-center px-1">
                                     <div className="flex flex-col group">
@@ -1037,7 +1037,7 @@ export function AccountDetailHeaderV2({
                                 <HeaderSection
                                     label="Cashback Performance"
                                     borderColor="border-emerald-100"
-                                    className="w-full bg-emerald-50/10 !h-[136px] cursor-help"
+                                    className="w-full bg-emerald-50/10 !h-[105px] cursor-help"
                                     hideHintInHeader
                                 >
                                     <div className="flex flex-col h-full">
@@ -1101,8 +1101,8 @@ export function AccountDetailHeaderV2({
                                             })()}
                                         </div>
 
-                                        {/* Row 2: Progress Bar (H-[24px] to match Credit Health) */}
-                                        <div className="w-full h-[24px] flex items-center">
+                                        {/* Row 2: Progress Bar (Smaller H) */}
+                                        <div className="w-full h-[32px] flex items-end relative pb-1">
                                             {(() => {
                                                 const stats = dynamicCashbackStats;
                                                 if (!stats) return null;
@@ -1113,81 +1113,97 @@ export function AccountDetailHeaderV2({
                                                 const cap = stats.maxCashback || 0;
                                                 const earned = stats.earnedSoFar || 0;
 
-                                                // Determine what the bar represents
                                                 const activeMax = stats.activeRules?.reduce((acc, r) => acc + (r.max || 0), 0) || 0;
                                                 const effectiveCap = cap > 0 ? cap : activeMax;
 
                                                 let progress = 0;
                                                 let barColor = "bg-emerald-600";
-                                                let displayValue = "";
-                                                let centerLabel = "";
-
-                                                // Calculate "Can Buy" (Remaining Spend to reached limit)
-                                                const maxRate = stats.activeRules && stats.activeRules.length > 0
-                                                    ? Math.max(...stats.activeRules.map(r => r.rate))
-                                                    : 0.1; // Fallback to 10% if no rules
-                                                const remainingBenefit = Math.max(0, effectiveCap - earned);
-                                                const canBuySpend = maxRate > 0 ? Math.ceil(remainingBenefit / (maxRate > 1 ? maxRate / 100 : maxRate)) : 0;
-
-                                                // Prepare High-Impact Badge Parts
-                                                const badges = !isQualified && minSpend > 0
-                                                    ? [
-                                                        { icon: <Check className="h-3 w-3" />, label: stats?.is_min_spend_met ? "Qualified" : "Targeting", value: stats?.is_min_spend_met ? "YES" : "NO", theme: stats?.is_min_spend_met ? "text-emerald-700 bg-emerald-50/90 border-emerald-200" : "text-amber-700 bg-amber-50/90 border-amber-200" },
-                                                        { icon: <Target className="h-3 w-3" />, label: "Target", value: formatMoneyVND(Math.ceil(minSpend)), theme: "text-indigo-700 bg-indigo-50/90 border-indigo-100" },
-                                                        { icon: <Calculator className="h-3 w-3" />, label: "Spent", value: formatMoneyVND(Math.ceil(spent)), theme: "text-slate-700 bg-slate-50/80 border-slate-200" },
-                                                        { icon: <TrendingUp className="h-3 w-3" />, label: "Need", value: formatMoneyVND(Math.max(0, minSpend - spent)), theme: "text-rose-700 bg-rose-50 border-rose-200 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.2)]" }
-                                                    ]
-                                                    : [
-                                                        { icon: <Zap className="h-3 w-3" />, label: "Earned", value: formatMoneyVND(Math.ceil(earned)), theme: "text-emerald-700 bg-emerald-50/80 border-emerald-200" },
-                                                        { icon: <ShieldCheck className="h-3 w-3" />, label: "Limit", value: effectiveCap > 0 ? formatMoneyVND(effectiveCap) : "Unlimited", theme: "text-slate-600 bg-slate-50/80 border-slate-200" },
-                                                        { icon: <Sparkles className="h-3 w-3" />, label: "Potential", value: effectiveCap > 0 ? formatMoneyVND(canBuySpend) : "Unlimited", theme: "text-indigo-700 bg-indigo-50/80 border-indigo-200" },
-                                                        { icon: <Clock className="h-3 w-3" />, label: "Period", value: stats?.cycle?.label || "N/A", theme: "text-slate-500 bg-slate-50/80 border-slate-200" }
-                                                    ];
-
                                                 if (!isQualified && minSpend > 0) {
                                                     progress = Math.min((spent / minSpend) * 100, 100);
                                                     barColor = progress >= 90 ? "bg-emerald-500" : "bg-indigo-600";
                                                 } else {
                                                     progress = effectiveCap > 0 ? Math.min(100, (earned / effectiveCap) * 100) : 0;
-                                                    barColor = "bg-emerald-600 shadow-[0_0_8px_rgba(16,185,129,0.2)]";
+                                                    barColor = "bg-emerald-600";
                                                 }
 
                                                 return (
-                                                    <div className="relative h-5 w-full rounded-lg shadow-inner group/cb-bar mt-1">
-                                                        {/* Track Area */}
-                                                        <div className="absolute inset-0 bg-slate-100/50 rounded-lg border border-slate-200/60 overflow-hidden shadow-[inset_0_1px_3px_rgba(0,0,0,0.05)]">
-                                                            <div
-                                                                className={cn("h-full transition-all duration-700 rounded-sm shadow-sm", barColor)}
-                                                                style={{ width: `${progress}%` }}
-                                                            />
-                                                        </div>
+                                                    <div className="relative h-1.5 w-full bg-slate-100 rounded-full overflow-visible border border-slate-200/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+                                                        <div
+                                                            className={cn("h-full transition-all duration-700 rounded-full shadow-sm", barColor)}
+                                                            style={{ width: `${progress}% ` }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
 
-                                                        {/* Center Badge System - High Scannability */}
-                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                                                            <div className="flex items-center gap-2 h-7 translate-y-[0px]">
-                                                                {badges.map((badge, idx) => (
-                                                                    <div
-                                                                        key={idx}
-                                                                        className={cn(
-                                                                            "px-3 py-1 rounded-full border shadow-sm flex items-center gap-2 h-7 whitespace-nowrap bg-white/95 backdrop-blur-md transition-all group-hover/cb-bar:scale-105",
-                                                                            badge.theme
-                                                                        )}
-                                                                    >
-                                                                        {badge.icon}
-                                                                        <div className="flex items-baseline gap-1.5 leading-none">
-                                                                            <span className="text-[8px] font-bold uppercase tracking-tight opacity-40">{badge.label}</span>
-                                                                            <span className="text-[12px] font-black tabular-nums tracking-tighter">{badge.value}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
+                                        {/* Row 3: Cashback Metrics Aligned Below Bar */}
+                                        <div className="flex items-center gap-2 pb-1 px-0.5 mt-auto h-[28px]">
+                                            {(() => {
+                                                const stats = dynamicCashbackStats;
+                                                if (!stats) return null;
 
-                                                                {/* Percentage Badge - Consolidated into cluster */}
-                                                                <div className="px-2.5 py-1 rounded-full border border-slate-900 bg-slate-900 shadow-lg flex items-center h-7 ml-1">
-                                                                    <span className="text-[12px] font-black text-white tabular-nums tracking-tighter leading-none">{Math.round(progress)}%</span>
+                                                const isQualified = stats.is_min_spend_met;
+                                                const minSpend = stats.minSpend || 0;
+                                                const spent = stats.currentSpend || 0;
+                                                const cap = stats.maxCashback || 0;
+                                                const earned = stats.earnedSoFar || 0;
+                                                const activeMax = stats.activeRules?.reduce((acc, r) => acc + (r.max || 0), 0) || 0;
+                                                const effectiveCap = cap > 0 ? cap : activeMax;
+
+                                                let progress = 0;
+                                                let barColor = "bg-emerald-600";
+                                                if (!isQualified && minSpend > 0) {
+                                                    progress = Math.min((spent / minSpend) * 100, 100);
+                                                    barColor = progress >= 90 ? "bg-emerald-500" : "bg-indigo-600";
+                                                } else {
+                                                    progress = effectiveCap > 0 ? Math.min(100, (earned / effectiveCap) * 100) : 0;
+                                                    barColor = "bg-emerald-600";
+                                                }
+
+                                                // STANDALONE PROGRESS BADGE
+                                                const progressBadge = (
+                                                    <div className={cn(
+                                                        "px-1.5 py-0.5 rounded border shadow-sm flex items-center h-5.5 whitespace-nowrap",
+                                                        Math.round(progress) >= 100 ? "bg-emerald-600 text-white border-emerald-700" : "bg-white text-slate-500 border-slate-200"
+                                                    )}>
+                                                        <span className="text-[9px] font-black uppercase tracking-tighter">
+                                                            {Math.round(progress) >= 100 ? "MET TARGET" : `${Math.round(progress)}% `}
+                                                        </span>
+                                                    </div>
+                                                );
+
+                                                const maxRate = stats.activeRules && stats.activeRules.length > 0
+                                                    ? Math.max(...stats.activeRules.map(r => r.rate))
+                                                    : 0.1;
+                                                const remainingBenefit = Math.max(0, effectiveCap - earned);
+                                                const canBuySpend = maxRate > 0 ? Math.ceil(remainingBenefit / (maxRate > 1 ? maxRate / 100 : maxRate)) : 0;
+
+                                                const footerBadges = !isQualified && minSpend > 0
+                                                    ? [
+                                                        { label: "Spent", value: formatMoneyVND(Math.ceil(spent)), theme: "text-slate-700 bg-slate-50 border-slate-200" },
+                                                        { label: "Target", value: formatMoneyVND(Math.ceil(minSpend)), theme: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                                                        { label: "Need", value: formatMoneyVND(Math.max(0, minSpend - spent)), theme: "text-rose-700 bg-rose-50 border-rose-200 animate-pulse" },
+                                                    ]
+                                                    : [
+                                                        { label: "Earned", value: formatMoneyVND(Math.ceil(earned)), theme: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+                                                        { label: "Limit", value: effectiveCap > 0 ? formatMoneyVND(effectiveCap) : "Unlimited", theme: "text-slate-600 bg-slate-50 border-slate-200" },
+                                                        { label: "Potential", value: effectiveCap > 0 ? formatMoneyVND(canBuySpend) : "Unlimited", theme: "text-indigo-700 bg-indigo-50 border-indigo-200" },
+                                                        { label: "Period", value: stats?.cycle?.label || "N/A", theme: "text-slate-500 bg-slate-50 border-slate-200" }
+                                                    ];
+
+                                                return (
+                                                    <>
+                                                        {progressBadge}
+                                                        {footerBadges.map((badge, idx) => (
+                                                            <div key={idx} className={cn("px-2 py-1 rounded border shadow-sm flex items-center h-6 whitespace-nowrap", badge.theme)}>
+                                                                <div className="flex items-baseline gap-1.5 leading-none">
+                                                                    <span className="text-[8px] font-bold uppercase tracking-tight opacity-40">{badge.label}</span>
+                                                                    <span className="text-[10px] font-black tabular-nums tracking-tighter">{badge.value}</span>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    </div>
+                                                        ))}
+                                                    </>
                                                 );
                                             })()}
                                         </div>
@@ -1233,7 +1249,7 @@ export function AccountDetailHeaderV2({
                                         <div className="grid grid-cols-2 text-xs py-1">
                                             <span className="text-slate-500 font-medium">Shared with Others</span>
                                             <span className="text-right font-bold text-amber-600">
-                                                {(dynamicCashbackStats.sharedAmount || 0) > 0 ? `-${formatMoneyVND(Math.ceil(dynamicCashbackStats.sharedAmount))}` : '0'}
+                                                {(dynamicCashbackStats.sharedAmount || 0) > 0 ? `- ${formatMoneyVND(Math.ceil(dynamicCashbackStats.sharedAmount))} ` : '0'}
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-2 text-xs pt-2 border-t border-slate-200 font-black">
@@ -1253,16 +1269,23 @@ export function AccountDetailHeaderV2({
                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">
                                                 Detailed Rule Breakdown
                                             </div>
-                                            <div className="space-y-2.5 max-h-[120px] overflow-y-auto pr-1">
-                                                {dynamicCashbackStats.activeRules.map((rule) => {
+                                            <div className="space-y-3 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                                                {dynamicCashbackStats.activeRules.map((rule, idx) => {
                                                     const ruleProgress = rule.max ? Math.min(100, (rule.earned / rule.max) * 100) : (rule.spent > 0 ? 100 : 0);
+                                                    const displayRate = rule.rate > 0 && rule.rate < 1 ? (rule.rate * 100).toFixed(0) : Math.round(rule.rate);
+
                                                     return (
-                                                        <div key={rule.ruleId} className="space-y-1">
+                                                        <div key={`${rule.ruleId} -${idx} `} className="space-y-1.5 p-2 bg-slate-50/50 rounded-lg border border-slate-100/50">
                                                             <div className="flex justify-between items-end">
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{rule.name}</span>
-                                                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1 rounded">
-                                                                        {Math.round(rule.rate > 1 ? rule.rate : rule.rate * 100)}%
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">{rule.name}</span>
+                                                                        <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-1 rounded shadow-sm">
+                                                                            {displayRate}%
+                                                                        </span>
+                                                                    </div>
+                                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest italic leading-none opacity-60">
+                                                                        {ruleProgress >= 100 ? 'Benefit Cap Reached' : `${formatVNShort(rule.spent)} Spent toward target`}
                                                                     </span>
                                                                 </div>
                                                                 <div className="text-[10px] font-black text-slate-900 tabular-nums">
@@ -1270,8 +1293,11 @@ export function AccountDetailHeaderV2({
                                                                     {rule.max && <span className="text-slate-300 font-bold ml-1">/ {formatVNShort(rule.max)}</span>}
                                                                 </div>
                                                             </div>
-                                                            <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                                <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${ruleProgress}%` }} />
+                                                            <div className="h-1.5 w-full bg-slate-200/50 rounded-full overflow-hidden border border-slate-200/30">
+                                                                <div className={cn(
+                                                                    "h-full transition-all duration-700 shadow-sm",
+                                                                    ruleProgress >= 100 ? "bg-emerald-600" : "bg-indigo-500"
+                                                                )} style={{ width: `${ruleProgress}% ` }} />
                                                             </div>
                                                         </div>
                                                     );
@@ -1280,42 +1306,61 @@ export function AccountDetailHeaderV2({
                                         </div>
                                     )}
 
-                                    {/* Wealth Tracking Supplement */}
-                                    <div className="mt-4 pt-4 border-t border-slate-100 bg-slate-50/50 -mx-4 px-4 pb-4">
-                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Wealth Tracking (Yearly)</div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="bg-white p-2 rounded border border-slate-200 shadow-sm relative group/hint">
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-                                                    Actual Credit
-                                                    <Info className="h-2 w-2 opacity-40" />
+                                    {/* Entire Year Performance Report */}
+                                    <div className="mt-4 pt-4 border-t border-slate-200 bg-slate-50/80 -mx-4 px-4 pb-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2">
+                                                <Calendar className="h-3 w-3" /> Entire Year Performance {selectedYear || currentYear}
+                                            </div>
+                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[8px] font-black rounded uppercase">Calculated</span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-4">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Profit</span>
+                                                    <span className={cn(
+                                                        "text-sm font-black tabular-nums tracking-tight",
+                                                        (summary?.netProfitYearly || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                                                    )}>
+                                                        {formatMoneyVND(Math.ceil(summary?.netProfitYearly || 0))}
+                                                    </span>
                                                 </div>
-                                                <div className="text-xs font-black text-emerald-600">
-                                                    +{formatMoneyVND(Math.max(0, Math.ceil(summary?.cardYearlyCashbackTotal || 0)))}
-                                                </div>
-                                                <div className="absolute bottom-full left-0 mb-2 w-48 p-2 bg-slate-900 text-white text-[8px] rounded shadow-xl opacity-0 group-hover/hint:opacity-100 transition-opacity pointer-events-none z-50 font-medium leading-relaxed">
-                                                    Total actual money earned and hit this account for the whole year.
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Est. Cashback</span>
+                                                    <span className="text-sm font-black text-emerald-600 tabular-nums tracking-tight">
+                                                        {formatMoneyVND(Math.ceil(summary?.cardYearlyCashbackTotal || 0))}
+                                                    </span>
                                                 </div>
                                             </div>
-                                            <div className="bg-white p-2 rounded border border-slate-200 shadow-sm relative group/hint">
-                                                <div className="text-[8px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
-                                                    Shared Net
-                                                    <Info className="h-2 w-2 opacity-40" />
+                                            <div className="space-y-4 text-right">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Actual Claimed</span>
+                                                    <span className="text-sm font-black text-indigo-600 tabular-nums tracking-tight">
+                                                        {formatMoneyVND(Math.ceil(summary?.cashbackTotal || 0))}
+                                                    </span>
                                                 </div>
-                                                <div className="text-xs font-black text-rose-600">
-                                                    {(summary?.cardYearlyCashbackGivenTotal || 0) > 0 ? '-' : ''}
-                                                    {formatMoneyVND(Math.max(0, Math.ceil(summary?.cardYearlyCashbackGivenTotal || 0)))}
-                                                </div>
-                                                <div className="absolute bottom-full right-0 mb-2 w-48 p-2 bg-slate-900 text-white text-[8px] rounded shadow-xl opacity-0 group-hover/hint:opacity-100 transition-opacity pointer-events-none z-50 font-medium leading-relaxed">
-                                                    Amount of cashback shared or given to others from this account this year.
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Cashback Shared</span>
+                                                    <span className="text-sm font-black text-amber-600 tabular-nums tracking-tight">
+                                                        {formatMoneyVND(Math.ceil(summary?.cardYearlyCashbackGivenTotal || 0))}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="mt-2 bg-emerald-950 p-2.5 rounded shadow-lg border border-emerald-800">
+
+                                        <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
                                             <div className="flex justify-between items-center">
-                                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Net Benefit Year</span>
-                                                <span className="text-sm font-black text-white tabular-nums">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Net Benefit</span>
+                                                    <span className="text-xs font-medium text-slate-500 italic">Whole year impact</span>
+                                                </div>
+                                                <div className={cn(
+                                                    "text-lg font-black tabular-nums tracking-tighter",
+                                                    (summary?.netProfitYearly || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                                                )}>
                                                     {formatMoneyVND(Math.ceil(summary?.netProfitYearly || 0))}
-                                                </span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
