@@ -78,11 +78,11 @@ interface NavIconProps {
   showBg?: boolean
 }
 
-export function NavIcon({ 
-  icon: Icon, 
-  color = 'blue', 
+export function NavIcon({
+  icon: Icon,
+  color = 'blue',
   size = 'md',
-  showBg = false 
+  showBg = false
 }: NavIconProps) {
   const colors = colorMap[color] || colorMap['blue']
   const sizeMap = {
@@ -107,93 +107,86 @@ export function NavIcon({
 
 // Predefined nav items with colors
 export const coloredNavItems: NavItemConfig[] = [
-  { 
-    title: "Dashboard", 
-    href: "/", 
+  {
+    title: "Dashboard",
+    href: "/",
     icon: LayoutDashboard,
     color: 'blue',
     description: 'Overview & analytics'
   },
-  { 
-    title: "Accounts", 
-    href: "/accounts", 
+  {
+    title: "Accounts",
+    href: "/accounts",
     icon: Landmark,
     color: 'blue',
     description: 'Bank & credit cards'
   },
-  { 
-    title: "Transactions", 
-    href: "/transactions", 
+  {
+    title: "Transactions",
+    href: "/transactions",
     icon: ArrowRightLeft,
     color: 'green',
     description: 'Income & expenses'
   },
-  { 
-    title: "Installments", 
-    href: "/installments", 
+  {
+    title: "Installments",
+    href: "/installments",
     icon: Hourglass,
     color: 'amber',
     description: 'Payment plans'
   },
-  { 
-    title: "Categories", 
-    href: "/categories", 
+  {
+    title: "Categories",
+    href: "/categories",
     icon: Tags,
     color: 'purple',
     description: 'Expense categories'
   },
-  { 
-    title: "Shops", 
-    href: "/shops", 
-    icon: ShoppingBag,
-    color: 'orange',
-    description: 'Merchants & stores'
-  },
-  { 
-    title: "People", 
-    href: "/people", 
+  {
+    title: "People",
+    href: "/people",
     icon: Users,
     color: 'indigo',
     description: 'Debt management'
   },
-  { 
-    title: "Cashback", 
-    href: "/cashback", 
+  {
+    title: "Cashback",
+    href: "/cashback",
     icon: Banknote,
     color: 'green',
     description: 'Rewards tracking'
   },
-  { 
-    title: "Batches", 
-    href: "/batch", 
+  {
+    title: "Batches",
+    href: "/batch",
     icon: Database,
     color: 'red',
     description: 'Import transactions'
   },
-  { 
-    title: "Services", 
-    href: "/services", 
+  {
+    title: "Services",
+    href: "/services",
     icon: Cloud,
     color: 'blue',
     description: 'Subscriptions'
   },
-  { 
-    title: "Refunds", 
-    href: "/refunds", 
+  {
+    title: "Refunds",
+    href: "/refunds",
     icon: Undo2,
     color: 'amber',
     description: 'Return management'
   },
-  { 
-    title: "AI Management", 
-    href: "/settings/ai", 
+  {
+    title: "AI Management",
+    href: "/settings/ai",
     icon: Sparkles,
     color: 'purple',
     description: 'AI settings'
   },
-  { 
-    title: "Settings", 
-    href: "/settings", 
+  {
+    title: "Settings",
+    href: "/settings",
     icon: Settings,
     color: 'slate',
     description: 'App configuration'

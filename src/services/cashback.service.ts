@@ -700,8 +700,13 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   allSubRules.forEach(rule => {
     const matchingTxns = txns.filter(t => rule.cat_ids.includes(t.category?.id));
     const spent = matchingTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+    // MF16.2: Normalize rate. If rate is 0.2 but logic uses /100, it becomes 0.002 (0.2%).
+    // If user provided 0.2, it likely means 20% (0.2).
+    const normalizedRate = (rule.rate > 0 && rule.rate < 1) ? rule.rate * 100 : rule.rate;
+
     let earned = matchingTxns.reduce((sum, t) => {
-      const bankBack = Math.abs(t.amount) * (rule.rate / 100);
+      const bankBack = Math.abs(t.amount) * (normalizedRate / 100);
       return sum + (rule.max ? Math.min(bankBack, rule.max) : bankBack);
     }, 0);
 
@@ -713,18 +718,18 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     if (displayName.startsWith('Rule') || displayName.includes('% Bonus')) {
       const catLabels = rule.cat_ids.map(id => catMap[id]).filter(Boolean);
       if (catLabels.length > 0) {
-        displayName = `${rule.rate}% ${catLabels.slice(0, 2).join('/')}${catLabels.length > 2 ? '...' : ''}`;
+        displayName = `${normalizedRate}% ${catLabels.slice(0, 2).join('/')}${catLabels.length > 2 ? '...' : ''}`;
       }
     }
 
     activeRules.push({
       ruleId: rule.ruleId || 'unknown',
       name: displayName,
-      rate: rule.rate,
+      rate: normalizedRate, // Store normalized rate
       spent,
       earned,
       max: rule.max,
-      isMain: rule.rate > (account.cb_base_rate || 0)
+      isMain: normalizedRate > (account.cb_base_rate || 0)
     });
   });
 

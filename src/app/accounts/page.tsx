@@ -7,6 +7,10 @@ import { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Accounts & Cards | Money Flow',
+  icons: {
+    icon: '/favicon.svg?v=6',
+    apple: '/icon.svg?v=6',
+  },
 }
 
 export const dynamic = 'force-dynamic'

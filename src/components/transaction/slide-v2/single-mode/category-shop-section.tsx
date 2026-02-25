@@ -16,7 +16,7 @@ import { SingleTransactionFormValues } from "../types";
 import { Shop, Category } from "@/types/moneyflow.types";
 import { Combobox } from "@/components/ui/combobox";
 
-import { getRecentShopByCategoryId, getRecentCategoriesByShopId, getRecentShopIdsByCategoryId } from "@/actions/transaction-actions";
+import { getRecentShopByCategoryId, getRecentShopIdsByCategoryId, getRecentCategoriesByShopId } from "@/actions/cascade-actions";
 import { useState } from "react";
 
 type CategoryShopSectionProps = {

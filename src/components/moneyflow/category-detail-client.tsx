@@ -189,7 +189,6 @@ export function CategoryDetailClient({ category, transactions, allCategories, al
                         <Suspense fallback={<div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-slate-300" /></div>}>
                             <UnifiedTransactionTable
                                 transactions={transactions}
-                                hiddenColumns={['category']}
                                 searchQuery={searchQuery}
                                 selectedTxnIds={selectedIds}
                                 onSelectionChange={handleSelectionChange}
