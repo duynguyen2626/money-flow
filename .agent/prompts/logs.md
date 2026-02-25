@@ -44,12 +44,14 @@ https://react.dev/link/hydration-mismatch
               <script>
               <script>
               <script>
+              <script>
+              <script>
               <RootLayout>
                 <html lang="en" suppressHydrationWarning={true} className="h-full w-f...">
-                  <body className="geist_a715...">
-                    <PageTransitionOverlay>
+                  <body className="geist_a715..." suppressHydrationWarning={true}>
                     <TooltipProvider>
                       <TooltipProviderProvider scope={undefined} isOpenDelayedRef={{current:true}} delayDuration={700} ...>
+                        <PageTransitionOverlay>
                         <BreadcrumbProvider>
                           <AppLayoutV2>
                             <div className="flex h-ful..." suppressHydrationWarning={true}>
@@ -64,27 +66,18 @@ https://react.dev/link/hydration-mismatch
 
 
 
-    at throwOnHydrationMismatch (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:3342:56)
-    at beginWork (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:6769:918)
-    at runWithFiberInDEV (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:959:74)
-    at performUnitOfWork (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9556:97)
-    at workLoopConcurrentByScheduler (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9552:58)
-    at renderRootConcurrent (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9535:71)
-    at performWorkOnRoot (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:9062:150)
-    at performWorkOnRootViaSchedulerTask (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_react-dom_858b3af1._.js:10224:9)
-    at MessagePort.performWorkUntilDeadline (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/e474c_next_dist_compiled_a0775dff._.js:2647:64)
     at aside (<anonymous>:null:null)
-    at AppLayoutV2 (file://C:/Users/nam.thanhnguyen/Personal Project/money-flow-3/.next/dev/static/chunks/src_components_moneyflow_18aadbd0._.js:1145:326)
-    at RootLayout (src\app\layout.tsx:52:13)
+    at AppLayoutV2 (src/components/moneyflow/app-layout-v2.tsx:68:7)
+    at RootLayout (src\app\layout.tsx:55:13)
 
 ## Code Frame
-  50 |         <TooltipProvider>
-  51 |           <BreadcrumbProvider>
-> 52 |             <AppLayout>
-     |             ^
-  53 |               <AppErrorBoundary>{children}</AppErrorBoundary>
-  54 |             </AppLayout>
-  55 |           </BreadcrumbProvider>
+  66 |     <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
+  67 |       {/* Desktop Sidebar */}
+> 68 |       <aside
+     |       ^
+  69 |         suppressHydrationWarning
+  70 |         className={cn(
+  71 |           "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
 
 Next.js version: 16.0.10 (Turbopack)
 ## Error Type

@@ -21,6 +21,8 @@ interface SmartAmountInputProps {
     hideCalculator?: boolean
     compact?: boolean
     hideClearButton?: boolean
+    /** Allow decimal values (e.g. for % rates like 1.5%). Skips Math.round on change & blur. */
+    allowDecimal?: boolean
 }
 
 export function SmartAmountInput({
@@ -36,7 +38,8 @@ export function SmartAmountInput({
     hideLabel,
     hideCalculator,
     compact,
-    hideClearButton
+    hideClearButton,
+    allowDecimal = false,
 }: SmartAmountInputProps) {
     const [inputValue, setInputValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
@@ -47,9 +50,16 @@ export function SmartAmountInput({
     // Sync internal string state with external number value
     React.useEffect(() => {
         if (!isFocused) {
-            setInputValue((value === 0 || value) ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value)) : '')
+            if (value === undefined || value === null) {
+                setInputValue('')
+            } else if (allowDecimal) {
+                // Show up to 2 decimal places for rate fields, strip trailing zeros
+                setInputValue(value === 0 ? '0' : String(parseFloat(value.toFixed(2))))
+            } else {
+                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value)))
+            }
         }
-    }, [value, isFocused])
+    }, [value, isFocused, allowDecimal])
 
     const evaluateMath = (expression: string): number | null => {
         try {
@@ -90,20 +100,31 @@ export function SmartAmountInput({
         if (/[+\-*/]/.test(rawInput)) {
             const result = evaluateMath(rawInput)
             if (result !== null && !isNaN(result)) {
-                const rounded = Math.round(result);
-                onChange(rounded)
-                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
+                if (allowDecimal) {
+                    const val = parseFloat(result.toFixed(2))
+                    onChange(val)
+                    setInputValue(String(val))
+                } else {
+                    const rounded = Math.round(result);
+                    onChange(rounded)
+                    setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
+                }
             } else {
                 setMathError('Invalid calculation')
-                // Keep the input as is so user can fix it
             }
         } else {
             // Just a number
             const num = parseFloat(rawInput)
             if (!isNaN(num)) {
-                const rounded = Math.round(num);
-                onChange(rounded)
-                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
+                if (allowDecimal) {
+                    const val = parseFloat(num.toFixed(2))
+                    onChange(val)
+                    setInputValue(String(val))
+                } else {
+                    const rounded = Math.round(num);
+                    onChange(rounded)
+                    setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded))
+                }
             } else {
                 onChange(undefined)
                 setInputValue('')
@@ -159,13 +180,22 @@ export function SmartAmountInput({
         // If it's a number, format it with commas
         if (raw && !isNaN(Number(raw))) {
             const num = parseFloat(raw)
-            onChange(Math.round(num))
 
-            // Realtime formatting for integers
-            if (!val.includes('.') && !val.includes('e')) {
-                setInputValue(new Intl.NumberFormat('en-US').format(num))
-            } else {
+            if (allowDecimal) {
+                // For decimal mode: emit value as-is while typing, keep raw display
+                // Only emit if not currently typing a decimal (e.g. "1." or "1.0")
+                if (!val.endsWith('.') && !val.endsWith('.0')) {
+                    onChange(parseFloat(num.toFixed(2)))
+                }
                 setInputValue(val)
+            } else {
+                onChange(Math.round(num))
+                // Realtime formatting for integers
+                if (!val.includes('.') && !val.includes('e')) {
+                    setInputValue(new Intl.NumberFormat('en-US').format(num))
+                } else {
+                    setInputValue(val)
+                }
             }
         } else {
             if (raw === '') {

@@ -222,6 +222,7 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                             onUpdate({ ...rule, rate: nextRate > 100 ? 100 : nextRate })
                         }}
                         unit="%"
+                        allowDecimal
                         hideLabel
                         hideCurrencyText
                         hideClearButton
@@ -506,6 +507,7 @@ export function CashbackConfigForm({
                                         onChange({ cb_base_rate: nextRate > 100 ? 100 : nextRate })
                                     }}
                                     unit="%"
+                                    allowDecimal
                                     hideLabel
                                     compact
                                     className="h-10 font-black bg-white border-slate-300 shadow-sm"
@@ -608,6 +610,7 @@ export function CashbackConfigForm({
                                                 updateTieredConfig({ ...tieredConfig, base_rate: r > 100 ? 100 : r })
                                             }}
                                             unit="%"
+                                            allowDecimal
                                             hideLabel
                                             compact
                                             className="h-9 font-black bg-slate-50 border-slate-200 text-slate-900 shadow-inner"
@@ -674,6 +677,7 @@ export function CashbackConfigForm({
                                                                 updateTieredConfig(next)
                                                             }}
                                                             unit="%"
+                                                            allowDecimal
                                                             hideLabel
                                                             hideCurrencyText
                                                             hideClearButton
@@ -783,9 +787,9 @@ export function CashbackConfigForm({
                 </div>
 
                 {/* Summary Sentence footer */}
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3 shadow-inner">
-                    <div className="p-1 px-2 bg-slate-200 rounded text-[9px] font-bold text-slate-600 uppercase mt-0.5 tracking-wider">Plan Summary</div>
-                    <p className="text-[11px] text-slate-600 font-bold leading-relaxed italic pr-4">
+                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-2 shadow-inner">
+                    <div className="shrink-0 px-2 py-0.5 bg-slate-200 rounded text-[9px] font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">Plan Summary</div>
+                    <p className="text-[10px] text-slate-600 font-semibold italic truncate">
                         "{summary}"
                     </p>
                 </div>
