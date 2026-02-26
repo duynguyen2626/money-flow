@@ -319,7 +319,7 @@ export function AccountDetailViewV2({
     const pendingTotal = pendingBatchAmount + pendingRefundAmount
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-white pt-6 relative">
+        <div className="flex flex-col h-full overflow-hidden bg-white relative">
             {/* Header V2 */}
             <AccountDetailHeaderV2
                 account={account}

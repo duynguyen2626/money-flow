@@ -136,20 +136,36 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
             const recentShopIds = await getRecentShopIdsByCategoryId(categoryId);
             setCategoryHistoricalShopIds(recentShopIds);
 
-            // Auto-select the most recent one if no shop is selected
-            if (recentShopIds.length > 0 && !currentShopId) {
-                form.setValue('shop_id', recentShopIds[0], { shouldDirty: true });
-            } else if (!currentShopId) {
-                // Fallback to the single most recent shop logic (already robust)
-                const recentShopId = await getRecentShopByCategoryId(categoryId);
-                if (recentShopId) {
-                    form.setValue('shop_id', recentShopId, { shouldDirty: true });
+            // Determine if current shop is compatible with the new category
+            const currentShop = shops.find(s => s.id === currentShopId);
+            const isCurrentShopCompatible = currentShopId && (
+                recentShopIds.includes(currentShopId) ||
+                currentShop?.default_category_id === categoryId
+            );
+
+            // Auto-select if:
+            // 1. No shop is selected
+            // 2. The current shop has NO relationship with the NEW category (not recent, not default)
+            const shouldOverwrite = !currentShopId || !isCurrentShopCompatible;
+
+            if (shouldOverwrite) {
+                if (recentShopIds.length > 0) {
+                    form.setValue('shop_id', recentShopIds[0], { shouldDirty: true });
+                } else {
+                    // Fallback to the single most recent shop logic
+                    const recentShopId = await getRecentShopByCategoryId(categoryId);
+                    if (recentShopId) {
+                        form.setValue('shop_id', recentShopId, { shouldDirty: true });
+                    } else if (currentShopId && !isCurrentShopCompatible) {
+                        // If current shop is incompatible and no new match found, clear it
+                        form.setValue('shop_id', null, { shouldDirty: true });
+                    }
                 }
             }
         };
 
         fetchShops();
-    }, [categoryId, form]);
+    }, [categoryId, form, shops]);
 
     // CASCADE: Select Shop -> Auto-set Category
     useEffect(() => {
@@ -162,21 +178,30 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         const selectedShop = shops.find(s => s.id === shopId);
 
         const applyCategory = async () => {
-            // 1. Try default category from shop definition
-            if (selectedShop?.default_category_id) {
-                if (!currentCategoryId) {
-                    form.setValue('category_id', selectedShop.default_category_id, { shouldDirty: true });
-                }
-                return;
-            }
-
-            // 2. Fetch historical categories for this shop
+            // Fetch historical categories for this shop to check compatibility
             const recentCategoryIds = await getRecentCategoriesByShopId(shopId);
             setShopHistoricalCategoryIds(recentCategoryIds);
 
-            // 3. Auto-set the most recent one if nothing is selected
-            if (recentCategoryIds.length > 0 && !currentCategoryId) {
-                form.setValue('category_id', recentCategoryIds[0], { shouldDirty: true });
+            // Determine if current category is compatible with the new shop
+            const isCurrentCategoryCompatible = currentCategoryId && (
+                recentCategoryIds.includes(currentCategoryId) ||
+                selectedShop?.default_category_id === currentCategoryId
+            );
+
+            // Auto-set if:
+            // 1. No category is selected
+            // 2. The current category has NO relationship with the NEW shop
+            const shouldOverwrite = !currentCategoryId || !isCurrentCategoryCompatible;
+
+            if (shouldOverwrite) {
+                // 1. Try default category from shop definition
+                if (selectedShop?.default_category_id) {
+                    form.setValue('category_id', selectedShop.default_category_id, { shouldDirty: true });
+                }
+                // 2. Or use the most recent one from history
+                else if (recentCategoryIds.length > 0) {
+                    form.setValue('category_id', recentCategoryIds[0], { shouldDirty: true });
+                }
             }
         };
 

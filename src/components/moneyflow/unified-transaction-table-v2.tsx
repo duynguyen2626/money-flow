@@ -1380,7 +1380,7 @@ export function UnifiedTransactionTableV2({
               onMouseUp={handleCellMouseUp}
               onMouseLeave={handleCellMouseUp}
             >
-              <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
+              <TableHeader className="sticky top-0 z-30 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
                 <TableRow className="hover:bg-transparent border-b border-slate-200">
                   {displayedColumns.map(col => {
                     // Sticky Logic Removed Personally by User Request
@@ -1397,7 +1397,7 @@ export function UnifiedTransactionTableV2({
                         className={cn(
                           "border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 shadow-sm",
                           // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
-                          (stickyStyle.left !== undefined) && "z-50",
+                          (stickyStyle.left !== undefined) && "z-35",
                           stickyClass
                         )}
                         style={stickyStyle}
@@ -1722,10 +1722,10 @@ export function UnifiedTransactionTableV2({
                             {shopLogo ? (
                               <>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none" />
+                                <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-none border-none ring-0 outline-none" />
                               </>
                             ) : (
-                              <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm shrink-0">
+                              <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-none shrink-0">
                                 {txn.type === 'repayment' ? (
                                   <Wallet className="h-4 w-4 text-orange-600" />
                                 ) : (

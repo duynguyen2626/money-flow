@@ -417,7 +417,7 @@ export function BatchMasterChecklist({ bankType, accounts, period, monthYear }: 
         <div className="space-y-6">
             {/* Overlay Spinner */}
             {performingAction && (
-                <div className="fixed inset-0 bg-white/60 backdrop-blur-[2px] z-[100] flex flex-col items-center justify-center">
+                <div className="fixed inset-0 bg-white/60 backdrop-blur-[2px] z-[500] flex flex-col items-center justify-center">
                     <Loader2 className="h-12 w-12 animate-spin text-indigo-600 mb-4" />
                     <p className="text-sm font-black text-indigo-900 uppercase tracking-widest animate-pulse">Processing...</p>
                 </div>

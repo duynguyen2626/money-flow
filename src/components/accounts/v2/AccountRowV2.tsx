@@ -797,7 +797,7 @@ function renderCell(
                                                 </span>
                                             </div>
                                         </TooltipTrigger>
-                                        <TooltipContent side="left" className="p-4 min-w-[280px] bg-slate-900/95 backdrop-blur-xl text-slate-100 border-white/10 shadow-2xl z-[9999] rounded-2xl font-sans">
+                                        <TooltipContent side="left" className="p-4 min-w-[280px] bg-slate-900/95 backdrop-blur-xl text-slate-100 border-white/10 shadow-2xl z-[70] rounded-2xl font-sans">
                                             <div className="space-y-5">
                                                 {/* Section 1: Balance Calculation */}
                                                 <div className="space-y-3">

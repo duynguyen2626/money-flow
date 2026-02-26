@@ -17,6 +17,7 @@ import {
 import {
     Popover,
     PopoverContent,
+    PopoverTrigger,
     PopoverAnchor,
 } from "@/components/ui/popover"
 import {
@@ -54,26 +55,27 @@ function CashbackRuleRow({ rule, categories, onUpdate, onDelete, onOpenCategoryC
                 <Popover open={open} onOpenChange={setOpen}>
                     <PopoverAnchor asChild>
                         <div className="flex-1">
-                            <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={open}
-                                onClick={() => setOpen(true)}
-                                type="button"
-                                className="w-full justify-between h-10 text-[11px] font-bold border-slate-200 bg-slate-50/50 hover:bg-slate-100 px-3"
-                            >
-                                <div className="flex items-center gap-1.5 truncate">
-                                    {selectedCategories.length > 0 ? (
-                                        <>
-                                            <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
-                                            <span className="truncate text-slate-900 font-extrabold">{selectedCategories.length} Categories Selected</span>
-                                        </>
-                                    ) : (
-                                        <span className="text-slate-400 font-medium whitespace-nowrap italic">Pick Categories & MCCs...</span>
-                                    )}
-                                </div>
-                                <ChevronsUpDown className="ml-0.5 h-3.5 w-3.5 shrink-0 opacity-40" />
-                            </Button>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={open}
+                                    type="button"
+                                    className="w-full justify-between h-10 text-[11px] font-bold border-slate-200 bg-slate-50/50 hover:bg-slate-100 px-3"
+                                >
+                                    <div className="flex items-center gap-1.5 truncate">
+                                        {selectedCategories.length > 0 ? (
+                                            <>
+                                                <Sparkles className="h-3.5 w-3.5 text-blue-500 animate-pulse" />
+                                                <span className="truncate text-slate-900 font-extrabold">{selectedCategories.length} Categories Selected</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-slate-400 font-medium whitespace-nowrap italic">Pick Categories & MCCs...</span>
+                                        )}
+                                    </div>
+                                    <ChevronsUpDown className="ml-0.5 h-3.5 w-3.5 shrink-0 opacity-40" />
+                                </Button>
+                            </PopoverTrigger>
                         </div>
                     </PopoverAnchor>
                     <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0 shadow-2xl border-slate-200 rounded-xl" align="start">

@@ -16,6 +16,7 @@ import {
     SheetTitle,
     SheetFooter,
 } from "@/components/ui/sheet"
+import { ShopSlide } from "@/components/shops/ShopSlide"
 import { UnsavedChangesDialog } from "@/components/transaction/slide-v2/unsaved-changes-dialog"
 import {
     Form,
@@ -48,6 +49,7 @@ interface CategorySlideProps {
     onSuccess?: (newCategoryId?: string) => void
     onBack?: () => void
     zIndex?: number
+    isExternalLoading?: boolean
 }
 
 export function CategorySlide({
@@ -58,13 +60,18 @@ export function CategorySlide({
     defaultKind,
     onSuccess,
     onBack,
-    zIndex = 60,
-}: CategorySlideProps) {
+    zIndex = 600,
+    allCategories = [],
+    isExternalLoading = false,
+}: CategorySlideProps & { allCategories?: Category[] }) {
     const [isLoading, setIsLoading] = useState(false)
+    const combinedLoading = isLoading || isExternalLoading
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
     const [pendingCloseAction, setPendingCloseAction] = useState<"close" | "back" | null>(null)
     const [mccCodes, setMccCodes] = useState<string[]>([])
     const [mccInput, setMccInput] = useState("")
+
+    const [isShopSlideOpen, setIsShopSlideOpen] = useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -164,13 +171,20 @@ export function CategorySlide({
             if (category) {
                 await updateCategory(category.id, payload)
                 toast.success("Category updated")
-                onSuccess?.()
+                if (onSuccess) {
+                    onSuccess()
+                } else {
+                    onOpenChange(false)
+                }
             } else {
                 const newCategory = await createCategory(payload)
                 toast.success("Category created")
-                onSuccess?.(newCategory?.id)
+                if (onSuccess) {
+                    onSuccess(newCategory?.id)
+                } else {
+                    onOpenChange(false)
+                }
             }
-            onOpenChange(false)
         } catch (error) {
             console.error(error)
             toast.error("Something went wrong")
@@ -186,7 +200,37 @@ export function CategorySlide({
                     side="right"
                     className="sm:max-w-[480px] p-0 flex flex-col h-full bg-slate-50 border-l border-slate-200"
                     zIndex={zIndex}
+                    onPointerDownOutside={(e) => {
+                        if (hasChanges) {
+                            e.preventDefault()
+                            setPendingCloseAction("close")
+                            setShowUnsavedDialog(true)
+                        }
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (hasChanges) {
+                            e.preventDefault()
+                            setPendingCloseAction("close")
+                            setShowUnsavedDialog(true)
+                        }
+                    }}
                 >
+                    {combinedLoading && (
+                        <div className="absolute inset-0 z-[200] flex flex-col items-center justify-center bg-white/60 backdrop-blur-[2px] transition-all animate-in fade-in duration-300">
+                            <div className="p-8 rounded-3xl bg-white shadow-2xl shadow-blue-100 flex flex-col items-center gap-4 border border-blue-50/50">
+                                <div className="relative">
+                                    <div className="h-16 w-16 rounded-full border-4 border-slate-100 border-t-blue-600 animate-spin" />
+                                    <Loader2 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-8 w-8 text-blue-600 animate-pulse" />
+                                </div>
+                                <div className="space-y-1 text-center">
+                                    <p className="text-sm font-black text-slate-900 uppercase tracking-widest leading-none">
+                                        {isExternalLoading ? "Syncing..." : (category ? "Updating..." : "Creating...")}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-slate-400 italic">Please wait for synchronization</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     <SheetHeader className="px-6 py-6 bg-white border-b sticky top-0 z-10">
                         <div className="flex items-center gap-2">
                             {onBack && (
@@ -206,10 +250,20 @@ export function CategorySlide({
                                     {category ? "Update category details." : "Create a new category for your transactions."}
                                 </SheetDescription>
                             </div>
+                            {!category && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setIsShopSlideOpen(true)}
+                                    className="h-8 text-[10px] font-black uppercase border-dashed hover:bg-slate-50 text-blue-600"
+                                >
+                                    Add Shop
+                                </Button>
+                            )}
                         </div>
                     </SheetHeader>
 
-                    <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-none">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-none relative">
                         <Form {...form}>
                             <form id="category-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                                 <FormField
@@ -414,7 +468,7 @@ export function CategorySlide({
                         </Button>
                     </SheetFooter>
                 </SheetContent>
-            </Sheet>
+            </Sheet >
 
             <UnsavedChangesDialog
                 open={showUnsavedDialog}
@@ -424,6 +478,15 @@ export function CategorySlide({
                     setShowUnsavedDialog(false)
                     setPendingCloseAction(null)
                 }}
+            />
+
+            <ShopSlide
+                open={isShopSlideOpen}
+                onOpenChange={setIsShopSlideOpen}
+                categories={allCategories}
+                onBack={() => setIsShopSlideOpen(false)}
+                zIndex={zIndex + 100}
+                onSuccess={() => setIsShopSlideOpen(false)}
             />
         </>
     )

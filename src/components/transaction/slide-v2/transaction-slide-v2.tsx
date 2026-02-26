@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useForm, FormProvider, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -384,50 +384,70 @@ export function TransactionSlideV2({
         }
     }, [currentPersonId, currentTxnType, open, singleForm]);
 
-    // MF5.5: Pre-populate source account for Transfer/Pay if empty or not bank
-    useEffect(() => {
-        if (!open || operationMode === 'edit' || operationMode === 'duplicate') return;
+    // MF5.5: Account selector logic to smartly move IDs when switching flow types
+    const prevTypeRef = useRef<string | null>(null);
 
-        if (currentTxnType === 'transfer' || currentTxnType === 'credit_pay') {
-            const currentAcc = accounts.find(a => a.id === sourceAccId);
-            if (!sourceAccId || (currentAcc && currentAcc.type !== 'bank')) {
-                // Find a bank account to pre-populate
-                const bankAcc = accounts.find(a => a.type === 'bank');
-                if (bankAcc) {
-                    console.log("🔄 Auto-populating bank account for special mode");
-                    singleForm.setValue('source_account_id', bankAcc.id, { shouldDirty: false });
-                }
-            }
+    useEffect(() => {
+        if (!open) {
+            prevTypeRef.current = null;
+            return;
         }
-    }, [currentTxnType, open, operationMode, accounts, singleForm, sourceAccId]);
 
-    // MF5.5: Account selector logic to move IDs instead of clearing when switching flow types
-    useEffect(() => {
-        if (!open) return;
         const type = singleForm.getValues('type');
         const sourceId = singleForm.getValues('source_account_id');
         const targetId = singleForm.getValues('target_account_id');
 
-        // Only apply this logic if not in transfer/credit_pay mode, as they use both
-        const isSpecialMode = ['transfer', 'credit_pay'].includes(type);
-        if (isSpecialMode) return;
-
-        if (['income', 'repayment'].includes(type)) {
-            // For income/repayment, source_account_id is the "to" account, target_account_id is null
-            // If sourceId is set and targetId is not, move sourceId to targetId and clear sourceId
-            if (sourceId && !targetId) {
-                singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
-                singleForm.setValue('source_account_id', null, { shouldDirty: true });
-            }
-        } else if (['expense', 'debt'].includes(type)) {
-            // For expense/debt, source_account_id is the "from" account, target_account_id is null
-            // If targetId is set and sourceId is not, move targetId to sourceId and clear targetId
-            if (targetId && !sourceId) {
-                singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
-                singleForm.setValue('target_account_id', null, { shouldDirty: true });
-            }
+        if (prevTypeRef.current === null) {
+            prevTypeRef.current = type;
+            return;
         }
-    }, [currentTxnType, open, singleForm, sourceAccId, targetAccId]); // Depend on type and current IDs to trigger
+
+        if (prevTypeRef.current !== type) {
+            // Logic for switching TO Credit Card Pay
+            if (type === 'credit_pay') {
+                const currentSourceAcc = accounts.find(a => a.id === sourceId);
+                // If we are on Credit Card Pay and source is a Credit Card, move it to TARGET
+                if (currentSourceAcc?.type === 'credit_card' && !targetId) {
+                    console.log("💳 Credit Card Pay: Moving CC from source to target...");
+                    singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
+
+                    // Try to find a bank account for source (Pay From)
+                    const bankAcc = accounts.find(a => a.type === 'bank');
+                    if (bankAcc) {
+                        singleForm.setValue('source_account_id', bankAcc.id, { shouldDirty: true });
+                    } else {
+                        singleForm.setValue('source_account_id', null, { shouldDirty: true });
+                    }
+                }
+            }
+            // Logic for switching FROM Credit Card Pay back to regular modes
+            else if (prevTypeRef.current === 'credit_pay' && ['expense', 'debt'].includes(type)) {
+                console.log("🔄 Leaving Credit Card Pay: Restoring CC back to source...");
+                if (targetId) {
+                    singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
+                    singleForm.setValue('target_account_id', null, { shouldDirty: true });
+                }
+            }
+            // Standard logic movements for single modes
+            else if (['income', 'repayment'].includes(type)) {
+                if (sourceId && !targetId) {
+                    singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
+                    singleForm.setValue('source_account_id', null, { shouldDirty: true });
+                }
+            }
+            else if (['expense', 'debt'].includes(type)) {
+                if (targetId && !sourceId) {
+                    singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
+                    singleForm.setValue('target_account_id', null, { shouldDirty: true });
+                } else if (targetId && sourceId) {
+                    // Coming from a dual mode like transfer, clear target cleanly
+                    singleForm.setValue('target_account_id', null, { shouldDirty: true });
+                }
+            }
+
+            prevTypeRef.current = type;
+        }
+    }, [currentTxnType, open, accounts, singleForm]);
 
     useEffect(() => {
         // Only auto-expand cashback for new transactions, not edit/duplicate
@@ -668,7 +688,7 @@ export function TransactionSlideV2({
                 <SheetContent
                     showClose={false}
                     className={cn(
-                        "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100] max-w-screen",
+                        "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[500] max-w-screen",
                         mode === 'single' ? "sm:max-w-[550px]" : "sm:max-w-[1000px]"
                     )}
                     side="right"
@@ -875,8 +895,8 @@ export function TransactionSlideV2({
                         defaultType={categoryDefaults.type}
                         defaultKind={categoryDefaults.kind}
                         onBack={() => setIsCategoryDialogOpen(false)}
+                        isExternalLoading={isLoadingCategories}
                         onSuccess={async (newCategoryId) => {
-                            setIsCategoryDialogOpen(false);
                             if (newCategoryId) {
                                 setIsLoadingCategories(true);
                                 try {
@@ -888,12 +908,16 @@ export function TransactionSlideV2({
                                     singleForm.setValue('category_id', newCategoryId);
 
                                     toast.success("Category created and selected");
+                                    setIsCategoryDialogOpen(false);
                                 } catch (error) {
                                     console.error("Failed to refresh categories:", error);
                                     toast.error("Category created but failed to refresh list");
+                                    setIsCategoryDialogOpen(false);
                                 } finally {
                                     setIsLoadingCategories(false);
                                 }
+                            } else {
+                                setIsCategoryDialogOpen(false);
                             }
                         }}
                     />

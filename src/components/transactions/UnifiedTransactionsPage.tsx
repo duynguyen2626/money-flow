@@ -784,7 +784,7 @@ export function UnifiedTransactionsPage({
             {/* Content Section */}
             <div className="flex-1 overflow-hidden p-0 sm:p-4 relative">
                 {isGlobalLoading && (
-                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none">
+                    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[550] pointer-events-none">
                         <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             <span className="text-sm font-semibold text-white">{loadingMessage}</span>

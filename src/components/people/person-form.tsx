@@ -25,6 +25,7 @@ type PersonFormProps = {
   initialValues?: Partial<PersonFormValues>
   subscriptions: Subscription[]
   onCancel?: () => void
+  onChange?: () => void
 }
 
 const schema = z.object({
@@ -63,6 +64,7 @@ export function PersonForm({
   initialValues,
   subscriptions,
   onCancel,
+  onChange,
 }: PersonFormProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(initialValues?.image_url || null) // Changed from avatarPreview and avatar_url
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(
@@ -73,7 +75,7 @@ export function PersonForm({
     handleSubmit,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<PersonFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -87,6 +89,12 @@ export function PersonForm({
       is_group: initialValues?.is_group ?? false,
     },
   })
+
+  useEffect(() => {
+    if (isDirty && onChange) {
+      onChange()
+    }
+  }, [isDirty, onChange])
 
   const watchedImage = watch('image_url') // Changed from watchedAvatar
   const watchedSubs = watch('subscriptionIds')

@@ -78,7 +78,7 @@ export function PeopleHeader({
     const formattedRemainsPercent = remainsPercent > 0 ? `${remainsPercent}%` : ''
 
     return (
-        <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 sticky top-0 z-20 shadow-sm">
+        <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 sticky top-0 z-60 shadow-sm">
             {/* Main Header Row */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 {/* Left side info groups */}

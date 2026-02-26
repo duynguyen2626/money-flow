@@ -467,7 +467,7 @@ export function TransactionHeader({
   )
 
   return (
-    <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
+    <div className="sticky top-0 z-60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center gap-2 px-4 py-3 h-14">
         <div className="flex items-center flex-1 min-w-0 relative">
