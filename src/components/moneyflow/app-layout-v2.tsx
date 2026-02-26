@@ -53,6 +53,23 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
     return match?.title ?? 'Money Flow 3'
   }, [pathname])
 
+  // Click outside to collapse
+  useEffect(() => {
+    if (!sidebarCollapsed) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const sidebar = document.getElementById('desktop-sidebar-container')
+      if (sidebar && !sidebar.contains(e.target as Node)) {
+        // If we are in an "expanded" state but it was persistent, we might want to close it
+        // This logic will be more precisely handled by state inside SidebarNavV2 if we pass it down
+        // For now, let's let SidebarNavV2 handle its own internal temporary/persistent states
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [sidebarCollapsed])
+
   // Hide sidebar on login page
   if (pathname?.startsWith('/login')) {
     return (
@@ -62,59 +79,38 @@ export function AppLayoutV2({ children }: { children: React.ReactNode }) {
     )
   }
 
+
   return (
     <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Fixed Gutter (Zero Layout Shift) */}
       <aside
         suppressHydrationWarning
-        className={cn(
-          "flex-none h-full flex-col border-r border-slate-200 bg-card transition-all duration-300 z-20 shadow-sm hidden md:flex overflow-visible",
-          // Use a fixed width during hydration to match server exactly
-          !mounted ? "w-64" : (sidebarCollapsed ? "w-16" : "w-64")
-        )}
+        className="flex-none h-full border-r border-slate-200 bg-slate-50 hidden md:flex w-16 z-[190] relative"
       >
-        {/* Inner scroll container — overflow-y-auto is here, not on aside */}
-        <div className={cn(
-          "flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-8",
-          sidebarCollapsed ? "px-1" : "px-6"
-        )}>
-          {/* Header / Logo Area */}
-          <div className={cn(
-            "sticky top-0 z-50 flex items-center mb-6 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all",
-            sidebarCollapsed ? "justify-center" : "px-0"
-          )}>
-            {!sidebarCollapsed && (
-              <span className="text-xl font-bold text-slate-800 tracking-tight pl-2">
-                {currentPageTitle}
-              </span>
-            )}
-          </div>
+        {/* The actual Sidebar Panel that can expand as an overlay */}
+        <div
+          id="desktop-sidebar-container"
+          className={cn(
+            "absolute top-0 left-0 h-full bg-white border-r border-slate-200 transition-all duration-300 shadow-2xl overflow-visible z-[200]",
+            // This container will be sized by its content (SidebarNavV2)
+            "w-auto"
+          )}
+        >
+          <div className="flex flex-col h-full overflow-y-auto overflow-x-visible custom-scrollbar py-6">
+            {/* Sidebar Navigation */}
+            <div className="flex-1">
+              <SidebarNavV2
+                isCollapsed={sidebarCollapsed}
+                onCollapseChange={toggleSidebar}
+              />
+            </div>
 
-          {/* Sidebar Navigation */}
-          <SidebarNavV2
-            isCollapsed={sidebarCollapsed}
-            onCollapseChange={toggleSidebar}
-          />
-
-          {/* Footer / User Area */}
-          <div className="mt-auto pt-8 border-t border-slate-200">
-            {!sidebarCollapsed ? (
-              <div className="flex items-center gap-3 px-2">
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                  U
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-slate-700">User</span>
-                  <span className="text-xs text-slate-500">Admin</span>
-                </div>
+            {/* Footer / User Area - stable position */}
+            <div className="mt-auto px-4 py-6 border-t border-slate-200">
+              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm mx-auto shadow-sm">
+                U
               </div>
-            ) : (
-              <div className="flex justify-center">
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm">
-                  U
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </aside>

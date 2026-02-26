@@ -331,7 +331,7 @@ export function AccountDetailHeaderV2({
     }, [account, startOfDay])
 
     return (
-        <div className="bg-white border-b border-slate-200 px-6 py-1.5 flex flex-col gap-2 md:flex-row md:items-stretch sticky top-0 z-40 shadow-sm">
+        <div className="bg-white border-b border-slate-200 px-6 py-1.5 flex flex-col gap-2 md:flex-row md:items-stretch sticky top-0 z-60 shadow-sm">
             <AccountSlideV2
                 open={isSlideOpen}
                 onOpenChange={setIsSlideOpen}
@@ -375,7 +375,7 @@ export function AccountDetailHeaderV2({
                                     </button>
                                 </PopoverTrigger>
                                 <PopoverContent
-                                    className="w-[280px] z-[10001] shadow-2xl border-indigo-100"
+                                    className="w-[280px] z-[90] shadow-2xl border-indigo-100"
                                     align="start"
                                     onOpenAutoFocus={(e) => e.preventDefault()}
                                 >

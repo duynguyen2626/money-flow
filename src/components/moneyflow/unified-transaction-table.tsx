@@ -1635,7 +1635,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               onMouseUp={handleCellMouseUp}
               onMouseLeave={handleCellMouseUp}
             >
-              <TableHeader className="sticky top-0 z-50 bg-gradient-to-b from-slate-50 to-white backdrop-blur-sm border-b-2 border-slate-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)]">
+              <TableHeader className="sticky top-0 z-30 bg-gradient-to-b from-slate-50 to-white backdrop-blur-sm border-b-2 border-slate-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)]">
                 <TableRow className="hover:bg-transparent border-0">
                   {displayedColumns.map(col => {
                     const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };

@@ -70,10 +70,12 @@ export function ShopSlide({
     onSuccess,
     onCreateCategory,
     onBack,
+    zIndex = 700,
 }: ShopSlideProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
     const [pendingCloseAction, setPendingCloseAction] = useState<"close" | "back" | null>(null)
+    const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -164,7 +166,21 @@ export function ShopSlide({
                 <SheetContent
                     side="right"
                     className="sm:max-w-[480px] p-0 flex flex-col h-full bg-slate-50 border-l border-slate-200"
-                    zIndex={60}
+                    zIndex={zIndex}
+                    onPointerDownOutside={(e) => {
+                        if (hasChanges) {
+                            e.preventDefault()
+                            setPendingCloseAction("close")
+                            setShowUnsavedDialog(true)
+                        }
+                    }}
+                    onEscapeKeyDown={(e) => {
+                        if (hasChanges) {
+                            e.preventDefault()
+                            setPendingCloseAction("close")
+                            setShowUnsavedDialog(true)
+                        }
+                    }}
                 >
                     <SheetHeader className="px-6 py-6 bg-white border-b sticky top-0 z-10">
                         <div className="flex items-center gap-2">

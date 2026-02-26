@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import {
     Percent,
@@ -162,14 +162,22 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
         }
     };
 
+    const lastAutoPopulatedSig = useRef<string | null>(null);
+    const policySignature = policy ? `${policy.rate}-${policy.maxReward}` : null;
+
     useEffect(() => {
         if (isExpanded && policy && sharePercent === null && shareFixed === null && transactionType === 'debt') {
-            form.setValue('cashback_mode', 'real_percent');
-            if (suggestedShareRate) {
-                form.setValue('cashback_share_percent', suggestedShareRate);
+            if (lastAutoPopulatedSig.current !== policySignature) {
+                lastAutoPopulatedSig.current = policySignature;
+                form.setValue('cashback_mode', 'real_percent');
+                if (suggestedShareRate) {
+                    form.setValue('cashback_share_percent', suggestedShareRate);
+                }
             }
         }
-    }, [isExpanded, policy, transactionType, suggestedShareRate, form, sharePercent, shareFixed]);
+        // If the mode is not debt or expanded is closed, we can reset the ref if needed
+        // but keeping it until the policy actually changes is safer.
+    }, [isExpanded, policy, transactionType, suggestedShareRate, form, sharePercent, shareFixed, policySignature]);
 
     if (!isVisible) return null;
 

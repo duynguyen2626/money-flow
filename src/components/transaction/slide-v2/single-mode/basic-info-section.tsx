@@ -42,8 +42,14 @@ export function BasicInfoSection({ people, operationMode }: BasicInfoSectionProp
     useEffect(() => {
         if (occurredAt && operationMode === 'add') {
             const currentTag = form.getValues("tag");
-            if (!currentTag) {
-                form.setValue("tag", format(occurredAt, "yyyy-MM"));
+            const dateTag = format(occurredAt, "yyyy-MM");
+
+            // Only auto-update if tag is empty OR it looks like a year-month tag
+            // We want it to be dynamic but not overwrite custom manual tags
+            const isManualTag = currentTag && !/^\d{4}-\d{2}$/.test(currentTag);
+
+            if (!currentTag || !isManualTag) {
+                form.setValue("tag", dateTag);
             }
         }
     }, [occurredAt, form, operationMode]);

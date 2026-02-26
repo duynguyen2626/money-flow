@@ -174,7 +174,7 @@ export function Combobox({
         <PopoverPrimitive.Content
           align="start"
           sideOffset={4}
-          className="z-[100] w-[320px] rounded-xl border border-slate-200 bg-white p-0 shadow-lg flex flex-col overflow-hidden"
+          className="z-[1000] w-[320px] rounded-xl border border-slate-200 bg-white p-0 shadow-lg flex flex-col overflow-hidden"
           onWheel={(e) => e.stopPropagation()}
         >
           <Command className="flex-1 overflow-hidden" loop>

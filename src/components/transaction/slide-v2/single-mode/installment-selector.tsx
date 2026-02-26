@@ -42,6 +42,8 @@ export function InstallmentSelector() {
         fetchInstallments();
     }, []);
 
+    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
     // Only show for Expense, Repayment, Credit Pay, Income, or Debt
     const shouldShowByType = ['expense', 'repayment', 'credit_pay', 'income', 'debt'].includes(transactionType);
 
@@ -59,8 +61,6 @@ export function InstallmentSelector() {
     ];
 
     const isIncomeType = transactionType === 'income';
-
-    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
     return (
         <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">

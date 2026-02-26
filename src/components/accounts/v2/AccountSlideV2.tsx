@@ -49,6 +49,7 @@ import { DayOfMonthPicker } from "@/components/ui/day-of-month-picker";
 import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { CashbackConfigForm } from "./forms/CashbackConfigForm";
 import { CashbackRulesJson } from "@/types/cashback.types";
+import { UnsavedChangesDialog } from "@/components/transaction/slide-v2/unsaved-changes-dialog";
 
 interface AccountSlideV2Props {
     open: boolean;
@@ -60,6 +61,7 @@ interface AccountSlideV2Props {
     existingReceiverNames?: string[];
     onEditAccount?: (account: Account) => void;
     onBack?: () => void;
+    zIndex?: number;
 }
 
 import { Category, Person, Subscription } from "@/types/moneyflow.types";
@@ -79,6 +81,7 @@ export function AccountSlideV2({
     existingReceiverNames = [],
     onEditAccount,
     onBack,
+    zIndex = 500,
 }: AccountSlideV2Props & { categories?: Category[] }) {
     const router = useRouter();
     const isEdit = !!account;
@@ -99,6 +102,7 @@ export function AccountSlideV2({
     const [restrictedCategoryIds, setRestrictedCategoryIds] = useState<string[]>([]);
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+    const [isRefreshing, startRefresh] = React.useTransition();
     const [activeCategoryCallback, setActiveCategoryCallback] = useState<((categoryId: string) => void) | null>(null);
     // MF5.5 Rebooted Cashback States (Phase 16)
     const [cbType, setCbType] = useState<'none' | 'simple' | 'tiered'>('none');
@@ -674,6 +678,7 @@ export function AccountSlideV2({
                 <SheetContent
                     side="right"
                     className={cn("w-full transition-all duration-300 ease-in-out p-0 flex flex-col gap-0 border-l border-slate-200", isAdvancedCashback ? "sm:!max-w-[900px]" : "sm:!max-w-[700px]")}
+                    zIndex={zIndex}
                     onPointerDownOutside={(e) => {
                         if (currentState !== initialState) {
                             e.preventDefault();
@@ -853,7 +858,7 @@ export function AccountSlideV2({
                                 {holderType === 'relative' && (
                                     <div className="flex items-center justify-between gap-4 pt-1 animate-in fade-in slide-in-from-top-1">
                                         <div className="flex-1">
-                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover}>
+                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover} zIndex={(zIndex || 500) + 100}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
@@ -1628,6 +1633,8 @@ export function AccountSlideV2({
                     onOpenChange={(isOpen) => {
                         setIsPeopleSlideOpen(isOpen);
                     }}
+                    onBack={() => setIsPeopleSlideOpen(false)}
+                    zIndex={zIndex + 100}
                     subscriptions={subscriptions}
                     onSuccess={handlePersonCreated}
                 />
@@ -1658,50 +1665,29 @@ export function AccountSlideV2({
                 variant="destructive"
             />
 
-            <Sheet open={showUnsavedConfirm} onOpenChange={(open) => !open && setShowUnsavedConfirm(false)}>
-                <SheetContent side="right" showClose={false} className="w-full sm:max-w-md rounded-l-2xl border-l border-slate-200 p-0 shadow-2xl">
-                    <div className="p-6 space-y-4">
-                        <SheetHeader className="space-y-2 text-left">
-                            <SheetTitle className="text-xl font-black text-rose-600 flex items-center gap-2">
-                                <Trash2 className="h-5 w-5" />
-                                Unsaved Changes
-                            </SheetTitle>
-                            <SheetDescription className="text-sm font-medium text-slate-500">
-                                You have made changes to this account. Navigating away will discard these changes correctly.
-                            </SheetDescription>
-                        </SheetHeader>
-                        <SheetFooter className="flex-col gap-3 sm:flex-row sm:justify-end pt-2">
-                            <Button
-                                variant="outline"
-                                onClick={() => setShowUnsavedConfirm(false)}
-                                className="h-12 w-full font-bold text-slate-700 bg-white border-slate-200 hover:bg-slate-50 order-2 sm:order-1"
-                            >
-                                Keep Editing
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                onClick={confirmAction}
-                                className="h-12 w-full font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm order-1 sm:order-2"
-                            >
-                                Discard Changes
-                            </Button>
-                        </SheetFooter>
-                    </div>
-                </SheetContent>
-            </Sheet>
+            <UnsavedChangesDialog
+                open={showUnsavedConfirm}
+                onOpenChange={setShowUnsavedConfirm}
+                onConfirm={confirmAction}
+                onCancel={() => setShowUnsavedConfirm(false)}
+            />
 
             <CategorySlide
                 open={isCategoryDialogOpen}
                 onOpenChange={setIsCategoryDialogOpen}
                 defaultType="expense"
                 onBack={() => setIsCategoryDialogOpen(false)}
+                zIndex={zIndex + 100}
+                isExternalLoading={isRefreshing}
                 onSuccess={(newCategoryId) => {
-                    if (newCategoryId && activeCategoryCallback) {
-                        activeCategoryCallback(newCategoryId);
-                    }
-                    setIsCategoryDialogOpen(false);
-                    toast.success("Category created successfully");
-                    router.refresh();
+                    startRefresh(() => {
+                        if (newCategoryId && activeCategoryCallback) {
+                            activeCategoryCallback(newCategoryId);
+                        }
+                        router.refresh();
+                        setIsCategoryDialogOpen(false);
+                        toast.success("Category created successfully");
+                    });
                 }}
             />
         </>
