@@ -352,15 +352,14 @@ export function AccountDetailHeaderV2({
                         <ChevronLeft className="h-4 w-4" />
                     </Link>
 
-                    <div className="relative shrink-0">
-                        <div className="w-12 h-12 overflow-hidden flex items-center justify-center aspect-square border border-slate-100 bg-white">
-                            {account.image_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={account.image_url} alt="" className="w-full h-full object-contain rounded-none aspect-square" />
-                            ) : (
+                    <div className="relative shrink-0 flex items-center h-12">
+                        {account.image_url ? (
+                            <img src={account.image_url} alt="" className="h-full w-auto max-w-[80px] object-contain transition-all" />
+                        ) : (
+                            <div className="w-12 h-12 overflow-hidden flex items-center justify-center border border-slate-100 bg-white rounded-lg">
                                 <div className="text-xl font-bold text-slate-400 capitalize">{account.name.charAt(0)}</div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex flex-col min-w-0">

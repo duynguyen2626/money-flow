@@ -41,6 +41,7 @@ export function SidebarNavV2({
   const [navigatingItem, setNavigatingItem] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Effectively expanded if not 'collapsed'
@@ -62,6 +63,7 @@ export function SidebarNavV2({
     if (navState !== 'persistent_expanded') return
 
     const handleClickOutside = (e: MouseEvent) => {
+      if (isSearchFocused) return // Don't collapse if searching
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setNavState('collapsed')
         onCollapseChange?.(true)
@@ -70,7 +72,7 @@ export function SidebarNavV2({
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [navState, onCollapseChange])
+  }, [navState, onCollapseChange, isSearchFocused])
 
   const handleIconClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -90,7 +92,7 @@ export function SidebarNavV2({
   }
 
   const handleMouseLeave = () => {
-    if (navState === 'hover_expanded') {
+    if (navState === 'hover_expanded' && !isSearchFocused) {
       setNavState('collapsed')
     }
   }
@@ -136,6 +138,7 @@ export function SidebarNavV2({
         <SidebarSearch
           onSearchChange={setSearchQuery}
           onExpand={handleSearchExpand}
+          onFocusChange={setIsSearchFocused}
           placeholder="Search menu…"
           isCollapsed={isCollapsed}
         />

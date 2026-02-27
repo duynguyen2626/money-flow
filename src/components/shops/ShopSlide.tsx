@@ -60,6 +60,7 @@ interface ShopSlideProps {
     onSuccess?: (newShopId?: string) => void
     onCreateCategory?: () => void
     onBack?: () => void
+    zIndex?: number
 }
 
 export function ShopSlide({

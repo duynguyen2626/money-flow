@@ -8,7 +8,7 @@ import { getServiceBranding } from './service-branding'
 type SubscriptionCardProps = {
   subscription: Subscription
   onEdit?: () => void
-  onMemberClick?: (profileId: string) => void
+  onMemberClick?: (personId: string) => void
 }
 
 function formatMoney(value?: number | null) {
@@ -91,10 +91,10 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
           <div className="flex flex-wrap gap-2">
             {members.map(member => (
               <button
-                key={`${subscription.id}-${member.profile_id}`}
+                key={`${subscription.id}-${member.person_id}`}
                 type="button"
                 className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm hover:border-blue-200 hover:text-blue-700 focus:outline-none"
-                onClick={() => onMemberClick?.(member.profile_id)}
+                onClick={() => onMemberClick?.(member.person_id)}
               >
                 <span className="text-[11px] font-semibold text-slate-800">
                   {member.profile_name ?? 'Thanh vien'}

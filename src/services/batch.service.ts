@@ -11,7 +11,7 @@ export type FundBatchResult = {
     totalAmount: number
     fundedAmount: number
     createdTransaction: boolean
-    status: 'funded' | 'additional_funded' | 'already_funded'
+    status: 'funded' | 'additional_funded' | 'already_funded' | 'updated_funding'
     sourceAccountId: string
 }
 

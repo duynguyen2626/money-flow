@@ -16,6 +16,7 @@ interface SidebarSearchProps {
   onExpand?: () => void
   placeholder?: string
   isCollapsed?: boolean
+  onFocusChange?: (focused: boolean) => void
 }
 
 type ResultItem = {
@@ -30,7 +31,8 @@ export function SidebarSearch({
   onSearchChange,
   onExpand,
   placeholder = 'Search items...',
-  isCollapsed = false
+  isCollapsed = false,
+  onFocusChange
 }: SidebarSearchProps) {
   const [searchValue, setSearchValue] = useState('')
   const [isSmartEnabled, setIsSmartEnabled] = useState(true)
@@ -180,6 +182,8 @@ export function SidebarSearch({
                 placeholder={placeholder}
                 value={searchValue}
                 onChange={handleChange}
+                onFocus={() => onFocusChange?.(true)}
+                onBlur={() => onFocusChange?.(false)}
                 className={cn(
                   "w-full h-9 rounded-md border border-slate-200 bg-white pl-9 pr-8 text-xs placeholder:text-slate-400",
                   "focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200",
@@ -365,12 +369,14 @@ function ResultRow({ result, isCollapsed }: { result: ResultItem, isCollapsed: b
       <CustomTooltip content={`${label}: ${result.name}`} side="right">
         <Link
           href={href}
-          className="h-8 w-8 rounded-none border border-slate-100 bg-slate-50/50 flex items-center justify-center overflow-hidden hover:border-blue-300 hover:bg-blue-50 transition-all shadow-sm group"
+          className="h-8 w-10 flex items-center justify-center overflow-hidden hover:border-blue-300 hover:bg-blue-50 transition-all group"
         >
           {result.image ? (
             <img src={result.image} alt="" className="h-full w-full object-contain" />
           ) : (
-            <Icon className="h-3 w-3 text-slate-400 group-hover:text-blue-500" />
+            <div className="h-8 w-8 rounded-none border border-slate-100 bg-slate-50/50 flex items-center justify-center">
+              <Icon className="h-3 w-3 text-slate-400 group-hover:text-blue-500" />
+            </div>
           )}
         </Link>
       </CustomTooltip>
@@ -382,11 +388,13 @@ function ResultRow({ result, isCollapsed }: { result: ResultItem, isCollapsed: b
       href={href}
       className="flex items-center gap-2 p-1.5 rounded-md hover:bg-blue-50/50 border border-transparent hover:border-blue-100 transition-all group"
     >
-      <div className="h-6 w-6 rounded-none bg-white border border-slate-100 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
+      <div className="h-6 w-8 flex items-center justify-center shrink-0 overflow-hidden">
         {result.image ? (
           <img src={result.image} alt="" className="h-full w-full object-contain" />
         ) : (
-          <Icon className="h-2.5 w-2.5 text-slate-400" />
+          <div className="h-6 w-6 rounded-none bg-white border border-slate-100 flex items-center justify-center shadow-xs">
+            <Icon className="h-2.5 w-2.5 text-slate-400" />
+          </div>
         )}
       </div>
       <div className="flex-1 min-w-0 flex flex-col">

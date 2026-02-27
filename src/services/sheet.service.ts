@@ -431,6 +431,7 @@ export async function syncAllTransactions(personId: string) {
       shops: { name: string | null } | null
       account_id: string | null
       accounts: { name: string | null } | null
+      categories: { name: string | null } | null
     }[]
 
     // Group transactions by cycle tag
@@ -606,8 +607,7 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    const rawRows = (data ?? []) as unknown as any[]
-    const rows = rawRows
+    const rows = ((data ?? []) as any[])
       .filter(txn => {
         const note = (txn.note || '').toLowerCase()
         return !note.includes('#nosync') && !note.includes('#deprecated')

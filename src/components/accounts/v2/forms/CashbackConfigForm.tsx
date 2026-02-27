@@ -537,10 +537,10 @@ export function CashbackConfigForm({
                                 </div>
 
                                 {!cb_is_unlimited && (cb_max_budget || 0) > 0 && simpleRules.reduce((acc, rule) => acc + (rule.max || 0), 0) > (cb_max_budget || 0) && (
-                                    <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-md">
-                                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                    <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-md">
+                                        <Info className="h-4 w-4 shrink-0 mt-0.5" />
                                         <p className="text-[10px] font-medium leading-relaxed">
-                                            Tổng Limit Cap của các danh mục ngoại lệ ({(simpleRules.reduce((acc, rule) => acc + (rule.max || 0), 0) / 1000).toLocaleString()}k) đang vượt quá Overall Monthly Cap ({(cb_max_budget || 0) / 1000}k).
+                                            Tổng Limit Cap của các danh mục ngoại lệ ({(simpleRules.reduce((acc, rule) => acc + (rule.max || 0), 0) / 1000).toLocaleString()}k) đang lớn hơn Overall Cap ({(cb_max_budget || 0) / 1000}k). Thực tế bạn sẽ được hoàn tối đa {(cb_max_budget || 0) / 1000}k.
                                         </p>
                                     </div>
                                 )}
@@ -747,10 +747,10 @@ export function CashbackConfigForm({
                                             </div>
 
                                             {!cb_is_unlimited && (cb_max_budget || 0) > 0 && tier.policies.reduce((acc, policy) => acc + (policy.max || 0), 0) > (cb_max_budget || 0) && (
-                                                <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-md">
-                                                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                <div className="flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-md">
+                                                    <Info className="h-4 w-4 shrink-0 mt-0.5" />
                                                     <p className="text-[10px] font-medium leading-relaxed">
-                                                        Tổng Limit Cap của các danh mục ({(tier.policies.reduce((acc, policy) => acc + (policy.max || 0), 0) / 1000).toLocaleString()}k) đang vượt quá Overall Monthly Cap ({(cb_max_budget || 0) / 1000}k).
+                                                        Tổng Limit Cap của các danh mục ({(tier.policies.reduce((acc, policy) => acc + (policy.max || 0), 0) / 1000).toLocaleString()}k) đang lớn hơn Overall Cap ({(cb_max_budget || 0) / 1000}k). Thực tế bạn sẽ được hoàn tối đa {(cb_max_budget || 0) / 1000}k.
                                                     </p>
                                                 </div>
                                             )}
