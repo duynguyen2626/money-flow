@@ -62,7 +62,7 @@ import { AccountSlideV2 } from "@/components/accounts/v2/AccountSlideV2";
 import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { QuickPeopleSettingsDialog } from "@/components/moneyflow/quick-people-settings-dialog";
 import { CreatePersonDialog } from "@/components/people/create-person-dialog";
-import { AddShopDialog } from "@/components/moneyflow/add-shop-dialog";
+import { ShopSlide } from "@/components/shops/ShopSlide";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function TransactionSlideV2({
@@ -960,11 +960,10 @@ export function TransactionSlideV2({
                         subscriptions={[]} // Quick add doesn't need subs usually
                     />
 
-                    <AddShopDialog
+                    <ShopSlide
                         open={isShopDialogOpen}
                         onOpenChange={setIsShopDialogOpen}
                         categories={localCategories}
-                        preselectedCategoryId={singleForm.getValues('category_id') || undefined}
                     />
 
                 </SheetContent>
