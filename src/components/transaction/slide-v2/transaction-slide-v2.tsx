@@ -42,6 +42,7 @@ import { bulkCreateTransactions } from "@/actions/bulk-transaction-actions";
 import { logToServer, logErrorToServer } from "@/actions/log-actions";
 import { createTransaction, updateTransaction } from "@/services/transaction.service";
 import { getCategories } from "@/services/category.service";
+import { getShops } from "@/services/shop.service";
 import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
 
@@ -97,11 +98,17 @@ export function TransactionSlideV2({
     // Category Auto-Refresh State
     const [isLoadingCategories, setIsLoadingCategories] = useState(false);
     const [localCategories, setLocalCategories] = useState(categories);
+    const [isLoadingShops, setIsLoadingShops] = useState(false);
+    const [localShops, setLocalShops] = useState(shops);
 
-    // Sync localCategories with prop changes
+    // Sync localCategories and localShops with prop changes
     useEffect(() => {
         setLocalCategories(categories);
     }, [categories]);
+
+    useEffect(() => {
+        setLocalShops(shops);
+    }, [shops]);
 
     // Unsaved Changes Dialog State
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -846,11 +853,12 @@ export function TransactionSlideV2({
                                                 />
 
                                                 <CategoryShopSection
-                                                    shops={shops}
+                                                    shops={localShops}
                                                     categories={localCategories}
                                                     onAddNewCategory={() => setIsCategoryDialogOpen(true)}
                                                     onAddNewShop={onAddNewShop}
                                                     isLoadingCategories={isLoadingCategories}
+                                                    isLoadingShops={isLoadingShops}
                                                 />
 
                                                 <AmountSection />
@@ -964,6 +972,23 @@ export function TransactionSlideV2({
                         open={isShopDialogOpen}
                         onOpenChange={setIsShopDialogOpen}
                         categories={localCategories}
+                        defaultCategoryId={singleForm.getValues("category_id") || undefined}
+                        onSuccess={async (newShopId) => {
+                            if (newShopId) {
+                                setIsLoadingShops(true);
+                                try {
+                                    const updatedShops = await getShops();
+                                    setLocalShops(updatedShops);
+                                    singleForm.setValue("shop_id", newShopId, { shouldDirty: true });
+                                    toast.success("Shop created and selected");
+                                } catch (error) {
+                                    console.error("Failed to refresh shops:", error);
+                                } finally {
+                                    setIsLoadingShops(false);
+                                }
+                            }
+                            setIsShopDialogOpen(false);
+                        }}
                     />
 
                 </SheetContent>

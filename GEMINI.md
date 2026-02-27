@@ -27,11 +27,12 @@
 1. **`.agent/prompts/onboarding.md`** - Master onboarding guide
 2. **`.agent/rules/rules.md`** - Core coding standards
 3. **`.agent/rules/ui_rules.md`** - UI/UX standards (STRICT)
+4. **`.agent/CASHBACK_WORKFLOW.md`** - Advanced cashback rules & logic (CRITICAL for credit cards)
 
 ### Current Phase
 - **Phase 14**: COMPLETED - People UI Refactor & Navigation Optimization
 - **Phase 15**: IN PROGRESS - Categories UI Optimization & Cashback Logic Refinement
-- See `.agent/HANDOVER_CATEGORIES_UI.md` and `.agent/CASHBACK_REFACTOR_PLAN.md` for latest changes.
+- See `.agent/HANDOVER_CATEGORIES_UI.md`, `.agent/CASHBACK_REFACTOR_PLAN.md`, and `.agent/CASHBACK_WORKFLOW.md` for latest changes.
 
 ---
 

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 async function getCategories() {
   const supabase = createClient()
   const { data } = await supabase.from('categories').select('*').order('name')
-  return (data ?? []) as Category[]
+  return (data as unknown) as Category[]
 }
 
 export default async function ShopsPage() {

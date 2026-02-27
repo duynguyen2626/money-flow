@@ -340,6 +340,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
     { key: "total_back", label: "Total Back", defaultWidth: 120, minWidth: 100 },
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
+    { key: "people", label: "People", defaultWidth: 150 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "actual_cashback", label: "Est. Cashback", defaultWidth: 120, minWidth: 100 },
     { key: "est_share", label: "Cashback Shared", defaultWidth: 100, minWidth: 80 },
@@ -377,6 +378,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
       est_share: false,
       net_profit: false,
       back_info: false,
+      people: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -2831,6 +2833,26 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                             </div>
                           )
                         }
+                        case "people": {
+                          const personId = (txn as any).person_id
+                          const personName = (txn as any).person_name
+                          const personImage = (txn as any).person_image_url
+
+                          if (!personId) return <span className="text-slate-300 italic text-xs">-</span>
+
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="h-6 w-6 rounded-none border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                                {personImage ? (
+                                  <img src={personImage} alt={personName} className="h-full w-full object-cover" />
+                                ) : (
+                                  <User className="h-3 w-3 text-slate-400" />
+                                )}
+                              </div>
+                              <span className="text-sm font-medium text-slate-700 truncate">{personName}</span>
+                            </div>
+                          )
+                        }
 
                         case "tag": {
                           const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
@@ -3819,6 +3841,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
               est_share: false,
               net_profit: false,
               back_info: false,
+              people: true,
             };
             setVisibleColumns(defaultVis);
             localStorage.removeItem('mf_v3_col_vis');

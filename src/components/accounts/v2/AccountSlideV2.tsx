@@ -858,7 +858,7 @@ export function AccountSlideV2({
                                 {holderType === 'relative' && (
                                     <div className="flex items-center justify-between gap-4 pt-1 animate-in fade-in slide-in-from-top-1">
                                         <div className="flex-1">
-                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover} zIndex={(zIndex || 500) + 100}>
+                                            <Popover open={openHolderPersonPopover} onOpenChange={setOpenHolderPersonPopover}>
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"

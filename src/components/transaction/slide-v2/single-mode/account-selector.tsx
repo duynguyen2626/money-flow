@@ -76,7 +76,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     // Filtering logic for special rules
     const mapAccountToItem = (a: Account) => {
         let typeIcon = null;
-        let typeLabel = a.type;
+        let typeLabel: any = a.type || 'Acc';
         let colorClass = "text-slate-500 border-slate-200 bg-slate-50";
 
         switch (a.type) {
@@ -95,12 +95,12 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                 typeLabel = 'Cash';
                 colorClass = "text-emerald-600 border-emerald-200 bg-emerald-50";
                 break;
-            case 'e_wallet':
+            case 'ewallet':
                 typeIcon = <Smartphone className="h-2.5 w-2.5" />;
                 typeLabel = 'Wallet';
                 colorClass = "text-orange-600 border-orange-200 bg-orange-50";
                 break;
-            case 'saving':
+            case 'savings':
             case 'investment':
                 typeIcon = <PiggyBank className="h-2.5 w-2.5" />;
                 typeLabel = 'Saving';

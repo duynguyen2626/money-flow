@@ -1113,6 +1113,7 @@ export async function cloneBatch(batchId: string, overrides: Partial<Database['p
             is_template: overrides.is_template ?? false,
             bank_type: overrides.bank_type || originalBatch.bank_type,
             sheet_name: overrides.sheet_name || originalBatch.sheet_name,
+            month_year: overrides.month_year || originalBatch.month_year,
         })
         .select()
         .single()
@@ -1548,5 +1549,58 @@ export async function syncMasterOldBatches() {
         }
     }
 
+
     return { success: true, processedFunds, processedItems }
+}
+
+/**
+ * Automatically clone batches from previous month if they don't exist yet
+ */
+export async function checkAndAutoCloneBatches() {
+    const currentMonth = getCurrentMonthYear()
+    const supabase: any = createClient()
+
+    // Check if any batches exist for current month
+    const { data: currentBatches } = await supabase
+        .from('batches')
+        .select('id')
+        .eq('month_year', currentMonth)
+        .limit(1)
+
+    if (currentBatches && currentBatches.length > 0) {
+        return [] // Already initialized
+    }
+
+    // Get previous month string
+    const now = new Date()
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const prevMonthStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`
+
+    // Get active batches from previous month
+    const { data: prevBatches } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('month_year', prevMonthStr)
+        .eq('is_archived', false)
+
+    if (!prevBatches || prevBatches.length === 0) {
+        return []
+    }
+
+    const cloned = []
+    for (const batch of prevBatches) {
+        try {
+            const result = await cloneBatch(batch.id, {
+                month_year: currentMonth,
+                name: batch.name.includes(prevMonthStr)
+                    ? batch.name.replace(prevMonthStr, currentMonth)
+                    : `${batch.name} ${currentMonth}`
+            })
+            if (result) cloned.push(result)
+        } catch (e) {
+            console.error(`Failed to auto-clone batch ${batch.id}:`, e)
+        }
+    }
+
+    return cloned
 }

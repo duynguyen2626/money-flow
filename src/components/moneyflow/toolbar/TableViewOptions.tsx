@@ -44,7 +44,7 @@ export function TableViewOptions({
 
     // Ensure order sync and filter out 'people'
     const fullOrder = columnOrder.length > 0 ? columnOrder : defaultColumns.map(c => c.key)
-    const effectiveOrder = fullOrder.filter(key => key !== 'people')
+    const effectiveOrder = fullOrder
 
     const handleDragStart = (e: React.DragEvent, index: number) => {
         // Prevent Date dragging
