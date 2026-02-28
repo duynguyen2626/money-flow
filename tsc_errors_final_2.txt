@@ -1,0 +1,30 @@
+src/actions/batch-speed.actions.ts(238,23): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(240,44): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(243,44): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(299,22): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(300,44): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(301,44): error TS2339: Property 'transaction_id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/batch-speed.actions.ts(303,96): error TS2339: Property 'id' does not exist on type 'SelectQueryError<"Invalid Relationships cannot infer result type">'.
+src/actions/subscription-actions.ts(10,8): error TS2307: Cannot find module '@/services/subscription.service' or its corresponding type declarations.
+src/app/services/page 2.tsx(3,34): error TS2307: Cannot find module '@/services/subscription.service' or its corresponding type declarations.
+src/app/shops/page.tsx(14,10): error TS2352: Conversion of type 'SelectQueryError<"Invalid Relationships cannot infer result type">[]' to type 'Category[]' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type '{ error: true; } & String' is missing the following properties from type 'Category': id, name, type
+src/components/accounts/v2/AccountSlideV2.tsx(861,127): error TS2322: Type '{ children: Element[]; open: boolean; onOpenChange: Dispatch<SetStateAction<boolean>>; zIndex: number; }' is not assignable to type 'IntrinsicAttributes & PopoverProps'.
+  Property 'zIndex' does not exist on type 'IntrinsicAttributes & PopoverProps'.
+src/components/moneyflow/automation-checker.tsx(7,10): error TS2305: Module '"@/actions/batch.actions"' has no exported member 'checkAndAutoCloneBatchesAction'.
+src/components/moneyflow/debt-cycle-group.tsx(232,41): error TS2322: Type '"people"' is not assignable to type 'ColumnKey'.
+src/components/moneyflow/edit-account-dialog.tsx(396,7): error TS2322: Type 'CashbackLevel | { id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' is not assignable to type 'CashbackLevel'.
+  Property 'maxReward' is missing in type '{ id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' but required in type 'CashbackLevel'.
+src/components/moneyflow/edit-account-dialog.tsx(397,7): error TS2741: Property 'maxReward' is missing in type '{ id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' but required in type 'CashbackLevel'.
+src/components/moneyflow/filterable-transactions.tsx(133,13): error TS2353: Object literal may only specify known properties, and 'people' does not exist in type 'Record<ColumnKey, boolean>'.
+src/components/moneyflow/filterable-transactions.tsx(1092,33): error TS2322: Type '"people"[]' is not assignable to type 'ColumnKey[]'.
+  Type '"people"' is not assignable to type 'ColumnKey'.
+src/components/moneyflow/toolbar/TableViewOptions.tsx(47,52): error TS2367: This comparison appears to be unintentional because the types 'ColumnKey' and '"people"' have no overlap.
+src/components/moneyflow/transaction-table.tsx(332,7): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(333,38): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(347,7): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(1196,34): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/services/create-subscription-dialog.tsx(9,34): error TS2307: Cannot find module './subscription-form' or its corresponding type declarations.
+src/components/services/create-subscription-dialog.tsx(67,31): error TS7006: Parameter 'values' implicitly has an 'any' type.
+src/components/services/edit-subscription-dialog.tsx(9,34): error TS2307: Cannot find module './subscription-form' or its corresponding type declarations.
+src/components/services/edit-subscription-dialog.tsx(88,31): error TS7006: Parameter 'values' implicitly has an 'any' type.

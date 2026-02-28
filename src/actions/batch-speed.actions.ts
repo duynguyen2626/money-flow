@@ -231,7 +231,7 @@ export async function toggleBatchItemConfirmAction(params: {
     currentStatus: string
 }) {
     try {
-        const supabase = await createClient()
+        const supabase: any = await createClient()
         if (params.currentStatus === 'confirmed') {
             // Unconfirm (void transaction)
             const { data: item } = await supabase.from('batch_items').select('transaction_id').eq('id', params.batchItemId).single()
@@ -288,7 +288,7 @@ export async function bulkUnconfirmBatchItemsAction(batchId: string, itemIds: st
     try {
         if (!itemIds || itemIds.length === 0) return { success: true, count: 0 }
 
-        const supabase = await createClient()
+        const supabase: any = await createClient()
         const { data: items } = await supabase.from('batch_items').select('id, transaction_id').in('id', itemIds)
 
         const { voidTransaction } = await import('@/services/transaction.service')

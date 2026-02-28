@@ -60,6 +60,8 @@ interface ShopSlideProps {
     onSuccess?: (newShopId?: string) => void
     onCreateCategory?: () => void
     onBack?: () => void
+    zIndex?: number
+    defaultCategoryId?: string
 }
 
 export function ShopSlide({
@@ -71,6 +73,7 @@ export function ShopSlide({
     onCreateCategory,
     onBack,
     zIndex = 700,
+    defaultCategoryId,
 }: ShopSlideProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
@@ -128,11 +131,11 @@ export function ShopSlide({
                 form.reset({
                     name: "",
                     image_url: "",
-                    default_category_id: "none",
+                    default_category_id: defaultCategoryId || "none",
                 })
             }
         }
-    }, [shop, form, open])
+    }, [shop, form, open, defaultCategoryId])
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         setIsLoading(true)

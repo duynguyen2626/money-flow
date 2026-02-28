@@ -42,6 +42,7 @@ import { bulkCreateTransactions } from "@/actions/bulk-transaction-actions";
 import { logToServer, logErrorToServer } from "@/actions/log-actions";
 import { createTransaction, updateTransaction } from "@/services/transaction.service";
 import { getCategories } from "@/services/category.service";
+import { getShops } from "@/services/shop.service";
 import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
 
@@ -62,7 +63,7 @@ import { AccountSlideV2 } from "@/components/accounts/v2/AccountSlideV2";
 import { CategorySlide } from "@/components/accounts/v2/CategorySlide";
 import { QuickPeopleSettingsDialog } from "@/components/moneyflow/quick-people-settings-dialog";
 import { CreatePersonDialog } from "@/components/people/create-person-dialog";
-import { AddShopDialog } from "@/components/moneyflow/add-shop-dialog";
+import { ShopSlide } from "@/components/shops/ShopSlide";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 
 export function TransactionSlideV2({
@@ -97,11 +98,17 @@ export function TransactionSlideV2({
     // Category Auto-Refresh State
     const [isLoadingCategories, setIsLoadingCategories] = useState(false);
     const [localCategories, setLocalCategories] = useState(categories);
+    const [isLoadingShops, setIsLoadingShops] = useState(false);
+    const [localShops, setLocalShops] = useState(shops);
 
-    // Sync localCategories with prop changes
+    // Sync localCategories and localShops with prop changes
     useEffect(() => {
         setLocalCategories(categories);
     }, [categories]);
+
+    useEffect(() => {
+        setLocalShops(shops);
+    }, [shops]);
 
     // Unsaved Changes Dialog State
     const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
@@ -403,15 +410,17 @@ export function TransactionSlideV2({
         }
 
         if (prevTypeRef.current !== type) {
-            // Logic for switching TO Credit Card Pay
+            const currentSourceAcc = accounts.find(a => a.id === sourceId);
+            const currentTargetAcc = accounts.find(a => a.id === targetId);
+
+            // 1. Logic for switching TO Special Modes (Transfer or Card Pay)
             if (type === 'credit_pay') {
-                const currentSourceAcc = accounts.find(a => a.id === sourceId);
-                // If we are on Credit Card Pay and source is a Credit Card, move it to TARGET
+                // Moving CC from source to target for Card Pay
                 if (currentSourceAcc?.type === 'credit_card' && !targetId) {
                     console.log("💳 Credit Card Pay: Moving CC from source to target...");
                     singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
 
-                    // Try to find a bank account for source (Pay From)
+                    // Try to find a bank account for source (Pay From), but ONLY if current source is now the CC we just moved
                     const bankAcc = accounts.find(a => a.type === 'bank');
                     if (bankAcc) {
                         singleForm.setValue('source_account_id', bankAcc.id, { shouldDirty: true });
@@ -420,15 +429,42 @@ export function TransactionSlideV2({
                     }
                 }
             }
-            // Logic for switching FROM Credit Card Pay back to regular modes
-            else if (prevTypeRef.current === 'credit_pay' && ['expense', 'debt'].includes(type)) {
-                console.log("🔄 Leaving Credit Card Pay: Restoring CC back to source...");
-                if (targetId) {
+            else if (type === 'transfer') {
+                // If moving to Transfer and source is a Credit Card, it MUST move to target (Credit Pay logic)
+                // because you can't "transfer" from a CC effectively in this system's context.
+                if (currentSourceAcc?.type === 'credit_card') {
+                    console.log("🔄 Transfer with CC: Moving CC to target...");
+                    singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
+                    singleForm.setValue('source_account_id', null, { shouldDirty: true });
+                }
+            }
+
+            // 2. Logic for switching FROM Special Modes back to regular modes (Expense/Debt/Income/Repayment)
+            else if (['credit_pay', 'transfer'].includes(prevTypeRef.current) && ['expense', 'debt', 'income', 'repayment'].includes(type)) {
+                // If we had a CC in target, move it back to source for Expense/Debt
+                if (currentTargetAcc?.type === 'credit_card' && ['expense', 'debt'].includes(type)) {
+                    console.log("🔄 Restoring CC from target back to source...");
                     singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
                     singleForm.setValue('target_account_id', null, { shouldDirty: true });
                 }
+                // If we are on income/repayment, target is active, so we might want to keep it there if it's bank
+                else if (['income', 'repayment'].includes(type)) {
+                    if (sourceId && !targetId) {
+                        singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
+                        singleForm.setValue('source_account_id', null, { shouldDirty: true });
+                    }
+                }
+                // Cleanup: If both are set and we are going to a single-flow mode, clear the irrelevant one
+                else if (sourceId && targetId) {
+                    if (['expense', 'debt'].includes(type)) {
+                        singleForm.setValue('target_account_id', null, { shouldDirty: true });
+                    } else if (['income', 'repayment'].includes(type)) {
+                        singleForm.setValue('source_account_id', null, { shouldDirty: true });
+                    }
+                }
             }
-            // Standard logic movements for single modes
+
+            // 3. Fallback standard logic for simple type changes
             else if (['income', 'repayment'].includes(type)) {
                 if (sourceId && !targetId) {
                     singleForm.setValue('target_account_id', sourceId, { shouldDirty: true });
@@ -438,9 +474,6 @@ export function TransactionSlideV2({
             else if (['expense', 'debt'].includes(type)) {
                 if (targetId && !sourceId) {
                     singleForm.setValue('source_account_id', targetId, { shouldDirty: true });
-                    singleForm.setValue('target_account_id', null, { shouldDirty: true });
-                } else if (targetId && sourceId) {
-                    // Coming from a dual mode like transfer, clear target cleanly
                     singleForm.setValue('target_account_id', null, { shouldDirty: true });
                 }
             }
@@ -820,11 +853,12 @@ export function TransactionSlideV2({
                                                 />
 
                                                 <CategoryShopSection
-                                                    shops={shops}
+                                                    shops={localShops}
                                                     categories={localCategories}
                                                     onAddNewCategory={() => setIsCategoryDialogOpen(true)}
                                                     onAddNewShop={onAddNewShop}
                                                     isLoadingCategories={isLoadingCategories}
+                                                    isLoadingShops={isLoadingShops}
                                                 />
 
                                                 <AmountSection />
@@ -934,11 +968,27 @@ export function TransactionSlideV2({
                         subscriptions={[]} // Quick add doesn't need subs usually
                     />
 
-                    <AddShopDialog
+                    <ShopSlide
                         open={isShopDialogOpen}
                         onOpenChange={setIsShopDialogOpen}
                         categories={localCategories}
-                        preselectedCategoryId={singleForm.getValues('category_id') || undefined}
+                        defaultCategoryId={singleForm.getValues("category_id") || undefined}
+                        onSuccess={async (newShopId) => {
+                            if (newShopId) {
+                                setIsLoadingShops(true);
+                                try {
+                                    const updatedShops = await getShops();
+                                    setLocalShops(updatedShops);
+                                    singleForm.setValue("shop_id", newShopId, { shouldDirty: true });
+                                    toast.success("Shop created and selected");
+                                } catch (error) {
+                                    console.error("Failed to refresh shops:", error);
+                                } finally {
+                                    setIsLoadingShops(false);
+                                }
+                            }
+                            setIsShopDialogOpen(false);
+                        }}
                     />
 
                 </SheetContent>

@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 import { SingleTransactionFormValues } from "../types";
-import { Shop, Category } from "@/types/moneyflow.types";
+import { Category, Shop } from "@/types/moneyflow.types";
 import { Combobox } from "@/components/ui/combobox";
+import { Badge } from "@/components/ui/badge";
 
 import { getRecentShopByCategoryId, getRecentShopIdsByCategoryId, getRecentCategoriesByShopId } from "@/actions/cascade-actions";
 import { useState } from "react";
@@ -25,9 +26,10 @@ type CategoryShopSectionProps = {
     onAddNewCategory?: () => void;
     onAddNewShop?: () => void;
     isLoadingCategories?: boolean;
+    isLoadingShops?: boolean;
 };
 
-export function CategoryShopSection({ shops, categories, onAddNewCategory, onAddNewShop, isLoadingCategories }: CategoryShopSectionProps) {
+export function CategoryShopSection({ shops, categories, onAddNewCategory, onAddNewShop, isLoadingCategories, isLoadingShops }: CategoryShopSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const categoryId = useWatch({ control: form.control, name: "category_id" });
@@ -96,17 +98,45 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         }));
     }, [shops, categoryId, categoryHistoricalShopIds]);
 
-    const categoryOptions = filteredCategories.map(c => ({
-        value: c.id,
-        label: c.name,
-        icon: isValidUrl(c.image_url) ? (
-            <Image src={c.image_url} alt={c.name} width={20} height={20} className="object-contain rounded-none" />
-        ) : c.icon ? (
-            <span className="text-sm">{c.icon}</span>
-        ) : (
-            <Book className="w-4 h-4 text-slate-400" />
-        )
-    }));
+    const categoryOptions = filteredCategories.map(c => {
+        let badgeLabel = c.type === 'expense' ? 'Expense' : c.type === 'income' ? 'Income' : 'Transfer';
+        let badgeColor = "bg-slate-100 text-slate-500 border-slate-200";
+
+        if (c.type === 'expense') {
+            if (c.kind === 'internal') {
+                badgeLabel = 'Lend';
+                badgeColor = "bg-amber-50 text-amber-600 border-amber-100";
+            } else {
+                badgeColor = "bg-rose-50 text-rose-600 border-rose-100";
+            }
+        } else if (c.type === 'income') {
+            if (c.kind === 'internal') {
+                badgeLabel = 'Repay';
+                badgeColor = "bg-blue-50 text-blue-600 border-blue-100";
+            } else {
+                badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-100";
+            }
+        } else if (c.type === 'transfer') {
+            badgeColor = "bg-indigo-50 text-indigo-600 border-indigo-100";
+        }
+
+        return {
+            value: c.id,
+            label: c.name,
+            icon: isValidUrl(c.image_url) ? (
+                <Image src={c.image_url} alt={c.name} width={20} height={20} className="object-contain rounded-none" />
+            ) : c.icon ? (
+                <span className="text-sm">{c.icon}</span>
+            ) : (
+                <Book className="w-4 h-4 text-slate-400" />
+            ),
+            badge: (
+                <Badge variant="outline" className={cn("text-[9px] uppercase tracking-tighter py-0 px-1.5 font-bold border rounded-md", badgeColor)}>
+                    {badgeLabel}
+                </Badge>
+            )
+        };
+    });
 
     // Prioritize categories that this shop has been used with (many-to-many relationship support)
     const sortedCategoryOptions = useMemo(() => {
@@ -290,6 +320,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
                                         className="w-full h-11 bg-slate-50/50 border-slate-200 rounded-xl"
                                         onAddNew={onAddNewShop}
                                         addLabel="Shop"
+                                        isLoading={isLoadingShops}
                                     />
                                 </FormControl>
                                 <FormMessage />

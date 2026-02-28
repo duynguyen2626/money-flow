@@ -12,6 +12,7 @@ export type ComboboxItem = {
   label: string
   description?: string
   icon?: React.ReactNode
+  badge?: React.ReactNode
   searchValue?: string
 }
 
@@ -132,6 +133,11 @@ export function Combobox({
                   <span className="text-[11px] text-slate-500 truncate">{selectedItem.description}</span>
                 )}
               </span>
+              {selectedItem?.badge && (
+                <span className="flex-shrink-0 ml-2">
+                  {selectedItem.badge}
+                </span>
+              )}
             </span>
             <span className="flex items-center gap-1 flex-shrink-0 ml-2">
               {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
@@ -245,7 +251,10 @@ export function Combobox({
                               )}
                             </div>
                           </div>
-                          {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                          <div className="flex items-center gap-2">
+                            {item.badge}
+                            {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                          </div>
                         </CommandItem>
                       )
                     })}
@@ -271,7 +280,10 @@ export function Combobox({
                           )}
                         </div>
                       </div>
-                      {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                      <div className="flex items-center gap-2">
+                        {item.badge}
+                        {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                      </div>
                     </CommandItem>
                   )
                 })

@@ -197,3 +197,10 @@ export async function syncMasterOldBatchesAction() {
     revalidatePath('/batch')
     return result
 }
+
+export async function checkAndAutoCloneBatchesAction() {
+    const { checkAndAutoCloneBatches } = await import('@/services/batch.service')
+    const result = await checkAndAutoCloneBatches()
+    revalidatePath('/batch')
+    return result
+}

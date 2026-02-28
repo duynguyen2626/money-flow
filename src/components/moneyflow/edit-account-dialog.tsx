@@ -394,7 +394,7 @@ function CashbackLevelsList({
   const addLevel = () => {
     notifyParent([
       ...levels,
-      { id: `lvl_${Date.now()}`, name: '', minTotalSpend: 0, defaultRate: null, rules: [] }
+      { id: `lvl_${Date.now()}`, name: '', minTotalSpend: 0, defaultRate: null, rules: [], maxReward: null }
     ])
   }
 

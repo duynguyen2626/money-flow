@@ -242,7 +242,7 @@ export function AccountDetailHeaderV2({
 
     // Helper Component for Sections
     // Helper Component for Sections
-    const HeaderSection = React.forwardRef<HTMLDivElement, { label: string, children: React.ReactNode, className?: string, borderColor?: string, badge?: React.ReactNode, hint?: string, hideHintInHeader?: boolean, [key: string]: any }>(
+    const HeaderSection = React.forwardRef<HTMLDivElement, { label: string, children: React.ReactNode, className?: string, borderColor?: string, badge?: React.ReactNode, hint?: string, hideHintInHeader?: boolean } & React.HTMLAttributes<HTMLDivElement>>(
         ({ label, children, className, borderColor = "border-slate-200", badge, hint, hideHintInHeader, ...props }, ref) => (
             <div ref={ref} className={cn("relative border rounded-xl px-4 py-1.5 flex flex-col group/header", borderColor, className)} {...props}>
                 <div className="absolute -top-2 left-3 flex items-center gap-2 z-10">
@@ -352,15 +352,14 @@ export function AccountDetailHeaderV2({
                         <ChevronLeft className="h-4 w-4" />
                     </Link>
 
-                    <div className="relative shrink-0">
-                        <div className="w-12 h-12 overflow-hidden flex items-center justify-center aspect-square border border-slate-100 bg-white">
-                            {account.image_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={account.image_url} alt="" className="w-full h-full object-contain rounded-none aspect-square" />
-                            ) : (
+                    <div className="relative shrink-0 flex items-center h-12">
+                        {account.image_url ? (
+                            <img src={account.image_url} alt="" className="h-full w-auto max-w-[80px] object-contain transition-all" />
+                        ) : (
+                            <div className="w-12 h-12 overflow-hidden flex items-center justify-center border border-slate-100 bg-white rounded-lg">
                                 <div className="text-xl font-bold text-slate-400 capitalize">{account.name.charAt(0)}</div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex flex-col min-w-0">
@@ -620,7 +619,7 @@ export function AccountDetailHeaderV2({
                                 >
                                     <div className="flex flex-col h-full">
                                         {/* Row 1: Metrics (H-61px to ensure Bar Top is at 73px) */}
-                                        <div className="grid grid-cols-3 gap-2 w-full h-[61px] items-start pt-1">
+                                        <div className="grid grid-cols-4 gap-2 w-full h-[61px] items-start pt-1">
                                             <div className="flex flex-col group">
                                                 <div className="flex items-center gap-1.5 mb-1">
                                                     <BarChart3 className="h-3 w-3 text-slate-400 group-hover:text-emerald-500 transition-colors" />
@@ -634,7 +633,17 @@ export function AccountDetailHeaderV2({
                                                 </div>
                                             </div>
 
-                                            <div className="px-2">
+                                            <div className="flex flex-col group">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <ShieldCheck className="h-3 w-3 text-slate-400 group-hover:text-indigo-500 transition-colors" />
+                                                    <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase">Limit</span>
+                                                </div>
+                                                <div className="text-base font-black tracking-tight leading-none tabular-nums text-slate-900">
+                                                    {formatMoneyVND(Math.ceil(account.credit_limit || 0))}
+                                                </div>
+                                            </div>
+
+                                            <div className="px-1 flex justify-center">
                                                 {dueDateBadge}
                                             </div>
 
@@ -670,68 +679,40 @@ export function AccountDetailHeaderV2({
                                         {/* Row 3: Metrics & Badges (Footer) */}
                                         <div className="flex items-center gap-2 pb-1 px-0.5 mt-auto h-[28px]">
                                             {(() => {
-                                                const limit = account.credit_limit || 0
-                                                const usagePercent = limit > 0 ? Math.min((outstandingBalance / limit) * 100, 100) : 0
-                                                const isDanger = usagePercent > 90
-
-                                                // STANDALONE PERCENTAGE BADGE
-                                                const usageBadge = (
-                                                    <div className={cn(
-                                                        "px-1.5 py-0.5 rounded border shadow-sm flex items-center h-5.5",
-                                                        isDanger ? "bg-rose-500 text-white border-rose-600" : "bg-indigo-600 text-white border-indigo-700"
-                                                    )}>
-                                                        <span className="text-[9px] font-black tabular-nums">
-                                                            {Math.round(usagePercent)}%
-                                                        </span>
-                                                    </div>
-                                                );
-
                                                 const waiverTarget = account.annual_fee_waiver_target
                                                 const spent = summary?.yearExpensesTotal || 0
                                                 const needsWaiver = waiverTarget ? Math.max(0, waiverTarget - spent) : 0
 
+                                                if (!waiverTarget) return null;
+
                                                 return (
-                                                    <>
-                                                        {usageBadge}
-                                                        {/* Usage & Limit Metrics Aligned Left */}
-                                                        <div className={cn(
-                                                            "px-2 py-1 rounded border shadow-sm flex items-center gap-2 h-6",
-                                                            isDanger ? "text-rose-700 bg-rose-50 border-rose-200" : "text-slate-700 bg-slate-50 border-slate-200"
-                                                        )}>
-                                                            <Hash className="h-2.5 w-2.5 text-slate-400" />
-                                                            <div className="flex items-baseline gap-1.5">
-                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Usage</span>
-                                                                <span className="text-[10px] font-black tabular-nums leading-none">{formatMoneyVND(Math.ceil(outstandingBalance))}</span>
-                                                            </div>
+                                                    <div className={cn(
+                                                        "px-3 py-1 rounded-lg border shadow-sm flex items-center gap-3 h-7 w-full",
+                                                        needsWaiver > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"
+                                                    )}>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {needsWaiver > 0 ? <TrendingUp className="h-3 w-3 text-amber-500 animate-pulse" /> : <ShieldCheck className="h-3 w-3 text-emerald-500" />}
+                                                            <span className={cn("text-[9px] font-black uppercase tracking-[0.1em]", needsWaiver > 0 ? "text-amber-600" : "text-emerald-700")}>
+                                                                Waiver Needs
+                                                            </span>
                                                         </div>
 
-                                                        {/* Merged Waiver + Limits Tracked + Limit */}
-                                                        <div className={cn(
-                                                            "px-2 py-1 rounded border shadow-sm flex items-center gap-3 h-6",
-                                                            needsWaiver > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"
-                                                        )}>
-                                                            <div className="flex items-center gap-1.5 pr-2 border-r border-slate-200/50">
-                                                                {needsWaiver > 0 ? <TrendingUp className="h-2.5 w-2.5 text-amber-500 animate-pulse" /> : <ShieldCheck className="h-2.5 w-2.5 text-emerald-500" />}
-                                                                <span className={cn("text-[8px] font-black uppercase tracking-widest", needsWaiver > 0 ? "text-amber-600" : "text-emerald-700")}>
-                                                                    {needsWaiver > 0 ? `WAIVER NEED: ${formatVNShort(needsWaiver)} ` : "WAIVER MET"}
+                                                        <div className="flex items-center gap-2 ml-auto">
+                                                            <div className="flex flex-col items-end leading-none">
+                                                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">Still Need</span>
+                                                                <span className={cn("text-[11px] font-black tabular-nums whitespace-nowrap", needsWaiver > 0 ? "text-amber-700" : "text-emerald-700")}>
+                                                                    {needsWaiver > 0 ? formatMoneyVND(Math.ceil(needsWaiver)) : "READY"}
                                                                 </span>
                                                             </div>
-
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Limits Tracked</span>
-                                                                <span className="text-slate-200">|</span>
-                                                                <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">LIMIT</span>
-                                                                <span className="text-[10px] font-black text-indigo-900 tabular-nums leading-none">{formatMoneyVND(Math.ceil(account.credit_limit || 0))}</span>
+                                                            <span className="text-slate-200 mx-1 font-light">/</span>
+                                                            <div className="flex flex-col items-end leading-none">
+                                                                <span className="text-[7px] font-bold text-slate-400 uppercase tracking-tighter mb-0.5">Target</span>
+                                                                <span className="text-[11px] font-black text-slate-600 tabular-nums whitespace-nowrap">
+                                                                    {formatMoneyVND(waiverTarget)}
+                                                                </span>
                                                             </div>
                                                         </div>
-
-                                                        {!!account.annual_fee_waiver_target && (
-                                                            <div className="bg-amber-50/50 px-2 py-1 rounded border border-amber-100/50 flex items-center gap-2 h-6 ml-auto">
-                                                                <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">TARGET</span>
-                                                                <span className="text-[10px] font-black text-amber-900 tabular-nums leading-none">{formatMoneyVND(account.annual_fee_waiver_target)}</span>
-                                                            </div>
-                                                        )}
-                                                    </>
+                                                    </div>
                                                 )
                                             })()}
                                         </div>

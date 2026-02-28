@@ -1,0 +1,2 @@
+﻿src/components/moneyflow/transaction-table.tsx(1196,34): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/unified-transaction-table.tsx(3828,19): error TS2741: Property 'people' is missing in type '{ date: true; shop: true; note: false; category: false; tag: false; account: true; amount: true; total_back: false; final_price: true; id: false; actions: true; actual_cashback: false; est_share: false; net_profit: false; back_info: false; }' but required in type 'Record<ColumnKey, boolean>'.

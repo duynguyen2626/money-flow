@@ -1,0 +1,26 @@
+src/actions/subscription-actions.ts(10,8): error TS2307: Cannot find module '@/services/subscription.service' or its corresponding type declarations.
+src/app/services/page 2.tsx(3,34): error TS2307: Cannot find module '@/services/subscription.service' or its corresponding type declarations.
+src/components/moneyflow/automation-checker.tsx(7,10): error TS2305: Module '"@/actions/batch.actions"' has no exported member 'checkAndAutoCloneBatchesAction'.
+src/components/moneyflow/debt-cycle-group.tsx(232,41): error TS2322: Type '"people"' is not assignable to type 'ColumnKey'.
+src/components/moneyflow/edit-account-dialog.tsx(396,7): error TS2322: Type 'CashbackLevel | { id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' is not assignable to type 'CashbackLevel'.
+  Property 'maxReward' is missing in type '{ id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' but required in type 'CashbackLevel'.
+src/components/moneyflow/edit-account-dialog.tsx(397,7): error TS2741: Property 'maxReward' is missing in type '{ id: string; name: string; minTotalSpend: number; defaultRate: null; rules: never[]; }' but required in type 'CashbackLevel'.
+src/components/moneyflow/filterable-transactions.tsx(133,13): error TS2353: Object literal may only specify known properties, and 'people' does not exist in type 'Record<ColumnKey, boolean>'.
+src/components/moneyflow/filterable-transactions.tsx(1092,33): error TS2322: Type '"people"[]' is not assignable to type 'ColumnKey[]'.
+  Type '"people"' is not assignable to type 'ColumnKey'.
+src/components/moneyflow/toolbar/TableViewOptions.tsx(47,52): error TS2367: This comparison appears to be unintentional because the types 'ColumnKey' and '"people"' have no overlap.
+src/components/moneyflow/transaction-table.tsx(332,7): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(333,38): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(347,7): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/moneyflow/transaction-table.tsx(1196,34): error TS7006: Parameter 'line' implicitly has an 'any' type.
+src/components/services/create-subscription-dialog.tsx(9,34): error TS2307: Cannot find module './subscription-form' or its corresponding type declarations.
+src/components/services/create-subscription-dialog.tsx(67,31): error TS7006: Parameter 'values' implicitly has an 'any' type.
+src/components/services/edit-subscription-dialog.tsx(9,34): error TS2307: Cannot find module './subscription-form' or its corresponding type declarations.
+src/components/services/edit-subscription-dialog.tsx(88,31): error TS7006: Parameter 'values' implicitly has an 'any' type.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(85,17): error TS2820: Type '"Bank"' is not assignable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'. Did you mean '"bank"'?
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(90,17): error TS2322: Type '"Credit"' is not assignable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(95,17): error TS2820: Type '"Cash"' is not assignable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'. Did you mean '"cash"'?
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(98,18): error TS2678: Type '"e_wallet"' is not comparable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(100,17): error TS2820: Type '"Wallet"' is not assignable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'. Did you mean '"ewallet"'?
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(103,18): error TS2678: Type '"saving"' is not comparable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'.
+src/components/transaction/slide-v2/single-mode/account-selector.tsx(106,17): error TS2820: Type '"Saving"' is not assignable to type '"bank" | "cash" | "credit_card" | "ewallet" | "debt" | "savings" | "investment" | "asset" | "system"'. Did you mean '"savings"'?

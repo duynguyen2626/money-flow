@@ -487,6 +487,7 @@ export function CategorySlide({
                 onBack={() => setIsShopSlideOpen(false)}
                 zIndex={zIndex + 100}
                 onSuccess={() => setIsShopSlideOpen(false)}
+                defaultCategoryId={category?.id}
             />
         </>
     )

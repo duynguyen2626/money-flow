@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useFormContext, useWatch, Controller } from "react-hook-form";
-import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users, Store, AlertCircle } from "lucide-react";
+import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users, Store, AlertCircle, Landmark, CreditCard, Wallet, Smartphone, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import {
@@ -74,11 +74,55 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     }, [type, isSpecialMode, sourceId, targetId, form]);
 
     // Filtering logic for special rules
-    const mapAccountToItem = (a: Account) => ({
-        value: a.id,
-        label: a.name,
-        icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-none" /> : undefined
-    });
+    const mapAccountToItem = (a: Account) => {
+        let typeIcon = null;
+        let typeLabel: any = a.type || 'Acc';
+        let colorClass = "text-slate-500 border-slate-200 bg-slate-50";
+
+        switch (a.type) {
+            case 'bank':
+                typeIcon = <Landmark className="h-2.5 w-2.5" />;
+                typeLabel = 'Bank';
+                colorClass = "text-blue-600 border-blue-200 bg-blue-50";
+                break;
+            case 'credit_card':
+                typeIcon = <CreditCard className="h-2.5 w-2.5" />;
+                typeLabel = 'Credit';
+                colorClass = "text-violet-600 border-violet-200 bg-violet-50";
+                break;
+            case 'cash':
+                typeIcon = <Wallet className="h-2.5 w-2.5" />;
+                typeLabel = 'Cash';
+                colorClass = "text-emerald-600 border-emerald-200 bg-emerald-50";
+                break;
+            case 'ewallet':
+                typeIcon = <Smartphone className="h-2.5 w-2.5" />;
+                typeLabel = 'Wallet';
+                colorClass = "text-orange-600 border-orange-200 bg-orange-50";
+                break;
+            case 'savings':
+            case 'investment':
+                typeIcon = <PiggyBank className="h-2.5 w-2.5" />;
+                typeLabel = 'Saving';
+                colorClass = "text-sky-600 border-sky-200 bg-sky-50";
+                break;
+            default:
+                typeIcon = <Landmark className="h-2.5 w-2.5" />;
+                typeLabel = a.type || 'Acc';
+        }
+
+        return {
+            value: a.id,
+            label: a.name,
+            icon: a.image_url ? <img src={a.image_url} alt="" className="w-5 h-auto max-w-[20px] object-contain rounded-none" /> : undefined,
+            badge: (
+                <div className={`flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${colorClass}`}>
+                    {typeIcon}
+                    <span>{typeLabel}</span>
+                </div>
+            )
+        };
+    };
 
     const getAccountGroups = (side: 'source' | 'target'): ComboboxGroup[] => {
         let filtered = accounts;

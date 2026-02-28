@@ -66,13 +66,15 @@ export function RecentAccountsList({ isCollapsed, onClick }: { isCollapsed: bool
                                 )}
 
                                 <div className={cn(
-                                    "flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-none transition-colors",
-                                    isActive ? "bg-white" : "bg-slate-50"
+                                    "flex h-5 w-7 shrink-0 items-center justify-center overflow-hidden transition-colors",
+                                    isActive ? "bg-transparent" : "bg-transparent"
                                 )}>
                                     {account.image_url ? (
                                         <img src={account.image_url} alt="" className="h-full w-full object-contain" />
                                     ) : (
-                                        <Landmark className="h-2.5 w-2.5 text-slate-400" />
+                                        <div className="h-5 w-5 flex items-center justify-center bg-slate-50 rounded-sm">
+                                            <Landmark className="h-2.5 w-2.5 text-slate-400" />
+                                        </div>
                                     )}
                                 </div>
                                 {!isCollapsed && (

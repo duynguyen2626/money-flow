@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Loader2, Zap } from 'lucide-react'
 
-import { runSubscriptionBotAction } from '@/actions/subscription-actions'
+import { runAllServiceDistributionsAction } from '@/actions/service-actions'
 import { checkAndAutoCloneBatchesAction } from '@/actions/batch.actions'
 
 type BotToast = {
@@ -18,16 +18,16 @@ export function AutomationChecker() {
   const checkAndProcessSubscriptions = useCallback(async (isManualForce: boolean = false) => {
     setLoading(true)
     try {
-      // 1. Check Subscriptions
-      const subResult = await runSubscriptionBotAction(isManualForce)
+      // 1. Check Services (formerly Subscriptions)
+      const subResult = await runAllServiceDistributionsAction()
 
       // 2. Check Batches
       const batchResult = await checkAndAutoCloneBatchesAction()
 
       let message = ''
 
-      if (subResult && subResult.processedCount > 0) {
-        message += `Created Subs: ${(subResult.names ?? []).join(', ')}. `
+      if (subResult && subResult.success > 0) {
+        message += `Distributed ${subResult.success} services. `
       }
 
       if (batchResult && batchResult.length > 0) {
@@ -36,10 +36,8 @@ export function AutomationChecker() {
 
       if (message) {
         setToast({ title: `⚡ Automation: ${message}` })
-      } else if (subResult && subResult.skippedCount > 0) {
-        setToast({
-          title: `✅ All automations are up to date.`,
-        })
+      } else if (subResult && subResult.skipped > 0) {
+        // No toast for pure skips unless manual? Usually skip is silent.
       }
     } catch (error) {
       console.error('Automation checker failed:', error)

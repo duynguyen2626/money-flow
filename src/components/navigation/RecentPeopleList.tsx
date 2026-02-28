@@ -67,13 +67,15 @@ export function RecentPeopleList({ isCollapsed, onClick }: { isCollapsed: boolea
                                 )}
 
                                 <div className={cn(
-                                    "flex h-5 w-5 shrink-0 items-center justify-center overflow-hidden rounded-none transition-colors",
-                                    isActive ? "bg-white" : "bg-slate-50"
+                                    "flex h-5 w-7 shrink-0 items-center justify-center overflow-hidden transition-colors",
+                                    isActive ? "bg-transparent" : "bg-transparent"
                                 )}>
                                     {person.image_url ? (
                                         <img src={person.image_url} alt="" className="h-full w-full object-contain" />
                                     ) : (
-                                        <User className="h-2.5 w-2.5 text-slate-400" />
+                                        <div className="h-5 w-5 flex items-center justify-center bg-slate-50 rounded-sm">
+                                            <User className="h-2.5 w-2.5 text-slate-400" />
+                                        </div>
                                     )}
                                 </div>
                                 {!isCollapsed && (

@@ -329,8 +329,8 @@ export function TransactionTable({
   const openRefundDialog = (txn: TransactionWithDetails) => {
     const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
     const sourceAccountLine = txn.transaction_lines?.find(
-      line => line?.type === "credit" && line.account_id
-    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
+      (line: any) => line?.type === "credit" && line.account_id
+    ) ?? txn.transaction_lines?.find((line: any) => line?.type === "debit" && line.account_id)
     const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
 
     setRefundAmount(baseAmount)
@@ -344,7 +344,7 @@ export function TransactionTable({
 
   const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
     const pendingLine = txn.transaction_lines?.find(
-      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+      (line: any) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
     )
     const amount = Math.abs(pendingLine?.amount ?? 0)
     const defaultAccountId = refundAccountOptions[0]?.id ?? null
@@ -1193,7 +1193,7 @@ export function TransactionTable({
                     {numberFormatter.format(
                       Math.abs(
                         refundDialogTxn.transaction_lines
-                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
+                          ?.find((line: TransactionWithLineRelations) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
                           ?.amount ?? 0
                       )
                     )}
