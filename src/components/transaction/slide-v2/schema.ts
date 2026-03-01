@@ -9,7 +9,7 @@ export const singleTransactionSchema = z.object({
     amount: z.coerce.number().min(0, "Amount must be positive"),
     service_fee: z.coerce.number().min(0).optional().nullable(),
     note: z.string().optional().nullable(),
-    type: z.enum(["expense", "income", "debt", "transfer", "repayment", "credit_pay"]),
+    type: z.enum(["expense", "income", "debt", "transfer", "repayment", "credit_pay", "invest"]),
 
     // Relations
     source_account_id: z.string().optional().nullable(),
