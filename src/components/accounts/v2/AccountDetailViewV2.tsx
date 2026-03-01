@@ -232,7 +232,6 @@ export function AccountDetailViewV2({
             netProfit,
             profit,
             cashbackTotal,
-            cardYearlyCashbackTotal,
             cardYearlyCashbackGivenTotal,
             yearCardCashbackTotal,
             yearCardCashbackGivenTotal,

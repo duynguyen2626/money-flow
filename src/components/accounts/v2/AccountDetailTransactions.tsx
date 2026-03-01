@@ -36,6 +36,12 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
 type StatusFilter = 'active' | 'void' | 'pending'
@@ -181,7 +187,9 @@ export function AccountDetailTransactions({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year'>(account.type === 'credit_card' ? 'range' : 'month')
+    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year' | 'cycle'>(
+        account.type === 'credit_card' ? 'cycle' : 'month'
+    )
     const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>()
 
     // Use external state if provided, otherwise use internal
@@ -189,11 +197,15 @@ export function AccountDetailTransactions({
     const setSelectedCycle = onCycleChange || (() => { })
 
     const [cycles, setCycles] = useState<Array<{ label: string; value: string }>>([])
+    const [isLoadingCycles, setIsLoadingCycles] = useState(false)
 
     // Handle cycle changes with URL sync (Performance Optimized)
     const handleCycleChange = (cycle: string | undefined) => {
         startTransition(() => {
             setSelectedCycle(cycle)
+            if (cycle && cycle !== 'all') {
+                setDateMode('cycle')
+            }
 
             const params = new URLSearchParams(window.location.search)
             if (cycle) {
@@ -247,6 +259,7 @@ export function AccountDetailTransactions({
             return
         }
 
+        setIsLoadingCycles(true)
         fetchAccountCycleOptionsAction(account.id).then(options => {
             const cycleOptions = options.map(opt => ({
                 label: opt.label,
@@ -262,11 +275,13 @@ export function AccountDetailTransactions({
             }
 
             // Check if URL has a tag parameter first
-            const urlTag = new URLSearchParams(window.location.search).get('tag')
+            const params = new URLSearchParams(window.location.search)
+            const urlTag = params.get('tag')
             if (urlTag) {
                 // URL tag takes priority - set it and mark as auto-selected to prevent override
                 setSelectedCycle(urlTag)
                 setIsFilterActive(true)
+                setDateMode('cycle')
                 hasAutoSelectedCycle.current = true
                 return
             }
@@ -278,6 +293,7 @@ export function AccountDetailTransactions({
                     const matchingCycle = cycleOptions.find(c => c.value === currentTag)
                     if (matchingCycle) {
                         setSelectedCycle(currentTag)
+                        setDateMode('cycle')
                         hasAutoSelectedCycle.current = true
                     }
                 }
@@ -285,6 +301,8 @@ export function AccountDetailTransactions({
         }).catch(err => {
             console.error('Failed to fetch cycle options:', err)
             setCycles([])
+        }).finally(() => {
+            setIsLoadingCycles(false)
         })
     }, [account.id, account.type, account.cashback_config])
 
@@ -391,7 +409,7 @@ export function AccountDetailTransactions({
             }
 
             // Cycle filter (credit cards)
-            if (selectedCycle && selectedCycle !== 'all') {
+            if (dateMode === 'cycle' && selectedCycle && selectedCycle !== 'all') {
                 result = result.filter(t => {
                     const txCycle = t.persisted_cycle_tag || t.derived_cycle_tag || ''
                     return txCycle === selectedCycle
@@ -429,7 +447,7 @@ export function AccountDetailTransactions({
         }
 
         return result
-    }, [transactions, statusFilter, isFilterActive, filterType, searchTerm, selectedTargetId, selectedCycle, dateMode, date, dateRange])
+    }, [transactions, statusFilter, isFilterActive, filterType, searchTerm, selectedTargetId, selectedCycle, dateMode, date, dateRange, account.type])
 
     // Handle URL parameters - only accept 'tag' for credit cards
     const searchParams = useSearchParams()
@@ -440,6 +458,7 @@ export function AccountDetailTransactions({
         // Ignore 'dateFrom/dateTo' as they should be derived from cycle
         if (account.type === 'credit_card' && tag) {
             setSelectedCycle(tag)
+            setDateMode('cycle')
             // If tag is 'all', we still want to activate filter mode
             setIsFilterActive(true)
         }
@@ -554,8 +573,8 @@ export function AccountDetailTransactions({
                         }}
                         disabled={!isFilterActive && !hasAnyFilterSelected}
                         className={isFilterActive
-                            ? "h-9 gap-1.5 bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700"
-                            : "h-9 gap-1.5"
+                            ? "h-9 gap-1.5 bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700 font-bold"
+                            : "h-9 gap-1.5 font-bold"
                         }
                     >
                         {isFilterActive ? (
@@ -607,51 +626,55 @@ export function AccountDetailTransactions({
                             emptyText="No accounts found"
                         />
 
-                        {/* Cycle Filter (Credit Cards only) */}
-                        {cycles.length > 0 && (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                <CycleFilterDropdown
-                                    cycles={cycles}
-                                    value={selectedCycle}
-                                    onChange={handleCycleChange}
-                                    onReset={() => {
-                                        if (currentCycleRef.current) {
-                                            handleCycleChange(currentCycleRef.current)
-                                            toast.info("Reset to current cycle")
-                                        }
-                                    }}
-                                />
-                            </div>
-                        )}
-
-                        {/* Date Picker - disabled when cycle filter is active */}
-                        <div
-                            onClick={() => {
-                                if (selectedCycle) {
-                                    toast.error('Please clear Cycle filter first to use Date Select')
-                                }
-                            }}
-                            className={selectedCycle ? 'cursor-not-allowed opacity-50' : ''}
-                        >
+                        {/* Unified Date & Cycle Picker */}
+                        <div className="flex items-center gap-2">
                             <MonthYearPickerV2
                                 date={date}
                                 dateRange={dateRange}
                                 mode={dateMode}
                                 onDateChange={setDate}
                                 onRangeChange={setDateRange}
-                                onModeChange={(mode) => {
-                                    if (mode === 'month' || mode === 'range' || mode === 'date') {
-                                        setDateMode(mode);
-                                    }
-                                }}
+                                onModeChange={(mode) => setDateMode(mode)}
+                                onCycleChange={handleCycleChange}
+                                selectedCycle={selectedCycle}
                                 availableMonths={availableMonths}
-                                accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : []}
-                                disabled={!!selectedCycle}
+                                accountCycles={cycles}
+                                isLoadingCycles={isLoadingCycles}
                             />
+
+                            {/* Reset Button (Next to Picker) */}
+                            {isFilterActive && (
+                                <TooltipProvider>
+                                    <Tooltip delayDuration={200}>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-9 w-9 p-0 bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100 transition-colors"
+                                                onClick={() => {
+                                                    if (account.type === 'credit_card' && currentCycleRef.current) {
+                                                        handleCycleChange(currentCycleRef.current)
+                                                        toast.success("Reset to current cycle")
+                                                    } else {
+                                                        setDateMode('month')
+                                                        setDate(new Date())
+                                                        toast.success("Reset to current month")
+                                                    }
+                                                }}
+                                            >
+                                                <RotateCcw className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="text-xs font-bold">Reset to Current {account.type === 'credit_card' ? 'Cycle' : 'Month'}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
                         </div>
 
                         {/* Search with Paste Icon & Search Button */}
-                        <div className="relative flex items-center gap-1.5 flex-1 max-w-sm">
+                        <div className="relative flex items-center gap-1.5 flex-1 max-w-sm ml-auto">
                             <div className="relative flex-1">
                                 <Clipboard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer hover:text-slate-600 transition-colors"
                                     onClick={async () => {

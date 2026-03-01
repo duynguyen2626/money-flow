@@ -584,18 +584,41 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   // MF6.1 FIX: Helper to aggregate cycle stats in real-time for accuracy
   // 1. Calculate Spent Amount & Eligible Transactions
-  const { data: rawTxns } = await supabase
+  let txnsQuery = supabase
     .from('transactions')
     .select(`
       id, amount, type, occurred_at, note,
       cashback_share_percent, cashback_share_fixed,
+      est_cashback, cashback_shared_amount,
       category:categories(id, name, icon, kind),
       shop:shops(name, image_url)
     `)
     .eq('account_id', accountId)
-    .eq('persisted_cycle_tag', cycleTag)
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
+
+  // MF17: Robust cycle matching - try persisted tags first (both new and legacy columns)
+  const { data: tagTxns } = await txnsQuery.or(`persisted_cycle_tag.eq.${cycleTag},tag.eq.${cycleTag}`);
+
+  let rawTxns = tagTxns || [];
+
+  if (rawTxns.length === 0 && cycleRange) {
+    const { data: dateTxns } = await supabase
+      .from('transactions')
+      .select(`
+            id, amount, type, occurred_at, note,
+            cashback_share_percent, cashback_share_fixed,
+            est_cashback, cashback_shared_amount,
+            category:categories(id, name, icon, kind),
+            shop:shops(name, image_url)
+        `)
+      .eq('account_id', accountId)
+      .neq('status', 'void')
+      .in('type', ['expense', 'debt'])
+      .gte('occurred_at', cycleRange.start.toISOString())
+      .lte('occurred_at', cycleRange.end.toISOString());
+    rawTxns = dateTxns || [];
+  }
 
   // MF16: Aggregate only non-initial/rollover/internal transactions
   const txns = (rawTxns as any[] ?? []).filter(t => {
@@ -615,43 +638,70 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
   const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
 
-  // 2. Real-time Cashback Estimation (Bank Back, Share, Profit)
-  let realAwarded = 0;
-  let virtualProfit = 0;
-  let overflowLoss = 0;
+  // 2. Aggregate from Persisted Entries (Deterministic Source of Truth)
+  // MF16 FIX: Instead of real-time estimation, we fetch the actual calculated entries
+  // joined with the transactions in this cycle.
+  const txnIds = txns.map(t => t.id);
   let earnedSoFarFromTxns = 0;
   let sharedSoFarFromTxns = 0;
 
-  if (txns && txns.length > 0) {
-    for (const t of txns as any[]) {
-      const category = t.category;
-      const txnAmount = Math.abs(t.amount);
+  if (txnIds.length > 0) {
+    const { data: entries } = await supabase
+      .from('cashback_entries')
+      .select('amount, mode, transaction_id')
+      .in('transaction_id', txnIds)
+      .eq('account_id', accountId);
 
-      const resolvedPolicy = resolveCashbackPolicy({
-        account,
-        categoryId: category?.id,
-        amount: txnAmount,
-        cycleTotals: { spent: currentSpend }, // Note: using total current spend for policy tiered rates
-        categoryName: category?.name
+    if (entries && entries.length > 0) {
+      entries.forEach(entry => {
+        const txn = txns.find(t => t.id === entry.transaction_id);
+        const txnAmount = Math.abs(txn?.amount || 0);
+
+        if (entry.mode === 'virtual' || entry.mode === 'real') {
+          earnedSoFarFromTxns += (entry.amount || 0);
+
+          const sharePercent = txn?.cashback_share_percent ?? 0;
+          const shareFixed = txn?.cashback_share_fixed ?? 0;
+          const shared = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
+
+          sharedSoFarFromTxns += shared;
+        }
       });
+    } else {
+      // FALLBACK: User Stored or Real-time Estimation
+      for (const t of txns as any[]) {
+        const category = t.category;
+        const txnAmount = Math.abs(t.amount);
 
-      const policyMetadata = normalizePolicyMetadata(resolvedPolicy.metadata);
-      const policyRate = policyMetadata?.rate ?? 0;
-      const sharePercent = t.cashback_share_percent ?? policyRate;
-      const shareFixed = t.cashback_share_fixed ?? 0;
+        // PRIORITY: If transaction has explicit values from DB trigger, use them!
+        if (typeof t.est_cashback === 'number' && t.est_cashback > 0) {
+          earnedSoFarFromTxns += t.est_cashback;
+          sharedSoFarFromTxns += (t.cashback_shared_amount || 0);
+          continue;
+        }
 
-      let bankBack = txnAmount * policyRate;
-      const ruleMaxReward = policyMetadata?.ruleMaxReward ?? resolvedPolicy.maxReward ?? null;
+        const resolvedPolicy = resolveCashbackPolicy({
+          account,
+          categoryId: category?.id,
+          amount: txnAmount,
+          cycleTotals: { spent: currentSpend },
+          categoryName: category?.name
+        });
 
-      if (ruleMaxReward !== null && ruleMaxReward > 0) {
-        bankBack = Math.min(bankBack, ruleMaxReward);
+        const policyRate = resolvedPolicy.rate ?? 0;
+        const sharePercent = t.cashback_share_percent ?? policyRate;
+        const shareFixed = t.cashback_share_fixed ?? 0;
+
+        let bankBack = txnAmount * policyRate;
+        if (resolvedPolicy.maxReward && resolvedPolicy.maxReward > 0) {
+          bankBack = Math.min(bankBack, resolvedPolicy.maxReward);
+        }
+
+        const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
+
+        earnedSoFarFromTxns += bankBack;
+        sharedSoFarFromTxns += peopleBack;
       }
-
-      const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
-      const profit = bankBack - peopleBack;
-
-      earnedSoFarFromTxns += bankBack;
-      sharedSoFarFromTxns += peopleBack;
     }
   }
 
@@ -754,6 +804,11 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
   const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
 
+  // Calculate Est Yearly Total (earnedSoFar scaled to year, simplified for now)
+  // or use a more sophisticated projection if needed.
+  // For now, let's at least sum what we have.
+  const estYearlyTotal = earnedSoFar * 12; // Simplified projection
+
   return {
     currentSpend,
     minSpend: minSpendTarget,
@@ -770,6 +825,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     policyMetadata: normalizePolicyMetadata(policy.metadata) ?? undefined,
     is_min_spend_met: isMinSpendMet,
     activeRules,
+    estYearlyTotal,
     cycle: cycleRange ? {
       tag: cycleTag,
       label: config.cycleType === 'statement_cycle'
