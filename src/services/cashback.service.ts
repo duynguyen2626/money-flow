@@ -535,7 +535,7 @@ export async function removeTransactionCashback(transactionId: string) {
  * Returns stats for a specific account/date context.
  */
 export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string, cycleTag?: string): Promise<AccountSpendingStats | null> {
-  const supabase = createClient();
+  const supabase = getCashbackClient();
   const { data: account } = await (supabase
     .from('accounts')
     .select('cashback_config, type, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json')
@@ -716,9 +716,10 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   console.log(`[getAccountSpendingStats] Min spend target: ${minSpendTarget}`);
   console.log(`[getAccountSpendingStats] Max cashback budget: ${cycleMaxBudget}`);
 
-  // 2. Aggregate from Persisted Entries (Deterministic Source of Truth)
-  // MF16 FIX: Instead of real-time estimation, we fetch the actual calculated entries
-  // joined with the transactions in this cycle.
+  // 2. Aggregate Cashback Values (transaction-first with persisted entry fallback)
+  // Prefer transaction-level computed fields when present so selected-cycle metrics
+  // stay aligned with table values; fallback to persisted entries and then policy-based
+  // estimation if needed.
   const txnIds = txns.map(t => t.id);
   let earnedSoFarFromTxns = 0;
   let sharedSoFarFromTxns = 0;
@@ -730,56 +731,49 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .in('transaction_id', txnIds)
       .eq('account_id', accountId);
 
-    if (entries && entries.length > 0) {
-      entries.forEach(entry => {
-        const txn = txns.find(t => t.id === entry.transaction_id);
-        const txnAmount = Math.abs(txn?.amount || 0);
-
-        if (entry.mode === 'virtual' || entry.mode === 'real') {
-          earnedSoFarFromTxns += (entry.amount || 0);
-
-          const sharePercent = txn?.cashback_share_percent ?? 0;
-          const shareFixed = txn?.cashback_share_fixed ?? 0;
-          const shared = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
-
-          sharedSoFarFromTxns += shared;
-        }
-      });
-    } else {
-      // FALLBACK: User Stored or Real-time Estimation
-      for (const t of txns as any[]) {
-        const category = t.category;
-        const txnAmount = Math.abs(t.amount);
-
-        // PRIORITY: If transaction has explicit values from DB trigger, use them!
-        if (typeof t.est_cashback === 'number' && t.est_cashback > 0) {
-          earnedSoFarFromTxns += t.est_cashback;
-          sharedSoFarFromTxns += (t.cashback_shared_amount || 0);
-          continue;
-        }
-
-        const resolvedPolicy = resolveCashbackPolicy({
-          account,
-          categoryId: category?.id,
-          amount: txnAmount,
-          cycleTotals: { spent: currentSpend },
-          categoryName: category?.name
-        });
-
-        const policyRate = resolvedPolicy.rate ?? 0;
-        const sharePercent = t.cashback_share_percent ?? policyRate;
-        const shareFixed = t.cashback_share_fixed ?? 0;
-
-        let bankBack = txnAmount * policyRate;
-        if (resolvedPolicy.maxReward && resolvedPolicy.maxReward > 0) {
-          bankBack = Math.min(bankBack, resolvedPolicy.maxReward);
-        }
-
-        const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
-
-        earnedSoFarFromTxns += bankBack;
-        sharedSoFarFromTxns += peopleBack;
+    const entryMap = new Map<string, number>();
+    (entries || []).forEach(entry => {
+      if (entry.transaction_id && (entry.mode === 'virtual' || entry.mode === 'real')) {
+        entryMap.set(entry.transaction_id, (entryMap.get(entry.transaction_id) || 0) + (entry.amount || 0));
       }
+    });
+
+    for (const t of txns as any[]) {
+      const category = t.category;
+      const txnAmount = Math.abs(t.amount || 0);
+
+      let txnEarned = 0;
+      if (typeof t.est_cashback === 'number' && t.est_cashback > 0) {
+        txnEarned = t.est_cashback;
+      } else {
+        const entryEarned = entryMap.get(t.id) || 0;
+        if (entryEarned > 0) {
+          txnEarned = entryEarned;
+        } else {
+          const resolvedPolicy = resolveCashbackPolicy({
+            account,
+            categoryId: category?.id,
+            amount: txnAmount,
+            cycleTotals: { spent: currentSpend },
+            categoryName: category?.name
+          });
+
+          const policyRate = resolvedPolicy.rate ?? 0;
+          txnEarned = txnAmount * policyRate;
+          if (resolvedPolicy.maxReward && resolvedPolicy.maxReward > 0) {
+            txnEarned = Math.min(txnEarned, resolvedPolicy.maxReward);
+          }
+        }
+      }
+
+      const sharePercent = t.cashback_share_percent ?? 0;
+      const shareFixed = t.cashback_share_fixed ?? 0;
+      const sharedFromTxn = typeof t.cashback_shared_amount === 'number'
+        ? t.cashback_shared_amount
+        : (shareFixed > 0 ? shareFixed : (txnAmount * sharePercent));
+
+      earnedSoFarFromTxns += txnEarned;
+      sharedSoFarFromTxns += sharedFromTxn;
     }
   }
 
@@ -886,6 +880,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   console.log(`[getAccountSpendingStats] Earned so far: ${earnedSoFar.toLocaleString()}`);
   console.log(`[getAccountSpendingStats] Shared amount: ${sharedAmount.toLocaleString()}`);
   console.log(`[getAccountSpendingStats] Net profit: ${netProfit.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] estYearlyTotal: ${(earnedSoFar * 12).toLocaleString()}`);
   console.log(`[getAccountSpendingStats] Is min spend met: ${isMinSpendMet}`);
   console.log(`[getAccountSpendingStats] Remaining budget: ${remainingBudget}`);
   console.log(`[getAccountSpendingStats] ========== END ==========`);

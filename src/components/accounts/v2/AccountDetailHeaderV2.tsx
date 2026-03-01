@@ -1123,9 +1123,9 @@ export function AccountDetailHeaderV2({
                                         const earnedCurrent = stats?.earnedSoFar || 0;
                                         const cycleShared = stats?.sharedAmount || 0;
                                         const cycleProfit = stats?.netProfit || 0;
-                                        const threshold = stats?.effectiveMinSpend || 0;
+                                        const threshold = stats?.minSpend || 0;
                                         const spent = stats?.currentSpend || 0;
-                                        const isQualified = stats?.isQualified || false;
+                                        const isQualified = stats?.is_min_spend_met ?? false;
                                         const progressPercent = threshold > 0 ? Math.min((spent / threshold) * 100, 100) : 100;
 
                                         const progressBadge = (
@@ -1265,7 +1265,7 @@ export function AccountDetailHeaderV2({
                                                                                 </div>
                                                                                 <div className="grid grid-cols-2 text-[11px] py-1.5 hover:bg-slate-50 px-1 rounded transition-colors">
                                                                                     <span className="text-slate-500 font-medium">Spent Threshold</span>
-                                                                                    <span className="text-right font-bold text-amber-600">{formatMoneyVND(Math.ceil(stats?.effectiveMinSpend || 0))}</span>
+                                                                                    <span className="text-right font-bold text-amber-600">{formatMoneyVND(Math.ceil(stats?.minSpend || 0))}</span>
                                                                                 </div>
                                                                                 <div className="grid grid-cols-2 text-[11px] py-1.5 pt-2 mt-1 border-t border-slate-100">
                                                                                     <span className="text-slate-900 font-black uppercase text-[9px]">Net Cycle Profit</span>
@@ -1314,8 +1314,9 @@ export function AccountDetailHeaderV2({
                                 {/* Row 3: Footer Badges */}
                                 <div className="flex items-center gap-2 px-0.5 mt-auto h-[32px] mb-[2px]">
                                     {(() => {
-                                        const actual = summary?.yearActualCashbackTotal || 0;
-                                        const estBack = dynamicCashbackStats?.estYearlyTotal || summary?.cardYearlyCashbackTotal || 0;
+                                        const estBack = dynamicCashbackStats?.earnedSoFar || 0;
+                                        const shared = dynamicCashbackStats?.sharedAmount || 0;
+                                        const cycleProfit = dynamicCashbackStats?.netProfit || 0;
                                         const limit = dynamicCashbackStats?.maxCashback || 0;
                                         const potential = dynamicCashbackStats?.potentialProfit || 0;
                                         const threshold = dynamicCashbackStats?.minSpend || 0;
@@ -1323,8 +1324,9 @@ export function AccountDetailHeaderV2({
                                         const missing = Math.max(0, threshold - spent);
 
                                         const footerBadges = [
-                                            { label: "Actual", value: formatFullNumber(actual), icon: <CheckCircle2 className="h-3 w-3" />, theme: "text-indigo-700 bg-indigo-50 border-indigo-200", formula: "Tổng Cashback thực tế đã nhận (Income) trong năm nay." },
-                                            { label: "Est Back", value: formatFullNumber(estBack), icon: <TrendingUp className="h-3 w-3" />, theme: "text-emerald-700 bg-emerald-50 border-emerald-200", formula: "Dự báo tổng Cashback nhận được trong cả năm dựa trên hiệu suất hiện tại." },
+                                            { label: "Est Cashback", value: formatFullNumber(estBack), icon: <TrendingUp className="h-3 w-3" />, theme: "text-emerald-700 bg-emerald-50 border-emerald-200", formula: "Tổng cashback ước tính của chu kỳ đang chọn." },
+                                            { label: "Shared", value: formatFullNumber(shared), icon: <Users2 className="h-3 w-3" />, theme: "text-amber-700 bg-amber-50 border-amber-200", formula: "Tổng cashback chia sẻ trong chu kỳ đang chọn." },
+                                            { label: "Profit", value: formatFullNumber(cycleProfit), icon: <CheckCircle2 className="h-3 w-3" />, theme: cycleProfit >= 0 ? "text-indigo-700 bg-indigo-50 border-indigo-200" : "text-rose-700 bg-rose-50 border-rose-200", formula: "Lợi nhuận ròng chu kỳ = Est Cashback - Shared." },
                                             { label: "Limit / Target", value: `${limit > 0 ? formatShortNumber(limit) : "∞"} / ${formatShortNumber(threshold)}`, icon: <Target className="h-3 w-3" />, theme: "text-slate-600 bg-slate-50 border-slate-200", formula: `Hạn mức Cashback (${formatFullNumber(limit)}) và Ngưỡng chi tiêu tối thiểu (${formatFullNumber(threshold)}).` },
                                             ...(missing > 0 ? [{ label: "Missing", value: formatFullNumber(missing), icon: <FilterX className="h-3 w-3" />, theme: "text-rose-700 bg-rose-50 border-rose-200", formula: "Số tiền chi tiêu còn thiếu để đạt ngưỡng tối thiểu nhận Cashback tối ưu." }] : []),
                                             { label: "Potential", value: formatFullNumber(potential), icon: <Sparkles className="h-3 w-3" />, theme: "text-orange-700 bg-orange-50 border-orange-200", formula: "Lợi nhuận tiềm năng nếu tối ưu hóa quy tắc hoàn tiền." },
