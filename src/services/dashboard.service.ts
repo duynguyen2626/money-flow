@@ -326,7 +326,7 @@ export async function getDashboardStats(
           const personId = tx.person_id
           if (!personId) return
 
-          const tagValue = tx.tag
+          const tagValue = tx.debt_cycle_tag || tx.tag
           const occurredAt = tx.occurred_at
           const parsedDate = occurredAt ? new Date(occurredAt) : null
 

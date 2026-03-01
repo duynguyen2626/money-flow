@@ -641,8 +641,8 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
-  // MF17: Robust cycle matching - try persisted_cycle_tag first, then 'tag' column, then date range
-  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', resolvedCycleTag);
+  // MF17: Robust cycle matching - try statement_cycle_tag first, then fallback to persisted_cycle_tag
+  const { data: tagTxns } = await txnsQuery.eq('statement_cycle_tag', resolvedCycleTag);
 
   // Also try matching by 'tag' column (some transactions use this legacy approach)
   const { data: legacyTagTxns } = await (supabase
@@ -666,7 +666,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   let rawTxns = Array.from(mergedMap.values());
 
-  console.log(`[getAccountSpendingStats] Transactions found by persisted_cycle_tag: ${(tagTxns || []).length}`);
+  console.log(`[getAccountSpendingStats] Transactions found by statement_cycle_tag: ${(tagTxns || []).length}`);
   console.log(`[getAccountSpendingStats] Transactions found by tag column: ${(legacyTagTxns || []).length}`);
   console.log(`[getAccountSpendingStats] Merged transactions (after dedup): ${rawTxns.length}`);
 
@@ -1419,7 +1419,7 @@ export async function recomputeAccountCashback(accountId: string, monthsBack?: n
   for (const rawTxn of txns) {
     const txn = mapUnifiedTransaction(rawTxn, accountId) as any;
     // Force clear the tag to trigger recalculation in upsertTransactionCashback
-    const cleanTxn = { ...txn, persisted_cycle_tag: null };
+    const cleanTxn = { ...txn, statement_cycle_tag: null, persisted_cycle_tag: null };
     await upsertTransactionCashback(cleanTxn);
   }
 }

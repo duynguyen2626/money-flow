@@ -229,7 +229,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     percent_back: Math.round(percentRate * 100 * 100) / 100, // Round to 2 decimals for safety
     fixed_back: fixedBack,
     total_back: totalBack,
-    tag: txn.tag ?? undefined,
+    tag: txn.debt_cycle_tag ?? txn.tag ?? undefined,
     img: txn.img_url ?? undefined
   }
 }
@@ -296,7 +296,7 @@ export async function syncTransactionToSheet(
     const payload = {
       ...buildPayload(txn, action),
       person_id: personId,
-      cycle_tag: txn.tag ?? undefined,
+      cycle_tag: txn.debt_cycle_tag ?? txn.tag ?? undefined,
       bank_account: showBankAccount ? resolvedBankInfo : '', // Send empty to clear if disabled
       img: showQrImage && qrImageUrl ? qrImageUrl : '' // Send empty to clear if disabled
     }
@@ -438,7 +438,7 @@ export async function syncAllTransactions(personId: string) {
     const cycleMap = new Map<string, typeof rows>()
 
     for (const txn of rows) {
-      const cycleTag = txn.tag || getCycleTag(new Date(txn.occurred_at))
+      const cycleTag = txn.debt_cycle_tag || txn.tag || getCycleTag(new Date(txn.occurred_at))
       if (!cycleMap.has(cycleTag)) {
         cycleMap.set(cycleTag, [])
       }

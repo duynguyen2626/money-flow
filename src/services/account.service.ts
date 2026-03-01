@@ -125,7 +125,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       .eq('type', 'income')
       .eq('status', 'posted')
       .or('category_id.eq.e0000000-0000-0000-0000-000000000092,category_id.is.null') // Include Cashback category or null
-      .in('persisted_cycle_tag', cycleTags)
+      .in('statement_cycle_tag', cycleTags)
 
     if (incomeTxns && incomeTxns.length > 0) {
       real_awarded = incomeTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
@@ -140,7 +140,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       .eq('account_id', account.id)
       .neq('status', 'void')
       .in('type', ['expense', 'debt'])
-      .in('persisted_cycle_tag', cycleTags)
+      .in('statement_cycle_tag', cycleTags)
 
     if (!taggedError && taggedTxns && taggedTxns.length > 0) {
       const taggedSum = taggedTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)

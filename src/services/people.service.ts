@@ -281,7 +281,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       (txns as any[])?.forEach(txn => {
         const txnDate = txn.occurred_at ? new Date(txn.occurred_at) : null
         const currentMonthTag = toYYYYMMFromDate(new Date())
-        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const normalizedTag = normalizeMonthTag(txn.debt_cycle_tag || txn.tag) ?? (txn.debt_cycle_tag || txn.tag)
         const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
         // Determine which person this debt belongs to
@@ -320,7 +320,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
           // Track current cycle debt separately
           // STRICTER LOGIC: If tag exists, it MUST match. If no tag, check date.
-          const isStrictlyCurrentCycle = txn.tag
+          const isStrictlyCurrentCycle = (txn.debt_cycle_tag || txn.tag)
             ? normalizedTag === currentMonthTag
             : (txnDate && txnDate >= currentMonthStart)
 
@@ -446,7 +446,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const amount = Math.abs(txn.amount)
         // Side Effect: Update Current Cycle Debt Badge
         const currentMonthTag = toYYYYMMFromDate(new Date())
-        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const normalizedTag = normalizeMonthTag(txn.debt_cycle_tag || txn.tag) ?? (txn.debt_cycle_tag || txn.tag)
         const occurredAt = txn.occurred_at ? new Date(txn.occurred_at) : null
         const isCurrentCycle = (occurredAt && occurredAt >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
@@ -461,7 +461,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           initialAmount: calculateFinalPrice(txn),
           date: txn.occurred_at,
           metadata: txn.metadata,
-          tag: txn.tag
+          tag: txn.debt_cycle_tag || txn.tag
         })
       }
     })
@@ -505,7 +505,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         for (const debt of personDebts) {
           if (debt.remaining <= 0.01) continue;
 
-          const debtTag = normalizeMonthTag(debt.tag);
+          const debtTag = normalizeMonthTag(debt.tag || debt.debt_cycle_tag);
           if (debtTag === repayTag) {
             const pay = Math.min(repay.amount, debt.remaining);
             debt.remaining -= pay;
@@ -555,7 +555,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const tagMap = new Map<string, MonthlyDebtSummary>()
 
     personDebts.forEach(debt => {
-      const tagValue = normalizeMonthTag(debt.tag) ?? debt.tag ?? null
+      const tagValue = normalizeMonthTag(debt.debt_cycle_tag || debt.tag) ?? (debt.debt_cycle_tag || debt.tag) ?? null
       const occurredAt = debt.occurred_at ?? null
       const validDate = occurredAt ? new Date(occurredAt) : null
       const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
@@ -675,9 +675,10 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     // We match tag or date
     const fifoCurrentCycle = personFifoDebts
       .filter(d => {
-        const isTagMatch = d.tag === currentCycleLabel
+        const debtTag = d.debt_cycle_tag || d.tag
+        const isTagMatch = debtTag === currentCycleLabel
         const isDateMatch = d.occurred_at && new Date(d.occurred_at) >= currentMonthStart
-        return isTagMatch || (!d.tag && isDateMatch)
+        return isTagMatch || (!debtTag && isDateMatch)
       })
       .reduce((sum, d) => sum + d.amount, 0)
 
