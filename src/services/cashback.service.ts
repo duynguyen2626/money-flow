@@ -534,7 +534,7 @@ export async function removeTransactionCashback(transactionId: string) {
 /**
  * Returns stats for a specific account/date context.
  */
-export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string): Promise<AccountSpendingStats | null> {
+export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string, cycleTag?: string): Promise<AccountSpendingStats | null> {
   const supabase = createClient();
   const { data: account } = await (supabase
     .from('accounts')
@@ -544,19 +544,51 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   if (!account || account.type !== 'credit_card') return null;
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
-  const cycleRange = getCashbackCycleRange(config, date);
-  const tagDate = cycleRange?.end ?? date;
-  const cycleTag = formatIsoCycleTag(tagDate);
-  const legacyTag = formatLegacyCycleTag(tagDate);
+  
+  // If cycleTag is provided explicitly, use it directly; otherwise derive from date
+  let resolvedCycleTag: string;
+  let cycleRange: { start: Date; end: Date } | null;
+  
+  if (cycleTag) {
+    // Use the provided cycleTag directly
+    resolvedCycleTag = cycleTag;
+    // Try to derive cycleRange from the cycleTag for display purposes
+    // For statement cycles like "2026-01", we can reconstruct the range
+    try {
+      const [yearStr, monthStr] = cycleTag.split('-');
+      if (yearStr && monthStr) {
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        if (!isNaN(year) && !isNaN(month)) {
+          // Use the end day of the tag month as reference to get proper cycle range
+          const refDate = new Date(year, month - 1, 25); // Use day 25 to fall within statement cycle
+          cycleRange = getCashbackCycleRange(config, refDate);
+        } else {
+          cycleRange = getCashbackCycleRange(config, date);
+        }
+      } else {
+        cycleRange = getCashbackCycleRange(config, date);
+      }
+    } catch (e) {
+      cycleRange = getCashbackCycleRange(config, date);
+    }
+  } else {
+    // Derive from date (original behavior)
+    cycleRange = getCashbackCycleRange(config, date);
+    const tagDate = cycleRange?.end ?? date;
+    resolvedCycleTag = formatIsoCycleTag(tagDate);
+  }
+  
+  const legacyTag = formatLegacyCycleTag(cycleRange?.end ?? date);
 
   let cycle = (await supabase
     .from('cashback_cycles')
     .select('*')
     .eq('account_id', accountId)
-    .eq('cycle_tag', cycleTag)
+    .eq('cycle_tag', resolvedCycleTag)
     .maybeSingle()).data as any ?? null;
 
-  if (!cycle && legacyTag !== cycleTag) {
+  if (!cycle && legacyTag !== resolvedCycleTag) {
     cycle = (await supabase
       .from('cashback_cycles')
       .select('*')
@@ -565,7 +597,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .maybeSingle()).data as any ?? null;
   }
 
-  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
+  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${resolvedCycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
 
   let categoryName = undefined;
   if (categoryId) {
@@ -847,10 +879,10 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     activeRules,
     estYearlyTotal,
     cycle: cycleRange ? {
-      tag: cycleTag,
+      tag: resolvedCycleTag,
       label: config.cycleType === 'statement_cycle'
         ? `${format(cycleRange.start, 'dd.MM')} - ${format(cycleRange.end, 'dd.MM')}`
-        : cycleTag,
+        : resolvedCycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),
     } : null

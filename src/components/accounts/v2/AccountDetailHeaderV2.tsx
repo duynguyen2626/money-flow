@@ -165,20 +165,9 @@ export function AccountDetailHeaderV2({
         const fetchCashbackStats = async () => {
             setIsCashbackLoading(true)
             try {
-                const [yearStr, monthStr] = selectedCycle.split('-')
-                const year = parseInt(yearStr, 10)
-                const month = parseInt(monthStr, 10)
-
-                if (isNaN(year) || isNaN(month)) {
-                    throw new Error(`Invalid cycle selected: ${selectedCycle} `)
-                }
-
-                const cycleDate = new Date(year, month - 1, 10)
-                if (isNaN(cycleDate.getTime())) {
-                    throw new Error(`Invalid cycle date: ${selectedCycle}`)
-                }
-
-                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&date=${cycleDate.toISOString()}`)
+                // Pass the cycle tag directly to the API instead of reconstructing date
+                // This ensures the API resolves to the correct cycle for statement cycles
+                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}`)
                 if (response.ok) {
                     const data = await response.json()
                     setDynamicCashbackStats(data)
