@@ -165,15 +165,26 @@ export function AccountDetailHeaderV2({
         const fetchCashbackStats = async () => {
             setIsCashbackLoading(true)
             try {
+                console.log('[AccountDetailHeaderV2] Fetching cashback stats for cycle:', selectedCycle)
                 // Pass the cycle tag directly to the API instead of reconstructing date
                 // This ensures the API resolves to the correct cycle for statement cycles
                 const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}`)
                 if (response.ok) {
                     const data = await response.json()
+                    console.log('[AccountDetailHeaderV2] Received cashback stats:', {
+                        earnedSoFar: data.earnedSoFar,
+                        sharedAmount: data.sharedAmount,
+                        netProfit: data.netProfit,
+                        currentSpend: data.currentSpend,
+                        cycle: data.cycle,
+                        fullData: data
+                    })
                     setDynamicCashbackStats(data)
+                } else {
+                    console.error('[AccountDetailHeaderV2] API returned error:', response.status)
                 }
             } catch (error) {
-                console.error('Failed to fetch cashback stats:', error)
+                console.error('[AccountDetailHeaderV2] Failed to fetch cashback stats:', error)
                 setDynamicCashbackStats(cashbackStats)
             } finally {
                 setIsCashbackLoading(false)
@@ -629,11 +640,11 @@ export function AccountDetailHeaderV2({
                                 <HeaderSection
                                     label="Credit Health"
                                     borderColor="border-indigo-100"
-                                    className="flex-[5] min-w-[420px] bg-indigo-50/10 cursor-help !h-[120px]"
+                                    className="flex-[5] min-w-0 w-full bg-indigo-50/10 cursor-help !h-[120px]"
                                 >
                                     <div className="flex flex-col h-full justify-center">
                                         {/* Row 1: Metrics & Health Circle */}
-                                        <div className="flex items-center gap-10 w-full h-[60px] pt-1">
+                                        <div className="flex items-center gap-4 md:gap-10 w-full h-[60px] pt-1">
                                             {/* Left: Health Indicator */}
                                             {(() => {
                                                 const limit = account.credit_limit || 0
@@ -694,21 +705,21 @@ export function AccountDetailHeaderV2({
                                             <div className="h-10 w-px bg-slate-100 shrink-0" />
 
                                             {/* Right: Balance Metrics */}
-                                            <div className="flex items-center gap-12 flex-1 min-w-0">
-                                                <div className="flex flex-col">
+                                            <div className="flex items-center gap-4 md:gap-8 lg:gap-12 flex-1 min-w-0">
+                                                <div className="flex flex-col min-w-0">
                                                     <div className="flex items-center gap-1.5 mb-1 opacity-60">
                                                         <BarChart3 className="h-3 w-3 text-slate-400" />
                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Available</span>
                                                     </div>
                                                     <div className={cn(
-                                                        "text-[15px] font-black tracking-tight leading-none tabular-nums",
+                                                        "text-[13px] md:text-[15px] font-black tracking-tight leading-none tabular-nums truncate",
                                                         availableBalance >= 0 ? "text-emerald-600" : "text-rose-600"
                                                     )}>
                                                         {formatFullNumber(availableBalance)}
                                                     </div>
                                                 </div>
 
-                                                <div className="ml-auto">
+                                                <div className="ml-auto shrink-0">
                                                     {dueDateBadge}
                                                 </div>
                                             </div>
@@ -1086,7 +1097,7 @@ export function AccountDetailHeaderV2({
 
             {/* Section 3: Cashback Performance */}
             {
-                isCreditCard && dynamicCashbackStats && (
+                isCreditCard && (
                     <div className="flex flex-[5] min-w-[420px]">
                         <HeaderSection
                             label="Cashback Performance"
@@ -1094,6 +1105,17 @@ export function AccountDetailHeaderV2({
                             className="w-full bg-emerald-50/10 !h-[120px] mb-2"
                             hideHintInHeader
                         >
+                            {isCashbackLoading ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="relative flex items-center justify-center">
+                                            <div className="h-8 w-8 border-2 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+                                            <div className="absolute inset-0 m-auto h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest animate-pulse">Loading stats...</span>
+                                    </div>
+                                </div>
+                            ) : dynamicCashbackStats ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex items-center justify-start gap-10 w-full h-[60px] pt-1">
                                     {(() => {
@@ -1360,6 +1382,11 @@ export function AccountDetailHeaderV2({
                                 </div>
                                 <div className="mt-auto" />
                             </div>
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <span className="text-xs text-slate-400">No cashback data</span>
+                                </div>
+                            )}
                         </HeaderSection>
                     </div>
                 )
