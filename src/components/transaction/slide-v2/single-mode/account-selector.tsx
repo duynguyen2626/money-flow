@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useFormContext, useWatch, Controller } from "react-hook-form";
 import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users, Store, AlertCircle, Landmark, CreditCard, Wallet, Smartphone, PiggyBank } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useParams } from "next/navigation";
 
 import {
     FormControl,
@@ -31,6 +32,9 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const sourceId = useWatch({ control: form.control, name: "source_account_id" });
     const targetId = useWatch({ control: form.control, name: "target_account_id" });
 
+    const params = useParams();
+    const currentAccountId = params?.id as string | undefined;
+
     // MF5.5: Recent People Optimization
     const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
     const [lastClickedPersonId, setLastClickedPersonId] = useState<string | null>(() => {
@@ -47,7 +51,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const selectedPerson = useMemo(() => people.find(p => p.id === personId), [people, personId]);
 
     // Mode detection
-    const isSpecialMode = ['transfer', 'credit_pay'].includes(type);
+    const isSpecialMode = ['transfer', 'credit_pay', 'invest'].includes(type);
 
     // Smart Type Inferrer
     useEffect(() => {
@@ -135,12 +139,14 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
             else filtered = accounts.filter(a => a.type === 'credit_card');
         }
 
-        const creditAccounts = filtered.filter(a => a.type === 'credit_card');
-        const cashAccounts = filtered.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
+        const currentAccount = currentAccountId ? filtered.find(a => a.id === currentAccountId) : null;
+        const creditAccounts = filtered.filter(a => a.type === 'credit_card' && a.id !== currentAccountId);
+        const cashAccounts = filtered.filter(a => a.type !== 'credit_card' && a.type !== 'debt' && a.id !== currentAccountId);
 
         return [
+            ...(currentAccount ? [{ label: "Current Account", items: [mapAccountToItem(currentAccount)] }] : []),
             ...(creditAccounts.length > 0 ? [{ label: "Credit Cards", items: creditAccounts.map(mapAccountToItem) }] : []),
-            { label: "Cash / Bank", items: cashAccounts.map(mapAccountToItem) }
+            { label: "Cash & Banks", items: cashAccounts.map(mapAccountToItem) }
         ];
     };
 
@@ -199,7 +205,8 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                     name="person_id"
                     render={({ field }) => (
                         <FormItem className="w-full">
-                            <FormLabel className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 block">
+                            <FormLabel className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 capitalize tracking-wide mb-1.5">
+                                <Users className="w-3 h-3" />
                                 Involved Person
                             </FormLabel>
                             <FormControl>
@@ -315,41 +322,6 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                 </div>
             </div>
 
-            {/* ROW 3: CONTEXT HINT */}
-            <div className="animate-in fade-in slide-in-from-bottom-1 duration-400">
-                <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200/50 shadow-sm flex items-start gap-4 transition-all overflow-hidden group">
-                    <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-sm transition-all duration-500",
-                        isIncomeFlow ? "bg-emerald-500 text-white border-emerald-600 shadow-emerald-100" :
-                            isExpenseFlow ? "bg-rose-500 text-white border-rose-600 shadow-rose-100" :
-                                isTransferFlow ? (type === 'credit_pay' ? "bg-violet-600 text-white border-violet-700 shadow-violet-100" : "bg-blue-500 text-white border-blue-600 shadow-blue-100") :
-                                    "bg-white text-slate-400 border-slate-200"
-                    )}>
-                        {isIncomeFlow ? <ArrowUpRight className="w-5 h-5 animate-pulse" /> :
-                            isExpenseFlow ? <ArrowDownLeft className="w-5 h-5 animate-pulse" /> :
-                                isTransferFlow ? (type === 'credit_pay' ? <RefreshCcw className="w-5 h-5" /> : <ArrowRightLeft className="w-5 h-5" />) :
-                                    <User className="w-5 h-5" />}
-                    </div>
-                    <div className="space-y-0.5 flex-1">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Automated Flow Summary</span>
-                        <p className="text-[11px] text-slate-600 leading-tight font-bold">
-                            {type === 'credit_pay' ? (
-                                sourceId && targetId ? "Card Repayment Match: Moving funds to settle credit debt." : "Card Repayment Mode: Please choose source bank and target credit card."
-                            ) : isTransferFlow ? (
-                                sourceId && targetId ? "Internal Transfer: Moving funds between your own assets." : "Transfer Mode: Please select both source and destination accounts."
-                            ) : isIncomeFlow ? (
-                                personId ? `Repayment Flow: ${selectedPerson?.name} is paying you back into ${accounts.find(a => a.id === targetId)?.name}.` :
-                                    `Income Flow: Receiving funds into ${accounts.find(a => a.id === targetId)?.name}.`
-                            ) : isExpenseFlow ? (
-                                personId ? `Lending Flow: You are lending to ${selectedPerson?.name} from ${accounts.find(a => a.id === sourceId)?.name}.` :
-                                    `Expense Flow: Paying from ${accounts.find(a => a.id === sourceId)?.name}.`
-                            ) : (
-                                "Intelligent Transaction Flow: Start by picking an account or person."
-                            )}
-                        </p>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }

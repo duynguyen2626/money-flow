@@ -69,7 +69,7 @@ export function AccountHeaderV2({
     const filters = [
         { id: 'accounts_cards' as const, label: 'Standard' },
         { id: 'credit' as const, label: 'Credit' },
-        { id: 'savings' as const, label: 'Savings' },
+        { id: 'savings' as const, label: 'Assets' },
         { id: 'debt' as const, label: 'Debt' },
         { id: 'system' as const, label: `System` },
         { id: 'closed' as const, label: `Closed` },

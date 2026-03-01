@@ -4,7 +4,7 @@ import { useState, useEffect, KeyboardEvent } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, X, Plus, Hash, ArrowLeft } from "lucide-react"
+import { Loader2, X, Plus, Hash, ArrowLeft, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, TrendingUp, PiggyBank } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils"
 
 const formSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    type: z.enum(["expense", "income", "transfer"]),
+    type: z.enum(["expense", "income", "transfer", "investment"]),
     icon: z.string().optional(),
     image_url: z.string().optional(),
     kind: z.enum(["internal", "external"]),
@@ -287,19 +287,25 @@ export function CategorySlide({
                                         <FormItem>
                                             <FormLabel className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Type</FormLabel>
                                             <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
-                                                {["expense", "income", "transfer"].map((t) => (
+                                                {[
+                                                    { id: "expense", label: "Expense", icon: ArrowDownLeft, color: "bg-rose-500", activeText: "text-rose-600", activeBg: "bg-rose-50 border-rose-200" },
+                                                    { id: "income", label: "Income", icon: ArrowUpRight, color: "bg-emerald-500", activeText: "text-emerald-600", activeBg: "bg-emerald-50 border-emerald-200" },
+                                                    { id: "transfer", label: "Transfer", icon: ArrowRightLeft, color: "bg-blue-500", activeText: "text-blue-600", activeBg: "bg-blue-50 border-blue-200" },
+                                                    { id: "investment", label: "Invest", icon: TrendingUp, color: "bg-indigo-500", activeText: "text-indigo-600", activeBg: "bg-indigo-50 border-indigo-200" },
+                                                ].map((t) => (
                                                     <button
-                                                        key={t}
+                                                        key={t.id}
                                                         type="button"
-                                                        onClick={() => field.onChange(t)}
+                                                        onClick={() => field.onChange(t.id)}
                                                         className={cn(
-                                                            "flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all border",
-                                                            field.value === t
-                                                                ? "bg-white border-slate-200 text-slate-900 shadow-sm"
-                                                                : "bg-transparent border-transparent text-slate-400 hover:text-slate-600"
+                                                            "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border shrink-0",
+                                                            field.value === t.id
+                                                                ? `${t.activeBg} ${t.activeText} shadow-sm z-10`
+                                                                : "bg-transparent border-transparent text-slate-400 hover:text-slate-600 hover:bg-white/50"
                                                         )}
                                                     >
-                                                        {t}
+                                                        <t.icon className={cn("w-3.5 h-3.5", field.value === t.id ? t.activeText : "text-slate-300")} />
+                                                        {t.label}
                                                     </button>
                                                 ))}
                                             </div>

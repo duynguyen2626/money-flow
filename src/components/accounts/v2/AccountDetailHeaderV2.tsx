@@ -27,7 +27,8 @@ import {
     Target,
     ArrowUpRight,
     ArrowDownRight,
-    RefreshCw
+    RefreshCw,
+    RotateCcw
 } from 'lucide-react'
 import { cn, formatMoneyVND } from '@/lib/utils'
 import { Account, Category, Transaction } from '@/types/moneyflow.types'
@@ -54,9 +55,11 @@ interface AccountDetailHeaderV2Props {
 
     selectedYear: string | null
     availableYears: string[]
-    onYearChange: (year: string | null) => void
-    selectedCycle?: string // For dynamic cashback badge display
-    summary?: {
+    onYearChange: (year: string) => void
+    selectedCycle?: string
+    onCycleChange?: (cycle: string | undefined) => void
+    currentCycleTag?: string
+    summary: {
         yearDebtTotal: number
         debtTotal: number
         expensesTotal: number
@@ -97,6 +100,8 @@ export function AccountDetailHeaderV2({
     availableYears,
     onYearChange,
     selectedCycle,
+    onCycleChange,
+    currentCycleTag,
     summary,
     isLoadingPending
 }: AccountDetailHeaderV2Props) {
@@ -721,19 +726,21 @@ export function AccountDetailHeaderV2({
                             </TooltipTrigger>
                             <TooltipContent side="bottom" className="w-[340px] p-0 overflow-hidden border-none shadow-2xl">
                                 <div className="bg-white">
-                                    <div className="bg-indigo-950 px-4 py-1.5 flex justify-between items-center">
-                                        <div className="flex flex-col">
-                                            <h3 className="font-black text-[9px] uppercase tracking-[0.2em] text-indigo-400/80 leading-tight">Analytics</h3>
-                                            <div className="flex items-baseline gap-2">
-                                                <h3 className="font-black text-[11px] uppercase tracking-[0.15em] text-indigo-200">Credit Health Report</h3>
+                                    <div className="bg-indigo-950 px-4 py-2 flex items-center justify-between gap-2">
+                                        {/* Left: labels stacked */}
+                                        <div className="flex flex-col min-w-0">
+                                            <h3 className="font-black text-[9px] uppercase tracking-[0.2em] text-indigo-400/80 leading-tight whitespace-nowrap">Analytics</h3>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <h3 className="font-black text-[11px] uppercase tracking-[0.15em] text-indigo-200 whitespace-nowrap">Credit Health Report</h3>
                                                 {!!account.annual_fee && (
-                                                    <span className="text-[9px] font-black text-indigo-400 opacity-60 px-1.5 py-0.5 rounded bg-indigo-900/40 border border-indigo-700/50">
+                                                    <span className="text-[9px] font-black text-indigo-400 opacity-70 px-1.5 py-0.5 rounded bg-indigo-900/40 border border-indigo-700/50 whitespace-nowrap">
                                                         Fee: {formatMoneyVND(account.annual_fee)}
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        {/* Right: year select + icon */}
+                                        <div className="flex items-center gap-2 shrink-0">
                                             {availableYears.length > 0 ? (
                                                 <div className="relative">
                                                     <select
@@ -1022,20 +1029,20 @@ export function AccountDetailHeaderV2({
                                     hideHintInHeader
                                 >
                                     <div className="flex flex-col h-full">
-                                        {/* Row 1: Metrics */}
-                                        <div className="grid grid-cols-4 gap-4 w-full h-[61px] items-start pt-1">
+                                        <div className="flex items-center justify-between w-full h-[61px] pt-1 pb-2">
                                             {(() => {
-                                                const yearlyRealValue = summary?.cashbackTotal || 0;
-                                                const earned = dynamicCashbackStats?.earnedSoFar || 0;
-                                                const shared = dynamicCashbackStats?.sharedAmount || 0;
-                                                const profit = dynamicCashbackStats?.netProfit || 0;
+                                                const yearlyRealValue = summary?.realCashbackIncome || 0;
+                                                const earned = summary?.cardYearlyCashbackTotal || 0;
+                                                const shared = summary?.cardYearlyCashbackGivenTotal || 0;
+                                                const profit = summary?.profit || 0;
 
                                                 return (
                                                     <>
+                                                        {/* Profit */}
                                                         <div className="flex flex-col group">
                                                             <div className="flex items-center gap-1.5 mb-1">
-                                                                <BarChart3 className="h-3 w-3 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase">Profit</span>
+                                                                <BarChart3 className="h-3 w-3 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">Profit</span>
                                                             </div>
                                                             <span className={cn(
                                                                 "text-base font-black leading-none tabular-nums tracking-tighter",
@@ -1045,10 +1052,11 @@ export function AccountDetailHeaderV2({
                                                             </span>
                                                         </div>
 
+                                                        {/* Actual */}
                                                         <div className="flex flex-col group">
                                                             <div className="flex items-center gap-1.5 mb-1">
                                                                 <TrendingUp className="h-3 w-3 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase">Actual Claimed</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">Actual</span>
                                                             </div>
                                                             <span className={cn(
                                                                 "text-base font-black leading-none tabular-nums tracking-tighter",
@@ -1058,20 +1066,22 @@ export function AccountDetailHeaderV2({
                                                             </span>
                                                         </div>
 
+                                                        {/* Est. Back */}
                                                         <div className="flex flex-col group">
                                                             <div className="flex items-center gap-1.5 mb-1">
                                                                 <PlusCircle className="h-3 w-3 text-slate-400 group-hover:text-emerald-500 transition-colors" />
-                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase">Est. Cashback</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">Est. Back</span>
                                                             </div>
                                                             <span className="text-base font-black text-emerald-600 leading-none tabular-nums tracking-tighter">
                                                                 {formatMoneyVND(Math.ceil(earned))}
                                                             </span>
                                                         </div>
 
-                                                        <div className="flex flex-col group items-end">
+                                                        {/* Shared */}
+                                                        <div className="flex flex-col group">
                                                             <div className="flex items-center gap-1.5 mb-1">
                                                                 <Users2 className="h-3 w-3 text-slate-400 group-hover:text-amber-500 transition-colors" />
-                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase">Cashback Shared</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 tracking-tight uppercase whitespace-nowrap">Shared</span>
                                                             </div>
                                                             <span className="text-base font-black text-amber-600 leading-none tabular-nums tracking-tighter">
                                                                 {formatMoneyVND(Math.ceil(shared))}
@@ -1082,8 +1092,8 @@ export function AccountDetailHeaderV2({
                                             })()}
                                         </div>
 
-                                        {/* Row 2: Progress Bar (Smaller H) */}
-                                        <div className="w-full h-[32px] flex items-end relative pb-1">
+                                        {/* Row 2: Progress Bar */}
+                                        <div className="w-full h-[32px] flex items-end relative pb-1 mt-3">
                                             {(() => {
                                                 const stats = dynamicCashbackStats;
                                                 if (!stats) return null;
@@ -1170,18 +1180,38 @@ export function AccountDetailHeaderV2({
                                                         { label: "Earned", value: formatMoneyVND(Math.ceil(earned)), theme: "text-emerald-700 bg-emerald-50 border-emerald-200" },
                                                         { label: "Limit", value: effectiveCap > 0 ? formatMoneyVND(effectiveCap) : "Unlimited", theme: "text-slate-600 bg-slate-50 border-slate-200" },
                                                         { label: "Potential", value: effectiveCap > 0 ? formatMoneyVND(canBuySpend) : "Unlimited", theme: "text-indigo-700 bg-indigo-50 border-indigo-200" },
-                                                        { label: "Period", value: stats?.cycle?.label || "N/A", theme: "text-slate-500 bg-slate-50 border-slate-200" }
+                                                        { label: "Period", value: summary?.period || "N/A", theme: "text-slate-500 bg-white border-slate-200" }
                                                     ];
 
                                                 return (
                                                     <>
                                                         {progressBadge}
                                                         {footerBadges.map((badge, idx) => (
-                                                            <div key={idx} className={cn("px-2 py-1 rounded border shadow-sm flex items-center h-6 whitespace-nowrap", badge.theme)}>
+                                                            <div
+                                                                key={idx}
+                                                                className={cn(
+                                                                    "px-2 py-1 rounded border shadow-sm flex items-center h-6 whitespace-nowrap relative group/badge",
+                                                                    badge.theme,
+                                                                    badge.label === 'Period' && onCycleChange && selectedCycle !== currentCycleTag && "pr-6 cursor-help"
+                                                                )}
+                                                            >
                                                                 <div className="flex items-baseline gap-1.5 leading-none">
                                                                     <span className="text-[8px] font-bold uppercase tracking-tight opacity-40">{badge.label}</span>
                                                                     <span className="text-[10px] font-black tabular-nums tracking-tighter">{badge.value}</span>
                                                                 </div>
+                                                                {badge.label === 'Period' && onCycleChange && selectedCycle !== currentCycleTag && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            onCycleChange(currentCycleTag);
+                                                                            toast.info(`Reset to current cycle (${currentCycleTag})`);
+                                                                        }}
+                                                                        className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/badge:opacity-100 p-0.5 bg-white rounded border border-slate-200 shadow-sm transition-all hover:text-emerald-600"
+                                                                        title="Reset Cycle"
+                                                                    >
+                                                                        <RotateCcw className="h-2.5 w-2.5" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </>
@@ -1289,11 +1319,11 @@ export function AccountDetailHeaderV2({
 
                                     {/* Entire Year Performance Report */}
                                     <div className="mt-4 pt-4 border-t border-slate-200 bg-slate-50/80 -mx-4 px-4 pb-4">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2">
-                                                <Calendar className="h-3 w-3" /> Entire Year Performance {selectedYear || currentYear}
+                                        <div className="flex items-center justify-between mb-3 gap-2">
+                                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] flex items-center gap-2 whitespace-nowrap">
+                                                <Calendar className="h-3 w-3 shrink-0" /> Entire Year Performance {selectedYear || currentYear}
                                             </div>
-                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[8px] font-black rounded uppercase">Calculated</span>
+                                            <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[8px] font-black rounded uppercase whitespace-nowrap shrink-0">Calculated</span>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4">
@@ -1302,15 +1332,15 @@ export function AccountDetailHeaderV2({
                                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Profit</span>
                                                     <span className={cn(
                                                         "text-sm font-black tabular-nums tracking-tight",
-                                                        (summary?.netProfitYearly || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                                                        (summary?.yearCardCashbackTotal - summary?.yearCardCashbackGivenTotal || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
                                                     )}>
-                                                        {formatMoneyVND(Math.ceil(summary?.netProfitYearly || 0))}
+                                                        {formatMoneyVND(Math.ceil((summary?.yearCardCashbackTotal || 0) - (summary?.yearCardCashbackGivenTotal || 0)))}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Est. Cashback</span>
                                                     <span className="text-sm font-black text-emerald-600 tabular-nums tracking-tight">
-                                                        {formatMoneyVND(Math.ceil(summary?.cardYearlyCashbackTotal || 0))}
+                                                        {formatMoneyVND(Math.ceil(summary?.yearCardCashbackTotal || 0))}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1318,13 +1348,13 @@ export function AccountDetailHeaderV2({
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Actual Claimed</span>
                                                     <span className="text-sm font-black text-indigo-600 tabular-nums tracking-tight">
-                                                        {formatMoneyVND(Math.ceil(summary?.cashbackTotal || 0))}
+                                                        {formatMoneyVND(Math.ceil(summary?.yearActualCashbackTotal || 0))}
                                                     </span>
                                                 </div>
                                                 <div className="flex flex-col gap-0.5">
                                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Cashback Shared</span>
                                                     <span className="text-sm font-black text-amber-600 tabular-nums tracking-tight">
-                                                        {formatMoneyVND(Math.ceil(summary?.cardYearlyCashbackGivenTotal || 0))}
+                                                        {formatMoneyVND(Math.ceil(summary?.yearCardCashbackGivenTotal || 0))}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1338,9 +1368,9 @@ export function AccountDetailHeaderV2({
                                                 </div>
                                                 <div className={cn(
                                                     "text-lg font-black tabular-nums tracking-tighter",
-                                                    (summary?.netProfitYearly || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                                                    (summary?.yearCardCashbackTotal - summary?.yearCardCashbackGivenTotal || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
                                                 )}>
-                                                    {formatMoneyVND(Math.ceil(summary?.netProfitYearly || 0))}
+                                                    {formatMoneyVND(Math.ceil((summary?.yearCardCashbackTotal || 0) - (summary?.yearCardCashbackGivenTotal || 0)))}
                                                 </div>
                                             </div>
                                         </div>

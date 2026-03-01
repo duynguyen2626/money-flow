@@ -8,7 +8,7 @@ export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 export type Category = {
   id: string
   name: string
-  type: 'expense' | 'income' | 'transfer'
+  type: 'expense' | 'income' | 'transfer' | 'investment'
   parent_id?: string | null
   icon?: string | null
   image_url?: string | null

@@ -302,7 +302,13 @@ export function ShopSlide({
                                                                         const cat = categories.find((c) => c.id === field.value);
                                                                         return cat ? (
                                                                             <div className="flex items-center gap-2">
-                                                                                <span>{cat.icon || "📁"}</span>
+                                                                                <div className="w-5 h-5 flex items-center justify-center overflow-hidden rounded-sm">
+                                                                                    {cat.image_url ? (
+                                                                                        <img src={cat.image_url} alt="" className="w-full h-full object-contain" />
+                                                                                    ) : (
+                                                                                        <span className="text-sm">{cat.icon || "📁"}</span>
+                                                                                    )}
+                                                                                </div>
                                                                                 <span className="font-medium">{cat.name}</span>
                                                                             </div>
                                                                         ) : "Select category";
@@ -349,7 +355,13 @@ export function ShopSlide({
                                                                                     field.value === cat.id ? "opacity-100" : "opacity-0"
                                                                                 )}
                                                                             />
-                                                                            <span className="mr-2">{cat.icon || "📁"}</span>
+                                                                            <div className="w-5 h-5 mr-2 flex items-center justify-center overflow-hidden rounded-sm">
+                                                                                {cat.image_url ? (
+                                                                                    <img src={cat.image_url} alt="" className="w-full h-full object-contain" />
+                                                                                ) : (
+                                                                                    <span className="text-sm">{cat.icon || "📁"}</span>
+                                                                                )}
+                                                                            </div>
                                                                             {cat.name}
                                                                         </CommandItem>
                                                                     ))}

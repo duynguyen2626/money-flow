@@ -17,7 +17,7 @@ import { SingleTransactionFormValues } from '@/components/transaction/slide-v2/t
 import { DateRange } from 'react-day-picker'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, format } from 'date-fns'
-import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2 } from 'lucide-react'
+import { Search, FilterX, Filter, Clipboard, ChevronDown, X, Trash2, RotateCcw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -607,19 +607,21 @@ export function AccountDetailTransactions({
                             emptyText="No accounts found"
                         />
 
-                        {/* Cycle Filter (Credit Cards only, has built-in clear icon) */}
+                        {/* Cycle Filter (Credit Cards only) */}
                         {cycles.length > 0 && (
-                            <CycleFilterDropdown
-                                cycles={cycles}
-                                value={selectedCycle}
-                                onChange={handleCycleChange}
-                                onReset={() => {
-                                    if (currentCycleRef.current) {
-                                        handleCycleChange(currentCycleRef.current)
-                                        toast.info("Reset to current cycle")
-                                    }
-                                }}
-                            />
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <CycleFilterDropdown
+                                    cycles={cycles}
+                                    value={selectedCycle}
+                                    onChange={handleCycleChange}
+                                    onReset={() => {
+                                        if (currentCycleRef.current) {
+                                            handleCycleChange(currentCycleRef.current)
+                                            toast.info("Reset to current cycle")
+                                        }
+                                    }}
+                                />
+                            </div>
                         )}
 
                         {/* Date Picker - disabled when cycle filter is active */}

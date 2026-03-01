@@ -88,7 +88,7 @@ export function AccountDirectoryV2({
         } else if (activeFilter === 'credit') {
             result = result.filter(a => a.type === 'credit_card' && a.is_active !== false);
         } else if (activeFilter === 'savings') {
-            result = result.filter(a => a.type === 'savings' && a.is_active !== false);
+            result = result.filter(a => ['savings', 'investment'].includes(a.type) && a.is_active !== false);
         } else if (activeFilter === 'debt') {
             result = result.filter(a => a.type === 'debt' && a.is_active !== false);
         } else if (activeFilter === 'closed') {

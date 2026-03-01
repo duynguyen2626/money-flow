@@ -305,6 +305,8 @@ export function TransactionSlideV2({
             case "transfer":
             case "credit_pay":
                 return { type: "transfer" as const, kind: "internal" as const };
+            case "invest":
+                return { type: "investment" as const, kind: "internal" as const };
             case "expense":
             default:
                 return { type: "expense" as const, kind: "external" as const };
@@ -833,7 +835,10 @@ export function TransactionSlideV2({
                                             )}
                                             className="space-y-6"
                                         >
-                                            <TransactionTypeSelector />
+                                            <TransactionTypeSelector
+                                                accounts={accounts}
+                                                people={people}
+                                            />
 
                                             {/* A. FLOW: ACCOUNTS & PEOPLE */}
                                             <div className="pt-2">
