@@ -630,7 +630,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .in('type', ['expense', 'debt']);
 
   // MF17: Robust cycle matching - try persisted_cycle_tag first, then 'tag' column, then date range
-  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', cycleTag);
+  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', resolvedCycleTag);
 
   // Also try matching by 'tag' column (some transactions use this legacy approach)
   const { data: legacyTagTxns } = await (supabase
@@ -645,7 +645,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .eq('account_id', accountId)
     .neq('status', 'void')
     .in('type', ['expense', 'debt'])
-    .eq('tag', cycleTag) as any);
+    .eq('tag', resolvedCycleTag) as any);
 
   // Merge both result sets, deduplicating by ID
   const mergedMap = new Map<string, any>();
