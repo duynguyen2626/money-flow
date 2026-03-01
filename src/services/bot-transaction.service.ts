@@ -82,6 +82,7 @@ const buildTransactionRow = async (
     note: input.note ?? null,
     status: "posted",
     tag: input.tag ?? null,
+    debt_cycle_tag: input.tag ?? null,  // Backfill new column
     created_by: input.created_by ?? null,
     amount: normalizedAmount,
     type: input.type,
@@ -92,6 +93,7 @@ const buildTransactionRow = async (
     metadata: input.metadata ?? null,
     shop_id: input.shop_id ?? null,
     persisted_cycle_tag: null,
+    statement_cycle_tag: null,  // Backfill new column
     is_installment: false,
     installment_plan_id: null,
     cashback_share_percent: input.cashback_share_percent ?? null,

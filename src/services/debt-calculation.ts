@@ -106,7 +106,7 @@ export function aggregateDebtByTags(
     >();
 
     rows.forEach((row) => {
-        const tag = row.tag ?? 'UNTAGGED';
+        const tag = row.debt_cycle_tag ?? row.tag ?? 'UNTAGGED';
         const baseType = resolveBaseType(row.type);
         const finalPrice = calculateFinalPrice(row);
         const occurredAt = row.occurred_at ?? '';
@@ -227,8 +227,8 @@ export function aggregateDebtByTags(
         // Explicit tags are... explicit. Order within them might not matter much if they are all selected.
         // But let's stick to Oldest First for stability.
         const targetDebts = surplusPool
-            .filter((d) => d.status !== 'settled' && creditItem.settled_tags!.includes(d.tag))
-            .sort((a, b) => compareTags(a.tag, b.tag));
+            .filter((d) => d.status !== 'settled' && creditItem.settled_tags!.includes(d.debt_cycle_tag ?? d.tag))
+            .sort((a, b) => compareTags(a.debt_cycle_tag ?? a.tag, b.debt_cycle_tag ?? b.tag));
 
         for (const debtItem of targetDebts) {
             if (Math.abs(creditItem.netBalance) < 0.01) break;
@@ -253,7 +253,7 @@ export function aggregateDebtByTags(
 
     // Phase 2: Implicit Repayments (Credit Pushes to Debt)
     // We iterate remaining Credits (Repayments) and let them distribute surplus to debts based on their strategy.
-    const sortedCredits = deficitPool.sort((a, b) => compareTags(a.tag, b.tag));
+    const sortedCredits = deficitPool.sort((a, b) => compareTags(a.debt_cycle_tag ?? a.tag, b.debt_cycle_tag ?? b.tag));
 
     for (const creditItem of sortedCredits) {
         if (creditItem.status === 'settled') continue;
@@ -275,12 +275,12 @@ export function aggregateDebtByTags(
         // Dynamic Sort for Targets based on THIS Credit's strategy
         const targetSortFn = (a: DebtByTagAggregatedResult, b: DebtByTagAggregatedResult) => {
             if (currentStrategy === 'manual') {
-                const hasA = manualAllocations[a.tag] !== undefined;
-                const hasB = manualAllocations[b.tag] !== undefined;
+                const hasA = manualAllocations[a.debt_cycle_tag ?? a.tag] !== undefined;
+                const hasB = manualAllocations[b.debt_cycle_tag ?? b.tag] !== undefined;
                 if (hasA && !hasB) return -1;
                 if (!hasA && hasB) return 1;
             }
-            const diff = compareTags(a.tag, b.tag);
+            const diff = compareTags(a.debt_cycle_tag ?? a.tag, b.debt_cycle_tag ?? b.tag);
             return currentStrategy === 'newest' ? -diff : diff;
         };
 
@@ -295,8 +295,8 @@ export function aggregateDebtByTags(
             const debtRemaining = debtItem.netBalance;
 
             let amountToCover = 0;
-            if (currentStrategy === 'manual' && manualAllocations[debtItem.tag] !== undefined) {
-                const manualAmount = manualAllocations[debtItem.tag];
+            if (currentStrategy === 'manual' && manualAllocations[debtItem.debt_cycle_tag ?? debtItem.tag] !== undefined) {
+                const manualAmount = manualAllocations[debtItem.debt_cycle_tag ?? debtItem.tag];
                 amountToCover = Math.min(debtRemaining, Math.min(manualAmount, creditRemaining));
             } else {
                 amountToCover = Math.min(creditRemaining, debtRemaining);
@@ -314,7 +314,7 @@ export function aggregateDebtByTags(
                     // Logic: debtItem.settled_by... overwrites. 
                     // Ideally we should append or check, but last-payer (or main-payer) takes credit is simpler.
                     debtItem.settled_by_transaction_id = creditItem.primary_transaction_id;
-                    debtItem.settled_by_tag = creditItem.tag;
+                    debtItem.settled_by_tag = creditItem.debt_cycle_tag ?? creditItem.debt_cycle_tag ?? creditItem.tag;
 
                     if (debtItem.netBalance < 0.01) debtItem.status = 'settled';
                     if (Math.abs(creditItem.netBalance) < 0.01) creditItem.status = 'settled';
@@ -324,6 +324,6 @@ export function aggregateDebtByTags(
     }
 
     const finalResult = [...surplusPool, ...deficitPool];
-    return finalResult.sort((a, b) => b.tag.localeCompare(a.tag));
+    return finalResult.sort((a, b) => (b.debt_cycle_tag ?? b.tag).localeCompare(a.debt_cycle_tag ?? a.tag));
 };
 
