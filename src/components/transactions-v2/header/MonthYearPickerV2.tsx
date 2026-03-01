@@ -155,7 +155,16 @@ export function MonthYearPickerV2({
   }
 
   const displayText = (() => {
-    if (mode === 'cycle' && selectedCycle) return selectedCycle === 'all' ? 'All Cycles' : selectedCycle
+    if (mode === 'cycle' && selectedCycle) {
+      if (selectedCycle === 'all') return 'All Cycles'
+      // Show loading state when cycles are being fetched
+      if (isLoadingCycles && (!accountCycles || accountCycles.length === 0)) {
+        return 'Loading cycle...'
+      }
+      // Look up label from accountCycles to display human-readable cycle range
+      const found = accountCycles?.find(c => c.value === selectedCycle)
+      return found?.label ?? selectedCycle
+    }
     if (mode === 'all') return 'All Time'
     if (mode === 'year') return format(date, 'yyyy')
     if (mode === 'month') return format(date, 'MMM yyyy')

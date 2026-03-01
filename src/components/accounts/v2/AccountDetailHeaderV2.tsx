@@ -165,26 +165,26 @@ export function AccountDetailHeaderV2({
         const fetchCashbackStats = async () => {
             setIsCashbackLoading(true)
             try {
-                const [yearStr, monthStr] = selectedCycle.split('-')
-                const year = parseInt(yearStr, 10)
-                const month = parseInt(monthStr, 10)
-
-                if (isNaN(year) || isNaN(month)) {
-                    throw new Error(`Invalid cycle selected: ${selectedCycle} `)
-                }
-
-                const cycleDate = new Date(year, month - 1, 10)
-                if (isNaN(cycleDate.getTime())) {
-                    throw new Error(`Invalid cycle date: ${selectedCycle}`)
-                }
-
-                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&date=${cycleDate.toISOString()}`)
+                console.log('[AccountDetailHeaderV2] Fetching cashback stats for cycle:', selectedCycle)
+                // Pass the cycle tag directly to the API instead of reconstructing date
+                // This ensures the API resolves to the correct cycle for statement cycles
+                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}`)
                 if (response.ok) {
                     const data = await response.json()
+                    console.log('[AccountDetailHeaderV2] Received cashback stats:', {
+                        earnedSoFar: data.earnedSoFar,
+                        sharedAmount: data.sharedAmount,
+                        netProfit: data.netProfit,
+                        currentSpend: data.currentSpend,
+                        cycle: data.cycle,
+                        fullData: data
+                    })
                     setDynamicCashbackStats(data)
+                } else {
+                    console.error('[AccountDetailHeaderV2] API returned error:', response.status)
                 }
             } catch (error) {
-                console.error('Failed to fetch cashback stats:', error)
+                console.error('[AccountDetailHeaderV2] Failed to fetch cashback stats:', error)
                 setDynamicCashbackStats(cashbackStats)
             } finally {
                 setIsCashbackLoading(false)
@@ -640,11 +640,11 @@ export function AccountDetailHeaderV2({
                                 <HeaderSection
                                     label="Credit Health"
                                     borderColor="border-indigo-100"
-                                    className="flex-[5] min-w-[420px] bg-indigo-50/10 cursor-help !h-[120px]"
+                                    className="flex-[5] min-w-0 w-full bg-indigo-50/10 cursor-help !h-[120px]"
                                 >
                                     <div className="flex flex-col h-full justify-center">
                                         {/* Row 1: Metrics & Health Circle */}
-                                        <div className="flex items-center gap-10 w-full h-[60px] pt-1">
+                                        <div className="flex items-center gap-4 md:gap-10 w-full h-[60px] pt-1">
                                             {/* Left: Health Indicator */}
                                             {(() => {
                                                 const limit = account.credit_limit || 0
@@ -705,21 +705,21 @@ export function AccountDetailHeaderV2({
                                             <div className="h-10 w-px bg-slate-100 shrink-0" />
 
                                             {/* Right: Balance Metrics */}
-                                            <div className="flex items-center gap-12 flex-1 min-w-0">
-                                                <div className="flex flex-col">
+                                            <div className="flex items-center gap-4 md:gap-8 lg:gap-12 flex-1 min-w-0">
+                                                <div className="flex flex-col min-w-0">
                                                     <div className="flex items-center gap-1.5 mb-1 opacity-60">
                                                         <BarChart3 className="h-3 w-3 text-slate-400" />
                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Available</span>
                                                     </div>
                                                     <div className={cn(
-                                                        "text-[15px] font-black tracking-tight leading-none tabular-nums",
+                                                        "text-[13px] md:text-[15px] font-black tracking-tight leading-none tabular-nums truncate",
                                                         availableBalance >= 0 ? "text-emerald-600" : "text-rose-600"
                                                     )}>
                                                         {formatFullNumber(availableBalance)}
                                                     </div>
                                                 </div>
 
-                                                <div className="ml-auto">
+                                                <div className="ml-auto shrink-0">
                                                     {dueDateBadge}
                                                 </div>
                                             </div>
@@ -1097,7 +1097,7 @@ export function AccountDetailHeaderV2({
 
             {/* Section 3: Cashback Performance */}
             {
-                isCreditCard && dynamicCashbackStats && (
+                isCreditCard && (
                     <div className="flex flex-[5] min-w-[420px]">
                         <HeaderSection
                             label="Cashback Performance"
@@ -1105,6 +1105,17 @@ export function AccountDetailHeaderV2({
                             className="w-full bg-emerald-50/10 !h-[120px] mb-2"
                             hideHintInHeader
                         >
+                            {isCashbackLoading ? (
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="relative flex items-center justify-center">
+                                            <div className="h-8 w-8 border-2 border-emerald-200 border-t-emerald-500 rounded-full animate-spin" />
+                                            <div className="absolute inset-0 m-auto h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest animate-pulse">Loading stats...</span>
+                                    </div>
+                                </div>
+                            ) : dynamicCashbackStats ? (
                             <div className="flex flex-col h-full">
                                 <div className="flex items-center justify-start gap-10 w-full h-[60px] pt-1">
                                     {(() => {
@@ -1112,9 +1123,9 @@ export function AccountDetailHeaderV2({
                                         const earnedCurrent = stats?.earnedSoFar || 0;
                                         const cycleShared = stats?.sharedAmount || 0;
                                         const cycleProfit = stats?.netProfit || 0;
-                                        const threshold = stats?.effectiveMinSpend || 0;
+                                        const threshold = stats?.minSpend || 0;
                                         const spent = stats?.currentSpend || 0;
-                                        const isQualified = stats?.isQualified || false;
+                                        const isQualified = stats?.is_min_spend_met ?? false;
                                         const progressPercent = threshold > 0 ? Math.min((spent / threshold) * 100, 100) : 100;
 
                                         const progressBadge = (
@@ -1254,7 +1265,7 @@ export function AccountDetailHeaderV2({
                                                                                 </div>
                                                                                 <div className="grid grid-cols-2 text-[11px] py-1.5 hover:bg-slate-50 px-1 rounded transition-colors">
                                                                                     <span className="text-slate-500 font-medium">Spent Threshold</span>
-                                                                                    <span className="text-right font-bold text-amber-600">{formatMoneyVND(Math.ceil(stats?.effectiveMinSpend || 0))}</span>
+                                                                                    <span className="text-right font-bold text-amber-600">{formatMoneyVND(Math.ceil(stats?.minSpend || 0))}</span>
                                                                                 </div>
                                                                                 <div className="grid grid-cols-2 text-[11px] py-1.5 pt-2 mt-1 border-t border-slate-100">
                                                                                     <span className="text-slate-900 font-black uppercase text-[9px]">Net Cycle Profit</span>
@@ -1303,8 +1314,9 @@ export function AccountDetailHeaderV2({
                                 {/* Row 3: Footer Badges */}
                                 <div className="flex items-center gap-2 px-0.5 mt-auto h-[32px] mb-[2px]">
                                     {(() => {
-                                        const actual = summary?.yearActualCashbackTotal || 0;
-                                        const estBack = dynamicCashbackStats?.estYearlyTotal || summary?.cardYearlyCashbackTotal || 0;
+                                        const estBack = dynamicCashbackStats?.earnedSoFar || 0;
+                                        const shared = dynamicCashbackStats?.sharedAmount || 0;
+                                        const cycleProfit = dynamicCashbackStats?.netProfit || 0;
                                         const limit = dynamicCashbackStats?.maxCashback || 0;
                                         const potential = dynamicCashbackStats?.potentialProfit || 0;
                                         const threshold = dynamicCashbackStats?.minSpend || 0;
@@ -1312,8 +1324,9 @@ export function AccountDetailHeaderV2({
                                         const missing = Math.max(0, threshold - spent);
 
                                         const footerBadges = [
-                                            { label: "Actual", value: formatFullNumber(actual), icon: <CheckCircle2 className="h-3 w-3" />, theme: "text-indigo-700 bg-indigo-50 border-indigo-200", formula: "Tổng Cashback thực tế đã nhận (Income) trong năm nay." },
-                                            { label: "Est Back", value: formatFullNumber(estBack), icon: <TrendingUp className="h-3 w-3" />, theme: "text-emerald-700 bg-emerald-50 border-emerald-200", formula: "Dự báo tổng Cashback nhận được trong cả năm dựa trên hiệu suất hiện tại." },
+                                            { label: "Est Cashback", value: formatFullNumber(estBack), icon: <TrendingUp className="h-3 w-3" />, theme: "text-emerald-700 bg-emerald-50 border-emerald-200", formula: "Tổng cashback ước tính của chu kỳ đang chọn." },
+                                            { label: "Shared", value: formatFullNumber(shared), icon: <Users2 className="h-3 w-3" />, theme: "text-amber-700 bg-amber-50 border-amber-200", formula: "Tổng cashback chia sẻ trong chu kỳ đang chọn." },
+                                            { label: "Profit", value: formatFullNumber(cycleProfit), icon: <CheckCircle2 className="h-3 w-3" />, theme: cycleProfit >= 0 ? "text-indigo-700 bg-indigo-50 border-indigo-200" : "text-rose-700 bg-rose-50 border-rose-200", formula: "Lợi nhuận ròng chu kỳ = Est Cashback - Shared." },
                                             { label: "Limit / Target", value: `${limit > 0 ? formatShortNumber(limit) : "∞"} / ${formatShortNumber(threshold)}`, icon: <Target className="h-3 w-3" />, theme: "text-slate-600 bg-slate-50 border-slate-200", formula: `Hạn mức Cashback (${formatFullNumber(limit)}) và Ngưỡng chi tiêu tối thiểu (${formatFullNumber(threshold)}).` },
                                             ...(missing > 0 ? [{ label: "Missing", value: formatFullNumber(missing), icon: <FilterX className="h-3 w-3" />, theme: "text-rose-700 bg-rose-50 border-rose-200", formula: "Số tiền chi tiêu còn thiếu để đạt ngưỡng tối thiểu nhận Cashback tối ưu." }] : []),
                                             { label: "Potential", value: formatFullNumber(potential), icon: <Sparkles className="h-3 w-3" />, theme: "text-orange-700 bg-orange-50 border-orange-200", formula: "Lợi nhuận tiềm năng nếu tối ưu hóa quy tắc hoàn tiền." },
@@ -1371,6 +1384,11 @@ export function AccountDetailHeaderV2({
                                 </div>
                                 <div className="mt-auto" />
                             </div>
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    <span className="text-xs text-slate-400">No cashback data</span>
+                                </div>
+                            )}
                         </HeaderSection>
                     </div>
                 )
