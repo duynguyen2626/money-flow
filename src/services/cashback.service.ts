@@ -597,7 +597,19 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .maybeSingle()).data as any ?? null;
   }
 
-  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${resolvedCycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
+  console.log(`[getAccountSpendingStats] ========== START ==========`);
+  console.log(`[getAccountSpendingStats] Account ID: ${accountId}`);
+  console.log(`[getAccountSpendingStats] Input cycleTag: ${cycleTag}`);
+  console.log(`[getAccountSpendingStats] Resolved cycleTag: ${resolvedCycleTag}`);
+  console.log(`[getAccountSpendingStats] Legacy tag: ${legacyTag}`);
+  console.log(`[getAccountSpendingStats] Cycle found in DB: ${!!cycle}`);
+  console.log(`[getAccountSpendingStats] Cycle data:`, cycle ? {
+    cycle_tag: cycle.cycle_tag,
+    spent_amount: cycle.spent_amount,
+    real_awarded: cycle.real_awarded,
+    min_spend_target: cycle.min_spend_target,
+    max_budget: cycle.max_budget
+  } : 'NULL');
 
   let categoryName = undefined;
   if (categoryId) {
@@ -654,7 +666,15 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   let rawTxns = Array.from(mergedMap.values());
 
+  console.log(`[getAccountSpendingStats] Transactions found by persisted_cycle_tag: ${(tagTxns || []).length}`);
+  console.log(`[getAccountSpendingStats] Transactions found by tag column: ${(legacyTagTxns || []).length}`);
+  console.log(`[getAccountSpendingStats] Merged transactions (after dedup): ${rawTxns.length}`);
+
   if (rawTxns.length === 0 && cycleRange) {
+    console.log(`[getAccountSpendingStats] No transactions found by tag, trying date range:`, {
+      start: cycleRange.start.toISOString(),
+      end: cycleRange.end.toISOString()
+    });
     const { data: dateTxns } = await supabase
       .from('transactions')
       .select(`
@@ -670,6 +690,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .gte('occurred_at', cycleRange.start.toISOString())
       .lte('occurred_at', cycleRange.end.toISOString());
     rawTxns = dateTxns || [];
+    console.log(`[getAccountSpendingStats] Transactions found by date range: ${rawTxns.length}`);
   }
 
   // MF16: Aggregate only non-initial/rollover/internal transactions
@@ -689,6 +710,11 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const currentSpend = txns.reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
   const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
+
+  console.log(`[getAccountSpendingStats] Eligible transactions (after filtering): ${txns.length}`);
+  console.log(`[getAccountSpendingStats] Current spend total: ${currentSpend.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Min spend target: ${minSpendTarget}`);
+  console.log(`[getAccountSpendingStats] Max cashback budget: ${cycleMaxBudget}`);
 
   // 2. Aggregate from Persisted Entries (Deterministic Source of Truth)
   // MF16 FIX: Instead of real-time estimation, we fetch the actual calculated entries
@@ -855,6 +881,14 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const isUnlimitedBudget = account.cb_is_unlimited === true;
   const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
   const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
+
+  console.log(`[getAccountSpendingStats] ========== RESULTS ==========`);
+  console.log(`[getAccountSpendingStats] Earned so far: ${earnedSoFar.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Shared amount: ${sharedAmount.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Net profit: ${netProfit.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Is min spend met: ${isMinSpendMet}`);
+  console.log(`[getAccountSpendingStats] Remaining budget: ${remainingBudget}`);
+  console.log(`[getAccountSpendingStats] ========== END ==========`);
 
   // Calculate Est Yearly Total (earnedSoFar scaled to year, simplified for now)
   // or use a more sophisticated projection if needed.
