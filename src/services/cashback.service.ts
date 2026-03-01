@@ -597,10 +597,30 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
-  // MF17: Robust cycle matching - try persisted tags first (both new and legacy columns)
-  const { data: tagTxns } = await txnsQuery.or(`persisted_cycle_tag.eq.${cycleTag},tag.eq.${cycleTag}`);
+  // MF17: Robust cycle matching - try persisted_cycle_tag first, then 'tag' column, then date range
+  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', cycleTag);
 
-  let rawTxns = tagTxns || [];
+  // Also try matching by 'tag' column (some transactions use this legacy approach)
+  const { data: legacyTagTxns } = await (supabase
+    .from('transactions')
+    .select(`
+      id, amount, type, occurred_at, note,
+      cashback_share_percent, cashback_share_fixed,
+      est_cashback, cashback_shared_amount,
+      category:categories(id, name, icon, kind),
+      shop:shops(name, image_url)
+    `)
+    .eq('account_id', accountId)
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt'])
+    .eq('tag', cycleTag) as any);
+
+  // Merge both result sets, deduplicating by ID
+  const mergedMap = new Map<string, any>();
+  (tagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
+  (legacyTagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
+
+  let rawTxns = Array.from(mergedMap.values());
 
   if (rawTxns.length === 0 && cycleRange) {
     const { data: dateTxns } = await supabase

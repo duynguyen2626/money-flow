@@ -29,7 +29,8 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     RefreshCw,
-    RotateCcw
+    RotateCcw,
+    FilterX
 } from 'lucide-react'
 import { cn, formatMoneyVND } from '@/lib/utils'
 import { Account, Category, Transaction } from '@/types/moneyflow.types'
@@ -1306,7 +1307,7 @@ export function AccountDetailHeaderV2({
                                         const estBack = dynamicCashbackStats?.estYearlyTotal || summary?.cardYearlyCashbackTotal || 0;
                                         const limit = dynamicCashbackStats?.maxCashback || 0;
                                         const potential = dynamicCashbackStats?.potentialProfit || 0;
-                                        const threshold = dynamicCashbackStats?.effectiveMinSpend || 0;
+                                        const threshold = dynamicCashbackStats?.minSpend || 0;
                                         const spent = dynamicCashbackStats?.currentSpend || 0;
                                         const missing = Math.max(0, threshold - spent);
 
