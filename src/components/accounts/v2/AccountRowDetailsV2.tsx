@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { loadAccountTransactionsV2 } from "@/services/transaction.service";
 import Link from "next/link";
-import { Wallet, ArrowUpRight, ArrowDownLeft, RotateCcw, Copy, Check, CreditCard, Banknote, HandCoins, Link2, LucideIcon, User, Pencil, Building2 } from "lucide-react";
+import { Wallet, ArrowUpRight, ArrowDownLeft, RotateCcw, Copy, Check, CreditCard, Banknote, HandCoins, Link2, LucideIcon, User, Pencil, Building2, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Need to import Tooltip
 import { Button } from "@/components/ui/button"; // Need to import Button
@@ -42,7 +42,8 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
             case 'credit_card': return CreditCard;
             case 'bank': return Banknote;
             case 'ewallet': return Wallet;
-            case 'savings': return ArrowUpRight;
+            case 'savings': return PiggyBank;
+            case 'investment': return PiggyBank;
             case 'debt': return HandCoins;
             default: return Wallet;
         }

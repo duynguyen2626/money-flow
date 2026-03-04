@@ -1,0 +1,2 @@
+﻿src/components/transaction/slide-v2/single-mode/amount-section.tsx(31,30): error TS2304: Cannot find name 'FormLabel'.
+src/components/transaction/slide-v2/single-mode/amount-section.tsx(33,31): error TS2304: Cannot find name 'FormLabel'.

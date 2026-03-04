@@ -9,6 +9,7 @@ import {
     FormControl,
     FormField,
     FormItem,
+    FormLabel,
     FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,10 @@ export function BasicInfoSection({ people, operationMode }: BasicInfoSectionProp
                         name="occurred_at"
                         render={({ field }) => (
                             <FormItem className="flex flex-col">
+                                <FormLabel className="flex items-center gap-1.5 text-[10px] font-bold text-sky-500 capitalize tracking-wide mb-1.5 min-h-[14px]">
+                                    <CalendarIcon className="w-3 h-3" />
+                                    Date
+                                </FormLabel>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <FormControl>
@@ -116,6 +121,10 @@ export function BasicInfoSection({ people, operationMode }: BasicInfoSectionProp
                         name="tag"
                         render={({ field }) => (
                             <FormItem>
+                                <FormLabel className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 capitalize tracking-wide mb-1.5 min-h-[14px]">
+                                    <Tag className="w-3 h-3" />
+                                    Tag
+                                </FormLabel>
                                 <div className="relative flex gap-1">
                                     <div className="relative flex-1">
                                         <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

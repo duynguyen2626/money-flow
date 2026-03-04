@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AccountGroupHeaderProps {
-    section: 'credit' | 'loans' | 'savings';
+    section: 'credit' | 'loans' | 'savings' | 'banks' | 'investments';
     label: string;
     accountCount: number;
     totalAmount: number | { debt: number; limit: number };
@@ -30,6 +30,8 @@ export function AccountGroupHeader({
                 "group-header-row cursor-pointer transition-colors border-b select-none",
                 section === 'credit' && "bg-indigo-50/50 hover:bg-indigo-50",
                 section === 'loans' && "bg-rose-50/50 hover:bg-rose-50",
+                section === 'banks' && "bg-blue-50/50 hover:bg-blue-50",
+                section === 'investments' && "bg-sky-50/50 hover:bg-sky-50",
                 section === 'savings' && "bg-white hover:bg-slate-50"
             )}
             onClick={onToggle}
@@ -48,6 +50,8 @@ export function AccountGroupHeader({
                             "text-[11px] font-black uppercase tracking-widest",
                             section === 'credit' && "text-indigo-700",
                             section === 'loans' && "text-rose-700",
+                            section === 'banks' && "text-blue-700",
+                            section === 'investments' && "text-sky-700",
                             section === 'savings' && "text-slate-600"
                         )}>
                             {label}
@@ -84,6 +88,8 @@ export function AccountGroupHeader({
                                 "text-xs font-black tabular-nums",
                                 section === 'credit' && "text-indigo-600",
                                 section === 'loans' && "text-rose-600",
+                                section === 'banks' && "text-blue-600",
+                                section === 'investments' && "text-sky-600",
                                 section === 'savings' && "text-emerald-600"
                             )}>
                                 {formatMoney(typeof totalAmount === 'number' ? totalAmount : totalAmount.debt)}

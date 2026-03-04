@@ -534,8 +534,8 @@ export async function removeTransactionCashback(transactionId: string) {
 /**
  * Returns stats for a specific account/date context.
  */
-export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string): Promise<AccountSpendingStats | null> {
-  const supabase = createClient();
+export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string, cycleTag?: string): Promise<AccountSpendingStats | null> {
+  const supabase = getCashbackClient();
   const { data: account } = await (supabase
     .from('accounts')
     .select('cashback_config, type, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json')
@@ -544,19 +544,51 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   if (!account || account.type !== 'credit_card') return null;
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
-  const cycleRange = getCashbackCycleRange(config, date);
-  const tagDate = cycleRange?.end ?? date;
-  const cycleTag = formatIsoCycleTag(tagDate);
-  const legacyTag = formatLegacyCycleTag(tagDate);
+  
+  // If cycleTag is provided explicitly, use it directly; otherwise derive from date
+  let resolvedCycleTag: string;
+  let cycleRange: { start: Date; end: Date } | null;
+  
+  if (cycleTag) {
+    // Use the provided cycleTag directly
+    resolvedCycleTag = cycleTag;
+    // Try to derive cycleRange from the cycleTag for display purposes
+    // For statement cycles like "2026-01", we can reconstruct the range
+    try {
+      const [yearStr, monthStr] = cycleTag.split('-');
+      if (yearStr && monthStr) {
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        if (!isNaN(year) && !isNaN(month)) {
+          // Use the end day of the tag month as reference to get proper cycle range
+          const refDate = new Date(year, month - 1, 25); // Use day 25 to fall within statement cycle
+          cycleRange = getCashbackCycleRange(config, refDate);
+        } else {
+          cycleRange = getCashbackCycleRange(config, date);
+        }
+      } else {
+        cycleRange = getCashbackCycleRange(config, date);
+      }
+    } catch (e) {
+      cycleRange = getCashbackCycleRange(config, date);
+    }
+  } else {
+    // Derive from date (original behavior)
+    cycleRange = getCashbackCycleRange(config, date);
+    const tagDate = cycleRange?.end ?? date;
+    resolvedCycleTag = formatIsoCycleTag(tagDate);
+  }
+  
+  const legacyTag = formatLegacyCycleTag(cycleRange?.end ?? date);
 
   let cycle = (await supabase
     .from('cashback_cycles')
     .select('*')
     .eq('account_id', accountId)
-    .eq('cycle_tag', cycleTag)
+    .eq('cycle_tag', resolvedCycleTag)
     .maybeSingle()).data as any ?? null;
 
-  if (!cycle && legacyTag !== cycleTag) {
+  if (!cycle && legacyTag !== resolvedCycleTag) {
     cycle = (await supabase
       .from('cashback_cycles')
       .select('*')
@@ -565,7 +597,19 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .maybeSingle()).data as any ?? null;
   }
 
-  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
+  console.log(`[getAccountSpendingStats] ========== START ==========`);
+  console.log(`[getAccountSpendingStats] Account ID: ${accountId}`);
+  console.log(`[getAccountSpendingStats] Input cycleTag: ${cycleTag}`);
+  console.log(`[getAccountSpendingStats] Resolved cycleTag: ${resolvedCycleTag}`);
+  console.log(`[getAccountSpendingStats] Legacy tag: ${legacyTag}`);
+  console.log(`[getAccountSpendingStats] Cycle found in DB: ${!!cycle}`);
+  console.log(`[getAccountSpendingStats] Cycle data:`, cycle ? {
+    cycle_tag: cycle.cycle_tag,
+    spent_amount: cycle.spent_amount,
+    real_awarded: cycle.real_awarded,
+    min_spend_target: cycle.min_spend_target,
+    max_budget: cycle.max_budget
+  } : 'NULL');
 
   let categoryName = undefined;
   if (categoryId) {
@@ -584,18 +628,70 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   // MF6.1 FIX: Helper to aggregate cycle stats in real-time for accuracy
   // 1. Calculate Spent Amount & Eligible Transactions
-  const { data: rawTxns } = await supabase
+  let txnsQuery = supabase
     .from('transactions')
     .select(`
       id, amount, type, occurred_at, note,
       cashback_share_percent, cashback_share_fixed,
+      est_cashback, cashback_shared_amount,
       category:categories(id, name, icon, kind),
       shop:shops(name, image_url)
     `)
     .eq('account_id', accountId)
-    .eq('persisted_cycle_tag', cycleTag)
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
+
+  // MF17: Robust cycle matching - try persisted_cycle_tag first, then 'tag' column, then date range
+  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', resolvedCycleTag);
+
+  // Also try matching by 'tag' column (some transactions use this legacy approach)
+  const { data: legacyTagTxns } = await (supabase
+    .from('transactions')
+    .select(`
+      id, amount, type, occurred_at, note,
+      cashback_share_percent, cashback_share_fixed,
+      est_cashback, cashback_shared_amount,
+      category:categories(id, name, icon, kind),
+      shop:shops(name, image_url)
+    `)
+    .eq('account_id', accountId)
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt'])
+    .eq('tag', resolvedCycleTag) as any);
+
+  // Merge both result sets, deduplicating by ID
+  const mergedMap = new Map<string, any>();
+  (tagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
+  (legacyTagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
+
+  let rawTxns = Array.from(mergedMap.values());
+
+  console.log(`[getAccountSpendingStats] Transactions found by persisted_cycle_tag: ${(tagTxns || []).length}`);
+  console.log(`[getAccountSpendingStats] Transactions found by tag column: ${(legacyTagTxns || []).length}`);
+  console.log(`[getAccountSpendingStats] Merged transactions (after dedup): ${rawTxns.length}`);
+
+  if (rawTxns.length === 0 && cycleRange) {
+    console.log(`[getAccountSpendingStats] No transactions found by tag, trying date range:`, {
+      start: cycleRange.start.toISOString(),
+      end: cycleRange.end.toISOString()
+    });
+    const { data: dateTxns } = await supabase
+      .from('transactions')
+      .select(`
+            id, amount, type, occurred_at, note,
+            cashback_share_percent, cashback_share_fixed,
+            est_cashback, cashback_shared_amount,
+            category:categories(id, name, icon, kind),
+            shop:shops(name, image_url)
+        `)
+      .eq('account_id', accountId)
+      .neq('status', 'void')
+      .in('type', ['expense', 'debt'])
+      .gte('occurred_at', cycleRange.start.toISOString())
+      .lte('occurred_at', cycleRange.end.toISOString());
+    rawTxns = dateTxns || [];
+    console.log(`[getAccountSpendingStats] Transactions found by date range: ${rawTxns.length}`);
+  }
 
   // MF16: Aggregate only non-initial/rollover/internal transactions
   const txns = (rawTxns as any[] ?? []).filter(t => {
@@ -615,43 +711,69 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
   const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
 
-  // 2. Real-time Cashback Estimation (Bank Back, Share, Profit)
-  let realAwarded = 0;
-  let virtualProfit = 0;
-  let overflowLoss = 0;
+  console.log(`[getAccountSpendingStats] Eligible transactions (after filtering): ${txns.length}`);
+  console.log(`[getAccountSpendingStats] Current spend total: ${currentSpend.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Min spend target: ${minSpendTarget}`);
+  console.log(`[getAccountSpendingStats] Max cashback budget: ${cycleMaxBudget}`);
+
+  // 2. Aggregate Cashback Values (transaction-first with persisted entry fallback)
+  // Prefer transaction-level computed fields when present so selected-cycle metrics
+  // stay aligned with table values; fallback to persisted entries and then policy-based
+  // estimation if needed.
+  const txnIds = txns.map(t => t.id);
   let earnedSoFarFromTxns = 0;
   let sharedSoFarFromTxns = 0;
 
-  if (txns && txns.length > 0) {
+  if (txnIds.length > 0) {
+    const { data: entries } = await supabase
+      .from('cashback_entries')
+      .select('amount, mode, transaction_id')
+      .in('transaction_id', txnIds)
+      .eq('account_id', accountId);
+
+    const entryMap = new Map<string, number>();
+    (entries || []).forEach(entry => {
+      if (entry.transaction_id && (entry.mode === 'virtual' || entry.mode === 'real')) {
+        entryMap.set(entry.transaction_id, (entryMap.get(entry.transaction_id) || 0) + (entry.amount || 0));
+      }
+    });
+
     for (const t of txns as any[]) {
       const category = t.category;
-      const txnAmount = Math.abs(t.amount);
+      const txnAmount = Math.abs(t.amount || 0);
 
-      const resolvedPolicy = resolveCashbackPolicy({
-        account,
-        categoryId: category?.id,
-        amount: txnAmount,
-        cycleTotals: { spent: currentSpend }, // Note: using total current spend for policy tiered rates
-        categoryName: category?.name
-      });
+      let txnEarned = 0;
+      if (typeof t.est_cashback === 'number' && t.est_cashback > 0) {
+        txnEarned = t.est_cashback;
+      } else {
+        const entryEarned = entryMap.get(t.id) || 0;
+        if (entryEarned > 0) {
+          txnEarned = entryEarned;
+        } else {
+          const resolvedPolicy = resolveCashbackPolicy({
+            account,
+            categoryId: category?.id,
+            amount: txnAmount,
+            cycleTotals: { spent: currentSpend },
+            categoryName: category?.name
+          });
 
-      const policyMetadata = normalizePolicyMetadata(resolvedPolicy.metadata);
-      const policyRate = policyMetadata?.rate ?? 0;
-      const sharePercent = t.cashback_share_percent ?? policyRate;
-      const shareFixed = t.cashback_share_fixed ?? 0;
-
-      let bankBack = txnAmount * policyRate;
-      const ruleMaxReward = policyMetadata?.ruleMaxReward ?? resolvedPolicy.maxReward ?? null;
-
-      if (ruleMaxReward !== null && ruleMaxReward > 0) {
-        bankBack = Math.min(bankBack, ruleMaxReward);
+          const policyRate = resolvedPolicy.rate ?? 0;
+          txnEarned = txnAmount * policyRate;
+          if (resolvedPolicy.maxReward && resolvedPolicy.maxReward > 0) {
+            txnEarned = Math.min(txnEarned, resolvedPolicy.maxReward);
+          }
+        }
       }
 
-      const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
-      const profit = bankBack - peopleBack;
+      const sharePercent = t.cashback_share_percent ?? 0;
+      const shareFixed = t.cashback_share_fixed ?? 0;
+      const sharedFromTxn = typeof t.cashback_shared_amount === 'number'
+        ? t.cashback_shared_amount
+        : (shareFixed > 0 ? shareFixed : (txnAmount * sharePercent));
 
-      earnedSoFarFromTxns += bankBack;
-      sharedSoFarFromTxns += peopleBack;
+      earnedSoFarFromTxns += txnEarned;
+      sharedSoFarFromTxns += sharedFromTxn;
     }
   }
 
@@ -754,6 +876,20 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
   const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
 
+  console.log(`[getAccountSpendingStats] ========== RESULTS ==========`);
+  console.log(`[getAccountSpendingStats] Earned so far: ${earnedSoFar.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Shared amount: ${sharedAmount.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Net profit: ${netProfit.toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] estYearlyTotal: ${(earnedSoFar * 12).toLocaleString()}`);
+  console.log(`[getAccountSpendingStats] Is min spend met: ${isMinSpendMet}`);
+  console.log(`[getAccountSpendingStats] Remaining budget: ${remainingBudget}`);
+  console.log(`[getAccountSpendingStats] ========== END ==========`);
+
+  // Calculate Est Yearly Total (earnedSoFar scaled to year, simplified for now)
+  // or use a more sophisticated projection if needed.
+  // For now, let's at least sum what we have.
+  const estYearlyTotal = earnedSoFar * 12; // Simplified projection
+
   return {
     currentSpend,
     minSpend: minSpendTarget,
@@ -770,11 +906,12 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     policyMetadata: normalizePolicyMetadata(policy.metadata) ?? undefined,
     is_min_spend_met: isMinSpendMet,
     activeRules,
+    estYearlyTotal,
     cycle: cycleRange ? {
-      tag: cycleTag,
+      tag: resolvedCycleTag,
       label: config.cycleType === 'statement_cycle'
         ? `${format(cycleRange.start, 'dd.MM')} - ${format(cycleRange.end, 'dd.MM')}`
-        : cycleTag,
+        : resolvedCycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),
     } : null

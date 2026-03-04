@@ -61,7 +61,7 @@ export function AccountTableV2({
     const robustAllAccounts = allAccounts || accounts;
 
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-        new Set(['credit', 'loans', 'savings'])
+        new Set(['credit', 'loans', 'banks', 'investments'])
     );
 
     const [sortConfig, setSortConfig] = useState<{
@@ -142,10 +142,15 @@ export function AccountTableV2({
                 label: 'Loans & Debt',
                 accounts: applySort(accounts.filter(a => a.type === 'debt')),
             },
-            'savings': {
-                section: 'savings' as const,
-                label: 'Accounts & Savings',
-                accounts: applySort(accounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt')),
+            'banks': {
+                section: 'banks' as const,
+                label: 'Cash & Banks',
+                accounts: applySort(accounts.filter(a => ['bank', 'cash', 'e_wallet'].includes(a.type) || (!['credit_card', 'debt', 'savings', 'investment', 'bank', 'cash', 'e_wallet'].includes(a.type)))),
+            },
+            'investments': {
+                section: 'investments' as const,
+                label: 'Assets & Investments',
+                accounts: applySort(accounts.filter(a => ['savings', 'investment'].includes(a.type))),
             },
         };
 
@@ -280,9 +285,9 @@ export function AccountTableV2({
                                         if (key === 'limit') return 'Limit & Waiver';
                                         if (key === 'rewards') return 'Rewards & Target';
                                         if (key === 'due') return 'Due & Cycle';
-                                    } else if (group.section === 'savings') {
+                                    } else if (group.section === 'investments' || group.section === 'banks') {
                                         if (key === 'limit') return 'Status';
-                                        if (key === 'rewards') return 'Interest & Benefits';
+                                        if (key === 'rewards') return 'Benefits';
                                         if (key === 'due') return 'Activity';
                                     } else if (group.section === 'loans') {
                                         if (key === 'limit') return 'Debt Type';

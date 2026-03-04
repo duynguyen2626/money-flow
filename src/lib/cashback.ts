@@ -116,7 +116,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
 
   // IMPORTANT: Fix for "cycleType=statement_cycle and statementDay=15 never default to calendar-month"
   const rawCycle = program ? program.cycleType : getVal(['cycle_type', 'cycle', 'cycleType']);
-  const cycleType: CashbackCycleType = (rawCycle === 'statement_cycle') ? 'statement_cycle' : (rawCycle === 'calendar_month' ? 'calendar_month' : null);
+  let cycleType: CashbackCycleType = (rawCycle === 'statement_cycle') ? 'statement_cycle' : (rawCycle === 'calendar_month' ? 'calendar_month' : null);
 
   const rawStatementDay = program ? program.statementDay : getVal(['statement_day', 'statementDay', 'statement_date']);
   let statementDay: number | null = null;
@@ -151,9 +151,9 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
     }));
   }
 
-  // DIAGNOSTIC LOG: If it's supposed to be statement cycle but statementDay is missing
+  // Graceful fallback: if statement_cycle is configured but statementDay is missing, use calendar_month
   if (cycleType === 'statement_cycle' && !statementDay) {
-    console.error(`[parseCashbackConfig] Account ${source} configured as statement_cycle but statementDay is missing/null.`);
+    cycleType = 'calendar_month';
   }
 
   return {

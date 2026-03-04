@@ -49,6 +49,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
             if (['expense', 'debt', 'credit_pay'].includes(txType)) return catType === 'expense';
             if (['income', 'repayment'].includes(txType)) return catType === 'income';
             if (txType === 'transfer') return catType === 'transfer';
+            if (txType === 'invest') return catType === 'investment';
 
             return true;
         });

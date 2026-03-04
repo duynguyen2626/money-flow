@@ -27,7 +27,7 @@ type TransactionStatus =
   | "waiting_refund"
   | "refunded"
   | "completed";
-type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment" | "credit_pay";
+type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment" | "credit_pay" | "invest";
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -109,6 +109,7 @@ function resolveBaseType(
   if (type === "repayment") return "income";
   if (type === "debt") return "expense";
   if (type === "credit_pay") return "transfer";
+  if (type === "invest") return "transfer";
   if (type === "transfer") return "transfer";
   return type;
 }
@@ -143,6 +144,17 @@ async function normalizeInput(
     input.amount,
   );
 
+  const isInvest = input.type === "invest";
+  const dbType = isInvest ? "transfer" : input.type;
+
+  const modifiedMetadata = input.metadata ? { ...(input.metadata as object) } : {};
+  if (isInvest) {
+    (modifiedMetadata as any).is_invest = true;
+  } else if (modifiedMetadata && (modifiedMetadata as any).is_invest) {
+    // If we changed from invest to something else, remove the flag
+    delete (modifiedMetadata as any).is_invest;
+  }
+
   return {
     occurred_at: input.occurred_at,
     note: input.note ?? null,
@@ -150,12 +162,12 @@ async function normalizeInput(
     tag: input.tag ?? null,
     created_by: null,
     amount: normalizedAmount,
-    type: input.type,
+    type: dbType as any,
     account_id: input.source_account_id,
     target_account_id: baseType === "transfer" ? targetAccountId : null,
     category_id: input.category_id ?? null,
     person_id: input.person_id ?? null,
-    metadata: input.metadata ?? null,
+    metadata: Object.keys(modifiedMetadata).length > 0 ? modifiedMetadata : null,
     shop_id: input.shop_id ?? null,
     persisted_cycle_tag: null,
     is_installment: Boolean(input.is_installment),
@@ -400,8 +412,14 @@ export async function mapTransactionRow(
     }
   }
 
+  let effectiveRowType = row.type;
+  if (row.type === "transfer" && (row.metadata as any)?.is_invest) {
+    effectiveRowType = "invest" as any;
+  }
+
   return {
     ...row,
+    type: effectiveRowType,
     tag: normalizeMonthTag(row.tag) ?? row.tag ?? null,
     amount: displayAmount,
     original_amount: Math.abs(row.amount),

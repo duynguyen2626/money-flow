@@ -15,12 +15,14 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Support both cycleTag (new) and date (fallback) parameters
+  const cycleTag = url.searchParams.get('cycleTag') ?? undefined
   const dateParam = url.searchParams.get('date')
   const parsedDate = dateParam ? new Date(dateParam) : new Date()
   const referenceDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
 
   const categoryId = url.searchParams.get('categoryId') ?? undefined
-  const stats = await getAccountSpendingStats(accountId, referenceDate, categoryId)
+  const stats = await getAccountSpendingStats(accountId, referenceDate, categoryId, cycleTag)
 
   return NextResponse.json(stats)
 }

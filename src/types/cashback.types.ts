@@ -103,6 +103,7 @@ export type AccountSpendingStats = {
     label: string
     tag: string
   } | null
+  estYearlyTotal?: number // Projected yearly cashback based on current cycle
 }
 
 export type CashbackMonthSummary = {
