@@ -476,73 +476,74 @@ export async function loadTransactions(options: {
   context?: "person" | "account" | "general";
   includeVoided?: boolean;
 }): Promise<TransactionWithDetails[]> {
-  const { createClient } = await import("@/lib/pocketbase/server");
-  const pb = await createClient();
+  const supabase = createClient();
 
-  try {
-    const filters: string[] = [];
-    if (!options.includeVoided) {
-      filters.push('status != "void"');
+  let query = supabase
+    .from("transactions")
+    .select(
+      "id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count), cashback_entries(amount, mode, metadata)"
+    )
+    .order("occurred_at", { ascending: false });
+
+  if (!options.includeVoided) {
+    query = query.neq("status", "void");
+  }
+
+  if (options.transactionId) {
+    query = query.eq("id", options.transactionId);
+  } else {
+    if (options.personIds && options.personIds.length > 0) {
+      query = query.in("person_id", options.personIds);
+    } else if (options.personId) {
+      query = query.eq("person_id", options.personId);
+    } else if (options.accountId) {
+      query = query.or(
+        `account_id.eq.${options.accountId},target_account_id.eq.${options.accountId}`,
+      );
     }
+  }
 
-    if (options.transactionId) {
-      filters.push(`id = "${options.transactionId}"`);
-    } else {
-      if (options.personIds && options.personIds.length > 0) {
-        filters.push(`(${options.personIds.map(id => `person_id = "${id}"`).join(' || ')})`);
-      } else if (options.personId) {
-        filters.push(`person_id = "${options.personId}"`);
-      } else if (options.accountId) {
-        filters.push(`(account_id = "${options.accountId}" || to_account_id = "${options.accountId}")`);
-      }
-    }
+  if (options.shopId) {
+    query = query.eq("shop_id", options.shopId);
+  }
 
-    if (options.shopId) filters.push(`shop_id = "${options.shopId}"`);
-    if (options.categoryId) filters.push(`category_id = "${options.categoryId}"`);
+  if (options.categoryId) {
+    query = query.eq("category_id", options.categoryId);
+  }
 
-    const result = await pb.collection('transactions').getList(1, options.limit || 100, {
-      filter: filters.length > 0 ? filters.join(' && ') : undefined,
-      sort: '-date',
-      expand: 'account_id,to_account_id,category_id,person_id,shop_id',
+  if (options.installmentPlanId) {
+    query = query.eq("installment_plan_id", options.installmentPlanId);
+  }
+
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data, error } = await query;
+
+  if (error || !data) {
+    console.error("Error fetching transactions:", {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      hasData: !!data,
+      fullError: error
     });
+    return [];
+  }
 
-    return Promise.all(result.items.map(async (item) => {
-      // Map PB record to our TransactionWithDetails format
-      // Note: mapping might need careful adjustment for expanded fields
-      const row = {
-        ...item,
-        // Map PB names back to legacy names if they differ
-        occurred_at: item.date,
-        note: item.description,
-        // ... more mapping
-      } as any;
-
-      const lookups: any = {
-        accounts: new Map(),
-        categories: new Map(),
-        people: new Map(),
-        shops: new Map()
-      };
-
-      // Extract from expand
-      if (item.expand) {
-        if (item.expand.account_id) lookups.accounts.set(item.account_id, item.expand.account_id);
-        if (item.expand.to_account_id) lookups.accounts.set(item.to_account_id, item.expand.to_account_id);
-        if (item.expand.category_id) lookups.categories.set(item.category_id, item.expand.category_id);
-        if (item.expand.person_id) lookups.people.set(item.person_id, item.expand.person_id);
-        if (item.expand.shop_id) lookups.shops.set(item.shop_id, item.expand.shop_id);
-      }
-
-      return mapTransactionRow(row, {
+  const rows = data as unknown as FlatTransactionRow[];
+  const lookups = await fetchLookups(rows);
+  return Promise.all(
+    rows.map((row) =>
+      mapTransactionRow(row, {
         lookups,
         contextAccountId: options.accountId,
         contextMode: options.context ?? "general",
-      });
-    }));
-  } catch (error) {
-    console.error("Error fetching transactions from PocketBase:", error);
-    return [];
-  }
+      }),
+    )
+  );
 }
 
 export async function createTransaction(

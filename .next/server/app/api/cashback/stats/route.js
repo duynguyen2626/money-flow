@@ -1,0 +1,12 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/cashback/stats/route.js")
+R.c("server/chunks/[root-of-the-server]__7ae64a7e._.js")
+R.c("server/chunks/_44908a9a._.js")
+R.c("server/chunks/_4d57e0d9._.js")
+R.c("server/chunks/src_services_cashback_service_ts_af7fdedc._.js")
+R.c("server/chunks/[root-of-the-server]__7c55af0b._.js")
+R.c("server/chunks/d6ff3_next_dist_b12e8b17._.js")
+R.c("server/chunks/d6ff3_next_dist_27ebda14._.js")
+R.c("server/chunks/_f3f5178e._.js")
+R.c("server/chunks/_next-internal_server_app_api_cashback_stats_route_actions_b1a582fc.js")
+R.m(65479)
+module.exports=R.m(65479).exports

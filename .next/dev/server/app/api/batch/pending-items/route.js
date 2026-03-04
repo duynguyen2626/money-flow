@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/batch/pending-items/route.js")
+R.c("server/chunks/src_services_c470a8d2._.js")
+R.c("server/chunks/d6ff3_next_5a5ad61a._.js")
+R.c("server/chunks/cd977_@supabase_auth-js_dist_module_21949c4e._.js")
+R.c("server/chunks/50d1e_date-fns_7d004dae._.js")
+R.c("server/chunks/node_modules__pnpm_28e1c15c._.js")
+R.c("server/chunks/[root-of-the-server]__d36b7b93._.js")
+R.c("server/chunks/_next-internal_server_app_api_batch_pending-items_route_actions_a0181374.js")
+R.m("[project]/node_modules/.pnpm/next@16.0.10_@babel+core@7.28.5_react-dom@19.2.3_react@19.2.3__react@19.2.3/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/src/app/api/batch/pending-items/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)")
+module.exports=R.m("[project]/node_modules/.pnpm/next@16.0.10_@babel+core@7.28.5_react-dom@19.2.3_react@19.2.3__react@19.2.3/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/src/app/api/batch/pending-items/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)").exports
