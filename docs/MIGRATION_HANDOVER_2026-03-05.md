@@ -128,3 +128,41 @@
   1) lưu docs/handover,
   2) commit state hiện tại,
   3) chuyển bước còn lại cho agent sau bằng checklist rõ ràng.
+
+---
+
+## 7) Chuẩn SSH auth nhiều account (khuyến nghị)
+
+Mục tiêu: không bị mất auth khi push và không bị lẫn account giữa `personal` và `work`.
+
+### 7.1 Mẫu `~/.ssh/config`
+```ssh
+Host github-personal
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_personal
+  IdentitiesOnly yes
+
+Host github-work
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_work
+  IdentitiesOnly yes
+```
+
+### 7.2 Map repo này về account personal (`namnt..`)
+```bash
+git remote set-url origin git@github-personal:rei6868/money-flow-3.git
+```
+
+### 7.3 Kiểm tra key hoạt động
+```bash
+ssh -T git@github-personal
+```
+
+Kỳ vọng: GitHub trả về thông báo authenticated với đúng account personal.
+
+### 7.4 Lưu ý passphrase
+- `passphrase` là mật khẩu bảo vệ private key khi tạo bằng `ssh-keygen`.
+- Không nhập `github-personal` vào passphrase prompt.
+- Có thể để trống (tiện) hoặc đặt passphrase (an toàn hơn).
