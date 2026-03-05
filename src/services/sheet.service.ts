@@ -71,6 +71,11 @@ function calculateTotals(txn: SheetSyncTransaction) {
   }
 }
 
+function shouldExcludeFromSheet(note: string | null | undefined): boolean {
+  const normalized = String(note ?? '').toLowerCase()
+  return normalized.includes('#nosync') || normalized.includes('#deprecated')
+}
+
 function extractSheetId(sheetUrl: string | null | undefined): string | null {
   if (!sheetUrl) return null
   const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
@@ -241,8 +246,7 @@ export async function syncTransactionToSheet(
 ) {
   try {
     // Check for #nosync or #deprecated tags
-    const note = (txn.note || '').toLowerCase()
-    if (note.includes('#nosync') || note.includes('#deprecated')) {
+    if (shouldExcludeFromSheet(txn.note)) {
       // If tagged as nosync, we treat it as a deletion from the sheet
       action = 'delete'
     }
@@ -415,8 +419,6 @@ export async function syncAllTransactions(personId: string) {
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} transactions.`);
-
     const rows = (data ?? []) as unknown as {
       id: string
       occurred_at: string
@@ -434,10 +436,14 @@ export async function syncAllTransactions(personId: string) {
       categories: { name: string | null } | null
     }[]
 
+    const eligibleRows = rows.filter(txn => !shouldExcludeFromSheet(txn.note))
+
+    console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${rows.length} transactions, eligible ${eligibleRows.length} after #nosync/#deprecated filtering.`)
+
     // Group transactions by cycle tag
     const cycleMap = new Map<string, typeof rows>()
 
-    for (const txn of rows) {
+    for (const txn of eligibleRows) {
       const cycleTag = txn.tag || getCycleTag(new Date(txn.occurred_at))
       if (!cycleMap.has(cycleTag)) {
         cycleMap.set(cycleTag, [])
@@ -608,10 +614,7 @@ export async function syncCycleTransactions(
     }
 
     const rows = ((data ?? []) as any[])
-      .filter(txn => {
-        const note = (txn.note || '').toLowerCase()
-        return !note.includes('#nosync') && !note.includes('#deprecated')
-      })
+      .filter(txn => !shouldExcludeFromSheet(txn.note))
       .map(txn => {
         const shopData = txn.shops as any
         let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name

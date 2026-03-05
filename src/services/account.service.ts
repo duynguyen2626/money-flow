@@ -675,8 +675,8 @@ export async function updateAccountConfig(
 }
 
 export async function getAccountStats(accountId: string) {
-  const { getAccountSpendingStats } = await import('@/services/cashback.service')
-  const stats = await getAccountSpendingStats(accountId, new Date())
+  const { getAccountSpendingStatsSnapshot } = await import('@/services/cashback.service')
+  const stats = await getAccountSpendingStatsSnapshot(accountId, new Date())
 
   if (!stats) {
     return null

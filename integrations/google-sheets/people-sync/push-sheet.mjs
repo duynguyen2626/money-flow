@@ -10,6 +10,7 @@ const claspPath = join(__dirname, '.clasp.json')
 const repoRoot = join(__dirname, '..', '..', '..')
 const homeDir = process.env.HOME || process.env.USERPROFILE
 const globalClasprcPath = join(homeDir, '.clasprc.json')
+const expectedClaspEmail = (process.env.CLASP_EMAIL || 'namnt05@gmail.com').trim().toLowerCase()
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -33,6 +34,25 @@ const ask = (question) =>
       resolve(answer.trim())
     })
   })
+
+const resolveCurrentClaspEmail = async () => {
+  try {
+    if (!existsSync(globalClasprcPath)) return null
+    const creds = JSON.parse(readFileSync(globalClasprcPath, 'utf8'))
+    const accessToken = creds?.tokens?.default?.access_token
+    if (!accessToken) return null
+
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (!response.ok) return null
+    const payload = await response.json()
+    return typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : null
+  } catch {
+    return null
+  }
+}
 
 const isLikelyScriptId = (value) => /^[a-zA-Z0-9_-]{20,}$/.test(value)
 
@@ -144,6 +164,21 @@ const chooseProfile = async (profiles) => {
 
 const main = async () => {
   loadEnv()
+  const activeClaspEmail = await resolveCurrentClaspEmail()
+
+  if (activeClaspEmail) {
+    console.log(`Active clasp account: ${activeClaspEmail}`)
+    if (expectedClaspEmail && activeClaspEmail !== expectedClaspEmail) {
+      console.log(`\n❌ clasp account mismatch.`)
+      console.log(`Expected: ${expectedClaspEmail}`)
+      console.log(`Actual:   ${activeClaspEmail}`)
+      console.log(`Run 'clasp login' with the expected account, then retry.`)
+      process.exit(1)
+    }
+  } else {
+    console.log('⚠️ Unable to resolve active clasp account email from token. Continuing...')
+  }
+
   const profiles = buildProfiles()
 
   if (profiles.length === 0 && prefixArg) {
@@ -276,8 +311,9 @@ const main = async () => {
           console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
 
           // Enhanced Auth Handling
-          console.log(`\nPush to ${profile.key} failed. This is likely a permission issue for namnt05@gmail.com.`)
-          console.log(`Please ensure the script ID (${profile.value}) is shared with namnt05@gmail.com as Editor.`)
+          const emailForMessage = activeClaspEmail || expectedClaspEmail || 'your clasp account'
+          console.log(`\nPush to ${profile.key} failed. This is likely a permission issue for ${emailForMessage}.`)
+          console.log(`Please ensure the script ID (${profile.value}) is shared with ${emailForMessage} as Editor.`)
 
           const loginChoice = await ask(`Would you like to run 'clasp login' to refresh your token and retry? (y/n): `)
 

@@ -532,6 +532,131 @@ export async function removeTransactionCashback(transactionId: string) {
 }
 
 /**
+ * Snapshot-first stats path (fast):
+ * Reads precomputed metrics from cashback_cycles and avoids heavy transaction scans.
+ */
+export async function getAccountSpendingStatsSnapshot(
+  accountId: string,
+  date: Date,
+  categoryId?: string,
+  cycleTag?: string,
+): Promise<AccountSpendingStats | null> {
+  const supabase = getCashbackClient();
+  const { data: account } = await (supabase
+    .from('accounts')
+    .select('cashback_config, type, cb_type, cb_base_rate, cb_rules_json')
+    .eq('id', accountId)
+    .single() as any);
+
+  if (!account || account.type !== 'credit_card') return null;
+
+  const config = parseCashbackConfig(account.cashback_config, accountId);
+
+  let resolvedCycleTag: string;
+  let cycleRange: { start: Date; end: Date } | null;
+
+  if (cycleTag) {
+    resolvedCycleTag = cycleTag;
+    try {
+      const [yearStr, monthStr] = cycleTag.split('-');
+      if (yearStr && monthStr) {
+        const year = parseInt(yearStr, 10);
+        const month = parseInt(monthStr, 10);
+        if (!isNaN(year) && !isNaN(month)) {
+          const refDate = new Date(year, month - 1, 1);
+          cycleRange = getCashbackCycleRange(config, refDate);
+        } else {
+          cycleRange = getCashbackCycleRange(config, date);
+        }
+      } else {
+        cycleRange = getCashbackCycleRange(config, date);
+      }
+    } catch {
+      cycleRange = getCashbackCycleRange(config, date);
+    }
+  } else {
+    cycleRange = getCashbackCycleRange(config, date);
+    const tagDate = cycleRange?.end ?? date;
+    resolvedCycleTag = formatIsoCycleTag(tagDate);
+  }
+
+  const legacyTag = formatLegacyCycleTag(cycleRange?.end ?? date);
+
+  let cycle = (await supabase
+    .from('cashback_cycles')
+    .select('cycle_tag, spent_amount, min_spend_target, max_budget, real_awarded, virtual_profit')
+    .eq('account_id', accountId)
+    .eq('cycle_tag', resolvedCycleTag)
+    .maybeSingle()).data as any ?? null;
+
+  if (!cycle && legacyTag !== resolvedCycleTag) {
+    cycle = (await supabase
+      .from('cashback_cycles')
+      .select('cycle_tag, spent_amount, min_spend_target, max_budget, real_awarded, virtual_profit')
+      .eq('account_id', accountId)
+      .eq('cycle_tag', legacyTag)
+      .maybeSingle()).data as any ?? null;
+  }
+
+  let categoryName = undefined;
+  if (categoryId) {
+    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single() as any;
+    categoryName = cat?.name;
+  }
+
+  const policy = resolveCashbackPolicy({
+    account,
+    categoryId,
+    amount: 1000000,
+    cycleTotals: { spent: cycle?.spent_amount ?? 0 },
+    categoryName
+  });
+
+  const currentSpend = Number(cycle?.spent_amount ?? 0);
+  const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
+  const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
+  const actualClaimed = Number(cycle?.real_awarded ?? 0);
+  const virtualProfit = Number(cycle?.virtual_profit ?? 0);
+
+  const earnedSoFar = actualClaimed + virtualProfit;
+  const sharedAmount = actualClaimed;
+  const netProfit = virtualProfit;
+
+  const isUnlimitedBudget = account.cb_is_unlimited === true;
+  const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
+  const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
+  const estYearlyTotal = earnedSoFar * 12;
+
+  return {
+    currentSpend,
+    minSpend: minSpendTarget,
+    maxCashback: cycleMaxBudget,
+    actualClaimed,
+    rate: policy.rate,
+    maxReward: policy.maxReward,
+    earnedSoFar,
+    sharedAmount,
+    potentialProfit: netProfit,
+    netProfit,
+    remainingBudget,
+    potentialRate: policy.rate,
+    matchReason: normalizePolicyMetadata(policy.metadata)?.policySource,
+    policyMetadata: normalizePolicyMetadata(policy.metadata) ?? undefined,
+    is_min_spend_met: isMinSpendMet,
+    activeRules: [],
+    estYearlyTotal,
+    cycle: cycleRange ? {
+      tag: resolvedCycleTag,
+      label: config.cycleType === 'statement_cycle'
+        ? `${format(cycleRange.start, 'dd.MM')} - ${format(cycleRange.end, 'dd.MM')}`
+        : resolvedCycleTag,
+      start: cycleRange.start.toISOString(),
+      end: cycleRange.end.toISOString(),
+    } : null
+  };
+}
+
+/**
  * Returns stats for a specific account/date context.
  */
 export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string, cycleTag?: string): Promise<AccountSpendingStats | null> {
@@ -597,20 +722,6 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .maybeSingle()).data as any ?? null;
   }
 
-  console.log(`[getAccountSpendingStats] ========== START ==========`);
-  console.log(`[getAccountSpendingStats] Account ID: ${accountId}`);
-  console.log(`[getAccountSpendingStats] Input cycleTag: ${cycleTag}`);
-  console.log(`[getAccountSpendingStats] Resolved cycleTag: ${resolvedCycleTag}`);
-  console.log(`[getAccountSpendingStats] Legacy tag: ${legacyTag}`);
-  console.log(`[getAccountSpendingStats] Cycle found in DB: ${!!cycle}`);
-  console.log(`[getAccountSpendingStats] Cycle data:`, cycle ? {
-    cycle_tag: cycle.cycle_tag,
-    spent_amount: cycle.spent_amount,
-    real_awarded: cycle.real_awarded,
-    min_spend_target: cycle.min_spend_target,
-    max_budget: cycle.max_budget
-  } : 'NULL');
-
   let categoryName = undefined;
   if (categoryId) {
     const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single() as any;
@@ -628,61 +739,35 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
 
   // MF6.1 FIX: Helper to aggregate cycle stats in real-time for accuracy
   // 1. Calculate Spent Amount & Eligible Transactions
-  let txnsQuery = supabase
+  const txnsQuery = supabase
     .from('transactions')
     .select(`
       id, amount, type, occurred_at, note,
       cashback_share_percent, cashback_share_fixed,
       est_cashback, cashback_shared_amount,
-      category:categories(id, name, icon, kind),
-      shop:shops(name, image_url)
+      category:categories(id, name, kind)
     `)
     .eq('account_id', accountId)
     .neq('status', 'void')
     .in('type', ['expense', 'debt', 'service']);
 
-  // MF17: Robust cycle matching - try persisted_cycle_tag first, then 'tag' column, then date range
-  const { data: tagTxns } = await txnsQuery.eq('persisted_cycle_tag', resolvedCycleTag);
+  const resolvedEscaped = resolvedCycleTag.replaceAll(',', '');
+  const legacyEscaped = legacyTag.replaceAll(',', '');
+  const tagPredicates = legacyEscaped !== resolvedEscaped
+    ? `persisted_cycle_tag.eq.${resolvedEscaped},persisted_cycle_tag.eq.${legacyEscaped},tag.eq.${resolvedEscaped},tag.eq.${legacyEscaped}`
+    : `persisted_cycle_tag.eq.${resolvedEscaped},tag.eq.${resolvedEscaped}`;
 
-  // Also try matching by 'tag' column (some transactions use this legacy approach)
-  const { data: legacyTagTxns } = await (supabase
-    .from('transactions')
-    .select(`
-      id, amount, type, occurred_at, note,
-      cashback_share_percent, cashback_share_fixed,
-      est_cashback, cashback_shared_amount,
-      category:categories(id, name, icon, kind),
-      shop:shops(name, image_url)
-    `)
-    .eq('account_id', accountId)
-    .neq('status', 'void')
-    .in('type', ['expense', 'debt', 'service'])
-    .eq('tag', resolvedCycleTag) as any);
-
-  // Merge both result sets, deduplicating by ID
-  const mergedMap = new Map<string, any>();
-  (tagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
-  (legacyTagTxns || []).forEach((t: any) => mergedMap.set(t.id, t));
-
-  let rawTxns = Array.from(mergedMap.values());
-
-  console.log(`[getAccountSpendingStats] Transactions found by persisted_cycle_tag: ${(tagTxns || []).length}`);
-  console.log(`[getAccountSpendingStats] Transactions found by tag column: ${(legacyTagTxns || []).length}`);
-  console.log(`[getAccountSpendingStats] Merged transactions (after dedup): ${rawTxns.length}`);
+  const { data: tagMatchedTxns } = await (txnsQuery.or(tagPredicates) as any);
+  let rawTxns = tagMatchedTxns || [];
 
   if (rawTxns.length === 0 && cycleRange) {
-    console.log(`[getAccountSpendingStats] No transactions found by tag, trying date range:`, {
-      start: cycleRange.start.toISOString(),
-      end: cycleRange.end.toISOString()
-    });
     const { data: dateTxns } = await supabase
       .from('transactions')
       .select(`
             id, amount, type, occurred_at, note,
             cashback_share_percent, cashback_share_fixed,
             est_cashback, cashback_shared_amount,
-            category:categories(id, name, icon, kind),
-            shop:shops(name, image_url)
+            category:categories(id, name, kind)
         `)
       .eq('account_id', accountId)
       .neq('status', 'void')
@@ -690,7 +775,6 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .gte('occurred_at', cycleRange.start.toISOString())
       .lte('occurred_at', cycleRange.end.toISOString());
     rawTxns = dateTxns || [];
-    console.log(`[getAccountSpendingStats] Transactions found by date range: ${rawTxns.length}`);
   }
 
   // MF16: Aggregate only non-initial/rollover/internal transactions
@@ -710,11 +794,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const currentSpend = txns.reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
   const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
-
-  console.log(`[getAccountSpendingStats] Eligible transactions (after filtering): ${txns.length}`);
-  console.log(`[getAccountSpendingStats] Current spend total: ${currentSpend.toLocaleString()}`);
-  console.log(`[getAccountSpendingStats] Min spend target: ${minSpendTarget}`);
-  console.log(`[getAccountSpendingStats] Max cashback budget: ${cycleMaxBudget}`);
+  const actualClaimed = Number(cycle?.real_awarded ?? 0);
 
   // 2. Aggregate Cashback Values (transaction-first with persisted entry fallback)
   // Prefer transaction-level computed fields when present so selected-cycle metrics
@@ -876,15 +956,6 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const remainingBudget = (isUnlimitedBudget || cycleMaxBudget === null) ? null : Math.max(0, cycleMaxBudget - earnedSoFar);
   const isMinSpendMet = currentSpend >= (minSpendTarget ?? 0);
 
-  console.log(`[getAccountSpendingStats] ========== RESULTS ==========`);
-  console.log(`[getAccountSpendingStats] Earned so far: ${earnedSoFar.toLocaleString()}`);
-  console.log(`[getAccountSpendingStats] Shared amount: ${sharedAmount.toLocaleString()}`);
-  console.log(`[getAccountSpendingStats] Net profit: ${netProfit.toLocaleString()}`);
-  console.log(`[getAccountSpendingStats] estYearlyTotal: ${(earnedSoFar * 12).toLocaleString()}`);
-  console.log(`[getAccountSpendingStats] Is min spend met: ${isMinSpendMet}`);
-  console.log(`[getAccountSpendingStats] Remaining budget: ${remainingBudget}`);
-  console.log(`[getAccountSpendingStats] ========== END ==========`);
-
   // Calculate Est Yearly Total (earnedSoFar scaled to year, simplified for now)
   // or use a more sophisticated projection if needed.
   // For now, let's at least sum what we have.
@@ -894,6 +965,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     currentSpend,
     minSpend: minSpendTarget,
     maxCashback: cycleMaxBudget,
+    actualClaimed,
     rate: policy.rate,
     maxReward: policy.maxReward,
     earnedSoFar,
@@ -1428,9 +1500,9 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
   const supabase = createAdminClient();
   const { data: cycles } = await (supabase
     .from('cashback_cycles')
-    .select('cycle_tag')
+    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit')
     .eq('account_id', accountId)
-    .limit(48) as any);
+    .limit(Math.max(limit * 2, 24)) as any);
 
   const { data: account } = await (supabase
     .from('accounts')
@@ -1485,6 +1557,12 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     return {
       tag,
       label,
+      cycleId: c.id ?? null,
+      stats: {
+        spent_amount: c.spent_amount ?? 0,
+        real_awarded: c.real_awarded ?? 0,
+        virtual_profit: c.virtual_profit ?? 0,
+      },
       cycleType: config.cycleType,
       statementDay: config.statementDay,
     };
@@ -1498,7 +1576,7 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
 export async function getCashbackYearAnalytics(year: number): Promise<import('@/types/cashback.types').CashbackYearSummary[]> {
   const supabase = createAdminClient() as any;
 
-  // 1. Get credit cards and debt accounts (for volunteer/loans)
+  // 1. Get active credit cards
   const { data: cards, error: cardError } = await supabase
     .from('accounts')
     .select('id, name, annual_fee, type')
@@ -1511,94 +1589,62 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
   }
 
   const cardIds = cards.map((c: any) => c.id);
-  console.log(`[getCashbackYearAnalytics] Found ${cardIds.length} cards/debt-accounts:`, cards.map((c: any) => `${c.name} (${c.type})`).join(', '));
-
   if (cardIds.length === 0) return [];
 
-  const startDate = `${year}-01-01`;
-  const endDate = `${year}-12-31T23:59:59`;
-
-  // 2. Batch Fetch Transactions (Single Query)
-  const { data: allTxns } = await supabase
-    .from('transactions')
-    .select(`
-        id, amount, occurred_at, type, category_id, account_id, cashback_mode,
-        cashback_entries ( amount )
-      `)
+  // 2. Snapshot-first yearly cycles from cashback_cycles
+  const startTag = `${year}-01`;
+  const endTag = `${year}-12`;
+  const { data: allCycles, error: cyclesError } = await supabase
+    .from('cashback_cycles')
+    .select('account_id, cycle_tag, real_awarded, shared_amount, net_profit, virtual_profit')
     .in('account_id', cardIds)
-    .gte('occurred_at', startDate)
-    .lte('occurred_at', endDate)
-    .neq('status', 'void') as any;
+    .gte('cycle_tag', startTag)
+    .lte('cycle_tag', endTag) as any;
 
-  // 3. Batch Fetch Redeemed (Income 'Hoàn tiền (Cashback)')
-  const { data: allRedeemed } = await supabase
-    .from('transactions')
-    .select('amount, account_id')
-    .in('account_id', cardIds)
-    .gte('occurred_at', startDate)
-    .lte('occurred_at', endDate)
-    .neq('status', 'void')
-    .eq('type', 'income')
-    .eq('category_id', 'e0000000-0000-0000-0000-000000000092');
+  if (cyclesError) {
+    console.error('[getCashbackYearAnalytics] Failed to fetch cycles:', cyclesError);
+    return [];
+  }
 
   const results: import('@/types/cashback.types').CashbackYearSummary[] = [];
-  const { computeCardCashbackProfit } = await import('@/lib/analytics-utils');
 
   for (const card of cards) {
-    // A. Filter Data in Memory
-    const cardTxns = (allTxns || []).filter((t: any) => t.account_id === card.id);
-    const cardRedeemedTxns = (allRedeemed || []).filter((t: any) => t.account_id === card.id);
+    const cardCycles = (allCycles || []).filter((cycle: any) => cycle.account_id === card.id);
 
-    const monthsData: { [key: number]: { spend: number, given: number } } = {};
-    for (let m = 1; m <= 12; m++) monthsData[m] = { spend: 0, given: 0 };
+    const monthMap = new Map<number, { cashbackGiven: number; totalGivenAway: number; netProfit: number; redeemed: number }>();
+    for (let month = 1; month <= 12; month++) {
+      monthMap.set(month, { cashbackGiven: 0, totalGivenAway: 0, netProfit: 0, redeemed: 0 });
+    }
 
-    cardTxns.forEach((t: any) => {
+    for (const cycle of cardCycles) {
+      const parsed = parseCycleTag(cycle.cycle_tag);
+      if (!parsed || parsed.year !== year) continue;
 
+      const target = monthMap.get(parsed.month);
+      if (!target) continue;
 
-      const date = new Date(t.occurred_at);
-      const month = date.getMonth() + 1;
+      const sharedAmount = Number(cycle.shared_amount ?? cycle.real_awarded ?? 0);
+      const redeemedAmount = Number(cycle.real_awarded ?? 0);
+      const profitAmount = Number(cycle.net_profit ?? cycle.virtual_profit ?? 0);
 
-      // DEBUG: Log transaction processing
-      // if (t.type === 'debt') console.log(`[CashbackAnalytics] Processing DEBT txn: ${t.id} Amount: ${t.amount} Account: ${t.account_id}`);
+      target.cashbackGiven += sharedAmount;
+      target.totalGivenAway += sharedAmount;
+      target.netProfit += profitAmount;
+      target.redeemed += redeemedAmount;
+    }
 
-      // Track cashback GIVEN AWAY to people (not the lent amount itself)
-      // Calculate: (cashback_share_percent * amount) + cashback_share_fixed
-      if (t.type === 'debt') {
-        const sharePercent = parseFloat(t.cashback_share_percent || '0');
-        const shareFixed = parseFloat(t.cashback_share_fixed || '0');
-        const txnAmount = Math.abs(t.amount);
-        const cashbackGivenAway = (sharePercent * txnAmount) + shareFixed;
-        monthsData[month].spend += cashbackGivenAway;
-      }
-
-      // Sum cashback entries for this transaction
-      if (t.cashback_entries && t.cashback_entries.length > 0) {
-        // Fix: Shared Return should ONLY count Voluntary (Shared) cashback.
-        // Previously it summed ALL cashback (including real/bank).
-        const given = t.cashback_entries
-          .filter((e: any) => e.mode === 'voluntary')
-          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
-        monthsData[month].given += given;
-      }
-    });
-
-    const monthsArray = Object.entries(monthsData).map(([m, val]) => ({
-      month: Number(m),
-      totalGivenAway: val.spend, // Total cashback given away (percent + fixed)
-      cashbackGiven: val.given
+    const monthsArray = Array.from(monthMap.entries()).map(([month, val]) => ({
+      month,
+      totalGivenAway: val.totalGivenAway,
+      cashbackGiven: val.cashbackGiven,
     }));
 
-    const cashbackGivenYearTotal = monthsArray.reduce((sum, m) => sum + m.cashbackGiven, 0);
-    const cashbackRedeemedYearTotal = cardRedeemedTxns.reduce((sum: any, t: any) => sum + Math.abs(t.amount || 0), 0);
-    const annualFeeYearTotal = card.annual_fee || 0;
+    const cashbackGivenYearTotal = Array.from(monthMap.values()).reduce((sum, val) => sum + val.cashbackGiven, 0);
+    const cashbackRedeemedYearTotal = Array.from(monthMap.values()).reduce((sum, val) => sum + val.redeemed, 0);
+    const annualFeeYearTotal = Number(card.annual_fee || 0);
     const interestYearTotal = 0;
-
-    const netProfit = computeCardCashbackProfit({
-      cashbackRedeemed: cashbackRedeemedYearTotal,
-      cashbackGiven: cashbackGivenYearTotal,
-      annualFee: annualFeeYearTotal,
-      interest: interestYearTotal
-    });
+    const snapshotNetProfit = Array.from(monthMap.values()).reduce((sum, val) => sum + val.netProfit, 0);
+    const netProfit = snapshotNetProfit - annualFeeYearTotal - interestYearTotal;
 
     results.push({
       cardId: card.id,

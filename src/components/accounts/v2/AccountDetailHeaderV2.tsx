@@ -156,7 +156,7 @@ export function AccountDetailHeaderV2({
         const fetchCashbackStats = async () => {
             setIsCashbackLoading(true)
             try {
-                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}`)
+                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}&mode=snapshot`)
                 if (response.ok) {
                     const data = await response.json()
                     setDynamicCashbackStats(data)
@@ -1088,7 +1088,7 @@ export function AccountDetailHeaderV2({
                                                     const minSpend = stats.minSpend || 0;
                                                     const spent = stats.currentSpend || 0;
                                                     const cap = stats.maxCashback || 0;
-                                                    const earned = selectedCycleMetrics?.est ?? (stats.earnedSoFar || 0);
+                                                    const earned = stats.earnedSoFar || selectedCycleMetrics?.est || 0;
 
                                                     const activeMax = stats.activeRules?.reduce((acc, r) => acc + (r.max || 0), 0) || 0;
                                                     const effectiveCap = cap > 0 ? cap : activeMax;
@@ -1129,7 +1129,7 @@ export function AccountDetailHeaderV2({
                                                     const cycleShared = dynamicCashbackStats?.sharedAmount || 0;
                                                     const cycleProfit = dynamicCashbackStats?.netProfit || 0;
                                                     const cycleCurrentSpend = dynamicCashbackStats?.currentSpend || 0;
-                                                    const cycleActualClaimed = selectedCycleMetrics?.actual ?? 0;
+                                                    const cycleActualClaimed = dynamicCashbackStats?.actualClaimed ?? selectedCycleMetrics?.actual ?? 0;
 
                                                     // Build detailed formula from activeRules for Est tooltip
                                                     const ruleDetails = (dynamicCashbackStats?.activeRules || []).map((rule: any) => {

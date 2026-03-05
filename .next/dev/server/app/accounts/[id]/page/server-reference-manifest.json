@@ -1440,6 +1440,21 @@
       "exportedName": "getCashbackProgress",
       "filename": "src/services/cashback.service.ts"
     },
+    "7831fa7a53dec5c616fc7b30be32a97425659b4a2a": {
+      "workers": {
+        "app/accounts/[id]/page": {
+          "moduleId": "[project]/.next-internal/server/app/accounts/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/actions/ai-reminder-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/src/actions/ai-actions-v2.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/src/actions/transaction-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/src/actions/ai-learn-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE4 => \"[project]/src/services/account.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE5 => \"[project]/src/services/people.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE6 => \"[project]/src/services/shop.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE7 => \"[project]/src/services/category.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE8 => \"[project]/src/actions/bulk-transaction-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE9 => \"[project]/src/actions/log-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE10 => \"[project]/src/services/transaction.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE11 => \"[project]/src/actions/cascade-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE12 => \"[project]/src/actions/account-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE13 => \"[project]/src/services/installment.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE14 => \"[project]/src/actions/people-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE15 => \"[project]/src/actions/service-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE16 => \"[project]/src/actions/settings-actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE17 => \"[project]/src/services/cashback.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE18 => \"[project]/src/services/sheet.service.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE19 => \"[project]/src/actions/cashback.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE20 => \"[project]/src/actions/history-actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getAccountSpendingStatsSnapshot",
+          "filename": "src/services/cashback.service.ts"
+        }
+      },
+      "layer": {
+        "app/accounts/[id]/page": "rsc"
+      },
+      "exportedName": "getAccountSpendingStatsSnapshot",
+      "filename": "src/services/cashback.service.ts"
+    },
     "787d4b0bcc1fd5f8c8942ee2b5c83f1de5f7760cf5": {
       "workers": {
         "app/accounts/[id]/page": {

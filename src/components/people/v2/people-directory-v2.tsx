@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Person, Subscription, Account, Category, Shop } from "@/types/moneyflow.types";
 import {
     LayoutGrid,
@@ -33,6 +34,7 @@ export function PeopleDirectoryV2({
     categories,
     shops,
 }: PeopleDirectoryV2Props) {
+    const router = useRouter();
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
     const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -195,6 +197,7 @@ export function PeopleDirectoryV2({
             error: 'Failed to sync sheets',
         });
         await promise;
+        router.refresh();
         setIsSyncingAll(false);
     };
 
@@ -206,6 +209,7 @@ export function PeopleDirectoryV2({
             error: (err) => `Failed to sync sheet: ${err.message || err}`
         });
         await promise;
+        router.refresh();
     };
 
     const handleTxnSuccess = () => {

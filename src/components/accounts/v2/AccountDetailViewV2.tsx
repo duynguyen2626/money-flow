@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useState, useTransition, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
     Account,
@@ -248,20 +247,13 @@ export function AccountDetailViewV2({
         }
         window.addEventListener('refresh-account-data', handleRefresh)
 
-        const supabase = createClient()
-        const channel = supabase
-            .channel(`account_pending_stats_${account.id}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'batch_items',
-                filter: `target_account_id=eq.${account.id}`,
-            }, () => syncPendingStats())
-            .subscribe()
+        const pollTimer = window.setInterval(() => {
+            syncPendingStats()
+        }, 30_000)
 
         return () => {
             window.removeEventListener('refresh-account-data', handleRefresh)
-            supabase.removeChannel(channel)
+            window.clearInterval(pollTimer)
         }
     }, [account.id, syncPendingStats])
 

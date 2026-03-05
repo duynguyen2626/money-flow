@@ -52,6 +52,7 @@ export function AccountCycleTransactionsModal({
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [activeTab, setActiveTab] = useState<string>('all');
     const lastCycleKeyRef = useRef<string | null>(null);
+    const loadedCyclesForAccountRef = useRef<string | null>(null);
 
     // Helper to get fiscal year from cycle (year of cycle start date)
     const getYear = (c: AccountCycleOption) => {
@@ -119,11 +120,17 @@ export function AccountCycleTransactionsModal({
     useEffect(() => {
         if (!open || !accountId) return;
 
+        if (loadedCyclesForAccountRef.current === accountId && cycleOptions.length > 0) {
+            setLoadingCycles(false);
+            return;
+        }
+
         const loadCycles = async () => {
             setLoadingCycles(true);
             try {
                 const res = await fetchAccountCycleOptionsAction(accountId);
                 setCycleOptions(Array.isArray(res) ? res : []);
+                loadedCyclesForAccountRef.current = accountId;
                 if (res && res.length > 0 && !selectedCycleTag) {
                     const currentYear = String(new Date().getFullYear());
                     setSelectedYear(currentYear);
@@ -142,6 +149,7 @@ export function AccountCycleTransactionsModal({
             } catch (err) {
                 console.error("Failed to load cycles", err);
                 setCycleOptions([]);
+                loadedCyclesForAccountRef.current = null;
             } finally {
                 setLoadingCycles(false);
             }
