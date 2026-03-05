@@ -1,19 +1,41 @@
 'use server'
 
 import {
-    getMonthlyCashbackTransactions,
-    getCashbackProgress
-} from '@/services/cashback.service'
-import {
     getPocketBaseAccountCycleOptions,
     getPocketBaseCycleTransactions,
-    getPocketBaseAccountSpendingStatsSnapshot,
 } from '@/services/pocketbase/account-details.service'
-import { parseCycleTag } from '@/lib/cashback'
+import { pocketbaseList, toPocketBaseId } from '@/services/pocketbase/server'
 
 export async function fetchMonthlyCashbackDetails(cardId: string, month: number, year: number) {
     try {
-        return await getMonthlyCashbackTransactions(cardId, month, year)
+        const pbAccountId = toPocketBaseId(cardId, 'accounts')
+        const startDate = new Date(year, month - 1, 1).toISOString()
+        const endDate = new Date(year, month, 1).toISOString()
+
+        const response = await pocketbaseList<Record<string, unknown>>('transactions', {
+            perPage: 500,
+            sort: '-occurred_at',
+            filter: `account_id='${pbAccountId}' && occurred_at>='${startDate}' && occurred_at<'${endDate}' && type='debt' && status!='void'`,
+            expand: 'category_id',
+            fields: 'id,occurred_at,note,amount,type,cashback_amount,cashback_share_percent,cashback_share_fixed,expand',
+        })
+
+        return (response.items || []).map((t: Record<string, unknown>) => {
+            const expanded = t.expand as Record<string, unknown> | undefined
+            const category = expanded?.category_id as Record<string, unknown> | undefined
+            return {
+                id: t.id,
+                occurred_at: t.occurred_at,
+                note: t.note,
+                amount: Number(t.amount || 0),
+                type: t.type,
+                cashback_share_percent: t.cashback_share_percent ?? null,
+                cashback_share_fixed: t.cashback_share_fixed ?? null,
+                cashbackGiven: Number(t.cashback_amount || 0),
+                category: category ? { name: category.name, icon: category.icon } : null,
+                cashback_entries: [],
+            }
+        })
     } catch (error) {
         console.error('Failed to fetch monthly cashback details:', error)
         return []
