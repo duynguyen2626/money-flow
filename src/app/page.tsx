@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { getDashboardStats } from '@/services/dashboard.service'
 import { createClient } from '@/lib/supabase/server'
-import { getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
+import {
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBasePeople,
+  getPocketBaseShops,
+} from '@/services/pocketbase/account-details.service'
 import { DashboardContent } from '@/components/dashboard/dashboard-content'
 
 export const dynamic = 'force-dynamic'
@@ -33,10 +35,10 @@ export default async function Home({
 
   const [stats, accounts, categories, people, shops] = await Promise.all([
     getDashboardStats(month, year),
-    getAccounts(),
-    getCategories(),
-    getPeople(),
-    getShops(),
+    getPocketBaseAccounts(),
+    getPocketBaseCategories(),
+    getPocketBasePeople(),
+    getPocketBaseShops(),
   ])
 
   return (

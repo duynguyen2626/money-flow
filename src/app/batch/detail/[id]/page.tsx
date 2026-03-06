@@ -1,5 +1,5 @@
 import { getBatchByIdAction } from '@/actions/batch.actions'
-import { getAccounts } from '@/services/account.service'
+import { getPocketBaseAccounts } from '@/services/pocketbase/account-details.service'
 import { BatchDetail } from '@/components/batch/batch-detail'
 import { getBankMappings } from '@/services/bank.service'
 import { getSheetWebhookLinks } from '@/services/webhook-link.service'
@@ -7,7 +7,7 @@ import { getSheetWebhookLinks } from '@/services/webhook-link.service'
 export default async function BatchDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const batch = await getBatchByIdAction(id)
-    const accounts = await getAccounts()
+    const accounts = await getPocketBaseAccounts()
     const bankMappings = await getBankMappings(batch.bank_type || 'MBB')
     const webhookLinks = await getSheetWebhookLinks()
     const { getAccountsWithActiveInstallments } = await import('@/services/installment.service')

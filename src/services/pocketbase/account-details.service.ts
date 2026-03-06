@@ -160,8 +160,8 @@ async function listAllRecords(collection: string, params: Record<string, string 
 
 export async function getPocketBaseCategories(): Promise<Category[]> {
   console.log('[DB:PB] categories.list')
-  const records = await listAllRecords('categories', { sort: 'name' })
-  const items = records.map(mapCategory)
+  const records = await listAllRecords('categories', { sort: '-created' })
+  const items = records.map(mapCategory).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] categories.list →', items.length, 'records')
   return items
 }
@@ -285,16 +285,16 @@ export async function deletePocketBaseCategoriesBulk(supabaseIds: string[]): Pro
 
 export async function getPocketBasePeople(): Promise<Person[]> {
   console.log('[DB:PB] people.list')
-  const records = await listAllRecords('people', { sort: 'name' })
-  const items = records.map(mapPerson)
+  const records = await listAllRecords('people', { sort: '-created' })
+  const items = records.map(mapPerson).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] people.list →', items.length, 'records')
   return items
 }
 
 export async function getPocketBaseShops(): Promise<Shop[]> {
   console.log('[DB:PB] shops.list')
-  const records = await listAllRecords('shops', { sort: 'name' })
-  const items = records.map(mapShop)
+  const records = await listAllRecords('shops', { sort: '-created' })
+  const items = records.map(mapShop).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] shops.list →', items.length, 'records')
   return items
 }
@@ -688,8 +688,8 @@ export async function updatePocketBaseAccountConfig(
 }
 
 export async function getPocketBaseAccounts(): Promise<Account[]> {
-  const records = await listAllRecords('accounts', { sort: 'name' })
-  const mapped = records.map(mapAccount)
+  const records = await listAllRecords('accounts', { sort: '-created' })
+  const mapped = records.map(mapAccount).sort((a, b) => a.name.localeCompare(b.name))
 
   const byPocketBaseId = new Map(records.map((item) => [item.id, item]))
   const pocketBaseToSource = new Map(records.map((item) => [item.id, item.slug || item.id]))
@@ -992,4 +992,30 @@ export async function voidPocketBaseTransaction(supabaseId: string): Promise<voi
     method: 'PATCH',
     body: { status: 'void' },
   })
+}
+
+// ============================================================
+// PHASE 5 — Unified transaction read (global, no account filter)
+// ============================================================
+
+export async function getPocketBaseUnifiedTransactions(options: {
+  limit?: number
+  includeVoided?: boolean
+} = {}): Promise<TransactionWithDetails[]> {
+  const { limit = 1000, includeVoided = false } = options
+  console.log('[DB:PB] transactions.unified.list', { limit, includeVoided })
+
+  const filter = includeVoided ? undefined : `status != 'void'`
+  const records = await listAllRecords('transactions', {
+    perPage: Math.min(limit, 200),
+    sort: '-occurred_at',
+    expand: 'account_id,target_account_id,to_account_id,category_id,shop_id,person_id',
+    ...(filter ? { filter } : {}),
+  })
+
+  // Respect the limit after pagination (listAllRecords fetches all pages)
+  const sliced = limit < records.length ? records.slice(0, limit) : records
+  const result = sliced.map((item) => mapTransaction(item, ''))
+  console.log('[DB:PB] transactions.unified.list →', result.length, 'records')
+  return result
 }

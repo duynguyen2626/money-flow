@@ -1,8 +1,10 @@
-import { getAccountTransactions } from '@/services/account.service'
-import { getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
+import {
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBasePeople,
+  getPocketBaseShops,
+  loadPocketBaseTransactionsForAccount,
+} from '@/services/pocketbase/account-details.service'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { ArrowLeft } from 'lucide-react'
@@ -17,11 +19,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function RefundsPage() {
   const [transactions, accounts, categories, people, shops] = await Promise.all([
-    getAccountTransactions(REFUND_PENDING_ACCOUNT_ID),
-    getAccounts(),
-    getCategories(),
-    getPeople(),
-    getShops(),
+    loadPocketBaseTransactionsForAccount(REFUND_PENDING_ACCOUNT_ID),
+    getPocketBaseAccounts(),
+    getPocketBaseCategories(),
+    getPocketBasePeople(),
+    getPocketBaseShops(),
   ])
 
   return (
