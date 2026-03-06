@@ -417,7 +417,8 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     const payload = {
       id: (existing as any).id,
       occurred_at: (existing as any).occurred_at,
-      amount: 0 // Amount 0 for delete or handling in sync service implies check logic
+      tag: (existing as any).tag,   // required: routes delete to the correct cycle tab
+      amount: 0
     };
     // Actually buildSheetPayload usually needs line info.
     // But since lines might be gone or complex to fetch in single table (they ARE the txn now),
