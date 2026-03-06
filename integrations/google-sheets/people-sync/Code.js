@@ -683,45 +683,32 @@ function setupNewSheet(sheet, summaryOptions) {
         sheet.setColumnWidth(15, 230); // Value O
     } catch (e) { }
 
-    // Conditional Formatting for Type (Column B - 2)
-    var rules = sheet.getConditionalFormatRules();
-    var hasTypeRule = rules.some(function (r) {
+    // Conditional Formatting for Type (Column B only - not full row)
+    // Always re-apply so existing full-row rules get replaced on next sync.
+    var typeRange = sheet.getRange('B2:B1000');
+
+    var ruleIn = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=$B2="In"')
+        .setBackground('#DCFCE7')
+        .setFontColor('#166534')
+        .setRanges([typeRange])
+        .build();
+
+    var ruleOutRed = SpreadsheetApp.newConditionalFormatRule()
+        .whenFormulaSatisfied('=$B2="Out"')
+        .setBackground('#FFF1F1')
+        .setFontColor('#991B1B')
+        .setRanges([typeRange])
+        .build();
+
+    // Remove stale full-row type rules, then push the column-B-only replacements
+    var keptRules = sheet.getConditionalFormatRules().filter(function (r) {
         var ranges = r.getRanges();
-        return ranges.length > 0 && ranges[0].getColumn() === 2;
+        return ranges.length === 0 || ranges[0].getColumn() !== 2;
     });
-
-    if (!hasTypeRule) {
-        // Full Row Range: A2:K1000
-        var fullRange = sheet.getRange('A2:K1000');
-
-        // IN (Green) - Full Row
-        var ruleIn = SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$B2="In"')
-            .setBackground('#DCFCE7')
-            .setFontColor('#166534')
-            .setRanges([fullRange])
-            .build();
-
-        // OUT (Red) - Full Row (Optional, user usually wants In highlighted)
-        var ruleOut = SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$B2="Out"')
-            .setBackground('#FFFFFF') // Keep white for Out or use light red
-            .setFontColor('#000000')   // Standard black
-            .setRanges([fullRange])
-            .build();
-
-        // Let's use light red for Out if they want full coloring
-        var ruleOutRed = SpreadsheetApp.newConditionalFormatRule()
-            .whenFormulaSatisfied('=$B2="Out"')
-            .setBackground('#FFF1F1') // Ultra light red
-            .setFontColor('#991B1B')
-            .setRanges([fullRange])
-            .build();
-
-        rules.push(ruleIn);
-        rules.push(ruleOutRed);
-        sheet.setConditionalFormatRules(rules);
-    }
+    keptRules.push(ruleIn);
+    keptRules.push(ruleOutRed);
+    sheet.setConditionalFormatRules(keptRules);
 
     // Ensure others
     ensureShopSheet(sheet.getParent());
