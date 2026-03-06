@@ -11,6 +11,7 @@ import { upsertTransactionCashback } from '@/services/cashback.service';
 import { normalizeMonthTag } from '@/lib/month-tag'
 import {
   createPocketBaseTransaction,
+  updatePocketBaseTransaction,
   voidPocketBaseTransaction,
 } from '@/services/pocketbase/account-details.service';
 
@@ -774,6 +775,26 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     console.error('Failed to update transaction header:', headerError);
     return false;
   }
+
+  // PB secondary write (fire-and-forget)
+  console.log('[DB:SB] transactions.update', { id, type: input.type, amount: finalAmount })
+  void updatePocketBaseTransaction(id, {
+    occurred_at: input.occurred_at,
+    note: input.note,
+    type: input.type,
+    account_id: input.source_account_id,
+    amount: finalAmount,
+    tag: tag,
+    category_id: input.category_id ?? null,
+    person_id: input.person_id ?? null,
+    target_account_id: input.destination_account_id ?? input.debt_account_id ?? null,
+    shop_id: input.shop_id ?? null,
+    status: 'posted',
+    persisted_cycle_tag: persistedCycleTag,
+    cashback_share_percent: sharePercent,
+    cashback_share_fixed: shareFixed,
+    cashback_mode: input.cashback_mode ?? null,
+  }).catch((err) => console.error('[DB:PB] transactions.update secondary failed:', err))
 
   // SHEET SYNC: Delete old entry if person existed
   const oldPersonId = (existingData as any).person_id;
