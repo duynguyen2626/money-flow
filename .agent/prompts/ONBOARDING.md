@@ -8,8 +8,8 @@
 
 **Name**: Money Flow 3  
 **Type**: Personal Finance Management Application  
-**Tech Stack**: Next.js 15 (App Router), TypeScript, Tailwind CSS, Shadcn UI, Supabase (PostgreSQL)  
-**Status**: Active Development
+**Tech Stack**: Next.js 15 (App Router), TypeScript, Tailwind CSS, Shadcn UI, PocketBase (Primary), Supabase (Legacy)  
+**Status**: Phase 17 - PocketBase Integration & Data Stabilization
 
 ### What is Money Flow 3?
 A comprehensive personal finance app for tracking:
