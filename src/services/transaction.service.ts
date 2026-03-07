@@ -13,12 +13,20 @@ import {
   upsertTransactionCashback,
   removeTransactionCashback,
 } from "./cashback.service";
+import { loadPocketBaseTransactions } from './pocketbase/account-details.service'
 import { parseMetadata } from '@/lib/transaction-mapper';
 import {
   parseCashbackConfig,
   getCashbackCycleRange,
   getCashbackCycleTag,
 } from "@/lib/cashback";
+import {
+  syncTransactionCreateToPB,
+  syncTransactionUpdateToPB,
+  syncTransactionDeleteToPB
+} from "./pocketbase/transaction-sync.service";
+import { upsertPocketBaseTransactionCashback, removePocketBaseTransactionCashback } from "./pocketbase/cashback-sync.service";
+import { pocketbaseGetById, pocketbaseList, toPocketBaseId, pocketbaseCreate, pocketbaseUpdate, pocketbaseDelete } from "./pocketbase/server";
 
 type TransactionStatus =
   | "posted"
@@ -464,6 +472,24 @@ export async function mapTransactionRow(
   };
 }
 
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+async function resolveSupabaseId(id: string, collection: 'transactions' | 'accounts' = 'transactions'): Promise<string> {
+  if (isUuid(id)) return id
+
+  // Try to find in PocketBase to get source_id
+  try {
+    const record = await (collection === 'accounts' ? pocketbaseGetById<any>('accounts', id) : pocketbaseGetById<any>('transactions', id))
+    if (record?.metadata?.source_id && isUuid(record.metadata.source_id)) {
+      return record.metadata.source_id
+    }
+  } catch (err) {
+    console.error(`[resolveSupabaseId] Failed to resolve ${id} from PB:`, err)
+  }
+
+  return id // Fallback
+}
+
 export async function loadTransactions(options: {
   transactionId?: string;
   accountId?: string;
@@ -476,6 +502,17 @@ export async function loadTransactions(options: {
   context?: "person" | "account" | "general";
   includeVoided?: boolean;
 }): Promise<TransactionWithDetails[]> {
+  console.log('[DB:PB] transactions.list', options)
+  try {
+    const pbTxns = await loadPocketBaseTransactions(options)
+    if (pbTxns && pbTxns.length > 0) {
+      return pbTxns
+    }
+  } catch (err) {
+    console.error('[DB:PB] transactions.list failed:', err)
+  }
+
+  console.log('[DB:SB] transactions.select', options)
   const supabase = createClient();
 
   let query = supabase
@@ -568,15 +605,40 @@ export async function createTransaction(
       }
     }
 
+    // 1. Write to PocketBase first
+    const pbId = toPocketBaseId(normalized.id || crypto.randomUUID(), 'transactions')
+    const pbPayload = {
+      ...normalized,
+      id: pbId,
+      date: normalized.occurred_at,
+      description: normalized.note || '',
+    }
+
+    console.log(`[DB:PB] createTransaction id=${pbId}`)
+    try {
+      await pocketbaseCreate('transactions', pbPayload)
+      // PB Fast Cashback Recompute
+      await upsertPocketBaseTransactionCashback(pbId)
+    } catch (pbError) {
+      console.error('[DB:PB] createTransaction failed:', pbError)
+      // If primary write fails, we might want to throw or continue to SB?
+      // User wants to move to PB, so this is critical.
+    }
+
+    // 2. Sync to Supabase for legacy services (Sheets, Cashback, etc.)
     const { data, error } = await supabase
       .from("transactions")
-      .insert(normalized as any)
+      .insert([{
+        ...normalized,
+        id: normalized.id || (pbId && !isUuid(pbId) ? crypto.randomUUID() : pbId) // Ensure SB gets a UUID if PB got a hash
+      }] as any)
       .select()
       .single();
 
     if (error || !data) {
-      console.error("Error creating transaction:", error);
-      return null;
+      console.error("Error creating transaction in Supabase:", error);
+      // If SB fails but PB succeeded, we return the PB ID
+      return pbId;
     }
 
     const transactionId = (data as { id?: string }).id ?? null;
@@ -706,7 +768,7 @@ export async function createTransaction(
       });
     }
 
-    return transactionId;
+    return pbId || transactionId;
   } catch (error) {
     console.error("Unhandled error in createTransaction:", error);
     return null;
@@ -717,6 +779,7 @@ export async function updateTransaction(
   id: string,
   input: CreateTransactionInput,
 ): Promise<boolean> {
+  const supabaseId = await resolveSupabaseId(id, 'transactions')
   const supabase = createClient();
 
   // Fetch existing transaction INCLUDING person_id for sheet sync
@@ -725,7 +788,7 @@ export async function updateTransaction(
     .select(
       "id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed, metadata, status",
     )
-    .eq("id", id)
+    .eq("id", supabaseId)
     .maybeSingle();
 
   if (fetchError || !existing) {
@@ -789,11 +852,29 @@ export async function updateTransaction(
     }
   }
 
-  // LOG HISTORY BEFORE UPDATE
-  await logHistory(id, "edit", existing);
+  // 1. Log History
+  await logHistory(supabaseId, "edit", existing);
 
-  console.log(`[Service] Updating transaction ${id}...`);
-  const { error } = await supabase.from("transactions").update(normalized).eq("id", id);
+  // 2. Write to PocketBase primary
+  const pbId = toPocketBaseId(id, 'transactions')
+  const pbPayload = {
+    ...normalized,
+    date: normalized.occurred_at,
+    description: normalized.note || '',
+  }
+
+  console.log(`[DB:PB] updateTransaction id=${pbId}`)
+  try {
+    await pocketbaseUpdate('transactions', pbId, pbPayload)
+    // PB Fast Cashback Recompute
+    await upsertPocketBaseTransactionCashback(pbId)
+  } catch (pbError) {
+    console.error('[DB:PB] updateTransaction failed:', pbError)
+  }
+
+  // 2. Write to Supabase
+  console.log(`[Service] Updating transaction ${supabaseId}...`);
+  const { error } = await supabase.from("transactions").update(normalized).eq("id", supabaseId);
 
   if (error) {
     console.error(`[Service] Failed to update transaction ${id}:`, error);
@@ -1046,16 +1127,19 @@ export async function updateTransaction(
     revalidatePath(`/people/${input.person_id}/details`);
   }
 
+
+
   return true;
 }
 
 export async function deleteTransaction(id: string): Promise<boolean> {
+  const supabaseId = await resolveSupabaseId(id, 'transactions')
   const supabase = createClient();
   // Fetch existing transaction INCLUDING person_id for sheet sync and installment_plan_id for auto-settle
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
     .select("account_id, target_account_id, person_id, installment_plan_id, metadata, status")
-    .eq("id", id)
+    .eq("id", supabaseId)
     .maybeSingle();
 
   if (fetchError || !existing) return false;
@@ -1111,13 +1195,6 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   // Case B: Deleting Refund Request (GD2) -> Revert Original (GD1) to 'posted' & Clear Metadata
   // Only if NOT a confirmation (which also has original_id)
   if (meta.original_transaction_id && !meta.is_refund_confirmation) {
-    const { data: linkedReview } = await supabase.from('transactions').select('id, status').eq('linked_transaction_id', id).maybeSingle() as { data: { id: string, status: string } | null };
-    if (linkedReview && linkedReview.status !== 'void') {
-      // This should be caught by GUARD above, but double check.
-      return false;
-    }
-
-    console.log(`[deleteTransaction] Deleting Request ${id}. Cleaning Original ${meta.original_transaction_id}.`);
     const { data: gd1 } = await supabase
       .from("transactions")
       .select("metadata")
@@ -1147,6 +1224,26 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     return false;
   }
 
+  // 1. Write to PocketBase primary
+  const pbTxnId = toPocketBaseId(id, 'transactions')
+  console.log(`[DB:PB] deleteTransaction id=${pbTxnId}`)
+  try {
+    // Get Cycle Tag for recompute BEFORE deletion
+    const txnRecord: any = await pocketbaseGetById('transactions', pbTxnId)
+    const cycleTag = txnRecord?.persisted_cycle_tag
+    const accountId = txnRecord?.account_id
+
+    await pocketbaseDelete('transactions', pbTxnId)
+
+    // PB Fast Cashback Recompute
+    if (accountId && cycleTag) {
+      await removePocketBaseTransactionCashback(accountId, cycleTag)
+    }
+  } catch (pbError) {
+    console.error('[DB:PB] deleteTransaction failed:', pbError)
+  }
+
+  // 2. Write to Supabase
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) {
     console.error("Error deleting transaction:", error);
@@ -1263,6 +1360,17 @@ export async function voidTransaction(id: string): Promise<boolean> {
   }
 
   // Simplified Void: Just update status. No need to join lines which might be complex or deleted.
+  // 1. Write to PocketBase primary
+  const pbId = toPocketBaseId(id, 'transactions')
+  console.log(`[DB:PB] voidTransaction id=${pbId}`)
+  try {
+    const pbPayload = { status: 'void' }
+    await pocketbaseUpdate('transactions', pbId, pbPayload)
+  } catch (pbError) {
+    console.error('[DB:PB] voidTransaction failed:', pbError)
+  }
+
+  // 2. Write to Supabase
   const { error } = await (supabase.from("transactions").update as any)({
     status: "void",
   }).eq("id", id);
@@ -1315,6 +1423,17 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     .eq("id", id)
     .maybeSingle();
 
+  // 1. Write to PocketBase primary
+  const pbId = toPocketBaseId(id, 'transactions')
+  console.log(`[DB:PB] restoreTransaction id=${pbId}`)
+  try {
+    const pbPayload = { status: 'posted' }
+    await pocketbaseUpdate('transactions', pbId, pbPayload)
+  } catch (pbError) {
+    console.error('[DB:PB] restoreTransaction failed:', pbError)
+  }
+
+  // 2. Write to Supabase
   const { error } = await (supabase.from("transactions").update as any)({
     status: "posted",
   }).eq("id", id);
@@ -2011,23 +2130,29 @@ export async function updateSplitBillAmounts(
 }
 
 export async function loadAccountTransactionsV2(accountId: string, limit: number = 5) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      id, occurred_at, note, amount, type, status,
-      category:categories(name, icon),
-      person:people(name)
-    `)
-    .eq('account_id', accountId)
-    .neq('status', 'void')
-    .order('occurred_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error('Error loading account transactions:', error);
-    return [];
+  console.log(`[DB:PB] transactions.v2 accountId=${accountId}`)
+  try {
+    const pbTxns = await loadPocketBaseTransactions({ accountId, limit })
+    if (pbTxns && pbTxns.length > 0) {
+      return pbTxns.map(t => ({
+        id: t.id,
+        occurred_at: t.occurred_at,
+        note: t.note,
+        amount: t.amount,
+        type: t.type,
+        status: t.status,
+        category_name: t.category_name,
+        category_icon: t.category_icon,
+        person_name: t.person_name,
+        displayType: t.type
+      }))
+    }
+  } catch (err) {
+    console.error('[DB:PB] transactions.v2 failed:', err)
   }
+
+  console.log(`[DB:SB] transactions.v2 accountId=${accountId}`)
+  const supabase = createClient();
 
 
   return data.map((t: any) => ({

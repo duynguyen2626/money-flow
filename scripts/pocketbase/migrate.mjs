@@ -1,9 +1,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { createHash } from 'crypto';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local'), override: true });
@@ -56,19 +57,28 @@ function normalizeCashbackFields(account) {
         ? account.cashback_config
         : {};
 
-    const parsedBaseRate = account?.cb_base_rate ?? config.baseRate ?? 0;
-    const parsedMaxBudget = account?.cb_max_budget ?? config.maxAmount ?? null;
-    const parsedMinSpend = account?.cb_min_spend ?? config.minSpend ?? null;
-    const parsedRules = account?.cb_rules_json ?? config.rules ?? null;
+    // MF5.3 Compatibility: Check for 'program' wrapper
+    const program = config.program || null;
+
+    // Type resolution
+    let cbType = account?.cb_type || (program ? (program.levels ? 'tiered' : 'simple') : (config.hasTiers ? 'tiered' : 'none'));
+    if (cbType === 'none' && (program || config.rate)) cbType = 'simple';
+
+    const baseRate = account?.cb_base_rate ?? (program?.defaultRate ?? (config.rate ?? 0));
+    const maxBudget = account?.cb_max_budget ?? (program?.maxBudget ?? (config.maxAmount ?? null));
+    const minSpend = account?.cb_min_spend ?? (program?.minSpendTarget ?? (config.minSpend ?? null));
+
+    // Rules / Tiers resolution
+    let rules = account?.cb_rules_json ?? (program?.rules_json_v2 ?? (program?.levels ?? (config.tiers ?? null)));
 
     return {
-        cb_cycle_type: account?.cb_cycle_type ?? config.cycleType ?? null,
-        cb_type: account?.cb_type ?? config.type ?? 'none',
-        cb_base_rate: Number(parsedBaseRate || 0),
-        cb_max_budget: parsedMaxBudget === null ? null : Number(parsedMaxBudget),
-        cb_is_unlimited: account?.cb_is_unlimited ?? Boolean(config.isUnlimited),
-        cb_rules_json: parsedRules,
-        cb_min_spend: parsedMinSpend === null ? null : Number(parsedMinSpend),
+        cb_cycle_type: account?.cb_cycle_type ?? (program?.cycleType ?? (config.cycleType ?? null)),
+        cb_type: cbType,
+        cb_base_rate: Number(baseRate || 0),
+        cb_max_budget: maxBudget === null ? null : Number(maxBudget),
+        cb_is_unlimited: account?.cb_is_unlimited ?? (program?.maxBudget === null || config.isUnlimited === true),
+        cb_rules_json: rules,
+        cb_min_spend: minSpend === null ? null : Number(minSpend),
     };
 }
 
@@ -94,7 +104,8 @@ function parseArgs() {
     const args = process.argv.slice(2);
     const config = {
         phase: 'all',
-        cleanup: 'auto'
+        cleanup: 'auto',
+        syncSchema: false
     };
 
     for (const arg of args) {
@@ -103,6 +114,9 @@ function parseArgs() {
         }
         if (arg.startsWith('--cleanup=')) {
             config.cleanup = arg.split('=')[1] || 'auto';
+        }
+        if (arg === '--sync-schema') {
+            config.syncSchema = true;
         }
     }
 
@@ -122,7 +136,7 @@ async function listAllRecordIds(baseUrl, collection, headers) {
     let page = 1;
     let totalPages = 1;
     do {
-        const res = await fetch(`${baseUrl}/api/collections/${collection}/records?page=${page}&perPage=500&fields=id` , { headers });
+        const res = await fetch(`${baseUrl}/api/collections/${collection}/records?page=${page}&perPage=500&fields=id`, { headers });
         if (!res.ok) {
             const text = await res.text();
             throw new Error(`Failed listing ${collection} page ${page}: ${text}`);
@@ -225,17 +239,23 @@ async function upsertRecord(baseUrl, collection, id, payload, headers) {
 
 function toPocketBaseId(sourceId, fallbackPrefix = 'mf3') {
     if (!sourceId) {
+        const randomSeed = `${fallbackPrefix}-${Date.now()}-${Math.random()}`;
+        const hash = crypto.createHash('sha256').update(randomSeed).digest();
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-        const seed = createHash('sha256').update(`${fallbackPrefix}-${Date.now()}-${Math.random()}`).digest();
         let randomId = '';
         for (let i = 0; i < 15; i++) {
-            randomId += chars[seed[i] % chars.length];
+            randomId += chars[hash[i] % chars.length];
         }
         return randomId;
     }
 
+    // Idempotency: If already 15-char lowercase alphanumeric, assume it's a PB ID
+    if (/^[a-z0-9]{15}$/.test(sourceId)) {
+        return sourceId;
+    }
+
+    const hash = crypto.createHash('sha256').update(String(sourceId)).digest();
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    const hash = createHash('sha256').update(String(sourceId)).digest();
     let result = '';
     for (let i = 0; i < 15; i++) {
         result += chars[hash[i] % chars.length];
@@ -255,12 +275,57 @@ async function checkCollectionsExist(baseUrl, headers) {
     const missing = COLLECTION_ORDER.filter((name) => !names.has(name));
 
     if (missing.length > 0) {
-        throw new Error(`Missing PocketBase collections: ${missing.join(', ')}. Please import scripts/pocketbase/schema.json first.`);
+        throw new Error(`Missing PocketBase collections: ${missing.join(', ')}. Please import scripts/pocketbase/schema.json first or use --sync-schema.`);
     }
 }
 
+async function syncPocketBaseSchema(baseUrl, headers) {
+    console.log('🔄 Syncing PocketBase schema from schema.json...');
+    const schemaPath = path.resolve(__dirname, 'schema.json');
+    if (!fs.existsSync(schemaPath)) {
+        throw new Error(`schema.json not found at ${schemaPath}`);
+    }
+
+    const schemaRaw = fs.readFileSync(schemaPath, 'utf8');
+    const collections = JSON.parse(schemaRaw);
+
+    for (const coll of collections) {
+        // Try to find if collection exists
+        const checkRes = await fetch(`${baseUrl}/api/collections/${coll.name}`, { headers });
+
+        if (checkRes.ok) {
+            console.log(`- Updating collection: ${coll.name}`);
+            const updateRes = await fetch(`${baseUrl}/api/collections/${coll.name}`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify(coll)
+            });
+            if (!updateRes.ok) {
+                const text = await updateRes.text();
+                throw new Error(`Failed to update ${coll.name}: ${text}`);
+            }
+        } else if (checkRes.status === 404) {
+            console.log(`- Creating collection: ${coll.name}`);
+            const createRes = await fetch(`${baseUrl}/api/collections`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(coll)
+            });
+            if (!createRes.ok) {
+                const text = await createRes.text();
+                throw new Error(`Failed to create ${coll.name}: ${text}`);
+            }
+        } else {
+            const text = await checkRes.text();
+            throw new Error(`Failed to check ${coll.name}: ${text}`);
+        }
+    }
+
+    console.log('✅ Schema synced successfully!');
+}
+
 async function migrate() {
-    const { phase, cleanup } = parseArgs();
+    const { phase, cleanup, syncSchema } = parseArgs();
     const targetCollections = PHASE_TO_COLLECTIONS[phase];
 
     console.log('🚀 Starting migration...');
@@ -284,7 +349,11 @@ async function migrate() {
     const { token } = await authRes.json();
     const headers = { 'Content-Type': 'application/json', 'Authorization': token };
 
-    await checkCollectionsExist(PB_URL, headers);
+    if (syncSchema) {
+        await syncPocketBaseSchema(PB_URL, headers);
+    } else {
+        await checkCollectionsExist(PB_URL, headers);
+    }
     await cleanupCollections(PB_URL, targetCollections, headers, cleanup);
 
     async function migrateTable({ phaseKey, tableName, pbCollection, mapper, orderBy, select = '*' }) {
@@ -328,7 +397,16 @@ async function migrate() {
         phaseKey: 'categories',
         tableName: 'categories',
         pbCollection: 'categories',
-        mapper: (c) => ({ name: c.name, icon: c.icon, type: c.type, image_url: c.image_url })
+        mapper: (c) => ({
+            name: c.name,
+            icon: c.icon,
+            type: (c.type || 'expense').toLowerCase(),
+            image_url: c.image_url,
+            kind: c.kind || 'external',
+            is_archived: c.is_archived || false,
+            mcc_codes: c.mcc_codes || [],
+            parent_id: c.parent_id ? toPocketBaseId(c.parent_id, 'categories') : null
+        })
     });
     if (categoriesResult) summary.push(categoriesResult);
 
@@ -339,7 +417,8 @@ async function migrate() {
         mapper: (s) => ({
             name: s.name,
             image_url: s.image_url,
-            default_category_id: s.default_category_id ? toPocketBaseId(s.default_category_id, 'categories') : null
+            default_category_id: s.default_category_id ? toPocketBaseId(s.default_category_id, 'categories') : null,
+            is_archived: s.is_archived || false
         })
     });
     if (shopsResult) summary.push(shopsResult);
@@ -443,7 +522,12 @@ async function migrate() {
             cycle_tag: c.cycle_tag,
             spent_amount: parseFloat(c.spent_amount || 0),
             real_awarded: parseFloat(c.real_awarded || 0),
-            virtual_profit: parseFloat(c.virtual_profit || 0)
+            virtual_profit: parseFloat(c.virtual_profit || 0),
+            max_budget: parseFloat(c.max_budget || 0) || null,
+            min_spend_target: parseFloat(c.min_spend_target || 0) || null,
+            is_exhausted: c.is_exhausted || false,
+            met_min_spend: c.met_min_spend || false,
+            overflow_loss: parseFloat(c.overflow_loss || 0) || null
         })
     });
     if (cashbackResult) summary.push(cashbackResult);

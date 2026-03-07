@@ -9,6 +9,25 @@ import { loadShopInfo, ShopRow, parseMetadata, mapUnifiedTransaction } from '@/l
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { upsertTransactionCashback } from '@/services/cashback.service';
 import { normalizeMonthTag } from '@/lib/month-tag'
+import { pocketbaseGetById } from '@/services/pocketbase/server';
+
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+async function resolveSupabaseId(id: string, collection: 'transactions' | 'accounts' = 'transactions'): Promise<string> {
+  if (isUuid(id)) return id
+
+  // Try to find in PocketBase to get source_id
+  try {
+    const record = await pocketbaseGetById<any>(collection, id)
+    if (record?.metadata?.source_id && isUuid(record.metadata.source_id)) {
+      return record.metadata.source_id
+    }
+  } catch (err) {
+    console.error(`[resolveSupabaseId] Failed to resolve ${id} from PB:`, err)
+  }
+
+  return id // Fallback
+}
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -310,6 +329,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 }
 
 export async function voidTransactionAction(id: string): Promise<boolean> {
+  const supabaseId = await resolveSupabaseId(id, 'transactions')
   const supabase = createClient();
 
   const { data: existing, error: fetchError } = await supabase
@@ -358,7 +378,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
 
   // 3. Mark current as void FIRST
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
+  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', supabaseId);
 
   if (updateError) {
     console.error('Failed to void transaction:', updateError);
@@ -368,7 +388,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
   // 3b. Revert Batch Item if linked
   try {
     const { revertBatchItem } = await import('@/services/batch.service');
-    await revertBatchItem(id);
+    await revertBatchItem(supabaseId);
   } catch (err) {
     console.error('[Void] Failed to revert batch item:', err);
   }
@@ -404,7 +424,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
   const { data: fullTxn } = await supabase
     .from('transactions')
     .select('metadata')
-    .eq('id', id)
+    .eq('id', supabaseId)
     .single();
 
   const meta = parseMetadata((fullTxn as any)?.metadata);
@@ -415,7 +435,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
   if ((existing as any).person_id) {
     const personId = (existing as any).person_id;
     const payload = {
-      id: (existing as any).id,
+      id: supabaseId,
       occurred_at: (existing as any).occurred_at,
       amount: 0 // Amount 0 for delete or handling in sync service implies check logic
     };
@@ -629,6 +649,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
 }
 
 export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
+  const supabaseId = await resolveSupabaseId(id, 'transactions')
   const supabase = createClient();
 
   // GUARD: Block editing if this transaction has linked children (Void/Refund)
@@ -637,7 +658,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     .from('transactions')
     .select('id, status')
     .neq('status', 'void')
-    .eq('linked_transaction_id', id)
+    .eq('linked_transaction_id', supabaseId)
     .limit(1);
 
   if (linkedError) {
@@ -654,7 +675,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     .from('transactions')
     .select('id, status')
     .neq('status', 'void')
-    .or(`metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`)
+    .or(`metadata.cs.{"original_transaction_id":"${supabaseId}"},metadata.cs.{"pending_refund_id":"${supabaseId}"}`)
     .limit(1);
 
   if (metaError) {
@@ -681,7 +702,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       cashback_share_percent,
       cashback_share_fixed
     `)
-    .eq('id', id)
+    .eq('id', supabaseId)
     .maybeSingle();
 
   if (existingError || !existingData) {
@@ -738,7 +759,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       shop_id: input.shop_id ?? null,
       cashback_mode: input.cashback_mode ?? null,
     })
-    .eq('id', id);
+    .eq('id', supabaseId);
 
   if (headerError) {
     console.error('Failed to update transaction header:', headerError);
@@ -749,7 +770,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   const oldPersonId = (existingData as any).person_id;
   if (oldPersonId) {
     const deletePayload = {
-      id: (existingData as any).id,
+      id: supabaseId,
       occurred_at: (existingData as any).occurred_at,
       note: (existingData as any).note,
       tag: (existingData as any).tag,
@@ -764,7 +785,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   const newPersonId = input.person_id;
   if (newPersonId) {
     const syncPayload = {
-      id,
+      id: supabaseId,
       occurred_at: input.occurred_at,
       note: input.note,
       tag,
@@ -782,7 +803,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
   // Cashback Integration (Update)
   try {
-    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', supabaseId).single();
     if (rawTxn) {
       const txnShape: any = { ...(rawTxn as any), category_name: (rawTxn as any).categories?.name };
       await upsertTransactionCashback(txnShape);

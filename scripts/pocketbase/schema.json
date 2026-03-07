@@ -66,6 +66,28 @@
                 "id": "f_img_04",
                 "name": "image_url",
                 "type": "text"
+            },
+            {
+                "id": "f_kind_01",
+                "name": "kind",
+                "type": "text"
+            },
+            {
+                "id": "f_arch_01",
+                "name": "is_archived",
+                "type": "bool"
+            },
+            {
+                "id": "f_mcc_01",
+                "name": "mcc_codes",
+                "type": "json"
+            },
+            {
+                "id": "f_pcat_01",
+                "name": "parent_id",
+                "type": "relation",
+                "collectionId": "pvl_cat_001",
+                "maxSelect": 1
             }
         ]
     },
@@ -98,6 +120,11 @@
                 "type": "relation",
                 "collectionId": "pvl_cat_001",
                 "maxSelect": 1
+            },
+            {
+                "id": "f_arch_02",
+                "name": "is_archived",
+                "type": "bool"
             }
         ]
     },
@@ -134,7 +161,15 @@
                         "credit_card",
                         "e_wallet",
                         "receivable",
-                        "debt"
+                        "debt",
+                        "savings",
+                        "cash",
+                        "system",
+                        "brokerage",
+                        "prepaid",
+                        "investment",
+                        "credit",
+                        "loan"
                     ]
                 }
             },
@@ -201,6 +236,36 @@
                 "id": "f_ctyp_01",
                 "name": "cb_cycle_type",
                 "type": "text"
+            },
+            {
+                "id": "f_cbtype_01",
+                "name": "cb_type",
+                "type": "text"
+            },
+            {
+                "id": "f_cbrate_01",
+                "name": "cb_base_rate",
+                "type": "number"
+            },
+            {
+                "id": "f_cbmb_01",
+                "name": "cb_max_budget",
+                "type": "number"
+            },
+            {
+                "id": "f_cbunl_01",
+                "name": "cb_is_unlimited",
+                "type": "bool"
+            },
+            {
+                "id": "f_cbrul_01",
+                "name": "cb_rules_json",
+                "type": "json"
+            },
+            {
+                "id": "f_cbms_01",
+                "name": "cb_min_spend",
+                "type": "number"
             }
         ]
     },
@@ -359,6 +424,31 @@
             {
                 "id": "cb_prof_01",
                 "name": "virtual_profit",
+                "type": "number"
+            },
+            {
+                "id": "cb_mb_01",
+                "name": "max_budget",
+                "type": "number"
+            },
+            {
+                "id": "cb_ms_01",
+                "name": "min_spend_target",
+                "type": "number"
+            },
+            {
+                "id": "cb_exh_01",
+                "name": "is_exhausted",
+                "type": "bool"
+            },
+            {
+                "id": "cb_met_01",
+                "name": "met_min_spend",
+                "type": "bool"
+            },
+            {
+                "id": "cb_loss_01",
+                "name": "overflow_loss",
                 "type": "number"
             }
         ]

@@ -65,13 +65,16 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
+  const { tag } = await searchParams
+  const resolvedDate = new Date() // Fallback
+
   // Pre-fetch everything needed for V2 view
   const [allAccounts, categories, people, shops, cashbackStats, transactions] = await Promise.all([
     getPocketBaseAccounts(),
     getPocketBaseCategories(),
     getPocketBasePeople(),
     getPocketBaseShops(),
-    getPocketBaseAccountSpendingStatsSnapshot(id, new Date()),
+    getPocketBaseAccountSpendingStatsSnapshot(id, resolvedDate, tag),
     loadPocketBaseTransactionsForAccount(id, 2000),
   ])
 

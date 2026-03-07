@@ -16,38 +16,40 @@ type CategoryRow = {
   is_archived?: boolean | null
 }
 
+import { getPocketBaseCategories } from './pocketbase/account-details.service'
+
 export async function getCategories(): Promise<Category[]> {
-  const supabase = createClient()
+  console.log('[DB:PB] categories.list')
+  try {
+    return await getPocketBaseCategories()
+  } catch (err) {
+    console.error('[DB:PB] categories.list failed, falling back to Supabase:', err)
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select('*')
-    .order('name', { ascending: true })
+    console.log('[DB:SB] categories.select')
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('categories')
+      .select('*')
+      .order('name', { ascending: true })
 
-  if (error) {
-    console.error('Error fetching categories:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      fullError: error
-    })
-    return []
+    if (error) {
+      console.error('[DB:SB] categories.select failed:', error)
+      return []
+    }
+
+    const rows = (data ?? []) as unknown as CategoryRow[]
+    return rows.map(item => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      parent_id: item.parent_id ?? undefined,
+      icon: item.icon,
+      image_url: item.image_url,
+      kind: item.kind,
+      mcc_codes: item.mcc_codes,
+      is_archived: item.is_archived,
+    }))
   }
-
-  const rows = (data ?? []) as unknown as CategoryRow[]
-
-  return rows.map(item => ({
-    id: item.id,
-    name: item.name,
-    type: item.type,
-    parent_id: item.parent_id ?? undefined,
-    icon: item.icon,
-    image_url: item.image_url,
-    kind: item.kind,
-    mcc_codes: item.mcc_codes,
-    is_archived: item.is_archived,
-  }))
 }
 
 export async function createCategory(category: Omit<Category, 'id'>): Promise<Category | null> {

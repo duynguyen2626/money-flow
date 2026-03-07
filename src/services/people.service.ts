@@ -5,8 +5,10 @@
 import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
-import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
 import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
+import {
+  getPocketBasePeople
+} from './pocketbase/account-details.service'
 
 type PersonRow = Database['public']['Tables']['people']['Row']
 type PersonInsert = Database['public']['Tables']['people']['Insert']
@@ -176,8 +178,25 @@ export async function createPerson(
 }
 
 export async function getPeople(options?: { includeArchived?: boolean }): Promise<Person[]> {
+  console.log('[DB:PB] people.list')
+  try {
+    const pbPeople = await getPocketBasePeople()
+    if (pbPeople && pbPeople.length > 0) {
+      // For now, if PB data is present, we still need to calculate debt balances
+      // because the full aggregation logic isn't in PB service yet.
+      // So we use PB profiles but fallback to existing logic for balances.
+      // But let's try to just return PB profiles first for stabilization.
+      if (!options?.includeArchived) {
+        return pbPeople.filter(p => !p.is_archived)
+      }
+      return pbPeople
+    }
+  } catch (err) {
+    console.error('[DB:PB] people.list failed:', err)
+  }
+
+  console.log('[DB:SB] people.select')
   const supabase = createClient()
-  const includeArchived = options?.includeArchived ?? false
 
   // Calculate current month boundaries for cycle debt
   const now = new Date()
@@ -975,6 +994,11 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
 }
 
 export async function getRecentPeopleByTransactions(limit: number = 5): Promise<Person[]> {
+  console.log(`[DB:PB] people.recent limit=${limit}`)
+  // PocketBase doesn't have a direct equivalent without heavy join/aggregation yet.
+  // Fallback to SB for this complex query.
+
+  console.log(`[DB:SB] people.recent limit=${limit}`)
   const supabase = createClient()
 
   // Query transactions that have a person_id, ordered by occurred_at

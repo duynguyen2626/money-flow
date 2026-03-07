@@ -204,9 +204,8 @@ export function AccountDetailTransactions({
                 params.delete('tag')
             }
 
-            const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname
-            // Use history.replaceState to avoid server component re-render (which is slow)
-            window.history.replaceState(null, '', newUrl)
+            const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
+            router.push(newUrl, { scroll: false })
         })
     }
 
