@@ -8,6 +8,94 @@ import { pocketbaseGetById, pocketbaseList, toPocketBaseId } from './server'
 
 type PocketBaseRecord = Record<string, any>
 
+function escapeFilterValue(value: string): string {
+  return String(value).replace(/'/g, "\\'")
+}
+
+function isPocketBase400Error(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('PocketBase request failed [400]')
+}
+
+function buildTransactionQueryAttempts(
+  baseParams: Record<string, string | number | boolean | undefined>,
+): Array<Record<string, string | number | boolean | undefined>> {
+  const attempts: Array<Record<string, string | number | boolean | undefined>> = []
+  const dedupe = new Set<string>()
+
+  const pushAttempt = (params: Record<string, string | number | boolean | undefined>) => {
+    const key = JSON.stringify(params)
+    if (!dedupe.has(key)) {
+      dedupe.add(key)
+      attempts.push(params)
+    }
+  }
+
+  pushAttempt(baseParams)
+
+  const baseExpand = typeof baseParams.expand === 'string' ? baseParams.expand : ''
+  const baseFilter = typeof baseParams.filter === 'string' ? baseParams.filter : ''
+  const baseSort = typeof baseParams.sort === 'string' ? baseParams.sort : '-date'
+
+  if (baseExpand.includes('to_account_id')) {
+    pushAttempt({ ...baseParams, expand: baseExpand.replace(/to_account_id/g, 'target_account_id') })
+    pushAttempt({ ...baseParams, expand: baseExpand.replace(/,?to_account_id,?/g, ',').replace(/(^,|,$)/g, '') })
+  }
+
+  if (baseFilter.includes('to_account_id')) {
+    pushAttempt({ ...baseParams, filter: baseFilter.replace(/to_account_id/g, 'target_account_id') })
+    pushAttempt({ ...baseParams, filter: baseFilter.replace(/\s*\|\|\s*to_account_id='[^']*'/g, '') })
+  }
+
+  if (baseSort !== '-occurred_at') {
+    pushAttempt({ ...baseParams, sort: '-occurred_at' })
+  }
+
+  pushAttempt({ ...baseParams, expand: undefined })
+
+  return attempts
+}
+
+async function listTransactionsWithFallback(
+  params: Record<string, string | number | boolean | undefined>,
+): Promise<PocketBaseRecord[]> {
+  const attempts = buildTransactionQueryAttempts(params)
+  let lastError: unknown
+
+  for (const attempt of attempts) {
+    try {
+      return await listAllRecords('transactions', attempt)
+    } catch (error) {
+      lastError = error
+      if (!isPocketBase400Error(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('PocketBase transactions query failed')
+}
+
+async function listTransactionPageWithFallback(
+  params: Record<string, string | number | boolean | undefined>,
+): Promise<PocketBaseRecord[]> {
+  const attempts = buildTransactionQueryAttempts(params)
+  let lastError: unknown
+
+  for (const attempt of attempts) {
+    try {
+      const response = await pocketbaseList<PocketBaseRecord>('transactions', attempt)
+      return response.items || []
+    } catch (error) {
+      lastError = error
+      if (!isPocketBase400Error(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('PocketBase transactions query failed')
+}
+
 function toAccountType(value: string | null | undefined): Account['type'] {
   if (!value) return 'bank'
   if (value === 'e_wallet') return 'ewallet'
@@ -85,7 +173,7 @@ function mapShop(record: PocketBaseRecord): Shop {
   }
 }
 
-async function resolvePocketBaseAccountId(sourceId: string): Promise<string> {
+export async function resolvePocketBaseAccountId(sourceId: string): Promise<string> {
   const pbId = toPocketBaseId(sourceId, 'accounts')
   try {
     const record = await pocketbaseGetById<PocketBaseRecord>('accounts', pbId)
@@ -124,10 +212,12 @@ function mapTransaction(record: PocketBaseRecord, currentAccountSourceId: string
   const sourceAccountSourceId = expandedAccount?.id || (record.account_id === toPocketBaseId(currentAccountSourceId, 'accounts') ? record.account_id : record.account_id)
   const targetAccountSourceId = expandedTargetAccount?.id || record.target_account_id || record.to_account_id || null
 
+  const occurredAt = record.occurred_at || record.date || record.created || new Date().toISOString()
+
   return {
     id: record.id,
-    occurred_at: record.occurred_at,
-    date: record.date || record.occurred_at,
+    occurred_at: occurredAt,
+    date: record.date || occurredAt,
     note: record.note || record.description || null,
     amount: Number(record.amount || 0),
     final_price: Number(record.final_price || 0),
@@ -403,9 +493,9 @@ export async function getPocketBaseAccountDetails(sourceAccountId: string): Prom
 
 export async function loadPocketBaseTransactionsForAccount(sourceAccountId: string, limit = 2000): Promise<TransactionWithDetails[]> {
   const pocketBaseAccountId = await resolvePocketBaseAccountId(sourceAccountId)
-  const records = await listAllRecords('transactions', {
+  const records = await listTransactionsWithFallback({
     perPage: Math.min(limit, 200),
-    sort: '-occurred_at',
+    sort: '-date',
     expand: 'account_id,to_account_id,category_id,shop_id,person_id',
     filter: `(account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}')`,
   })
@@ -474,8 +564,8 @@ export async function getPocketBaseAccountCycleOptions(sourceAccountId: string, 
 
 export async function getPocketBaseCycleTransactions(sourceAccountId: string, cycleTag: string): Promise<TransactionWithDetails[]> {
   const pocketBaseAccountId = await resolvePocketBaseAccountId(sourceAccountId)
-  const records = await listAllRecords('transactions', {
-    sort: '-occurred_at',
+  const records = await listTransactionsWithFallback({
+    sort: '-date',
     expand: 'account_id,to_account_id,category_id,shop_id,person_id',
     filter: `(account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}') && (persisted_cycle_tag='${cycleTag}' || tag='${cycleTag}')`,
   })
@@ -495,40 +585,46 @@ export async function loadPocketBaseTransactions(options: {
 }): Promise<TransactionWithDetails[]> {
   const filters: string[] = []
 
-  if (!options.includeVoided) {
-    filters.push("status != 'void'")
-  }
-
   if (options.transactionId) {
-    filters.push(`(id = '${options.transactionId}' || metadata.source_id = '${options.transactionId}')`)
+    const normalizedInputId = options.transactionId.trim()
+    const hashedId = toPocketBaseId(normalizedInputId, 'transactions')
+    const possibleIds = new Set<string>([normalizedInputId, hashedId].filter(Boolean))
+    const idFilter = Array.from(possibleIds)
+      .map((id) => `id='${escapeFilterValue(id)}'`)
+      .join(' || ')
+    filters.push(`(${idFilter})`)
   } else {
     if (options.personIds && options.personIds.length > 0) {
-      const pIdList = options.personIds.map(id => `person_id = '${id}'`).join(' || ')
+      const pIdList = options.personIds
+        .map((id) => toPocketBaseId(id, 'people'))
+        .map((id) => `person_id='${escapeFilterValue(id)}'`)
+        .join(' || ')
       filters.push(`(${pIdList})`)
     } else if (options.personId) {
-      filters.push(`person_id = '${options.personId}'`)
+      const pbPersonId = toPocketBaseId(options.personId, 'people')
+      filters.push(`person_id='${escapeFilterValue(pbPersonId)}'`)
     } else if (options.accountId) {
       const pbAccountId = await resolvePocketBaseAccountId(options.accountId)
-      filters.push(`(account_id = '${pbAccountId}' || to_account_id = '${pbAccountId}')`)
+      filters.push(`(account_id='${escapeFilterValue(pbAccountId)}' || to_account_id='${escapeFilterValue(pbAccountId)}')`)
     }
   }
 
   if (options.shopId) {
     const pbShopId = toPocketBaseId(options.shopId, 'shops')
-    filters.push(`shop_id = '${pbShopId}'`)
+    filters.push(`shop_id='${escapeFilterValue(pbShopId)}'`)
   }
 
   if (options.categoryId) {
     const pbCategoryId = toPocketBaseId(options.categoryId, 'categories')
-    filters.push(`category_id = '${pbCategoryId}'`)
+    filters.push(`category_id='${escapeFilterValue(pbCategoryId)}'`)
   }
 
   if (options.installmentPlanId) {
-    filters.push(`installment_plan_id = '${options.installmentPlanId}'`)
+    filters.push(`installment_plan_id='${escapeFilterValue(options.installmentPlanId)}'`)
   }
 
   const queryParams: any = {
-    sort: '-occurred_at',
+    sort: '-date',
     expand: 'account_id,to_account_id,category_id,shop_id,person_id',
     perPage: options.limit ? Math.min(options.limit, 200) : 200,
   }
@@ -537,8 +633,14 @@ export async function loadPocketBaseTransactions(options: {
     queryParams.filter = filters.join(' && ')
   }
 
-  const response = await pocketbaseList<PocketBaseRecord>('transactions', queryParams)
-  return (response.items || []).map((item) => mapTransaction(item, options.accountId || ''))
+  const items = await listTransactionPageWithFallback(queryParams)
+  const mapped = items.map((item) => mapTransaction(item, options.accountId || ''))
+
+  if (options.includeVoided) {
+    return mapped
+  }
+
+  return mapped.filter((item) => String(item.status || '').toLowerCase() !== 'void')
 }
 
 export async function getPocketBaseTransactionById(transactionId: string): Promise<TransactionWithDetails | null> {

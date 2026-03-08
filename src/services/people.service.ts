@@ -5,10 +5,17 @@
 import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
+import type {
+  MonthlyDebtSummary,
+  Person as MoneyflowPerson,
+  PersonCycleSheet,
+} from '@/types/moneyflow.types'
 import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 import {
   getPocketBasePeople
 } from './pocketbase/account-details.service'
+
+type Person = MoneyflowPerson & { email?: string | null }
 
 type PersonRow = Database['public']['Tables']['people']['Row']
 type PersonInsert = Database['public']['Tables']['people']['Insert']
@@ -178,6 +185,7 @@ export async function createPerson(
 }
 
 export async function getPeople(options?: { includeArchived?: boolean }): Promise<Person[]> {
+  const includeArchived = Boolean(options?.includeArchived)
   console.log('[DB:PB] people.list')
   try {
     const pbPeople = await getPocketBasePeople()

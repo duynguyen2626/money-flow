@@ -13,7 +13,7 @@ export async function ensurePocketBaseCycle(
     accountId: string,
     cycleTag: string,
     accountRecord: PocketBaseRecord
-) {
+): Promise<PocketBaseRecord> {
     const pbAccountId = toPocketBaseId(accountId, 'accounts');
 
     // 1. Try to fetch existing
@@ -31,7 +31,7 @@ export async function ensurePocketBaseCycle(
     const maxBudget = accountRecord.cb_max_budget ?? null;
     const minSpend = accountRecord.cb_min_spend ?? null;
 
-    const newCycle = await pocketbaseCreate('cashback_cycles', {
+    const newCycle = await pocketbaseCreate<PocketBaseRecord>('cashback_cycles', {
         account_id: pbAccountId,
         cycle_tag: cycleTag,
         max_budget: maxBudget,

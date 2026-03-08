@@ -306,7 +306,7 @@ export function TransactionSlideV2({
             case "credit_pay":
                 return { type: "transfer" as const, kind: "internal" as const };
             case "invest":
-                return { type: "investment" as const, kind: "internal" as const };
+                return { type: "expense" as const, kind: "internal" as const };
             case "expense":
             default:
                 return { type: "expense" as const, kind: "external" as const };

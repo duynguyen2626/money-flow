@@ -606,7 +606,7 @@ export async function createTransaction(
     }
 
     // 1. Write to PocketBase first
-    const pbId = toPocketBaseId(normalized.id || crypto.randomUUID(), 'transactions')
+    const pbId = toPocketBaseId(crypto.randomUUID(), 'transactions')
     const pbPayload = {
       ...normalized,
       id: pbId,
@@ -630,7 +630,7 @@ export async function createTransaction(
       .from("transactions")
       .insert([{
         ...normalized,
-        id: normalized.id || (pbId && !isUuid(pbId) ? crypto.randomUUID() : pbId) // Ensure SB gets a UUID if PB got a hash
+          id: crypto.randomUUID()
       }] as any)
       .select()
       .single();
@@ -2153,6 +2153,28 @@ export async function loadAccountTransactionsV2(accountId: string, limit: number
 
   console.log(`[DB:SB] transactions.v2 accountId=${accountId}`)
   const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      amount,
+      type,
+      status,
+      category:categories(name, icon),
+      person:people(name)
+    `)
+    .eq('account_id', accountId)
+    .neq('status', 'void')
+    .order('occurred_at', { ascending: false })
+    .limit(limit)
+
+  if (error || !data) {
+    console.error('[DB:SB] transactions.v2 failed:', error)
+    return []
+  }
 
 
   return data.map((t: any) => ({

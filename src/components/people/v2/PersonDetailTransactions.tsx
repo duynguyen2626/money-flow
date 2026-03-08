@@ -223,7 +223,11 @@ export function PersonDetailTransactions({
                             mode={dateMode}
                             onDateChange={setDate}
                             onRangeChange={setDateRange}
-                            onModeChange={setDateMode}
+                            onModeChange={(mode) => {
+                                if (mode !== 'cycle') {
+                                    setDateMode(mode)
+                                }
+                            }}
                             availableMonths={availableMonths}
                         />
 
