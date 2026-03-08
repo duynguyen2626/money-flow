@@ -56,6 +56,10 @@ const resolveCurrentClaspEmail = async () => {
 
 const isLikelyScriptId = (value) => /^[a-zA-Z0-9_-]{20,}$/.test(value)
 
+// On Windows, .cmd files (like clasp.cmd) cannot be executed by spawnSync
+// with shell:false — it throws EINVAL. Requires shell:true on Windows only.
+const useShell = process.platform === 'win32'
+
 const loadEnv = () => {
   const envPath = join(repoRoot, '.env')
   const envLocalPath = join(repoRoot, '.env.local')
@@ -273,7 +277,7 @@ const main = async () => {
         let result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false, // Avoid security warning, arguments are passed as array
+          shell: useShell,
         })
 
         if (result.status === 0) {
@@ -294,7 +298,7 @@ const main = async () => {
             ], {
               cwd: __dirname,
               stdio: 'inherit',
-              shell: false,
+              shell: useShell,
             })
 
             if (deployResult.status === 0) {
@@ -321,7 +325,7 @@ const main = async () => {
             console.log(`\nRunning 'clasp login'... Please refresh your session.`)
             const loginResult = spawnSync(claspCmd, ['login'], {
               stdio: 'inherit',
-              shell: false,
+              shell: useShell,
             })
 
             if (loginResult.status === 0) {
@@ -329,7 +333,7 @@ const main = async () => {
               result = spawnSync(claspCmd, pushArgs, {
                 cwd: __dirname,
                 stdio: 'inherit',
-                shell: false,
+                shell: useShell,
               })
 
               if (result.status === 0) {
@@ -348,7 +352,7 @@ const main = async () => {
                   ], {
                     cwd: __dirname,
                     stdio: 'inherit',
-                    shell: false,
+                    shell: useShell,
                   })
                   if (deployResult.status === 0) {
                     console.log(`   ✨ [${new Date().toLocaleString()}] Deployed Successfully!`)
@@ -407,7 +411,7 @@ const main = async () => {
   let result = spawnSync(claspCmd, pushArgs, {
     cwd: __dirname,
     stdio: 'inherit',
-    shell: false,
+    shell: useShell,
   })
 
   // Retry logic for single push
@@ -419,7 +423,7 @@ const main = async () => {
       console.log(`\nRunning 'clasp login'... Please refresh your session.`)
       const loginResult = spawnSync(claspCmd, ['login'], {
         stdio: 'inherit',
-        shell: false,
+        shell: useShell,
       })
 
       if (loginResult.status === 0) {
@@ -427,7 +431,7 @@ const main = async () => {
         result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false,
+          shell: useShell,
         })
       }
     }
@@ -461,7 +465,7 @@ const main = async () => {
         ], {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false,
+          shell: useShell,
         })
 
         if (deployResult.status === 0) {

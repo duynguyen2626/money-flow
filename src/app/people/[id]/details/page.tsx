@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
-import { getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
+import {
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBasePeople,
+  getPocketBaseShops,
+} from '@/services/pocketbase/account-details.service'
 import { getDebtByTags } from '@/services/debt.service'
 import { getUnifiedTransactions, getTransactionsByPeople } from '@/services/transaction.service'
 import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
@@ -32,10 +34,10 @@ export default async function MemberDetailsPage({ params }: { params: Promise<{ 
 
     // Fetch all required data in parallel
     const [accounts, categories, people, shops, debtTags, cycleSheets] = await Promise.all([
-        getAccounts(),
-        getCategories(),
-        getPeople(),
-        getShops(),
+        getPocketBaseAccounts(),
+        getPocketBaseCategories(),
+        getPocketBasePeople(),
+        getPocketBaseShops(),
         getDebtByTags(personId),
         getPersonCycleSheets(sheetProfileId),
     ]) as any

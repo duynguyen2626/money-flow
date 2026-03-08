@@ -1,8 +1,10 @@
-import { getPeople } from '@/services/people.service'
+import {
+  getPocketBasePeople,
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBaseShops,
+} from '@/services/pocketbase/account-details.service'
 import { getServices } from '@/services/service-manager'
-import { getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getShops } from '@/services/shop.service'
 import { PeopleDirectoryV2 } from '@/components/people/v2/people-directory-v2'
 import { Metadata } from 'next'
 
@@ -14,11 +16,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function PeopleV2Page() {
     const [people, subscriptions, accounts, categories, shops] = await Promise.all([
-        getPeople({ includeArchived: true }),
+        getPocketBasePeople(),
         getServices() as Promise<any>,
-        getAccounts(),
-        getCategories(),
-        getShops(),
+        getPocketBaseAccounts(),
+        getPocketBaseCategories(),
+        getPocketBaseShops(),
     ])
 
     return (

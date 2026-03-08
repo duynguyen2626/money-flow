@@ -1,5 +1,5 @@
 import { getServiceById } from '@/services/service-manager'
-import { getPeople } from '@/services/people.service'
+import { getPocketBasePeople } from '@/services/pocketbase/account-details.service'
 import { ServiceCard } from '@/components/services/service-card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
@@ -8,7 +8,7 @@ import Link from 'next/link'
 export default async function ServiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const service: any = await getServiceById(id)
-    const people = await getPeople()
+    const people = await getPocketBasePeople()
 
     if (!service) {
         return <div>Service not found</div>

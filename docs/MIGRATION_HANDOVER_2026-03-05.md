@@ -23,12 +23,36 @@
   - `src/app/api/cashback/stats/route.ts`
 - Dọn trace Supabase ở account detail client:
   - `src/components/accounts/v2/AccountDetailViewV2.tsx` (bỏ realtime channel, dùng polling nhẹ)
+- **[2026-03-05 Session 2]** Tiếp tục Phase B - cutover các luồng còn Supabase:
+  - `src/app/accounts/page.tsx`: getAccounts/getCategories/getPeople/getShops → PocketBase equivalents
+  - `src/actions/cashback.actions.ts`: fetchMonthlyCashbackDetails - thay getMonthlyCashbackTransactions (Supabase) bằng direct PocketBase query; xóa import thừa (getCashbackProgress, parseCycleTag, getPocketBaseAccountSpendingStatsSnapshot)
+  - push-sheet.mjs preflight account check: **đã được implement sẵn** (lines 165-179), không cần thêm
 
 ### 2.2 Migration data model accounts (split cashback fields)
 - Cập nhật mapper trong `scripts/pocketbase/migrate.mjs` để tách từ `cashback_config` sang cột riêng:
   - `cb_type`, `cb_base_rate`, `cb_max_budget`, `cb_is_unlimited`, `cb_rules_json`, `cb_min_spend`, `cb_cycle_type`
 - Re-migrate phase accounts đã chạy thành công:
   - xóa + tạo lại 93 records accounts.
+
+### 2.4 [2026-03-06 Session 3] Rollover sheet sync + migration audit
+
+- **Fix `rolloverDebtAction` — thiếu sheet sync:**
+  - `src/actions/people-actions.ts`: thêm import `syncTransactionToSheet` từ `sheet.service`.
+  - Sau khi tạo `settleRes` (repayment, fromCycle): gọi `void syncTransactionToSheet(personId, {..., tag: fromCycle, type: 'repayment'}, 'create')`.
+  - Sau khi tạo `openRes` (debt, toCycle): gọi `void syncTransactionToSheet(personId, {..., tag: toCycle, type: 'debt'}, 'create')`.
+  - Cả 2 đều dùng `shop_name: 'Rollover'`, fire-and-forget với `.catch(console.error)`.
+
+- **Audit migration feasibility — people pages:**
+  - `/people/page.tsx`: cần `getPeople`, `getServices`, `getAccounts`, `getCategories`, `getShops`. 4/5 có PocketBase equivalent, nhưng `getServices` (subscriptions + JOIN service_members + people) **chưa có PocketBase equivalent** → migration **blocked**.
+  - `/people/[id]/page.tsx`: cần `getPersonWithSubs`, `getDebtByTags`, `getPersonCycleSheets`, `getUnifiedTransactions`, `getTransactionsByPeople`, `getServices` — **tất cả đều chưa có PocketBase equivalent** → migration **blocked**.
+  - **Kết luận:** People pages cần xây thêm PocketBase service functions trước khi migrate được.
+
+- **Audit `account-actions.ts`:**
+  - 5/6 exported functions dùng Supabase trực tiếp (`createClient()`): `updateAccountInfo`, `createAccount`, `getAccountsAction`, `getLastTransactionAccountId`, `getLastTransactionPersonId`.
+  - `updateAccountConfigAction` delegate sang `account.service` (không direct Supabase call).
+  - Migration cần xây PocketBase equivalents cho các CRUD write operations (insert/update accounts, get last transaction metadata).
+
+---
 
 ### 2.3 Google Sheets sync fixes (đã merge vào branch migrate)
 - Server-side filter thống nhất `#nosync/#deprecated`:
@@ -52,14 +76,21 @@
 - [x] Lọc `#nosync` nhất quán cho single/cycle/all sync.
 - [x] Fix highlight đỏ chỉ cột Type (B) trên people sheet.
 - [x] Cập nhật docs handover migration.
+- [x] **[Session 2]** `push-sheet.mjs` preflight account check — đã có sẵn (không cần code thêm).
+- [x] **[Session 2]** `/accounts/page.tsx` → PocketBase (getAccounts/getCategories/getPeople/getShops).
+- [x] **[Session 2]** `cashback.actions.ts` → xóa Supabase dependency cho `fetchMonthlyCashbackDetails`; tất cả 4 exported functions đều dùng PocketBase.
+- [x] **[Session 2]** Build pass sau thay đổi (`pnpm build` clean).
+- [x] **[Session 3]** Fix `rolloverDebtAction` — thêm `syncTransactionToSheet` cho cả 2 giao dịch rollover (settle repayment + open debt), mỗi giao dịch sync đúng cycle tab (fromCycle / toCycle).
+- [x] **[Session 3]** Audit people pages migration feasibility — xác nhận blocked do thiếu PocketBase services.
+- [x] **[Session 3]** Audit `account-actions.ts` — xác nhận 100% Supabase, chờ xây PocketBase write services.
 
 ### In Progress / Partial
-- [~] PocketBase migration chưa hoàn tất toàn bộ hệ thống (nhiều service/action khác vẫn dùng Supabase).
+- [~] PocketBase migration chưa hoàn tất toàn bộ hệ thống — `people-actions.ts` vẫn dùng Supabase (people/debt/transaction services).
 - [~] Smoke test authenticated E2E trên app route private chưa fully automated (chủ yếu manual/smoke route).
 
 ### Pending
-- [ ] Chuẩn hóa auth của `clasp` để tránh lẫn account khi push Apps Script (preflight guard trong `push-sheet.mjs`).
-- [ ] Hoàn thiện PocketBase-first cho các luồng people/actions còn dùng Supabase.
+- [ ] **[Blocked]** People pages PocketBase migration — cần xây PocketBase equivalents cho: `getPersonWithSubs`, `getDebtByTags`, `getPersonCycleSheets`, `getUnifiedTransactions`, `getTransactionsByPeople`, `getServices` (subscriptions+members JOIN).
+- [ ] **[Blocked]** `account-actions.ts` PocketBase migration — cần xây PocketBase write services (insertAccount, updateAccount) + getLastTransaction helpers.
 - [ ] Tổng hợp test matrix regression đầy đủ trước production deploy.
 
 ---
@@ -67,9 +98,7 @@
 ## 4) Issues hiện tại (People + migration dở dang)
 
 ### People / Sheet sync
-1. **Push script timeout/permission confusion**
-   - Có khả năng lẫn auth profile giữa global/local `.clasprc.json`.
-   - Cần preflight check account email trước khi `clasp push`.
+1. **Push script timeout/permission confusion** — ✅ **ĐÃ CÓ** preflight check trong `push-sheet.mjs` (lines 165-179). Kiểm tra email từ Google token, fail sớm nếu mismatch.
 
 2. **Google Sheet script deployment drift**
    - Nếu update `integrations/google-sheets/people-sync/Code.js` mà chưa push đúng script ID thì web behavior không đổi.
@@ -78,9 +107,14 @@
    - Đã thêm `router.refresh()` sau sync, nhưng vẫn cần verify thêm với data lớn và concurrent edits.
 
 ### PocketBase migration
-1. **Mixed backend state**
-   - Một số route/service mới dùng PocketBase, nhưng nhiều luồng khác vẫn Supabase.
-   - Cần chiến lược “PB-first + fallback” hoặc cutover theo module để tránh inconsistency.
+1. **Mixed backend state (còn lại sau Session 3)**
+   - `/accounts`, `/accounts/[id]`, `/cashback`, `cashback.actions.ts`, `/api/cashback/stats` — **100% PocketBase** ✅
+   - `people-actions.ts`:
+     - `rolloverDebtAction` — ✅ **Sheet sync đã fix** (Session 3); vẫn còn `createClient()` cho linked_transaction_id update (Supabase write).
+     - `createPersonAction`, `updatePersonAction`, `getPeoplePageData`, `ensureDebtAccountAction` — vẫn Supabase.
+   - `account-actions.ts` — **100% Supabase** (5/6 functions dùng `createClient()` trực tiếp).
+   - `/people/page.tsx`, `/people/[id]/page.tsx` — **100% Supabase**, migration **blocked** do thiếu PocketBase service equivalents:
+     - Cần build: `getPocketBasePersonWithSubs`, `getPocketBaseDebtByTags`, `getPocketBasePersonCycleSheets`, `getPocketBaseUnifiedTransactions`, `getPocketBaseTransactionsByPeople`, `getPocketBaseServices`.
 
 2. **Data parity validation**
    - Sau re-migrate accounts, cần checklist đối soát field-level (đặc biệt cashback fields split).
@@ -93,23 +127,25 @@
 
 ## 5) Kế hoạch chuẩn bị cho Agent tiếp theo
 
-### Phase A - Stabilize tools (nhanh)
-- Thêm preflight auth check cho `people-sync/batch-sync push-sheet.mjs`:
-  - xác nhận account `clasp` hiện hành,
-  - fail sớm nếu mismatch,
-  - hướng dẫn relogin 1 account duy nhất.
+### Phase A - Stabilize tools ✅ DONE
+- `push-sheet.mjs` preflight check đã implement sẵn; mismatch account → exit(1).
 
-### Phase B - Migration consistency
-- Rà các action/service còn Supabase trong flows liên quan Accounts/Cashback/People.
-- Chọn thứ tự cutover theo module, không làm big-bang.
+### Phase B - Migration consistency (một phần DONE)
+- ✅ `/accounts/page.tsx` cutover
+- ✅ `cashback.actions.ts` - `fetchMonthlyCashbackDetails` cutover
+- ✅ `people-actions.ts` — `rolloverDebtAction` sheet sync fixed (Session 3)
+- 🔲 `people-actions.ts` — còn Supabase: `createPersonAction`, `updatePersonAction`, `getPeoplePageData`, `rolloverDebtAction` (linked_transaction_id write)
+- 🔲 `/people/page.tsx`, `/people/[id]/page.tsx` — **BLOCKED**: cần build PocketBase equivalents cho 6 missing services (xem mục 4 bên trên)
+- 🔲 `account-actions.ts` — **BLOCKED**: cần build PocketBase write services (insert/update accounts, last transaction helpers)
 
 ### Phase C - Verification
 - Smoke test chuẩn theo checklist:
   - People sync all/current cycle
   - `#nosync` exclusion
   - Type coloring cột B
-  - Accounts details / Cashback pages
+  - Accounts list + details / Cashback pages
 - Chạy lint/build trước khi merge PR.
+- **PR cần tạo** từ `agent/pb-migration-20260305-accounts-cashback-pb` → `feat/pocketbase-migration`.
 
 ---
 

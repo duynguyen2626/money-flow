@@ -3,6 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { revalidatePath } from 'next/cache'
+import {
+  createPocketBaseShop,
+  updatePocketBaseShop,
+  togglePocketBaseShopArchive,
+  deletePocketBaseShop,
+  togglePocketBaseShopsArchiveBulk,
+  deletePocketBaseShopsBulk,
+} from '@/services/pocketbase/account-details.service'
 
 type ShopRow = Database['public']['Tables']['shops']['Row']
 type ShopInsert = Database['public']['Tables']['shops']['Insert']
@@ -41,6 +49,7 @@ export async function getShops(): Promise<ShopRow[]> {
 }
 
 export async function getShopById(id: string): Promise<ShopRow | null> {
+  console.log('[DB:SB] shops.getById', { id })
   const supabase = createClient()
   const { data, error } = await supabase
     .from('shops')
@@ -49,7 +58,7 @@ export async function getShopById(id: string): Promise<ShopRow | null> {
     .single()
 
   if (error) {
-    console.error('Failed to fetch shop by id:', error)
+    console.error('[DB:SB] shops.getById failed:', error)
     return null
   }
 
@@ -62,10 +71,7 @@ export async function createShop(input: {
   default_category_id?: string | null
 }): Promise<ShopRow | null> {
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const userId = user?.id ?? '917455ba-16c0-42f9-9cea-264f81a3db66'
+  console.log('[DB:SB] shops.create', { name: input.name })
 
   const payload: ShopInsert = {
     name: input.name.trim(),
@@ -75,14 +81,23 @@ export async function createShop(input: {
 
   const { data, error } = await (supabase.from('shops').insert as any)(payload).select().single()
   if (error || !data) {
-    console.error('Failed to create shop:', error)
+    console.error('[DB:SB] shops.create failed:', error)
     return null
   }
-  return data as ShopRow
+
+  const result = data as ShopRow
+  void createPocketBaseShop(result.id, {
+    name: result.name,
+    image_url: result.image_url ?? null,
+    default_category_id: result.default_category_id ?? null,
+  }).catch((err) => console.error('[DB:PB] shops.create secondary failed:', err))
+
+  return result
 }
 
 export async function updateShop(id: string, input: { name?: string; image_url?: string | null; default_category_id?: string | null }): Promise<boolean> {
   const supabase = createClient()
+  console.log('[DB:SB] shops.update', { id })
   const payload: Partial<ShopUpdate> = {}
 
   if (input.name) {
@@ -101,29 +116,43 @@ export async function updateShop(id: string, input: { name?: string; image_url?:
 
   const { error } = await (supabase.from('shops').update as any)(payload).eq('id', id)
   if (error) {
-    console.error('Failed to update shop:', error)
+    console.error('[DB:SB] shops.update failed:', error)
     return false
   }
+
+  void updatePocketBaseShop(id, {
+    name: payload.name,
+    image_url: payload.image_url !== undefined ? (payload.image_url ?? null) : undefined,
+    default_category_id: payload.default_category_id !== undefined ? (payload.default_category_id ?? null) : undefined,
+  }).catch((err) => console.error('[DB:PB] shops.update secondary failed:', err))
+
   return true
 }
 
 export async function toggleShopArchive(id: string, isArchived: boolean): Promise<boolean> {
   const supabase = createClient()
+  console.log('[DB:SB] shops.toggleArchive', { id, isArchived })
   const { error } = await supabase
     .from('shops')
     .update({ is_archived: isArchived } as any)
     .eq('id', id)
 
   if (error) {
-    console.error('Error toggling shop archive:', error)
+    console.error('[DB:SB] shops.toggleArchive failed:', error)
     return false
   }
+
+  void togglePocketBaseShopArchive(id, isArchived)
+    .catch((err) => console.error('[DB:PB] shops.toggleArchive secondary failed:', err))
+
   revalidatePath('/categories')
   return true
 }
 
 export async function deleteShop(id: string, targetId?: string): Promise<{ success: boolean; error?: string; hasTransactions?: boolean }> {
   const supabase = createClient()
+
+  console.log('[DB:SB] shops.delete', { id, targetId })
 
   // 1. Check for existing transactions
   const { count, error: countError } = await supabase
@@ -132,7 +161,7 @@ export async function deleteShop(id: string, targetId?: string): Promise<{ succe
     .eq('shop_id', id)
 
   if (countError) {
-    console.error('Error checking shop transactions:', countError)
+    console.error('[DB:SB] shops.delete count check failed:', countError)
     return { success: false, error: 'Failed to check transactions' }
   }
 
@@ -150,7 +179,7 @@ export async function deleteShop(id: string, targetId?: string): Promise<{ succe
       .eq('shop_id', id)
 
     if (updateError) {
-      console.error('Error moving transactions to new shop:', updateError)
+      console.error('[DB:SB] shops.delete handover failed:', updateError)
       return { success: false, error: 'Failed to move transactions' }
     }
   }
@@ -162,9 +191,12 @@ export async function deleteShop(id: string, targetId?: string): Promise<{ succe
     .eq('id', id)
 
   if (deleteError) {
-    console.error('Error deleting shop:', deleteError)
+    console.error('[DB:SB] shops.delete failed:', deleteError)
     return { success: false, error: 'Failed to delete shop' }
   }
+
+  void deletePocketBaseShop(id)
+    .catch((err) => console.error('[DB:PB] shops.delete secondary failed:', err))
 
   revalidatePath('/categories')
   return { success: true }
@@ -172,21 +204,28 @@ export async function deleteShop(id: string, targetId?: string): Promise<{ succe
 
 export async function toggleShopsArchiveBulk(ids: string[], isArchived: boolean): Promise<boolean> {
   const supabase = createClient()
+  console.log('[DB:SB] shops.toggleArchiveBulk', { count: ids.length, isArchived })
   const { error } = await supabase
     .from('shops')
     .update({ is_archived: isArchived } as any)
     .in('id', ids)
 
   if (error) {
-    console.error('Error toggling shops archive bulk:', error)
+    console.error('[DB:SB] shops.toggleArchiveBulk failed:', error)
     return false
   }
+
+  void togglePocketBaseShopsArchiveBulk(ids, isArchived)
+    .catch((err) => console.error('[DB:PB] shops.toggleArchiveBulk secondary failed:', err))
+
   revalidatePath('/categories')
   return true
 }
 
 export async function deleteShopsBulk(ids: string[], targetId?: string): Promise<{ success: boolean; error?: string; hasTransactionsIds?: string[] }> {
   const supabase = createClient()
+
+  console.log('[DB:SB] shops.deleteBulk', { count: ids.length, targetId })
 
   // 1. Check for transactions across all shops
   const { data: txns, error: countError } = await supabase
@@ -195,7 +234,7 @@ export async function deleteShopsBulk(ids: string[], targetId?: string): Promise
     .in('shop_id', ids)
 
   if (countError) {
-    console.error('Error checking shop transactions bulk:', countError)
+    console.error('[DB:SB] shops.deleteBulk count check failed:', countError)
     return { success: false, error: 'Failed to check transactions' }
   }
 
@@ -213,7 +252,7 @@ export async function deleteShopsBulk(ids: string[], targetId?: string): Promise
       .in('shop_id', idsWithTransactions)
 
     if (updateError) {
-      console.error('Error moving transactions bulk:', updateError)
+      console.error('[DB:SB] shops.deleteBulk handover failed:', updateError)
       return { success: false, error: 'Failed to move transactions' }
     }
   }
@@ -225,9 +264,12 @@ export async function deleteShopsBulk(ids: string[], targetId?: string): Promise
     .in('id', ids)
 
   if (deleteError) {
-    console.error('Error deleting shops bulk:', deleteError)
+    console.error('[DB:SB] shops.deleteBulk failed:', deleteError)
     return { success: false, error: 'Failed to delete shops' }
   }
+
+  void deletePocketBaseShopsBulk(ids)
+    .catch((err) => console.error('[DB:PB] shops.deleteBulk secondary failed:', err))
 
   revalidatePath('/categories')
   return { success: true }
@@ -235,6 +277,8 @@ export async function deleteShopsBulk(ids: string[], targetId?: string): Promise
 
 export async function archiveShop(id: string, targetId?: string): Promise<{ success: boolean; error?: string; hasTransactions?: boolean }> {
   const supabase = createClient()
+
+  console.log('[DB:SB] shops.archive', { id, targetId })
 
   // 1. If targetId provided, handover transactions first
   if (targetId) {
@@ -244,7 +288,7 @@ export async function archiveShop(id: string, targetId?: string): Promise<{ succ
       .eq('shop_id', id)
 
     if (updateError) {
-      console.error('Error moving transactions for archive:', updateError)
+      console.error('[DB:SB] shops.archive handover failed:', updateError)
       return { success: false, error: 'Failed to move transactions' }
     }
   } else {
@@ -267,15 +311,19 @@ export async function archiveShop(id: string, targetId?: string): Promise<{ succ
     .eq('id', id)
 
   if (archiveError) {
-    console.error('Error archiving shop:', archiveError)
+    console.error('[DB:SB] shops.archive failed:', archiveError)
     return { success: false, error: 'Failed to archive' }
   }
+
+  void togglePocketBaseShopArchive(id, true)
+    .catch((err) => console.error('[DB:PB] shops.archive secondary failed:', err))
 
   revalidatePath('/categories')
   return { success: true }
 }
 
 export async function getShopStats(year: number) {
+  console.log('[DB:SB] shops.getStats', { year })
   const supabase = createClient()
   const startDate = `${year}-01-01T00:00:00.000Z`
   const endDate = `${year}-12-31T23:59:59.999Z`
@@ -288,7 +336,7 @@ export async function getShopStats(year: number) {
     .lte('occurred_at', endDate)
 
   if (error) {
-    console.error('Error fetching shop stats:', error)
+    console.error('[DB:SB] shops.getStats failed:', error)
     return {}
   }
 

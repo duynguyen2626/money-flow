@@ -12,8 +12,11 @@ import type {
 } from '@/types/moneyflow.types'
 import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 import {
-  getPocketBasePeople
-} from './pocketbase/account-details.service'
+  getPocketBasePeople,
+  createPocketBasePerson,
+  updatePocketBasePerson,
+  createPocketBaseAccount,
+} from '@/services/pocketbase/account-details.service'
 
 type Person = MoneyflowPerson & { email?: string | null }
 
@@ -120,6 +123,7 @@ export async function createPerson(
     google_sheet_url?: string | null;
   }
 ): Promise<{ profileId: string; debtAccountId: string | null } | null> {
+  console.log('[DB:SB] people.create', { name: name?.trim() })
   const supabase = createClient()
   const trimmedName = name?.trim()
 
@@ -176,6 +180,27 @@ export async function createPerson(
 
   if (Array.isArray(subscriptionIds)) {
     await syncSubscriptionMemberships(supabase, profileId, subscriptionIds)
+  }
+
+  // PB secondary write (fire-and-forget)
+  void createPocketBasePerson(profileId, {
+    name: trimmedName,
+    image_url: image_url?.trim() || null,
+    sheet_link: sheet_link?.trim() || null,
+    google_sheet_url: opts?.google_sheet_url?.trim() || null,
+    is_owner: opts?.is_owner ?? null,
+    is_archived: opts?.is_archived ?? null,
+    is_group: opts?.is_group ?? null,
+    group_parent_id: opts?.group_parent_id ?? null,
+  }).catch((err) => console.error('[DB:PB] people.create secondary failed:', err))
+
+  if (debtAccountId) {
+    void createPocketBaseAccount(debtAccountId, {
+      name: `No phai thu - ${trimmedName}`,
+      type: 'debt',
+      owner_id: profileId,
+      current_balance: 0,
+    }).catch((err) => console.error('[DB:PB] accounts.createDebt secondary failed:', err))
   }
 
   return {
@@ -776,6 +801,7 @@ export async function ensureDebtAccount(
   personId: string,
   personName?: string
 ): Promise<string | null> {
+  console.log('[DB:SB] people.ensureDebtAccount', { personId })
   const supabase = createClient()
 
   const existingId = await findExistingDebtAccountId(supabase, personId)
@@ -834,6 +860,7 @@ export async function updatePerson(
     group_parent_id?: string | null
   }
 ): Promise<boolean> {
+  console.log('[DB:SB] people.update', { id })
   const supabase = createClient()
   const payload: PersonUpdate & { is_archived?: boolean } = {}
   const normalizedSheetLink =
@@ -883,11 +910,32 @@ export async function updatePerson(
     await syncSubscriptionMemberships(supabase, id, data.subscriptionIds)
   }
 
+  // PB secondary write (fire-and-forget)
+  if (Object.keys(payload).length > 0) {
+    const pbPayload: Parameters<typeof updatePocketBasePerson>[1] = {}
+    if (typeof payload.name === 'string') pbPayload.name = payload.name
+    if (typeof payload.image_url !== 'undefined') pbPayload.image_url = payload.image_url ?? null
+    if (typeof payload.sheet_link !== 'undefined') pbPayload.sheet_link = payload.sheet_link ?? null
+    if (typeof payload.google_sheet_url !== 'undefined') pbPayload.google_sheet_url = payload.google_sheet_url ?? null
+    if (typeof (payload as any).sheet_full_img !== 'undefined') pbPayload.sheet_full_img = (payload as any).sheet_full_img ?? null
+    if (typeof (payload as any).sheet_show_bank_account === 'boolean') pbPayload.sheet_show_bank_account = (payload as any).sheet_show_bank_account
+    if (typeof (payload as any).sheet_bank_info !== 'undefined') pbPayload.sheet_bank_info = (payload as any).sheet_bank_info ?? null
+    if (typeof (payload as any).sheet_linked_bank_id !== 'undefined') pbPayload.sheet_linked_bank_id = (payload as any).sheet_linked_bank_id ?? null
+    if (typeof (payload as any).sheet_show_qr_image === 'boolean') pbPayload.sheet_show_qr_image = (payload as any).sheet_show_qr_image
+    if (typeof (payload as any).is_owner === 'boolean') pbPayload.is_owner = (payload as any).is_owner
+    if (typeof (payload as any).is_archived === 'boolean') pbPayload.is_archived = (payload as any).is_archived
+    if (typeof (payload as any).is_group === 'boolean') pbPayload.is_group = (payload as any).is_group
+    if (typeof (payload as any).group_parent_id !== 'undefined') pbPayload.group_parent_id = (payload as any).group_parent_id ?? null
+    void updatePocketBasePerson(id, pbPayload)
+      .catch((err) => console.error('[DB:PB] people.update secondary failed:', err))
+  }
+
   return true
 }
 
 export async function getPersonWithSubs(id: string): Promise<Person | null> {
   if (!id || id === 'details') return null;
+  console.log('[DB:SB] people.getWithSubs', { id })
   const supabase = createClient()
 
   const profileSelect = async () => {

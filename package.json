@@ -14,7 +14,8 @@
     "sheet:batch": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
     "sheet:batch:1": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
     "sheet:batch:2": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
-    "sheet:batch:3": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_"
+    "sheet:batch:3": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
+    "clasp:refresh": "node scripts/refresh-clasp-token.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

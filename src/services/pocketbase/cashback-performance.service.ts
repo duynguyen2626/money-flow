@@ -18,7 +18,7 @@ export async function getPocketBaseCashbackYearAnalytics(year: number): Promise<
   const accountsResponse = await pocketbaseList<PocketBaseRecord>('accounts', {
     perPage: 200,
     filter: "type='credit_card' && is_active=true",
-    sort: 'name',
+    sort: '-created',
     fields: 'id,slug,type,annual_fee,name',
   })
 

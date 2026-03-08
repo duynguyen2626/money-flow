@@ -1,4 +1,4 @@
-import { getAccounts } from '@/services/account.service'
+import { getPocketBaseAccounts } from '@/services/pocketbase/account-details.service'
 import { getBankMappings } from '@/services/bank.service'
 import { getSheetWebhookLinks } from '@/services/webhook-link.service'
 import { BatchPageClientV2 } from '@/components/batch/batch-page-client-v2'
@@ -7,8 +7,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 
 export async function generateMetadata(): Promise<Metadata> {
-    const { getAccounts } = await import('@/services/account.service')
-    const accounts = await getAccounts()
+    const accounts = await getPocketBaseAccounts()
     const matched = accounts.find((a: any) => a.name.toLowerCase().includes('vib'))
     return {
         title: 'VIB Batch',
@@ -56,7 +55,7 @@ export default async function VIBBatchPage(props: {
         activeBatch = await getBatchById(targetBatchId)
     }
 
-    const accounts = await getAccounts()
+    const accounts = await getPocketBaseAccounts()
     const bankMappings = await getBankMappings(bankType)
     const webhookLinks = await getSheetWebhookLinks()
     const { getAccountsWithActiveInstallments } = await import('@/services/installment.service')

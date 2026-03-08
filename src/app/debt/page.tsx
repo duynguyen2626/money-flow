@@ -1,8 +1,10 @@
-import { getAccounts } from '@/services/account.service'
+import {
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBasePeople,
+  getPocketBaseShops,
+} from '@/services/pocketbase/account-details.service'
 import { getDebtAccounts } from '@/services/debt.service'
-import { getCategories } from '@/services/category.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
 import { DebtList } from '@/components/moneyflow/debt-list'
 import { Metadata } from 'next'
 
@@ -15,10 +17,10 @@ export const dynamic = 'force-dynamic'
 export default async function DebtPage() {
   const [debts, accounts, categories, people, shops] = await Promise.all([
     getDebtAccounts(),
-    getAccounts(),
-    getCategories(),
-    getPeople(),
-    getShops(),
+    getPocketBaseAccounts(),
+    getPocketBaseCategories(),
+    getPocketBasePeople(),
+    getPocketBaseShops(),
   ])
 
   return (
