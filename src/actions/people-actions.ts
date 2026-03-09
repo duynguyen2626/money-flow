@@ -7,7 +7,7 @@ import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
 import { getCategories } from '@/services/category.service';
 import { getShops, createShop } from '@/services/shop.service';
-import { syncAllTransactions, testConnection } from '@/services/sheet.service';
+import { syncAllTransactions, testConnection, syncTransactionToSheet } from '@/services/sheet.service';
 
 async function findOrCreateBankShop() {
   const shops = await getShops()
@@ -225,6 +225,19 @@ export async function rolloverDebtAction(
     return { success: false, error: 'Failed to create settlement transaction' }
   }
 
+  void syncTransactionToSheet(personId, {
+    id: settleRes,
+    occurred_at: txDate,
+    note: settleNote,
+    tag: fromCycle,
+    shop_name: 'Rollover',
+    amount: amount,
+    original_amount: amount,
+    cashback_share_percent: 0,
+    cashback_share_fixed: 0,
+    type: 'repayment',
+  }, 'create').catch((err) => console.error('[rollover] sheet sync (settle) failed:', err))
+
   // Transaction 2: Opening Balance (OUT) for the NEW cycle (Lending)
   // This increases the balance of the new month
   const openNote = `Rollover from ${fromCycle}`
@@ -243,6 +256,19 @@ export async function rolloverDebtAction(
   if (!openRes) {
     return { success: false, error: 'Failed to create opening balance transaction' }
   }
+
+  void syncTransactionToSheet(personId, {
+    id: openRes,
+    occurred_at: txDate,
+    note: openNote,
+    tag: toCycle,
+    shop_name: 'Rollover',
+    amount: amount,
+    original_amount: amount,
+    cashback_share_percent: 0,
+    cashback_share_fixed: 0,
+    type: 'debt',
+  }, 'create').catch((err) => console.error('[rollover] sheet sync (open) failed:', err))
 
   // Link Transaction 1 to Transaction 2 (Bidirectional for easier voiding)
   const supabase = createClient()

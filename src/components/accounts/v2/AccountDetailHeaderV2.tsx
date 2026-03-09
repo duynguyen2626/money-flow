@@ -45,7 +45,6 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { isToday, isTomorrow, differenceInDays, startOfDay } from 'date-fns'
 import { normalizeCashbackConfig } from '@/lib/cashback'
-import { resolveCashbackPolicy } from '@/services/cashback/policy-resolver'
 
 interface AccountDetailHeaderV2Props {
     account: Account
@@ -149,43 +148,15 @@ export function AccountDetailHeaderV2({
 
     // Recalculate cashback stats when selectedCycle changes
     React.useEffect(() => {
-        if (!selectedCycle || !isCreditCard) {
+        if (!selectedCycle || selectedCycle === 'all' || !isCreditCard) {
             setDynamicCashbackStats(cashbackStats)
-            return
-        }
-
-        // For "All cycles", use the initial cashback stats passed as prop
-        if (selectedCycle === 'all') {
-            if (cashbackStats) {
-                setDynamicCashbackStats(cashbackStats)
-                return
-            }
-
-            const fetchAllCycleStats = async () => {
-                setIsCashbackLoading(true)
-                try {
-                    const response = await fetch(`/api/cashback/stats?accountId=${account.id}`)
-                    if (response.ok) {
-                        const data = await response.json()
-                        if (data) {
-                            setDynamicCashbackStats(data)
-                        }
-                    }
-                } catch (error) {
-                    console.error('Failed to fetch all-cycle cashback stats:', error)
-                } finally {
-                    setIsCashbackLoading(false)
-                }
-            }
-
-            fetchAllCycleStats()
             return
         }
 
         const fetchCashbackStats = async () => {
             setIsCashbackLoading(true)
             try {
-                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}`)
+                const response = await fetch(`/api/cashback/stats?accountId=${account.id}&cycleTag=${encodeURIComponent(selectedCycle)}&mode=snapshot`)
                 if (response.ok) {
                     const data = await response.json()
                     setDynamicCashbackStats(data)
@@ -212,130 +183,64 @@ export function AccountDetailHeaderV2({
 
     // Sync dynamic stats when props update (e.g. after router.refresh())
     React.useEffect(() => {
-        if (cashbackStats) {
-            setDynamicCashbackStats(cashbackStats)
-        }
+        setDynamicCashbackStats(cashbackStats)
     }, [cashbackStats])
 
     const selectedCycleMetrics = React.useMemo(() => {
-        if (!selectedCycle || !Array.isArray(initialTransactions)) {
+        if (!selectedCycle || selectedCycle === 'all' || !Array.isArray(initialTransactions)) {
             return null
         }
 
         const categoryMap = new Map(categories.map(c => [c.id, c]))
 
-        const cycleTransactions = selectedCycle === 'all'
-            ? initialTransactions.filter((tx: any) => tx && tx.status !== 'void')
-            : initialTransactions.filter((tx: any) => {
-                if (!tx || tx.status === 'void') return false
-                const txCycle = tx.persisted_cycle_tag || tx.derived_cycle_tag || (tx.tag ? String(tx.tag).slice(0, 7) : '')
-                return txCycle === selectedCycle
-            })
-
-        const isInitialLike = (tx: any) => {
-            const noteText = String(tx?.note || tx?.notes || tx?.description || '').toLowerCase()
-            return noteText.includes('create initial')
-                || noteText.includes('số dư đầu')
-                || noteText.includes('opening balance')
-                || noteText.includes('rollover')
-        }
-
-        const cycleCashbackRows = cycleTransactions.filter((tx: any) => {
-            if (!tx) return false
-            const txType = String(tx.type || '').toLowerCase()
-            if (txType === 'income' || txType === 'transfer' || txType === 'repayment') return false
-            if (isInitialLike(tx)) return false
-            return true
+        const cycleTransactions = initialTransactions.filter((tx: any) => {
+            if (!tx || tx.status === 'void') return false
+            const txCycle = tx.persisted_cycle_tag || tx.derived_cycle_tag || (tx.tag ? String(tx.tag).slice(0, 7) : '')
+            return txCycle === selectedCycle
         })
 
-        const cycleShareRows = cycleCashbackRows
+        const cycleSpendRows = cycleTransactions.filter((tx: any) => ['expense', 'debt', 'service'].includes(tx.type))
 
-        const estDetailLines: string[] = []
-        let est = 0
-
-        cycleCashbackRows.forEach((tx: any) => {
-            const amountAbs = Math.abs(Number(tx?.original_amount ?? tx?.amount ?? 0))
-            if (amountAbs <= 0) return
-
-            // Check for explicit cashback_share_fixed first (lending/debt transactions)
-            const shareFixed = Number(tx?.cashback_share_fixed ?? tx?.metadata?.cashback_share_fixed ?? 0)
-            if (shareFixed > 0) {
-                est += shareFixed
-                estDetailLines.push(`${numberFormatter.format(shareFixed)} (fixed)`)
-                return
-            }
-
-            const policyCategoryId = tx?.metadata?.source_category_id ?? tx?.category_source_id ?? tx?.category_id
-
-            const policy = account.type === 'credit_card'
-                ? resolveCashbackPolicy({
-                    account: account as any,
-                    categoryId: policyCategoryId,
-                    amount: amountAbs,
-                    categoryName: tx?.category_name,
-                    cycleTotals: { spent: 0 },
-                })
-                : null
-
-            const policyRate = Number(policy?.rate ?? 0)
-            const baseVal = amountAbs * policyRate
-            const cappedVal = policy?.maxReward !== undefined && policy?.maxReward !== null
-                ? Math.min(baseVal, Number(policy.maxReward))
-                : baseVal
-
-            est += cappedVal
-
-            const rateDisplay = (policyRate * 100).toFixed((policyRate * 100) % 1 === 0 ? 0 : 2)
-            estDetailLines.push(`${numberFormatter.format(amountAbs)} × ${rateDisplay}% = ${numberFormatter.format(baseVal)}`)
-            if (policy?.maxReward !== undefined && policy?.maxReward !== null && baseVal > Number(policy.maxReward)) {
-                estDetailLines.push(`Config card max = ${numberFormatter.format(Number(policy.maxReward) || 0)}`)
-            }
-        })
-
-        const sharedDetailLines: string[] = []
-        const shared = cycleShareRows.reduce((sum: number, tx: any) => {
-            const sharedAmountRaw = tx?.cashback_share_amount
-            const amountAbs = Math.abs(Number(tx?.amount ?? 0))
-            const shareRateRaw = Number(tx?.cashback_share_percent ?? 0)
-            const shareRate = shareRateRaw > 1 ? shareRateRaw / 100 : shareRateRaw
-            const shareFixed = Number(tx?.cashback_share_fixed ?? tx?.metadata?.cashback_share_fixed ?? 0)
-            const resolvedShared = Number(sharedAmountRaw ?? ((amountAbs * shareRate) + shareFixed))
-
-            if (resolvedShared > 0) {
-                if (shareRate > 0 || shareFixed > 0) {
-                    const parts: string[] = []
-                    if (shareRate > 0) {
-                        const rateDisplay = (shareRate * 100).toFixed((shareRate * 100) % 1 === 0 ? 0 : 2)
-                        parts.push(`${numberFormatter.format(amountAbs)} × ${rateDisplay}%`)
-                    }
-                    if (shareFixed > 0) {
-                        parts.push(`${numberFormatter.format(shareFixed)} (fixed)`)
-                    }
-                    sharedDetailLines.push(`${parts.join(' + ')} = ${numberFormatter.format(resolvedShared)}`)
-                } else {
-                    sharedDetailLines.push(`${numberFormatter.format(resolvedShared)}`)
+        // Calculate earned (est) from cashback_entries
+        const est = cycleSpendRows.reduce((sum: number, tx: any) => {
+            const entries = Array.isArray(tx.cashback_entries) ? tx.cashback_entries : []
+            const entryAmount = entries.reduce((s: number, e: any) => {
+                // Sum all virtual or real entries
+                if (e.mode === 'virtual' || e.mode === 'real') {
+                    return s + Math.abs(Number(e.amount || 0))
                 }
-            }
-
-            return sum + Math.max(0, resolvedShared)
+                return s
+            }, 0)
+            return sum + entryAmount
         }, 0)
 
-        const currentSpend = cycleCashbackRows.reduce((sum: number, tx: any) => {
-            return sum + Math.abs(Number(tx?.original_amount ?? tx?.amount ?? 0))
+        // Calculate shared from share fields
+        const shared = cycleSpendRows.reduce((sum: number, tx: any) => {
+            const sharedFixed = Number(tx.cashback_share_fixed || 0)
+            if (sharedFixed > 0) return sum + sharedFixed
+
+            const sharePercent = Number(tx.cashback_share_percent || 0)
+            if (sharePercent > 0) {
+                // Use transaction amount as base for percentage calculation
+                const txAmount = Math.abs(Number(tx.amount || 0))
+                // Get earned for this transaction
+                const entries = Array.isArray(tx.cashback_entries) ? tx.cashback_entries : []
+                const txEarned = entries.reduce((s: number, e: any) => {
+                    if (e.mode === 'virtual' || e.mode === 'real') {
+                        return s + Math.abs(Number(e.amount || 0))
+                    }
+                    return s
+                }, 0)
+                return sum + (txEarned > 0 ? txEarned * sharePercent : 0)
+            }
+            return sum
         }, 0)
 
         const actual = cycleTransactions.reduce((sum: number, tx: any) => {
             if (tx.type !== 'income') return sum
             const category = tx.category_id ? categoryMap.get(tx.category_id) : null
             const categoryName = category?.name?.toLowerCase() || ''
-            const noteText = String(tx?.note || tx?.notes || tx?.description || '').toLowerCase()
-            const isCashbackIncome = categoryName.includes('cashback')
-                || categoryName.includes('hoàn tiền')
-                || noteText.includes('cashback')
-                || noteText.includes('hoàn tiền')
-                || noteText.includes('hoan tien')
-
-            if (isCashbackIncome) {
+            if (categoryName.includes('cashback') || categoryName.includes('hoàn tiền')) {
                 return sum + Math.abs(Number(tx.amount || 0))
             }
             return sum
@@ -346,44 +251,8 @@ export function AccountDetailHeaderV2({
             shared,
             profit: est - shared,
             actual,
-            currentSpend,
-            estDetailLines,
-            sharedDetailLines,
         }
-    }, [selectedCycle, initialTransactions, categories, account])
-
-    React.useEffect(() => {
-        if (!isCreditCard || !selectedCycle) return
-        if (dynamicCashbackStats) return
-        if (!selectedCycleMetrics) return
-
-        const fallbackCycleLabel = selectedCycle === 'all' ? 'All cycles' : selectedCycle
-        setDynamicCashbackStats({
-            currentSpend: selectedCycleMetrics.currentSpend || 0,
-            minSpend: 0,
-            maxCashback: account.cb_max_budget ?? null,
-            rate: 0,
-            earnedSoFar: selectedCycleMetrics.est || 0,
-            sharedAmount: selectedCycleMetrics.shared || 0,
-            potentialProfit: selectedCycleMetrics.profit || 0,
-            netProfit: selectedCycleMetrics.profit || 0,
-            remainingBudget: null,
-            activeRules: [],
-            is_min_spend_met: true,
-            cycle: {
-                start: '',
-                end: '',
-                label: fallbackCycleLabel,
-                tag: selectedCycle,
-            },
-        })
-    }, [
-        isCreditCard,
-        selectedCycle,
-        selectedCycleMetrics,
-        dynamicCashbackStats,
-        account.cb_max_budget,
-    ])
+    }, [selectedCycle, initialTransactions, categories])
 
     const rewardsCount = React.useMemo(() => {
         try {
@@ -1197,17 +1066,15 @@ export function AccountDetailHeaderV2({
                 )
             }
 
-            {/* Section 3: Cashback Health - Only show when cycle selected */}
-            {/* Check if account has cashback config OR has selected cycle */}
-            {isCreditCard && (account.cashback_config || (dynamicCashbackStats || selectedCycle)) && (selectedCycle && selectedCycle !== 'all' || account.cashback_config) ? (
+            {/* Section 3: Cashback Performance - Only show when cycle selected */}
+            {isCreditCard && dynamicCashbackStats && selectedCycle && selectedCycle !== 'all' && (
                 <div className="flex flex-1 min-w-0 lg:flex-[5]">
                     <HeaderSection
-                        label="Cashback Health"
+                        label="Cashback Performance"
                         borderColor="border-emerald-100"
                         className="w-full bg-emerald-50/10"
                         hideHintInHeader
                     >
-                        {selectedCycle ? (
                                     <div className="flex flex-col w-full h-full p-2.5 gap-2">
                                         {/* Main Layout: Circular Progress (Left) + 2x2 Metrics Grid (Right) */}
                                         <div className="flex items-start gap-3 w-full">
@@ -1219,9 +1086,9 @@ export function AccountDetailHeaderV2({
 
                                                     const isQualified = stats.is_min_spend_met;
                                                     const minSpend = stats.minSpend || 0;
-                                                    const spent = selectedCycleMetrics?.currentSpend ?? (stats.currentSpend || 0);
+                                                    const spent = stats.currentSpend || 0;
                                                     const cap = stats.maxCashback || 0;
-                                                    const earned = selectedCycleMetrics?.est ?? (stats.earnedSoFar || 0);
+                                                    const earned = stats.earnedSoFar || selectedCycleMetrics?.est || 0;
 
                                                     const activeMax = stats.activeRules?.reduce((acc, r) => acc + (r.max || 0), 0) || 0;
                                                     const effectiveCap = cap > 0 ? cap : activeMax;
@@ -1257,16 +1124,14 @@ export function AccountDetailHeaderV2({
                                             {/* Metrics Grid - 2x2 */}
                                             <div className="flex-1 grid grid-cols-2 gap-2">
                                                 {(() => {
-                                                    // Use selected-cycle transaction metrics as primary source to match table cells
-                                                    const cycleEstCashback = selectedCycleMetrics?.est ?? (dynamicCashbackStats?.earnedSoFar || 0);
-                                                    const cycleShared = selectedCycleMetrics?.shared ?? (dynamicCashbackStats?.sharedAmount || 0);
-                                                    const cycleProfit = selectedCycleMetrics?.profit ?? (dynamicCashbackStats?.netProfit || 0);
-                                                    const cycleCurrentSpend = selectedCycleMetrics?.currentSpend ?? (dynamicCashbackStats?.currentSpend || 0);
-                                                    const cycleActualClaimed = selectedCycleMetrics?.actual ?? 0;
-                                                    const estFormulaLines = selectedCycleMetrics?.estDetailLines ?? [];
-                                                    const sharedFormulaLines = selectedCycleMetrics?.sharedDetailLines ?? [];
+                                                    // Use API response as primary source (accurate calculation with transaction amount × rate)
+                                                    const cycleEstCashback = dynamicCashbackStats?.earnedSoFar || 0;
+                                                    const cycleShared = dynamicCashbackStats?.sharedAmount || 0;
+                                                    const cycleProfit = dynamicCashbackStats?.netProfit || 0;
+                                                    const cycleCurrentSpend = dynamicCashbackStats?.currentSpend || 0;
+                                                    const cycleActualClaimed = dynamicCashbackStats?.actualClaimed ?? selectedCycleMetrics?.actual ?? 0;
 
-                                                    // Fallback to API rule details when selected-cycle lines are unavailable
+                                                    // Build detailed formula from activeRules for Est tooltip
                                                     const ruleDetails = (dynamicCashbackStats?.activeRules || []).map((rule: any) => {
                                                         const spent = rule.spent || 0;
                                                         const earned = rule.earned || 0;
@@ -1328,11 +1193,7 @@ export function AccountDetailHeaderV2({
                                                                 </TooltipTrigger>
                                                                 <TooltipContent side="top" className="max-w-xs bg-slate-900 text-white text-[11px] p-2 space-y-1 max-h-40 overflow-y-auto">
                                                                     <p className="font-semibold">Est. Cashback (Calculated)</p>
-                                                                    {estFormulaLines.length > 0 ? (
-                                                                        estFormulaLines.map((detail: string, idx: number) => (
-                                                                            <p key={idx} className="text-slate-300 text-[10px]">{detail}</p>
-                                                                        ))
-                                                                    ) : ruleDetails.length > 0 ? (
+                                                                    {ruleDetails.length > 0 ? (
                                                                         ruleDetails.map((detail: string, idx: number) => (
                                                                             <p key={idx} className="text-slate-300 text-[10px]">{detail}</p>
                                                                         ))
@@ -1353,16 +1214,9 @@ export function AccountDetailHeaderV2({
                                                                         </span>
                                                                     </div>
                                                                 </TooltipTrigger>
-                                                                <TooltipContent side="top" className="max-w-xs bg-slate-900 text-white text-[11px] p-2 space-y-1 max-h-40 overflow-y-auto">
-                                                                    <p className="font-semibold mb-1">Cashback Shared</p>
-                                                                    {sharedFormulaLines.length > 0 ? (
-                                                                        sharedFormulaLines.map((detail: string, idx: number) => (
-                                                                            <p key={idx} className="text-slate-300 text-[10px]">{detail}</p>
-                                                                        ))
-                                                                    ) : (
-                                                                        <p className="text-slate-300">% hoặc số tiền fixed từ chia sẻ</p>
-                                                                    )}
-                                                                    <p className="text-slate-400 pt-1 border-t border-slate-700">Total: {formatMoneyVND(Math.ceil(cycleShared))}</p>
+                                                                <TooltipContent side="top" className="max-w-xs bg-slate-900 text-white text-[11px] p-2">
+                                                                    <p className="font-semibold mb-1">Cashback chia sẻ với người khác</p>
+                                                                    <p className="text-slate-300">% hoặc số tiền fixed từ chia sẻ</p>
                                                                 </TooltipContent>
                                                             </Tooltip>
 
@@ -1372,11 +1226,9 @@ export function AccountDetailHeaderV2({
                                                                     <Tooltip delayDuration={150}>
                                                                         <TooltipTrigger asChild>
                                                                             {(() => {
-                                                                                const stats = dynamicCashbackStats;
-                                                                                if (!stats) return null;
-                                                                                const isQualified = stats.is_min_spend_met;
-                                                                                const minSpend = stats.minSpend || 0;
-                                                                                const spent = selectedCycleMetrics?.currentSpend ?? (stats.currentSpend || 0);
+                                                                                const isQualified = dynamicCashbackStats.is_min_spend_met;
+                                                                                const minSpend = dynamicCashbackStats.minSpend || 0;
+                                                                                const spent = dynamicCashbackStats.currentSpend || 0;
                                                                                 const remaining = Math.ceil((minSpend || 0) - (spent || 0));
                                                                                 const progress = minSpend > 0 ? Math.min((spent / minSpend) * 100, 100) : 100;
 
@@ -1399,9 +1251,9 @@ export function AccountDetailHeaderV2({
                                                                         <TooltipContent side="top" className="max-w-xs bg-slate-900 text-white text-[11px] p-2.5">
                                                                             <p className="font-semibold mb-1">Cashback Health Status</p>
                                                                             <p className="text-slate-300 text-[10px]">
-                                                                                {dynamicCashbackStats?.is_min_spend_met 
+                                                                                {dynamicCashbackStats.is_min_spend_met 
                                                                                     ? "✅ Đã đạt min spend - đang kiếm cashback"
-                                                                                    : `⚠️ Cần chi tiêu thêm ${formatMoneyVND(Math.ceil((dynamicCashbackStats?.minSpend || 0) - (selectedCycleMetrics?.currentSpend ?? (dynamicCashbackStats?.currentSpend || 0))))} để qualify`
+                                                                                    : `⚠️ Cần chi tiêu thêm ${formatMoneyVND(Math.ceil((dynamicCashbackStats.minSpend || 0) - (dynamicCashbackStats.currentSpend || 0)))} để qualify`
                                                                                 }
                                                                             </p>
                                                                         </TooltipContent>
@@ -1437,17 +1289,6 @@ export function AccountDetailHeaderV2({
                                 <div className="p-4 space-y-4">
                                     {/* Performance Breakdown */}
                                     <div className="space-y-2">
-                                        {(() => {
-                                            const cycleEstCashback = selectedCycleMetrics?.est ?? (dynamicCashbackStats?.earnedSoFar || 0)
-                                            const cycleShared = selectedCycleMetrics?.shared ?? (dynamicCashbackStats?.sharedAmount || 0)
-                                            const cycleProfit = selectedCycleMetrics?.profit ?? (dynamicCashbackStats?.netProfit || 0)
-                                            const cycleCurrentSpend = selectedCycleMetrics?.currentSpend ?? (dynamicCashbackStats?.currentSpend || 0)
-                                            const cycleLabel = selectedCycle === 'all'
-                                                ? 'All cycles'
-                                                : (dynamicCashbackStats?.cycle?.label || selectedCycle || 'Current Month')
-
-                                            return (
-                                                <>
                                         <div className="grid grid-cols-2 text-[11px] pb-1 border-b border-slate-100 font-black text-slate-400 uppercase tracking-widest">
                                             <span>Metrics</span>
                                             <span className="text-right">Value</span>
@@ -1455,39 +1296,36 @@ export function AccountDetailHeaderV2({
                                         <div className="grid grid-cols-2 text-xs py-1">
                                             <span className="text-slate-500 font-medium whitespace-nowrap">Active Cycle Interval</span>
                                             <span className="text-right font-bold text-slate-900 truncate">
-                                                {cycleLabel}
+                                                {dynamicCashbackStats.cycle ? dynamicCashbackStats.cycle.label : 'Current Month'}
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-2 text-xs py-1">
                                             <span className="text-slate-500 font-medium">Monthly Eligible Spend</span>
-                                            <span className="text-right font-bold text-slate-900">{formatMoneyVND(Math.ceil(cycleCurrentSpend || 0))}</span>
+                                            <span className="text-right font-bold text-slate-900">{formatMoneyVND(Math.ceil(dynamicCashbackStats.currentSpend || 0))}</span>
                                         </div>
                                         <div className="grid grid-cols-2 text-xs py-1">
                                             <span className="text-slate-500 font-medium">Cashback Earned</span>
-                                            <span className="text-right font-bold text-emerald-600">+{formatMoneyVND(Math.ceil(cycleEstCashback || 0))}</span>
+                                            <span className="text-right font-bold text-emerald-600">+{formatMoneyVND(Math.ceil(dynamicCashbackStats.earnedSoFar || 0))}</span>
                                         </div>
                                         <div className="grid grid-cols-2 text-xs py-1">
                                             <span className="text-slate-500 font-medium">Shared with Others</span>
                                             <span className="text-right font-bold text-amber-600">
-                                                {(cycleShared || 0) > 0 ? `- ${formatMoneyVND(Math.ceil(cycleShared))} ` : '0'}
+                                                {(dynamicCashbackStats.sharedAmount || 0) > 0 ? `- ${formatMoneyVND(Math.ceil(dynamicCashbackStats.sharedAmount))} ` : '0'}
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-2 text-xs pt-2 border-t border-slate-200 font-black">
                                             <span className="text-emerald-900">NET CYCLE PROFIT</span>
                                             <span className={cn(
                                                 "text-right",
-                                                (cycleProfit || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
+                                                (dynamicCashbackStats.netProfit || 0) >= 0 ? "text-emerald-600" : "text-rose-600"
                                             )}>
-                                                {formatMoneyVND(Math.ceil(cycleProfit || 0))}
+                                                {formatMoneyVND(Math.ceil(dynamicCashbackStats.netProfit || 0))}
                                             </span>
                                         </div>
-                                                </>
-                                            )
-                                        })()}
                                     </div>
 
                                     {/* Row 2: Detailed Rule Breakdown (Scrollable) */}
-                                    {dynamicCashbackStats?.activeRules && dynamicCashbackStats.activeRules.length > 0 && (
+                                    {dynamicCashbackStats.activeRules && dynamicCashbackStats.activeRules.length > 0 && (
                                         <div className="space-y-3">
                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">
                                                 Detailed Rule Breakdown
@@ -1598,43 +1436,9 @@ export function AccountDetailHeaderV2({
                 </TooltipProvider>
                         </div>
                     </div>
-) : account.cashback_config ? (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-center py-8">
-                                    <Target className="h-8 w-8 text-emerald-300 mx-auto mb-2" />
-                                    <p className="text-[12px] font-medium text-emerald-600">Cashback configured ✓</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Select a cycle from dropdown to view details</p>
-                                </div>
-                            </div>
-) : (
-                            <div className="flex items-center justify-center h-full">
-                                <div className="text-center py-8">
-                                    <Zap className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                                    <p className="text-[12px] font-medium text-slate-500">Initializing cashback cycles...</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Select a cycle to view performance</p>
-                                </div>
-                            </div>
-                        )}
-                    </HeaderSection>
-                </div>
-            ) : isCreditCard ? (
-                <div className="flex flex-1 min-w-0 lg:flex-[5]">
-                    <HeaderSection
-                        label="Cashback Performance"
-                        borderColor="border-slate-100"
-                        className="w-full bg-slate-50/50"
-                        hideHintInHeader
-                    >
-                        <div className="flex items-center justify-center h-full">
-                            <div className="text-center py-8">
-                                <ShieldCheck className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                                <p className="text-[12px] font-medium text-slate-500">No cashback configuration</p>
-                                <p className="text-[10px] text-slate-400 mt-1">Add cashback rules to enable tracking</p>
-                            </div>
-                        </div>
-                    </HeaderSection>
-                </div>
-            ) : null}
+                </HeaderSection>
+            </div>
+            )}
 
             {/* Tools Area */}
             <div className="flex flex-col justify-center gap-2 min-w-0 md:min-w-[120px] border-l border-slate-100 pl-6 ml-2">

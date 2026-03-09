@@ -80,7 +80,7 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
             setIsLoadingStats(true);
             try {
                 const dateParam = occurredAt instanceof Date ? occurredAt.toISOString() : new Date(occurredAt).toISOString();
-                const res = await fetch(`/api/cashback/stats?accountId=${sourceAccountId}&date=${dateParam}`);
+                const res = await fetch(`/api/cashback/stats?accountId=${sourceAccountId}&date=${dateParam}&mode=snapshot`);
                 if (res.ok) {
                     const data = await res.json();
                     setCycleStats(data);
@@ -102,14 +102,13 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
     const policy = useMemo(() => {
         if (!activeAccount) return null;
         const cycleSpent = cycleStats?.currentSpend || activeAccount.stats?.spent_this_cycle || 0;
-        const projectedSpent = cycleSpent + totalGrossAmount;
 
         return resolveCashbackPolicy({
             account: activeAccount as Account,
             categoryId,
             amount: totalGrossAmount,
             cycleTotals: {
-                spent: projectedSpent
+                spent: cycleSpent
             },
             categoryName: category?.name
         });
@@ -511,7 +510,8 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                             {(() => {
                                                 const ruleId = policy?.metadata?.ruleId;
                                                 const activeRule = ruleId ? cycleStats?.activeRules?.find(r => r.ruleId === ruleId) : null;
-                                                const ruleRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
+                                                const rawRuleRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
+                                                const ruleRemaining = rawRuleRemaining === null ? null : Math.max(0, rawRuleRemaining - actualBankReward);
 
                                                 return (
                                                     <>
@@ -535,7 +535,8 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                     {(() => {
                                         const ruleId = policy?.metadata?.ruleId;
                                         const activeRule = ruleId ? cycleStats?.activeRules?.find(r => r.ruleId === ruleId) : null;
-                                        const rewardRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
+                                        const rawRewardRemaining = activeRule ? (activeRule.max! - activeRule.earned) : (policy?.maxReward ?? (cycleStats?.remainingBudget ?? remainsCap ?? null));
+                                        const rewardRemaining = rawRewardRemaining === null ? null : Math.max(0, rawRewardRemaining - actualBankReward);
 
                                         if (rewardRemaining === null || rewardRemaining === Infinity || !policy?.rate || policy.rate <= 0) return null;
 

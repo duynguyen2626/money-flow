@@ -6,6 +6,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { Account, AccountRelationships, AccountStats, TransactionWithDetails, AccountRow } from '@/types/moneyflow.types'
 import { executeWithFallback } from '@/lib/pocketbase/fallback-helpers'
 import {
+  updatePocketBaseAccountConfig,
+  updatePocketBaseAccountInfo,
+} from '@/services/pocketbase/account-details.service'
+import {
   parseCashbackConfig,
   normalizeCashbackConfig,
   getCashbackCycleRange,
@@ -351,6 +355,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
 export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Account[]> {
   const supabase = supabaseClient ?? createClient()
+  console.log('[DB:SB] accounts.getAll')
 
   const rows = await executeWithFallback(
     () => getPocketBaseAccountRows(),
@@ -494,6 +499,7 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
   if (!id || id === 'add' || id === 'new' || id === 'undefined') {
     return null
   }
+  console.log('[DB:SB] accounts.getDetails', { id })
 
   const mapAccountRowToDetails = (row: AccountRow): Account => ({
     id: row.id,
@@ -657,6 +663,7 @@ export async function getAccountTransactions(
   accountId: string,
   limit = 20
 ): Promise<TransactionWithDetails[]> {
+  console.log('[DB:SB] accounts.getTransactions', { accountId, limit })
   return fetchTransactions(accountId, limit)
 }
 
@@ -691,6 +698,7 @@ export async function updateAccountConfig(
 ): Promise<boolean> {
   // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
   if (accountId === 'new') return false
+  console.log('[DB:SB] accounts.updateConfig', { accountId })
 
   const supabase = createClient()
 
@@ -779,12 +787,17 @@ export async function updateAccountConfig(
 
   revalidatePath('/accounts')
   revalidatePath(`/accounts/${accountId}`)
+
+  // PB secondary write (fire-and-forget)
+  void updatePocketBaseAccountConfig(accountId, payload)
+    .catch((err) => console.error('[DB:PB] accounts.updateConfig secondary failed:', err))
+
   return true
 }
 
 export async function getAccountStats(accountId: string) {
-  const { getAccountSpendingStats } = await import('@/services/cashback.service')
-  const stats = await getAccountSpendingStats(accountId, new Date())
+  const { getAccountSpendingStatsSnapshot } = await import('@/services/cashback.service')
+  const stats = await getAccountSpendingStatsSnapshot(accountId, new Date())
 
   if (!stats) {
     return null
@@ -811,6 +824,7 @@ export async function getAccountStats(accountId: string) {
 
 // New implementation of recalculateBalance using single transactions table
 export async function recalculateBalance(accountId: string): Promise<boolean> {
+  console.log('[DB:SB] accounts.recalcBalance', { accountId })
   const supabase = createClient()
 
   // 1. Get current balance from transactions
@@ -914,9 +928,8 @@ export async function recalculateBalanceWithClient(
 }
 
 export async function deleteAccount(id: string): Promise<boolean> {
+  console.log('[DB:SB] accounts.delete', { id })
   const supabase = createClient()
-
-  // Potential restriction: don't delete if it has transactions?
   // Or just void it?
   // Schema usually allows deletion if no foreign keys block it.
   const { error } = await supabase

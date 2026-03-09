@@ -10,6 +10,7 @@ const claspPath = join(__dirname, '.clasp.json')
 const repoRoot = join(__dirname, '..', '..', '..')
 const homeDir = process.env.HOME || process.env.USERPROFILE
 const globalClasprcPath = join(homeDir, '.clasprc.json')
+const expectedClaspEmail = (process.env.CLASP_EMAIL || 'namnt05@gmail.com').trim().toLowerCase()
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -34,7 +35,30 @@ const ask = (question) =>
     })
   })
 
+const resolveCurrentClaspEmail = async () => {
+  try {
+    if (!existsSync(globalClasprcPath)) return null
+    const creds = JSON.parse(readFileSync(globalClasprcPath, 'utf8'))
+    const accessToken = creds?.tokens?.default?.access_token
+    if (!accessToken) return null
+
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (!response.ok) return null
+    const payload = await response.json()
+    return typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
 const isLikelyScriptId = (value) => /^[a-zA-Z0-9_-]{20,}$/.test(value)
+
+// On Windows, .cmd files (like clasp.cmd) cannot be executed by spawnSync
+// with shell:false — it throws EINVAL. Requires shell:true on Windows only.
+const useShell = process.platform === 'win32'
 
 const loadEnv = () => {
   const envPath = join(repoRoot, '.env')
@@ -144,6 +168,21 @@ const chooseProfile = async (profiles) => {
 
 const main = async () => {
   loadEnv()
+  const activeClaspEmail = await resolveCurrentClaspEmail()
+
+  if (activeClaspEmail) {
+    console.log(`Active clasp account: ${activeClaspEmail}`)
+    if (expectedClaspEmail && activeClaspEmail !== expectedClaspEmail) {
+      console.log(`\n❌ clasp account mismatch.`)
+      console.log(`Expected: ${expectedClaspEmail}`)
+      console.log(`Actual:   ${activeClaspEmail}`)
+      console.log(`Run 'clasp login' with the expected account, then retry.`)
+      process.exit(1)
+    }
+  } else {
+    console.log('⚠️ Unable to resolve active clasp account email from token. Continuing...')
+  }
+
   const profiles = buildProfiles()
 
   if (profiles.length === 0 && prefixArg) {
@@ -238,7 +277,7 @@ const main = async () => {
         let result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false, // Avoid security warning, arguments are passed as array
+          shell: useShell,
         })
 
         if (result.status === 0) {
@@ -259,7 +298,7 @@ const main = async () => {
             ], {
               cwd: __dirname,
               stdio: 'inherit',
-              shell: false,
+              shell: useShell,
             })
 
             if (deployResult.status === 0) {
@@ -276,8 +315,9 @@ const main = async () => {
           console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
 
           // Enhanced Auth Handling
-          console.log(`\nPush to ${profile.key} failed. This is likely a permission issue for namnt05@gmail.com.`)
-          console.log(`Please ensure the script ID (${profile.value}) is shared with namnt05@gmail.com as Editor.`)
+          const emailForMessage = activeClaspEmail || expectedClaspEmail || 'your clasp account'
+          console.log(`\nPush to ${profile.key} failed. This is likely a permission issue for ${emailForMessage}.`)
+          console.log(`Please ensure the script ID (${profile.value}) is shared with ${emailForMessage} as Editor.`)
 
           const loginChoice = await ask(`Would you like to run 'clasp login' to refresh your token and retry? (y/n): `)
 
@@ -285,7 +325,7 @@ const main = async () => {
             console.log(`\nRunning 'clasp login'... Please refresh your session.`)
             const loginResult = spawnSync(claspCmd, ['login'], {
               stdio: 'inherit',
-              shell: false,
+              shell: useShell,
             })
 
             if (loginResult.status === 0) {
@@ -293,7 +333,7 @@ const main = async () => {
               result = spawnSync(claspCmd, pushArgs, {
                 cwd: __dirname,
                 stdio: 'inherit',
-                shell: false,
+                shell: useShell,
               })
 
               if (result.status === 0) {
@@ -312,7 +352,7 @@ const main = async () => {
                   ], {
                     cwd: __dirname,
                     stdio: 'inherit',
-                    shell: false,
+                    shell: useShell,
                   })
                   if (deployResult.status === 0) {
                     console.log(`   ✨ [${new Date().toLocaleString()}] Deployed Successfully!`)
@@ -371,7 +411,7 @@ const main = async () => {
   let result = spawnSync(claspCmd, pushArgs, {
     cwd: __dirname,
     stdio: 'inherit',
-    shell: false,
+    shell: useShell,
   })
 
   // Retry logic for single push
@@ -383,7 +423,7 @@ const main = async () => {
       console.log(`\nRunning 'clasp login'... Please refresh your session.`)
       const loginResult = spawnSync(claspCmd, ['login'], {
         stdio: 'inherit',
-        shell: false,
+        shell: useShell,
       })
 
       if (loginResult.status === 0) {
@@ -391,7 +431,7 @@ const main = async () => {
         result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false,
+          shell: useShell,
         })
       }
     }
@@ -425,7 +465,7 @@ const main = async () => {
         ], {
           cwd: __dirname,
           stdio: 'inherit',
-          shell: false,
+          shell: useShell,
         })
 
         if (deployResult.status === 0) {

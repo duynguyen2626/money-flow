@@ -1,61 +1,7 @@
-const PB_URL = 'https://api-db.reiwarden.io.vn'
+import { createHash } from 'crypto'
 
-let cachedPocketBaseToken: string | null = null
-
-async function getPocketBaseAuthHeaders(): Promise<Record<string, string>> {
-  const explicitToken =
-    process.env.POCKETBASE_ADMIN_TOKEN ||
-    process.env.POCKETBASE_SERVICE_TOKEN ||
-    process.env.POCKETBASE_TOKEN ||
-    process.env.PB_ADMIN_TOKEN ||
-    process.env.PB_SERVICE_TOKEN ||
-    ''
-
-  if (explicitToken) {
-    return { Authorization: `Bearer ${explicitToken}` }
-  }
-
-  if (cachedPocketBaseToken) {
-    return { Authorization: `Bearer ${cachedPocketBaseToken}` }
-  }
-
-  const identity = process.env.POCKETBASE_DB_EMAIL || ''
-  const password = process.env.POCKETBASE_DB_PASSWORD || ''
-
-  if (!identity || !password) {
-    return {}
-  }
-
-  const authEndpoints = [
-    '/api/admins/auth-with-password',
-    '/api/collections/_superusers/auth-with-password',
-  ]
-
-  for (const endpoint of authEndpoints) {
-    try {
-      const response = await fetch(`${PB_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity, password }),
-      })
-
-      if (!response.ok) continue
-
-      const payload = await response.json() as { token?: string }
-      if (payload?.token) {
-        cachedPocketBaseToken = payload.token
-        return { Authorization: `Bearer ${payload.token}` }
-      }
-    } catch {
-      // try next endpoint
-    }
-  }
-
-  return {}
-}
-
-type PocketBaseRequestOptions = Omit<RequestInit, 'body'> & {
-  body?: unknown
+type PocketBaseAuth = {
+  token: string
 }
 
 type PocketBaseListResponse<T> = {
@@ -66,85 +12,135 @@ type PocketBaseListResponse<T> = {
   items: T[]
 }
 
-function toQueryString(params?: Record<string, string | number | boolean | undefined>): string {
-  if (!params) return ''
-  const searchParams = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null) {
-      searchParams.set(key, String(value))
-    }
+const POCKETBASE_URL = process.env.POCKETBASE_URL || 'https://api-db.reiwarden.io.vn'
+const POCKETBASE_EMAIL = (process.env.POCKETBASE_DB_EMAIL || '').trim()
+const POCKETBASE_PASSWORD = (process.env.POCKETBASE_DB_PASSWORD || '').trim()
+
+let cachedToken: string | null = null
+let cachedTokenExpiresAt = 0
+
+function decodeTokenExpiry(token: string): number {
+  try {
+    const segments = token.split('.')
+    if (segments.length < 2) return Date.now() + 5 * 60 * 1000
+    const payload = JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8'))
+    if (!payload?.exp) return Date.now() + 5 * 60 * 1000
+    return Number(payload.exp) * 1000
+  } catch {
+    return Date.now() + 5 * 60 * 1000
   }
-  const query = searchParams.toString()
-  return query ? `?${query}` : ''
 }
 
-function normalizeBody(body: unknown): BodyInit | undefined {
-  if (body === undefined || body === null) return undefined
-  if (typeof body === 'string' || body instanceof URLSearchParams || body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
-    return body as BodyInit
+async function getAuthToken(): Promise<string> {
+  const now = Date.now()
+  if (cachedToken && now < cachedTokenExpiresAt - 30_000) {
+    return cachedToken
   }
-  return JSON.stringify(body)
-}
 
-export async function pocketbaseRequest<T = any>(
-  endpoint: string,
-  options?: PocketBaseRequestOptions,
-): Promise<T> {
-  const url = `${PB_URL}${endpoint}`
-  const authHeaders = await getPocketBaseAuthHeaders()
+  if (!POCKETBASE_EMAIL || !POCKETBASE_PASSWORD) {
+    throw new Error('Missing POCKETBASE_DB_EMAIL or POCKETBASE_DB_PASSWORD')
+  }
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...(options?.headers ?? {}),
-    },
-    body: normalizeBody(options?.body),
+  const response = await fetch(`${POCKETBASE_URL}/api/collections/_superusers/auth-with-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity: POCKETBASE_EMAIL, password: POCKETBASE_PASSWORD }),
+    cache: 'no-store',
   })
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`PB request failed [${response.status}]: ${text}`)
+    throw new Error(`PocketBase auth failed: ${text}`)
+  }
+
+  const payload = (await response.json()) as PocketBaseAuth
+  cachedToken = payload.token
+  cachedTokenExpiresAt = decodeTokenExpiry(payload.token)
+  return payload.token
+}
+
+function buildQuery(params?: Record<string, string | number | boolean | undefined>): string {
+  if (!params) return ''
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'undefined') continue
+    search.set(key, String(value))
+  }
+  const query = search.toString()
+  return query ? `?${query}` : ''
+}
+
+export async function pocketbaseRequest<T>(
+  path: string,
+  options?: {
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+    params?: Record<string, string | number | boolean | undefined>
+    body?: unknown
+  },
+): Promise<T> {
+  const token = await getAuthToken()
+  const query = buildQuery(options?.params)
+  const url = `${POCKETBASE_URL}${path}${query}`
+
+  const response = await fetch(url, {
+    method: options?.method || 'GET',
+    headers: {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    },
+    body: typeof options?.body === 'undefined' ? undefined : JSON.stringify(options.body),
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`PocketBase request failed [${response.status}] ${path}: ${text}`)
   }
 
   if (response.status === 204) {
-    return undefined as T
+    return null as T
   }
 
   return (await response.json()) as T
 }
 
-export async function pocketbaseList<T = any>(
+export async function pocketbaseList<T>(
   collection: string,
   params?: Record<string, string | number | boolean | undefined>,
 ): Promise<PocketBaseListResponse<T>> {
-  const query = toQueryString(params)
-  return pocketbaseRequest<PocketBaseListResponse<T>>(`/api/collections/${collection}/records${query}`)
+  return pocketbaseRequest<PocketBaseListResponse<T>>(`/api/collections/${collection}/records`, {
+    method: 'GET',
+    params,
+  })
 }
 
-export async function pocketbaseGetById<T = any>(collection: string, id: string): Promise<T> {
-  return pocketbaseRequest<T>(`/api/collections/${collection}/records/${id}`)
+export async function pocketbaseGetById<T>(collection: string, id: string, expand?: string, fields?: string): Promise<T> {
+  return pocketbaseRequest<T>(`/api/collections/${collection}/records/${id}`, {
+    method: 'GET',
+    params: {
+      expand,
+      fields,
+    },
+  })
 }
 
-export function toPocketBaseId(supabaseId: string, _collection?: string): string {
-  if (!supabaseId) return generatePocketBaseId()
-
-  const hash = Array.from(supabaseId)
-    .reduce((acc, ch) => ((acc << 5) - acc) + ch.charCodeAt(0), 0)
-    .toString(36)
-    .replace('-', 'n')
-    .slice(0, 15)
-    .padEnd(15, '0')
-
-  return hash
-}
-
-export function generatePocketBaseId(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let id = ''
-  for (let i = 0; i < 15; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length))
+export function toPocketBaseId(sourceId: string, fallbackPrefix = 'mf3'): string {
+  if (!sourceId) {
+    const randomSeed = `${fallbackPrefix}-${Date.now()}-${Math.random()}`
+    const seed = createHash('sha256').update(randomSeed).digest()
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    let randomId = ''
+    for (let index = 0; index < 15; index++) {
+      randomId += chars[seed[index] % chars.length]
+    }
+    return randomId
   }
-  return id
+
+  const digest = createHash('sha256').update(String(sourceId)).digest()
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let index = 0; index < 15; index++) {
+    result += chars[digest[index] % chars.length]
+  }
+  return result
 }

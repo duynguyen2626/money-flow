@@ -1,212 +1,63 @@
-# 🚀 Agent Onboarding Prompt - Duplicate Transaction Issue
+# Agent Start Prompt — PocketBase Migration Continuation
 
-Copy and paste this into your next chat session:
+## Objective
+Continue migration work safely from current base branch state, with strict branch isolation and clear handover discipline.
 
----
+## Mandatory Git Workflow (DO THIS FIRST)
+1. `git checkout feat/pocketbase-migration`
+2. `git pull --rebase origin feat/pocketbase-migration`
+3. `git checkout -b agent/pb-migration-<yyyymmdd>-<task>`
 
-## Mission Brief
+Do **NOT** code directly on `feat/pocketbase-migration`.
 
-Debug duplicate transaction feature that fails silently when submitting. Test ID: `aae9c0be-e0e1-456f-b06e-87500607afe8`
+Suggested branch format:
+- `agent/pb-migration-20260305-clasp-preflight`
+- `agent/pb-migration-20260305-people-sync-validation`
 
-## Read First (Required - 15 min)
+## Read First (required)
+1. `docs/MIGRATION_HANDOVER_2026-03-05.md`
+2. `.github/copilot-instructions.md`
+3. `README.md`
+4. `scripts/pocketbase/migrate.mjs`
+5. `src/services/pocketbase/*`
+6. `src/services/sheet.service.ts`
 
-1. **TRANSACTION_SYSTEM_DOCS.md** - Complete system overview (V2 vs V1, operations, data flow)
-2. **HANDOVER_12-2.md** (.agent folder) - Investigation so far + 4 root cause theories
-3. **DUPLICATE_DEBUG_GUIDE.md** - 8-step console log reference
+## Current State Snapshot
+- Base branch: `feat/pocketbase-migration`
+- Sheet-sync fixes already merged into migration branch.
+- `#nosync/#deprecated` filtering already fixed in server-side sheet sync.
+- People sheet type coloring fixed to Type column only (B).
+- Account/cashback PocketBase service layer exists but codebase is still mixed PB/Supabase.
 
-## Quick Context
+## Priority Tasks
+### P1 — Stabilize Google Sheets push auth (avoid account confusion)
+- Add preflight account check in:
+  - `integrations/google-sheets/people-sync/push-sheet.mjs`
+  - `integrations/google-sheets/batch-sync/push-sheet.mjs`
+- Fail fast if active `clasp` account != expected account.
+- Keep logs actionable and concise.
 
-- **System:** TransactionSlideV2 (right-side slide panel)
-- **Issue:** Duplicate button works → slide opens → form populates → submit fails (no error)
-- **Branch:** `fix/phase-12-critical-bugs` (already pushed to GitHub)
-- **V1 System:** ARCHIVED in `Archive/components/moneyflow/` - DO NOT USE
+### P2 — Continue PB migration in small safe slices
+- Avoid big-bang rewrites.
+- Migrate module-by-module with behavior parity.
+- Keep backward compatibility while mixed backend remains.
 
-## Test Procedure
+### P3 — Validate critical flows after each change
+- People sync all/current cycle
+- `#nosync` exclusion
+- Accounts detail route
+- Cashback page
 
-### Step 1: Open Page
-```
-Go to: http://localhost:3000/transactions
-```
+## Constraints
+- No extra UX/features outside requested scope.
+- Keep edits surgical.
+- If tooling timeout or auth blockers occur: document blocker + commit partial progress + update handover.
 
-### Step 2: Find Test Transaction
-```
-Transaction ID: aae9c0be-e0e1-456f-b06e-87500607afe8
-Type: debt
-Amount: 1111
-```
-
-### Step 3: Open DevTools
-```
-F12 → Console tab + Network tab (both visible)
-```
-
-### Step 4: Duplicate
-```
-1. Click duplicate button (Files icon, purple)
-2. Watch console - should see logs:
-   🔄 initialSlideData useMemo triggered
-   🎨 defaultFormValues computed
-   
-3. Form should be populated with data
-4. Click Submit
-5. Watch for 8-step logs OR error logs
-```
-
-### Step 5: Check Network
-```
-Network tab → Filter "XHR" → Look for:
-- POST to createTransaction action
-- Check request payload (form data)
-- Check response (success/error?)
-```
-
-## Root Cause Theories (Priority)
-
-**Theory 1 (HIGH):** Form reset race condition
-- Form values populated → user submits → React batch state update → selectedTxn cleared → form resets to empty → validation fails
-- **Debug:** Add logs to track when selectedTxn changes
-
-**Theory 2 (HIGH):** Zod resolver type mismatch
-- `zodResolver(schema) as any` hides errors
-- **Debug:** Remove `as any`, check actual resolver errors
-
-**Theory 3 (MEDIUM):** Server action fails silently
-- createTransaction returns null without throwing
-- **Debug:** Add try/catch in transaction-actions.ts
-
-**Theory 4 (LOW):** Cashback policy rejection
-- Cashback resolution fails on duplicate
-- **Debug:** Check cashback.service.ts logs
-
-## Key Files to Check
-
-```
-src/components/transactions/UnifiedTransactionsPage.tsx
-  - Line 558: initialSlideData computation
-  - Line 462-469: handleDuplicate handler
-  
-src/components/transaction/slide-v2/transaction-slide-v2.tsx
-  - Line 70: defaultFormValues computation
-  - Line 195: onSingleSubmit with operation routing
-  
-src/actions/transaction-actions.ts
-  - createTransaction() server action
-  
-src/components/transaction/slide-v2/types.ts
-  - Line 11: singleTransactionSchema (Zod validation)
-```
-
-## Expected Console Logs (When Working)
-
-```
-✅ onSingleSubmit called - Form validation PASSED
-📋 Form data: {...all fields...}
-🎯 Operation: "duplicate" | editingId: undefined
-🔀 Will call: "createTransaction()"
-🚀 Starting transaction submit...
-➕ CREATE mode - creating new transaction
-✨ Create result - newId: "xxx-yyy-zzz"
-🎉 Submit success: true
-```
-
-## If You See This (Problem Indicators)
-
-```
-❌ Form validation FAILED
-Validation errors object: {}
-Current form values: {}
-Initial data passed: {}
-```
-→ Form reset before submit (Theory 1)
-
-```
-No console logs after clicking submit
-```
-→ Form submit handler not triggered (check onClick binding)
-
-```
-Network request never sent
-```
-→ Validation failed before reaching server action
-
-```
-Network response 200 but no newId
-```
-→ Server action failing silently (Theory 3)
-
-## Commands to Run
-
-```bash
-# Start dev server
-pnpm dev
-
-# Build check (should pass)
-pnpm build
-
-# If need to checkout branch
-git checkout fix/phase-12-critical-bugs
-```
-
-## Success Criteria
-
-When fixed:
-- ✅ Console shows all 8 logs
-- ✅ Network shows POST to createTransaction
-- ✅ Response contains newId
-- ✅ Loading indicator appears
-- ✅ Success toast shows
-- ✅ Page refreshes
-- ✅ New transaction visible in table
-
-## Research Approach
-
-1. **Phase 1 - Reproduce (5 min)**
-   - Follow test procedure above
-   - Screenshot console + network tabs
-   - Confirm which logs appear/missing
-
-2. **Phase 2 - Identify Theory (10 min)**
-   - Based on logs, pick theory 1-4
-   - Read related code sections
-   - Add targeted debug logs
-
-3. **Phase 3 - Fix (20 min)**
-   - Implement fix
-   - Test with same ID
-   - Verify all 8 logs appear
-   - Verify transaction created
-
-4. **Phase 4 - Validate (10 min)**
-   - Build passes
-   - Test add/edit still work
-   - Test duplicate with different transaction
-   - Commit and push
-
-## Additional Context
-
-- **Modal Dialog:** DEPRECATED - archived in Archive/ folder
-- **V2 System:** TransactionSlideV2 - current active system
-- **Loading Indicator:** Already implemented (blue gradient, top-center)
-- **Pre-existing TS Errors:** In accounts components - NOT related to this issue
-
-## Questions to Answer
-
-1. Does `initialSlideData` have data when duplicate opens?
-2. Does `defaultFormValues` receive initialData?
-3. Do form values persist until submit button clicked?
-4. Does `onSingleSubmit` get called?
-5. Does `createTransaction` server action execute?
-6. What does server response contain?
-
-## Quick Reference
-
-- **Docs:** TRANSACTION_SYSTEM_DOCS.md
-- **Onboarding:** ONBOARDING.md  
-- **Handover:** .agent/HANDOVER_12-2.md
-- **Debug Guide:** DUPLICATE_DEBUG_GUIDE.md
-
----
-
-**Your Task:** Open browser DevTools → Test duplicate → Find root cause → Fix → Verify → Commit
-
-Good luck! 🚀
+## Exit Criteria for this session
+- New branch pushed (not direct to base branch)
+- Focused commits with clear messages
+- Updated handover notes with:
+  - done
+  - pending
+  - blockers
+  - exact next command for next agent

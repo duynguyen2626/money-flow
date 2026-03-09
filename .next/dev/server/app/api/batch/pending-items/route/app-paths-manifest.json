@@ -1,0 +1,3 @@
+{
+  "/api/batch/pending-items/route": "app/api/batch/pending-items/route.js"
+}

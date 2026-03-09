@@ -3,9 +3,14 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Json } from '@/types/database.types'
+import {
+  createPocketBaseAccount,
+  updatePocketBaseAccountInfo,
+} from '@/services/pocketbase/account-details.service'
 
 export async function updateAccountInfo(accountId: string, data: { account_number?: string, receiver_name?: string }) {
   const supabase = await createClient()
+  console.log('[DB:SB] accounts.updateInfo', { accountId })
 
   try {
     const { error } = await supabase
@@ -16,9 +21,16 @@ export async function updateAccountInfo(accountId: string, data: { account_numbe
     if (error) throw error
 
     revalidatePath(`/accounts/${accountId}`)
+
+    // PB secondary write (fire-and-forget)
+    void updatePocketBaseAccountInfo(accountId, {
+      account_number: data.account_number ?? null,
+      receiver_name: data.receiver_name ?? null,
+    }).catch((err) => console.error('[DB:PB] accounts.updateInfo secondary failed:', err))
+
     return { success: true }
   } catch (error) {
-    console.error('Failed to update account info', error)
+    console.error('[DB:SB] accounts.updateInfo failed:', error)
     return { success: false, error }
   }
 }
@@ -51,6 +63,7 @@ type CreateAccountParams = {
 
 export async function createAccount(params: CreateAccountParams) {
   const supabase = await createClient()
+  console.log('[DB:SB] accounts.create', { name: params.name, type: params.type })
 
   // Get current user
   const { data: { user } } = await supabase.auth.getUser()
@@ -83,8 +96,8 @@ export async function createAccount(params: CreateAccountParams) {
     holder_person_id
   } = params
 
-  // Insert into DB
-  const { error } = await supabase
+  // Insert into DB and get back the created ID
+  const { data: insertedAccount, error } = await (supabase
     .from('accounts')
     .insert({
       owner_id: user.id,
@@ -111,11 +124,38 @@ export async function createAccount(params: CreateAccountParams) {
       due_date: dueDate,
       holder_type: holder_type ?? 'me',
       holder_person_id: holder_person_id
-    })
+    }) as any).select('id').single() as any
 
   if (error) {
-    console.error('Error creating account:', error)
+    console.error('[DB:SB] accounts.create failed:', error)
     return { error }
+  }
+
+  if (insertedAccount?.id) {
+    void createPocketBaseAccount(insertedAccount.id, {
+      name,
+      type,
+      owner_id: user.id,
+      credit_limit: creditLimit ?? null,
+      image_url: imageUrl ?? null,
+      annual_fee: annualFee ?? null,
+      annual_fee_waiver_target: annualFeeWaiverTarget ?? null,
+      parent_account_id: parentAccountId ?? null,
+      secured_by_account_id: securedByAccountId ?? null,
+      account_number: accountNumber ?? null,
+      receiver_name: receiverName ?? null,
+      cb_type,
+      cb_base_rate,
+      cb_max_budget: cb_max_budget ?? null,
+      cb_is_unlimited,
+      cb_rules_json: cb_rules_json ?? null,
+      cb_min_spend: cb_min_spend ?? null,
+      cb_cycle_type,
+      statement_day: statementDay ?? null,
+      due_date: dueDate ?? null,
+      holder_type,
+      holder_person_id: holder_person_id ?? null,
+    }).catch((err) => console.error('[DB:PB] accounts.create secondary failed:', err))
   }
 
   revalidatePath('/accounts')

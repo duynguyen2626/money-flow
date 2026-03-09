@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { syncAllSheetDataAction, testSheetConnectionAction, updatePersonAction } from '@/actions/people-actions'
 import { Save, ExternalLink, Check } from 'lucide-react'
 
@@ -17,6 +18,7 @@ type ToastState = {
 }
 
 export function SheetSyncControls({ personId, sheetLink, googleSheetUrl }: Props) {
+  const router = useRouter()
   const [currentScriptLink, setCurrentScriptLink] = useState(sheetLink ?? '')
   const [currentSheetUrl, setCurrentSheetUrl] = useState(googleSheetUrl ?? '')
   const [isEditing, setIsEditing] = useState(false)
@@ -74,6 +76,7 @@ export function SheetSyncControls({ personId, sheetLink, googleSheetUrl }: Props
       setToast({ title: 'Syncing all transactions...', tone: 'info' })
       const result = await syncAllSheetDataAction(personId)
       if (result?.success) {
+        router.refresh()
         setToast({
           title: `Synced ${result.count ?? 0} transactions`,
           tone: 'success',

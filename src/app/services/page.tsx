@@ -1,5 +1,5 @@
 import { getServices } from '@/services/service-manager'
-import { getPeople } from '@/services/people.service'
+import { getPocketBasePeople } from '@/services/pocketbase/account-details.service'
 import { ServicesPageContent } from '@/components/services/services-page-content'
 import { Bot } from 'lucide-react'
 import { Metadata } from 'next'
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export const dynamic = 'force-dynamic'
 
 export default async function ServicesPage() {
-  const [services, people] = await Promise.all([getServices(), getPeople()])
+  const [services, people] = await Promise.all([getServices(), getPocketBasePeople()])
 
   return (
     <div className="h-full overflow-auto p-4 md:p-6">

@@ -1,0 +1,744 @@
+module.exports = [
+"[project]/src/lib/account-balance.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+__turbopack_context__.s([
+    "computeAccountTotals",
+    ()=>computeAccountTotals,
+    "getCreditCardAvailableBalance",
+    ()=>getCreditCardAvailableBalance,
+    "getCreditCardDebt",
+    ()=>getCreditCardDebt,
+    "getCreditCardUsage",
+    ()=>getCreditCardUsage
+]);
+const isIncomingType = (type)=>type === 'income' || type === 'repayment';
+function computeAccountTotals(params) {
+    const { accountId, accountType, transactions } = params;
+    let totalIn = 0;
+    let totalOut = 0;
+    for (const txn of transactions){
+        if (!txn) continue;
+        if (txn.status === 'void') continue;
+        const amountAbs = Math.abs(Number(txn.amount) || 0);
+        if (!amountAbs) continue;
+        if (txn.account_id === accountId) {
+            if (isIncomingType(txn.type)) {
+                totalIn += amountAbs;
+            } else {
+                totalOut -= amountAbs;
+            }
+            continue;
+        }
+        if (txn.target_account_id === accountId) {
+            totalIn += amountAbs;
+        }
+    }
+    const netFlow = totalIn + totalOut;
+    const currentBalance = accountType === 'credit_card' ? Math.abs(totalOut) - totalIn : netFlow;
+    return {
+        totalIn,
+        totalOut,
+        currentBalance
+    };
+}
+function getCreditCardDebt(balance) {
+    return balance ?? 0;
+}
+function getCreditCardAvailableBalance(account) {
+    if (account.type !== 'credit_card') {
+        return account.current_balance ?? 0;
+    }
+    const limit = account.credit_limit ?? 0;
+    const debt = getCreditCardDebt(account.current_balance);
+    return limit - debt;
+}
+function getCreditCardUsage(account) {
+    const limit = account.credit_limit ?? 0;
+    if (account.type !== 'credit_card' || limit <= 0) {
+        return {
+            limit,
+            used: Math.abs(account.current_balance ?? 0),
+            percent: 0
+        };
+    }
+    const debt = getCreditCardDebt(account.current_balance);
+    const used = Math.max(0, debt);
+    const percent = limit > 0 ? used / limit * 100 : 0;
+    return {
+        limit,
+        used,
+        percent
+    };
+}
+}),
+"[project]/src/services/account.service.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
+"use strict";
+
+/* __next_internal_action_entry_do_not_use__ [{"4005e8fd4c9ee64db81d5c3ec61d8bd1ee1b458788":"getAccounts","401b566aac2ce3c00ebf0bfc95ae8fcd9bf7df8d0d":"getAccountStats","405012b6a02d0cf172ba409ef1422d681ff3b67830":"recalculateBalance","408c9f17e4ff03598b5d2a3ca1c54d6a67470f6dc7":"getAccountDetails","40b127cfd17b9ba50e8cd431f20acc57f3b17d5422":"deleteAccount","40dd37e53eaf01fee1f93534cc26e21f64954e8e88":"getRecentAccountsByTransactions","6028e078dc4e1c0da42e27bf178cd1dde0cb7678db":"updateAccountStatus","604be52c4be29f4eeef2fc7dd8002bfe9fc0deb12a":"recalculateBalanceWithClient","608920cc238eb8515b762383c7a2310e2c9ae6d684":"getAccountTransactions","60a9a39a880253b69830129ac7555f30b42e931e90":"updateAccountConfig"},"",""] */ __turbopack_context__.s([
+    "deleteAccount",
+    ()=>deleteAccount,
+    "getAccountDetails",
+    ()=>getAccountDetails,
+    "getAccountStats",
+    ()=>getAccountStats,
+    "getAccountTransactions",
+    ()=>getAccountTransactions,
+    "getAccounts",
+    ()=>getAccounts,
+    "getRecentAccountsByTransactions",
+    ()=>getRecentAccountsByTransactions,
+    "recalculateBalance",
+    ()=>recalculateBalance,
+    "recalculateBalanceWithClient",
+    ()=>recalculateBalanceWithClient,
+    "updateAccountConfig",
+    ()=>updateAccountConfig,
+    "updateAccountStatus",
+    ()=>updateAccountStatus
+]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.10_@babel+core@7._59b2c4e49353e66c503ff99109bd4451/node_modules/next/dist/build/webpack/loaders/next-flight-loader/server-reference.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.10_@babel+core@7._59b2c4e49353e66c503ff99109bd4451/node_modules/next/cache.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/supabase/server.ts [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/cashback.ts [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$account$2d$balance$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/account-balance.ts [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$transaction$2d$mapper$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/transaction-mapper.ts [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/.pnpm/next@16.0.10_@babel+core@7._59b2c4e49353e66c503ff99109bd4451/node_modules/next/dist/build/webpack/loaders/next-flight-loader/action-validate.js [app-route] (ecmascript)");
+;
+;
+;
+;
+;
+;
+function parseJsonSafe(value) {
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value);
+        } catch (parseError) {
+            console.error('Failed to parse JSON string:', parseError);
+            return null;
+        }
+    }
+    return value;
+}
+const fmtDate = (d)=>{
+    return new Intl.DateTimeFormat('vi-VN', {
+        day: '2-digit',
+        month: '2-digit'
+    }).format(d);
+};
+async function getStatsForAccount(supabase, account) {
+    const creditLimit = account.credit_limit ?? 0;
+    const currentBalance = account.current_balance ?? 0;
+    // 0. Base Stats (Usage)
+    const usage_percent = account.type === 'credit_card' ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$account$2d$balance$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCreditCardUsage"])({
+        type: account.type,
+        credit_limit: creditLimit,
+        current_balance: currentBalance
+    }).percent : 0;
+    const remaining_limit = account.type === 'credit_card' ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$account$2d$balance$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCreditCardAvailableBalance"])({
+        type: account.type,
+        credit_limit: creditLimit,
+        current_balance: currentBalance
+    }) : currentBalance;
+    // Default values
+    const baseStats = {
+        usage_percent,
+        remaining_limit,
+        spent_this_cycle: 0,
+        min_spend: null,
+        missing_for_min: null,
+        is_qualified: false,
+        cycle_range: "",
+        due_date_display: null,
+        due_date: null,
+        remains_cap: null,
+        shared_cashback: null
+    };
+    // Only calculate full stats for accounts with cashback config or type
+    const hasConfig = account.cashback_config || account.cb_type !== 'none';
+    if (!hasConfig) return baseStats;
+    const config = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["normalizeCashbackConfig"])(account.cashback_config, account);
+    if (!config) return baseStats;
+    const now = new Date();
+    const explicitCycleType = account.cb_cycle_type || config.cycleType;
+    const cycleRange = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCashbackCycleRange"])({
+        ...config,
+        cycleType: explicitCycleType
+    }, now);
+    if (!cycleRange) return baseStats;
+    const { start, end } = cycleRange;
+    // MF5.2.2B FIX: Read from cashback_cycles for consistency
+    // Determine cycle tag using statement day logic.
+    const tagDate = cycleRange.end;
+    const cycleTag = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["formatIsoCycleTag"])(tagDate);
+    const legacyCycleTag = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["formatLegacyCycleTag"])(tagDate);
+    const cycleTags = legacyCycleTag !== cycleTag ? [
+        cycleTag,
+        legacyCycleTag
+    ] : [
+        cycleTag
+    ];
+    let cycle = (await supabase.from('cashback_cycles').select('*').eq('account_id', account.id).eq('cycle_tag', cycleTag).maybeSingle()).data ?? null;
+    if (!cycle && legacyCycleTag !== cycleTag) {
+        cycle = (await supabase.from('cashback_cycles').select('*').eq('account_id', account.id).eq('cycle_tag', legacyCycleTag).maybeSingle()).data ?? null;
+    }
+    // 1. Stats from Cycle (Primary Source)
+    let spent_this_cycle = cycle?.spent_amount ?? 0;
+    let real_awarded = cycle?.real_awarded ?? 0;
+    const virtual_profit = cycle?.virtual_profit ?? 0;
+    // 1.1 Fallback/Live fetch for real_awarded (Income from Bank)
+    if (real_awarded === 0) {
+        const { data: incomeTxns } = await supabase.from('transactions').select('amount').eq('account_id', account.id).eq('type', 'income').eq('status', 'posted').or('category_id.eq.e0000000-0000-0000-0000-000000000092,category_id.is.null') // Include Cashback category or null
+        .in('persisted_cycle_tag', cycleTags);
+        if (incomeTxns && incomeTxns.length > 0) {
+            real_awarded = incomeTxns.reduce((sum, txn)=>sum + Math.abs(txn.amount ?? 0), 0);
+        }
+    }
+    // MF5.3.3 FIX: Fallback for spent_this_cycle if snapshot is lagging
+    if (!cycle || spent_this_cycle === 0) {
+        const { data: taggedTxns, error: taggedError } = await supabase.from('transactions').select('amount').eq('account_id', account.id).neq('status', 'void').in('type', [
+            'expense',
+            'debt'
+        ]).in('persisted_cycle_tag', cycleTags);
+        if (!taggedError && taggedTxns && taggedTxns.length > 0) {
+            const taggedSum = taggedTxns.reduce((sum, txn)=>sum + Math.abs(txn.amount ?? 0), 0);
+            if (taggedSum > 0) {
+                spent_this_cycle = taggedSum;
+            }
+        } else if (!taggedError && start && end) {
+            const { data: rangeTxns } = await supabase.from('transactions').select('amount, type').eq('account_id', account.id).neq('status', 'void').in('type', [
+                'expense',
+                'debt',
+                'income'
+            ]).gte('occurred_at', start.toISOString()).lte('occurred_at', end.toISOString());
+            if (rangeTxns && rangeTxns.length > 0) {
+                const rangeSpent = rangeTxns.filter((t)=>t.type === 'expense' || t.type === 'debt').reduce((sum, txn)=>sum + Math.abs(txn.amount ?? 0), 0);
+                const rangeAwarded = rangeTxns.filter((t)=>t.type === 'income').reduce((sum, txn)=>sum + Math.abs(txn.amount ?? 0), 0);
+                if (rangeSpent > 0 && spent_this_cycle === 0) spent_this_cycle = rangeSpent;
+                if (rangeAwarded > 0 && real_awarded === 0) real_awarded = rangeAwarded;
+            }
+        }
+    }
+    // 2. Budget Left Calculation
+    // MF5.3.3 FIX: Budget Left must come from cycle. If no cycle, show null (--) instead of fallback to full budget.
+    let remains_cap = null;
+    if (cycle) {
+        const maxBudget = cycle.max_budget ?? null;
+        if (maxBudget !== null) {
+            const consumed = real_awarded + virtual_profit;
+            remains_cap = Math.max(0, maxBudget - consumed);
+        }
+    } else if (config.maxBudget) {
+        const consumed = real_awarded + virtual_profit;
+        remains_cap = Math.max(0, config.maxBudget - consumed);
+    }
+    // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
+    // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
+    const min_spend = cycle ? cycle.min_spend_target ?? null : config.minSpendTarget;
+    const missing_for_min = min_spend !== null ? Math.max(0, min_spend - spent_this_cycle) : null;
+    const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend);
+    let cycle_range = start && end ? `${fmtDate(start)} - ${fmtDate(end)}` : null;
+    // Smart Cycle Detection - Format as DD-MM to DD-MM
+    const isFullMonth = start.getDate() === 1 && new Date(end.getTime() + 86400000).getDate() === 1;
+    if (config.cycleType === 'calendar_month' || isFullMonth) {
+        // Full month: show first day to last day of month
+        const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+        cycle_range = `01-${String(start.getMonth() + 1).padStart(2, '0')} to ${String(lastDay).padStart(2, '0')}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+    } else {
+        // Custom cycle: DD-MM to DD-MM
+        const startDay = String(start.getDate()).padStart(2, '0');
+        const startMonth = String(start.getMonth() + 1).padStart(2, '0');
+        const endDay = String(end.getDate()).padStart(2, '0');
+        const endMonth = String(end.getMonth() + 1).padStart(2, '0');
+        cycle_range = `${startDay}-${startMonth} to ${endDay}-${endMonth}`;
+    }
+    // 4. Due Date Display
+    let due_date_display = null;
+    let due_date = null;
+    if (config.dueDate) {
+        const currentDay = now.getDate();
+        let targetMonth = now.getMonth();
+        const targetYear = now.getFullYear();
+        if (currentDay > config.dueDate) {
+            targetMonth += 1;
+        }
+        const targetDate = new Date(targetYear, targetMonth, config.dueDate);
+        due_date_display = new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric'
+        }).format(targetDate);
+        due_date = targetDate.toISOString();
+    }
+    // 5. Annual Fee Waiver Calculation
+    let annual_fee_waiver_target = null;
+    let annual_fee_waiver_progress = 0;
+    let annual_fee_waiver_met = false;
+    if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
+        // Get waiver target from account config, or use minSpendTarget as fallback
+        annual_fee_waiver_target = account.annual_fee_waiver_target ?? config.minSpendTarget ?? null;
+        if (annual_fee_waiver_target && annual_fee_waiver_target > 0) {
+            // Calculate annual spend (not just current cycle)
+            // For now, use spent_this_cycle as proxy; in production, aggregate full year
+            const annualSpend = spent_this_cycle // TODO: Implement full year aggregation
+            ;
+            annual_fee_waiver_progress = Math.min(100, annualSpend / annual_fee_waiver_target * 100);
+            annual_fee_waiver_met = annualSpend >= annual_fee_waiver_target;
+        }
+    }
+    return {
+        ...baseStats,
+        spent_this_cycle,
+        min_spend,
+        missing_for_min,
+        is_qualified,
+        cycle_range,
+        due_date_display,
+        due_date,
+        remains_cap,
+        shared_cashback: real_awarded,
+        real_awarded,
+        virtual_profit,
+        annual_fee_waiver_target,
+        annual_fee_waiver_progress,
+        annual_fee_waiver_met,
+        max_budget: cycle?.max_budget ?? config.maxBudget ?? null
+    };
+}
+async function getAccounts(supabaseClient) {
+    const supabase = supabaseClient ?? (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    const { data, error } = await supabase.from('accounts').select('id, name, type, currency, current_balance, credit_limit, parent_account_id, account_number, owner_id, cashback_config, cashback_config_version, secured_by_account_id, is_active, image_url, receiver_name, total_in, total_out, annual_fee, annual_fee_waiver_target, cb_type, cb_base_rate, cb_max_budget, cb_is_unlimited, cb_rules_json, cb_min_spend, cb_cycle_type, statement_day, due_date, holder_type, holder_person_id');
+    // Remove default sorting to handle custom sort logic
+    if (error) {
+        console.error('Error fetching accounts:', error);
+        if (error.message) console.error('Error message:', error.message);
+        if (error.code) console.error('Error code:', error.code);
+        return [];
+    }
+    const rows = data ?? [];
+    // 1. Pre-process Relationships
+    const childrenMap = new Map();
+    const accountMap = new Map();
+    // First: Build Account Map
+    rows.forEach((row)=>{
+        accountMap.set(row.id, row);
+    });
+    // Second: Build Children Map
+    rows.forEach((row)=>{
+        if (row.parent_account_id) {
+            if (!childrenMap.has(row.parent_account_id)) {
+                childrenMap.set(row.parent_account_id, []);
+            }
+            // Only add if parent actually exists in current dataset to avoid orphans
+            if (accountMap.has(row.parent_account_id)) {
+                childrenMap.get(row.parent_account_id).push(row);
+            }
+        }
+    });
+    // 2. Parallel fetch stats and build Account objects
+    // 2. Linear fetch stats to avoid connection reset (ECONNRESET)
+    const accounts = [];
+    // Single-thread execution (or small batch) to be safe
+    for (const item of rows){
+        const stats = await getStatsForAccount(supabase, item);
+        // Relationship Logic (Shared Limit Family)
+        const childRows = childrenMap.get(item.id) || [];
+        const parentRow = item.parent_account_id ? accountMap.get(item.parent_account_id) : null;
+        const relationships = {
+            is_parent: childRows.length > 0,
+            child_count: childRows.length,
+            child_accounts: childRows.map((c)=>({
+                    id: c.id,
+                    name: c.name,
+                    image_url: c.image_url
+                })),
+            parent_info: parentRow ? {
+                id: parentRow.id,
+                name: parentRow.name,
+                type: parentRow.type,
+                image_url: parentRow.image_url
+            } : null
+        };
+        accounts.push({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            currency: item.currency ?? 'VND',
+            current_balance: item.current_balance ?? 0,
+            credit_limit: item.credit_limit ?? 0,
+            owner_id: item.owner_id ?? '',
+            account_number: item.account_number ?? null,
+            receiver_name: item.receiver_name ?? null,
+            parent_account_id: item.parent_account_id ?? null,
+            secured_by_account_id: item.secured_by_account_id ?? null,
+            cb_type: item.cb_type ?? 'none',
+            cb_base_rate: item.cb_base_rate ?? 0,
+            cb_max_budget: item.cb_max_budget ?? null,
+            cb_is_unlimited: item.cb_is_unlimited ?? false,
+            cb_rules_json: parseJsonSafe(item.cb_rules_json),
+            cb_min_spend: item.cb_min_spend ?? null,
+            cb_cycle_type: item.cb_cycle_type ?? 'calendar_month',
+            statement_day: item.statement_day ?? null,
+            due_date: item.due_date ?? null,
+            holder_type: item.holder_type ?? 'me',
+            holder_person_id: item.holder_person_id ?? null,
+            cashback_config: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["normalizeCashbackConfig"])(item.cashback_config),
+            is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
+            image_url: typeof item.image_url === 'string' ? item.image_url : null,
+            total_in: item.total_in ?? 0,
+            total_out: item.total_out ?? 0,
+            stats,
+            relationships,
+            credit_card_info: (()=>{
+                const config = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["normalizeCashbackConfig"])(item.cashback_config);
+                if (!config) return undefined;
+                return {
+                    statement_day: item.statement_day ?? config.statementDay ?? config.statement_day,
+                    payment_due_day: item.due_date ?? config.paymentDueDay ?? config.payment_due_day ?? config.dueDate
+                };
+            })()
+        });
+    }
+    // 3. Sorting Logic
+    // Priority: 
+    // 1. Due Date (ASC) - Nearest first
+    // 2. Cashback Need (DESC) - Highest missing_for_min first
+    // 3. Name (ASC)
+    return accounts.sort((a, b)=>{
+        // Helper to get sortable date timestamp
+        const getDueDateTs = (acc)=>{
+            if (!acc.stats?.due_date_display) return 9999999999999 // Far future
+            ;
+            const [day, month] = acc.stats.due_date_display.split('/').map(Number);
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const date = new Date(currentYear, month - 1, day);
+            // If date is in the past (e.g. today is Dec 15, due date Dec 10), assume next year?
+            // Actually due date usually means upcoming due date. 
+            // If getStats calculated it, it's relative to current cycle end.
+            // Let's assume the year is current year, or next year if month < current month?
+            // Simple heuristic: if month < now.month - 1, it's next year.
+            if (date.getTime() < now.getTime() - 30 * 24 * 60 * 60 * 1000) {
+                date.setFullYear(currentYear + 1);
+            }
+            return date.getTime();
+        };
+        const dueA = getDueDateTs(a);
+        const dueB = getDueDateTs(b);
+        if (dueA !== dueB) return dueA - dueB;
+        // Cashback Need (DESC)
+        const missA = a.stats?.missing_for_min ?? 0;
+        const missB = b.stats?.missing_for_min ?? 0;
+        if (missA !== missB) return missB - missA // Highest missing first
+        ;
+        // Name (ASC)
+        return a.name.localeCompare(b.name);
+    });
+}
+async function getAccountDetails(id) {
+    if (!id || id === 'add' || id === 'new' || id === 'undefined') {
+        return null;
+    }
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+        return null;
+    }
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    const { data, error } = await supabase.from('accounts').select('*').eq('id', id).maybeSingle();
+    if (error || !data) {
+        // Treat "no rows found" as a simple not-found instead of a hard error
+        if (error?.code && error.code === 'PGRST116') {
+            return null;
+        }
+        console.error('Error fetching account details:', {
+            accountId: id,
+            message: error?.message ?? 'unknown error',
+            code: error?.code
+        });
+        return null;
+    }
+    const row = data;
+    return {
+        id: row.id,
+        name: row.name,
+        type: row.type,
+        currency: row.currency ?? 'VND',
+        current_balance: row.current_balance ?? 0,
+        credit_limit: row.credit_limit ?? 0,
+        owner_id: row.owner_id ?? '',
+        account_number: row.account_number ?? null,
+        receiver_name: row.receiver_name ?? null,
+        secured_by_account_id: row.secured_by_account_id ?? null,
+        parent_account_id: row.parent_account_id ?? null,
+        cashback_config: (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$cashback$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["normalizeCashbackConfig"])(row.cashback_config),
+        cashback_config_version: row.cashback_config_version ?? 1,
+        is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
+        image_url: typeof row.image_url === 'string' ? row.image_url : null,
+        total_in: row.total_in ?? 0,
+        total_out: row.total_out ?? 0,
+        annual_fee: row.annual_fee ?? null,
+        annual_fee_waiver_target: row.annual_fee_waiver_target ?? null,
+        // New Cashback Columns
+        cb_type: row.cb_type ?? 'none',
+        cb_base_rate: row.cb_base_rate ?? 0,
+        cb_max_budget: row.cb_max_budget ?? null,
+        cb_is_unlimited: row.cb_is_unlimited ?? false,
+        cb_rules_json: parseJsonSafe(row.cb_rules_json),
+        cb_min_spend: row.cb_min_spend ?? null,
+        cb_cycle_type: row.cb_cycle_type ?? 'calendar_month',
+        statement_day: row.statement_day ?? null,
+        due_date: row.due_date ?? null,
+        holder_type: row.holder_type ?? 'me',
+        holder_person_id: row.holder_person_id ?? null
+    };
+}
+// GroupedTransactionLines removed as lines are deprecated
+async function fetchTransactions(accountId, limit) {
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    const { data, error } = await supabase.from('transactions').select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      status,
+      created_at,
+      shop_id,
+      shops ( id, name, image_url ),
+      amount,
+      type,
+      account_id,
+      target_account_id,
+      category_id,
+      person_id,
+      metadata,
+      cashback_share_percent,
+      cashback_share_fixed,
+      cashback_mode,
+      created_by,
+      currency,
+      accounts (name, type, image_url),
+      categories (name, image_url, icon)
+    `).eq('account_id', accountId).order('occurred_at', {
+        ascending: false
+    }).limit(limit);
+    if (error) {
+        console.error('Error fetching transactions for account:', {
+            accountId,
+            message: error?.message ?? 'unknown error',
+            code: error?.code
+        });
+        return [];
+    }
+    return (data || []).map((txn)=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$transaction$2d$mapper$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["mapUnifiedTransaction"])(txn, accountId));
+}
+async function getAccountTransactions(accountId, limit = 20) {
+    return fetchTransactions(accountId, limit);
+}
+async function updateAccountConfig(accountId, data) {
+    // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
+    if (accountId === 'new') return false;
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    const payload = {};
+    // 1. Basic Fields
+    if (typeof data.name === 'string') payload.name = data.name;
+    if (typeof data.credit_limit !== 'undefined') payload.credit_limit = data.credit_limit;
+    if (typeof data.type === 'string') payload.type = data.type;
+    if ('secured_by_account_id' in data) payload.secured_by_account_id = data.secured_by_account_id ?? null;
+    if (typeof data.is_active === 'boolean') payload.is_active = data.is_active;
+    if ('annual_fee' in data) payload.annual_fee = data.annual_fee ?? null;
+    if ('annual_fee_waiver_target' in data) payload.annual_fee_waiver_target = data.annual_fee_waiver_target ?? null;
+    if ('parent_account_id' in data) payload.parent_account_id = data.parent_account_id ?? null;
+    if (typeof data.image_url === 'string') payload.image_url = data.image_url;
+    if ('account_number' in data) payload.account_number = data.account_number ?? null;
+    if ('receiver_name' in data) payload.receiver_name = data.receiver_name ?? null;
+    if ('cb_cycle_type' in data) payload.cb_cycle_type = data.cb_cycle_type ?? 'calendar_month';
+    if ('statement_day' in data) payload.statement_day = data.statement_day ?? null;
+    if ('due_date' in data) payload.due_date = data.due_date ?? null;
+    if ('holder_type' in data) payload.holder_type = data.holder_type ?? 'me';
+    if ('holder_person_id' in data) payload.holder_person_id = data.holder_person_id ?? null;
+    // 2. New Cashback Columns
+    if (data.cb_type) payload.cb_type = data.cb_type;
+    if (typeof data.cb_base_rate === 'number') payload.cb_base_rate = data.cb_base_rate;
+    if ('cb_max_budget' in data) payload.cb_max_budget = data.cb_max_budget;
+    if (typeof data.cb_is_unlimited === 'boolean') payload.cb_is_unlimited = data.cb_is_unlimited;
+    if ('cb_rules_json' in data) payload.cb_rules_json = data.cb_rules_json;
+    if ('cb_min_spend' in data) payload.cb_min_spend = data.cb_min_spend ?? null;
+    // 3. MF5.4.2: Detect changes to cashback_config or new columns to increment version
+    const hasCashbackData = typeof data.cashback_config !== 'undefined' || data.cb_type || typeof data.cb_base_rate === 'number' || 'cb_rules_json' in data;
+    if (hasCashbackData) {
+        const { data: oldAccount } = await supabase.from('accounts').select('cashback_config, cashback_config_version, cb_type, cb_base_rate, cb_rules_json').eq('id', accountId).single();
+        const oldConfigStr = JSON.stringify({
+            c: oldAccount?.cashback_config,
+            t: oldAccount?.cb_type,
+            r: oldAccount?.cb_base_rate,
+            j: oldAccount?.cb_rules_json
+        });
+        const newConfigStr = JSON.stringify({
+            c: data.cashback_config ?? oldAccount?.cashback_config,
+            t: data.cb_type ?? oldAccount?.cb_type,
+            r: data.cb_base_rate ?? oldAccount?.cb_base_rate,
+            j: data.cb_rules_json ?? oldAccount?.cb_rules_json
+        });
+        if (oldConfigStr !== newConfigStr) {
+            const nextVersion = (Number(oldAccount?.cashback_config_version) || 1) + 1;
+            payload.cashback_config_version = nextVersion;
+            if (typeof data.cashback_config !== 'undefined') {
+                payload.cashback_config = data.cashback_config;
+            }
+            console.log(`[updateAccountConfig] Cashback config changed for ${accountId}. Incrementing version to ${nextVersion}`);
+            // Trigger recompute if version changed (async)
+            __turbopack_context__.A("[project]/src/services/cashback.service.ts [app-route] (ecmascript, async loader)").then((m)=>m.recomputeAccountCashback(accountId, 3));
+        }
+    }
+    if (Object.keys(payload).length === 0) {
+        return true;
+    }
+    const { error } = await supabase.from('accounts').update(payload).eq('id', accountId);
+    if (error) {
+        console.error('Error updating account configuration:', error);
+        return false;
+    }
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["revalidatePath"])('/accounts');
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["revalidatePath"])(`/accounts/${accountId}`);
+    return true;
+}
+async function getAccountStats(accountId) {
+    const { getAccountSpendingStatsSnapshot } = await __turbopack_context__.A("[project]/src/services/cashback.service.ts [app-route] (ecmascript, async loader)");
+    const stats = await getAccountSpendingStatsSnapshot(accountId, new Date());
+    if (!stats) {
+        return null;
+    }
+    const rawPotential = stats.currentSpend * stats.rate;
+    const cappedPotential = typeof stats.maxCashback === 'number' ? Math.min(rawPotential, stats.maxCashback) : rawPotential;
+    const potentialProfit = typeof stats.potentialProfit === 'number' && Number.isFinite(stats.potentialProfit) ? stats.potentialProfit : cappedPotential - stats.sharedAmount;
+    return {
+        ...stats,
+        potentialProfit
+    };
+}
+async function recalculateBalance(accountId) {
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    // 1. Get current balance from transactions
+    // Get account type first
+    const { data: account, error: accError } = await supabase.from('accounts').select('type').eq('id', accountId).single();
+    if (accError || !account) {
+        console.error('Account not found for balance calc:', accountId);
+        return false;
+    }
+    // Fetch all transactions involving this account
+    const { data: txns, error: txnError } = await supabase.from('transactions').select('amount, type, category_id, account_id, target_account_id, status').eq('status', 'posted').is('parent_transaction_id', null).or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`);
+    if (txnError) {
+        console.error('Error fetching transactions for balance:', txnError);
+        return false;
+    }
+    const { totalIn, totalOut, currentBalance } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$account$2d$balance$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["computeAccountTotals"])({
+        accountId,
+        accountType: account.type,
+        transactions: txns || []
+    });
+    const { error: updateError } = await supabase.from('accounts').update({
+        current_balance: currentBalance,
+        total_in: totalIn,
+        total_out: totalOut
+    }).eq('id', accountId);
+    if (updateError) {
+        console.error('Error updating account balance:', updateError);
+        return false;
+    }
+    return true;
+}
+async function recalculateBalanceWithClient(supabase, accountId) {
+    const { data: account, error: accError } = await supabase.from('accounts').select('type').eq('id', accountId).single();
+    if (accError || !account) {
+        console.error('Account not found for balance calc:', accountId);
+        return false;
+    }
+    const { data: txns, error: txnError } = await supabase.from('transactions').select('amount, type, category_id, account_id, target_account_id, status').eq('status', 'posted').is('parent_transaction_id', null).or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`);
+    if (txnError) {
+        console.error('Error fetching transactions for balance:', txnError);
+        return false;
+    }
+    const { totalIn, totalOut, currentBalance } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$account$2d$balance$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["computeAccountTotals"])({
+        accountId,
+        accountType: account.type,
+        transactions: txns || []
+    });
+    const { error: updateError } = await supabase.from('accounts').update({
+        current_balance: currentBalance,
+        total_in: totalIn,
+        total_out: totalOut
+    }).eq('id', accountId);
+    if (updateError) {
+        console.error('Error updating account balance:', updateError);
+        return false;
+    }
+    return true;
+}
+async function deleteAccount(id) {
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    // Potential restriction: don't delete if it has transactions?
+    // Or just void it?
+    // Schema usually allows deletion if no foreign keys block it.
+    const { error } = await supabase.from('accounts').delete().eq('id', id);
+    if (error) {
+        console.error('Error deleting account:', error);
+        return false;
+    }
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["revalidatePath"])('/accounts');
+    return true;
+}
+async function updateAccountStatus(id, isActive) {
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    const { error } = await supabase.from('accounts').update({
+        is_active: isActive
+    }).eq('id', id);
+    if (error) {
+        console.error('Error updating account status:', error);
+        return false;
+    }
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["revalidatePath"])('/accounts');
+    return true;
+}
+async function getRecentAccountsByTransactions(limit = 5) {
+    const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$supabase$2f$server$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createClient"])();
+    // Query transactions, ordered by occurred_at
+    const { data: txns, error } = await supabase.from('transactions').select('account_id').not('account_id', 'is', null).order('occurred_at', {
+        ascending: false
+    }).limit(50);
+    if (error || !txns) return [];
+    // Get unique account IDs in order of last transaction
+    const accountIds = Array.from(new Set(txns.map((t)=>t.account_id).filter((id)=>!!id))).slice(0, limit);
+    if (accountIds.length === 0) return [];
+    // Fetch account details
+    const { data: accounts, error: aError } = await supabase.from('accounts').select('id, name, type, image_url').in('id', accountIds);
+    if (aError || !accounts) return [];
+    // Return matched accounts in correct order
+    return accountIds.map((id)=>accounts.find((a)=>a.id === id)).filter(Boolean);
+}
+;
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["ensureServerEntryExports"])([
+    getAccounts,
+    getAccountDetails,
+    getAccountTransactions,
+    updateAccountConfig,
+    getAccountStats,
+    recalculateBalance,
+    recalculateBalanceWithClient,
+    deleteAccount,
+    updateAccountStatus,
+    getRecentAccountsByTransactions
+]);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(getAccounts, "4005e8fd4c9ee64db81d5c3ec61d8bd1ee1b458788", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(getAccountDetails, "408c9f17e4ff03598b5d2a3ca1c54d6a67470f6dc7", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(getAccountTransactions, "608920cc238eb8515b762383c7a2310e2c9ae6d684", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(updateAccountConfig, "60a9a39a880253b69830129ac7555f30b42e931e90", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(getAccountStats, "401b566aac2ce3c00ebf0bfc95ae8fcd9bf7df8d0d", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(recalculateBalance, "405012b6a02d0cf172ba409ef1422d681ff3b67830", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(recalculateBalanceWithClient, "604be52c4be29f4eeef2fc7dd8002bfe9fc0deb12a", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(deleteAccount, "40b127cfd17b9ba50e8cd431f20acc57f3b17d5422", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(updateAccountStatus, "6028e078dc4e1c0da42e27bf178cd1dde0cb7678db", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f2e$pnpm$2f$next$40$16$2e$0$2e$10_$40$babel$2b$core$40$7$2e$_59b2c4e49353e66c503ff99109bd4451$2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["registerServerReference"])(getRecentAccountsByTransactions, "40dd37e53eaf01fee1f93534cc26e21f64954e8e88", null);
+}),
+];
+
+//# sourceMappingURL=src_bdae0149._.js.map

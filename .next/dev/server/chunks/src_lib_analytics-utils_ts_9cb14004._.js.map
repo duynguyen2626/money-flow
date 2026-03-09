@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/nam.thanhnguyen/Personal%20Project/money-flow-3/src/lib/analytics-utils.ts"],"sourcesContent":["export function computeCardCashbackProfit(input: {\r\n    cashbackRedeemed: number\r\n    cashbackGiven: number\r\n    annualFee?: number\r\n    interest?: number\r\n}) {\r\n    const fee = input.annualFee ?? 0\r\n    const interest = input.interest ?? 0\r\n    return input.cashbackRedeemed + interest - fee - input.cashbackGiven\r\n}\r\n"],"names":[],"mappings":";;;;AAAO,SAAS,0BAA0B,KAKzC;IACG,MAAM,MAAM,MAAM,SAAS,IAAI;IAC/B,MAAM,WAAW,MAAM,QAAQ,IAAI;IACnC,OAAO,MAAM,gBAAgB,GAAG,WAAW,MAAM,MAAM,aAAa;AACxE"}}]
+}

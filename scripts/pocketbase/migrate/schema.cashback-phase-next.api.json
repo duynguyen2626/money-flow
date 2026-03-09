@@ -1,0 +1,44 @@
+[
+  {
+    "id": "pvl_cbcyc_001",
+    "name": "cashback_cycles",
+    "type": "base",
+    "fields": [
+      { "id": "cb_id_01", "name": "id", "type": "text", "required": true, "system": true, "primaryKey": true },
+      { "id": "cb_acc_01", "name": "account_id", "type": "relation", "collectionId": "pvl_acc_001", "minSelect": 0, "maxSelect": 1, "cascadeDelete": false },
+      { "id": "cb_tag_01", "name": "cycle_tag", "type": "text", "required": true },
+      { "id": "cb_start_01", "name": "cycle_start_at", "type": "date" },
+      { "id": "cb_end_01", "name": "cycle_end_at", "type": "date" },
+      { "id": "cb_status_01", "name": "status", "type": "text" },
+      { "id": "cb_spent_01", "name": "spent_amount", "type": "number" },
+      { "id": "cb_min_01", "name": "min_spend_target", "type": "number" },
+      { "id": "cb_met_01", "name": "met_min_spend", "type": "bool" },
+      { "id": "cb_max_01", "name": "max_budget", "type": "number" },
+      { "id": "cb_real_01", "name": "real_awarded", "type": "number" },
+      { "id": "cb_est_01", "name": "est_earned", "type": "number" },
+      { "id": "cb_shared_01", "name": "shared_amount", "type": "number" },
+      { "id": "cb_prof_01", "name": "virtual_profit", "type": "number" },
+      { "id": "cb_net_01", "name": "net_profit", "type": "number" },
+      { "id": "cb_remain_01", "name": "remaining_budget", "type": "number" },
+      { "id": "cb_over_01", "name": "overflow_loss", "type": "number" },
+      { "id": "cb_exh_01", "name": "is_exhausted", "type": "bool" },
+      { "id": "cb_updated_01", "name": "updated_at", "type": "date" }
+    ]
+  },
+  {
+    "id": "pvl_cbe_001",
+    "name": "cashback_entries",
+    "type": "base",
+    "fields": [
+      { "id": "cbe_id_01", "name": "id", "type": "text", "required": true, "system": true, "primaryKey": true },
+      { "id": "cbe_txn_01", "name": "transaction_id", "type": "relation", "collectionId": "pvl_txn_001", "minSelect": 0, "maxSelect": 1, "cascadeDelete": false },
+      { "id": "cbe_cycle_01", "name": "cycle_id", "type": "relation", "collectionId": "pvl_cbcyc_001", "minSelect": 0, "maxSelect": 1, "cascadeDelete": false },
+      { "id": "cbe_acc_01", "name": "account_id", "type": "relation", "collectionId": "pvl_acc_001", "minSelect": 0, "maxSelect": 1, "cascadeDelete": false },
+      { "id": "cbe_amt_01", "name": "amount", "type": "number" },
+      { "id": "cbe_mode_01", "name": "mode", "type": "select", "required": true, "maxSelect": 1, "values": ["real", "virtual", "voluntary"] },
+      { "id": "cbe_budget_01", "name": "counts_to_budget", "type": "bool" },
+      { "id": "cbe_meta_01", "name": "metadata", "type": "json" },
+      { "id": "cbe_created_01", "name": "created_at", "type": "date" }
+    ]
+  }
+]

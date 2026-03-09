@@ -19,15 +19,11 @@ import {
   getCashbackCycleRange,
   getCashbackCycleTag,
 } from "@/lib/cashback";
-// Phase 3: PocketBase transaction service
 import {
-  loadPocketBaseTransactions,
   createPocketBaseTransaction,
   updatePocketBaseTransaction,
-  deletePocketBaseTransaction,
   voidPocketBaseTransaction,
-} from "./pocketbase/transaction.service";
-import { pocketbaseRequest } from "./pocketbase/server";
+} from './pocketbase/account-details.service';
 
 type TransactionStatus =
   | "posted"
@@ -37,129 +33,6 @@ type TransactionStatus =
   | "refunded"
   | "completed";
 type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment" | "credit_pay" | "invest";
-
-function isPocketBaseId(value?: string | null): boolean {
-  return Boolean(value && value.length === 15);
-}
-
-async function resolveLegacySupabaseAccountId(pbAccountId: string): Promise<string | null> {
-  try {
-    const pbBaseUrl = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://api-db.reiwarden.io.vn';
-    const pbResponse = await fetch(
-      `${pbBaseUrl}/api/collections/pvl_acc_001/records/${pbAccountId}?fields=id,name,account_number,slug`,
-      { cache: 'no-store' },
-    );
-
-    if (!pbResponse.ok) {
-      return null;
-    }
-
-    const pbAccount = await pbResponse.json() as {
-      id?: string;
-      name?: string;
-      account_number?: string | null;
-      slug?: string | null;
-    };
-
-    const supabase = createClient();
-    const { data: candidates, error } = await supabase
-      .from('accounts')
-      .select('id, name, account_number')
-      .limit(1000);
-
-    if (error || !candidates || candidates.length === 0) {
-      return null;
-    }
-
-    const accountNumber = String(pbAccount.account_number || '').trim();
-    const slugPrefix = String(pbAccount.slug || '').trim().toLowerCase();
-    const accountName = String(pbAccount.name || '').trim().toLowerCase();
-
-    if (accountNumber) {
-      const numberMatches = candidates.filter(
-        (row) => String((row as any).account_number || '').trim() === accountNumber,
-      );
-
-      if (numberMatches.length === 1) {
-        return numberMatches[0].id as string;
-      }
-
-      const namedNumberMatch = numberMatches.find(
-        (row) => String((row as any).name || '').trim().toLowerCase() === accountName,
-      );
-      if (namedNumberMatch?.id) {
-        return namedNumberMatch.id as string;
-      }
-    }
-
-    if (slugPrefix) {
-      const slugMatches = candidates.filter((row) =>
-        String((row as any).id || '').toLowerCase().startsWith(slugPrefix),
-      );
-
-      if (slugMatches.length === 1) {
-        return slugMatches[0].id as string;
-      }
-
-      const namedSlugMatch = slugMatches.find(
-        (row) => String((row as any).name || '').trim().toLowerCase() === accountName,
-      );
-      if (namedSlugMatch?.id) {
-        return namedSlugMatch.id as string;
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.warn('[resolveLegacySupabaseAccountId] Failed:', {
-      pbAccountId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
-}
-
-function normalizeTransactionText(value?: string | null): string {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-}
-
-function buildTransactionFingerprint(input: {
-  occurred_at?: string | null;
-  amount?: number | null;
-  type?: string | null;
-  note?: string | null;
-  persisted_cycle_tag?: string | null;
-}): string {
-  const timestamp = input.occurred_at ? new Date(input.occurred_at).getTime() : Number.NaN;
-  const safeTimestamp = Number.isFinite(timestamp) ? timestamp : -1;
-  const safeAmount = Math.round(Number(input.amount || 0));
-  const safeType = String(input.type || '').toLowerCase();
-  const safeNote = normalizeTransactionText(input.note);
-  const safeCycleTag = normalizeMonthTag(input.persisted_cycle_tag || '') || String(input.persisted_cycle_tag || '');
-
-  return `${safeTimestamp}|${safeAmount}|${safeType}|${safeNote}|${safeCycleTag}`;
-}
-
-function indexPocketBaseTransactionIds(rows: FlatTransactionRow[]): Map<string, string[]> {
-  const index = new Map<string, string[]>();
-  for (const row of rows) {
-    const key = buildTransactionFingerprint({
-      occurred_at: row.occurred_at,
-      amount: row.amount,
-      type: row.type,
-      note: row.note,
-      persisted_cycle_tag: row.persisted_cycle_tag,
-    });
-
-    const current = index.get(key) || [];
-    current.push(row.id);
-    index.set(key, current);
-  }
-  return index;
-}
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -608,186 +481,6 @@ export async function loadTransactions(options: {
   context?: "person" | "account" | "general";
   includeVoided?: boolean;
 }): Promise<TransactionWithDetails[]> {
-  // PHASE 3: Smart routing based on account ID format
-  // - PB account ID (15 chars base32) → Query PB only
-  // - SB account ID (36 chars UUID) → Query SB only
-  // - No account ID → Query both and merge
-
-  const isPBAccountId = options.accountId && options.accountId.length === 15;
-  const isSBAccountId = options.accountId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.accountId);
-
-  console.log('[loadTransactions] Phase 3 routing:', {
-    accountId: options.accountId,
-    isPBAccountId,
-    isSBAccountId,
-    context: options.context
-  });
-
-  // If PB account ID, try PB first
-  if (isPBAccountId) {
-    console.log('[loadTransactions] Routing to PB (PB account ID detected)');
-    const pbRows = await loadPocketBaseTransactions(options);
-    console.log('[loadTransactions] PB raw rows result:', {
-      accountId: options.accountId,
-      rowCount: pbRows.length,
-      sample: pbRows.slice(0, 5).map((row) => ({
-        id: row.id,
-        account_id: row.account_id,
-        target_account_id: row.target_account_id,
-        type: row.type,
-        occurred_at: row.occurred_at,
-      }))
-    });
-    
-    if (pbRows.length > 0) {
-      const lookups = await fetchLookups(pbRows);
-      const mapped = await Promise.all(
-        pbRows.map((row) =>
-          mapTransactionRow(row, {
-            lookups,
-            contextAccountId: options.accountId,
-            contextMode: options.context ?? "general",
-          }),
-        )
-      );
-      console.log('[loadTransactions] PB results:', { count: mapped.length });
-      return mapped;
-    }
-    
-    const legacySupabaseId = await resolveLegacySupabaseAccountId(options.accountId!);
-    if (legacySupabaseId) {
-      console.warn('[loadTransactions] PB returned empty, falling back via legacy SB mapping:', {
-        pbAccountId: options.accountId,
-        legacySupabaseId,
-      });
-
-      const fallbackMapped = await loadTransactions({
-        ...options,
-        accountId: legacySupabaseId,
-      });
-
-      if (fallbackMapped.length > 0) {
-        let pbIdIndex = new Map<string, string[]>();
-        let pbRowsById = new Map<string, FlatTransactionRow>();
-        try {
-          const allPbRows = await loadPocketBaseTransactions({
-            includeVoided: options.includeVoided,
-            limit: options.limit ?? 2000,
-          });
-          pbIdIndex = indexPocketBaseTransactionIds(allPbRows);
-          pbRowsById = new Map(allPbRows.map((row) => [row.id, row]));
-        } catch (error) {
-          console.warn('[loadTransactions] Failed to build PB ID index for fallback remap:', {
-            pbAccountId: options.accountId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        let matchedPbIdCount = 0;
-        const pbFieldBackfills: Array<{ id: string; payload: Record<string, unknown> }> = [];
-
-        const remapped = fallbackMapped.map((tx) => {
-          const fingerprint = buildTransactionFingerprint({
-            occurred_at: tx.occurred_at,
-            amount: tx.amount,
-            type: tx.type,
-            note: tx.note,
-            persisted_cycle_tag: tx.persisted_cycle_tag,
-          });
-
-          const pbCandidates = pbIdIndex.get(fingerprint) || [];
-          const resolvedPbId = pbCandidates.length === 1 ? pbCandidates[0] : null;
-          if (resolvedPbId) {
-            matchedPbIdCount += 1;
-          }
-
-          const mappedAccountId = tx.account_id === legacySupabaseId ? options.accountId! : tx.account_id;
-          const mappedTargetAccountId = tx.target_account_id === legacySupabaseId ? options.accountId! : tx.target_account_id;
-
-          const nextMetadata = (tx.metadata && typeof tx.metadata === 'object')
-            ? { ...(tx.metadata as Record<string, unknown>) }
-            : {};
-
-          if (resolvedPbId) {
-            const pbRow = pbRowsById.get(resolvedPbId);
-            if (pbRow) {
-              const payload: Record<string, unknown> = {};
-
-              if (!pbRow.account_id && mappedAccountId) payload.account_id = mappedAccountId;
-              if (!pbRow.target_account_id && mappedTargetAccountId) payload.to_account_id = mappedTargetAccountId;
-              if (!pbRow.category_id && tx.category_id) payload.category_id = tx.category_id;
-              if (!pbRow.shop_id && tx.shop_id) payload.shop_id = tx.shop_id;
-              if (!pbRow.person_id && tx.person_id) payload.person_id = tx.person_id;
-
-              if (Object.keys(payload).length > 0) {
-                pbFieldBackfills.push({ id: resolvedPbId, payload });
-              }
-            }
-          }
-
-          return {
-            ...tx,
-            id: resolvedPbId || tx.id,
-            metadata: resolvedPbId
-              ? ({ ...nextMetadata, legacy_supabase_id: tx.id } as Json)
-              : tx.metadata,
-            account_id: mappedAccountId,
-            target_account_id: mappedTargetAccountId,
-          };
-        });
-
-        if (pbFieldBackfills.length > 0) {
-          const pbBaseUrl = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://api-db.reiwarden.io.vn';
-          const uniqueBackfills = Array.from(new Map(pbFieldBackfills.map((item) => [item.id, item])).values());
-
-          const results = await Promise.allSettled(
-            uniqueBackfills.map(async (item) => {
-              await pocketbaseRequest(`/api/collections/pvl_txn_001/records/${item.id}`, {
-                method: 'PATCH',
-                body: item.payload,
-                cache: 'no-store',
-              })
-              return { ok: true }
-            }),
-          );
-
-          const successCount = results.filter(
-            (result) => result.status === 'fulfilled',
-          ).length;
-
-          const failureDetails = results
-            .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-            .slice(0, 3)
-            .map((result) => {
-              const message = result.reason instanceof Error ? result.reason.message : String(result.reason)
-              return { message }
-            });
-
-          console.log('[loadTransactions] PB field backfill from legacy mapping:', {
-            requested: uniqueBackfills.length,
-            successCount,
-            pbAccountId: options.accountId,
-            failureDetails,
-          });
-        }
-
-        console.log('[loadTransactions] Legacy SB fallback returned rows:', {
-          count: remapped.length,
-          matchedPbIdCount,
-          pbAccountId: options.accountId,
-          legacySupabaseId,
-        });
-        return remapped;
-      }
-    }
-
-    console.log('[loadTransactions] PB returned empty and legacy fallback not found');
-    return [];
-  }
-
-  // If SB account ID or no specific account, query Supabase
-  console.log('[loadTransactions] Routing to SB (UUID detected or general query)');
-  
   const supabase = createClient();
 
   let query = supabase
@@ -833,30 +526,21 @@ export async function loadTransactions(options: {
 
   const { data, error } = await query;
 
-  if (error) {
-    console.error("[loadTransactions] SB Query error:", {
-      message: error?.message || 'Unknown error',
-      code: error?.code || 'UNKNOWN',
+  if (error || !data) {
+    console.error("Error fetching transactions:", {
+      message: error?.message,
+      code: error?.code,
       details: error?.details,
       hint: error?.hint,
-      accountId: options.accountId,
-      context: options.context
-    });
-    return [];
-  }
-
-  if (!data) {
-    console.warn("[loadTransactions] SB: No data returned (empty result set)", {
-      accountId: options.accountId,
-      context: options.context,
-      limit: options.limit
+      hasData: !!data,
+      fullError: error
     });
     return [];
   }
 
   const rows = data as unknown as FlatTransactionRow[];
   const lookups = await fetchLookups(rows);
-  const mapped = await Promise.all(
+  return Promise.all(
     rows.map((row) =>
       mapTransactionRow(row, {
         lookups,
@@ -865,81 +549,14 @@ export async function loadTransactions(options: {
       }),
     )
   );
-  
-  console.log('[loadTransactions] SB results:', { count: mapped.length });
-  return mapped;
 }
 
 export async function createTransaction(
   input: CreateTransactionInput,
 ): Promise<string | null> {
   try {
+    console.log('[DB:SB] transactions.create', { type: input.type, amount: input.amount })
     const normalized = await normalizeInput(input);
-
-    if (isPocketBaseId(normalized.account_id)) {
-      let pbConfig: Json | null = null;
-      const pbBaseUrl = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'https://api-db.reiwarden.io.vn';
-
-      try {
-        const response = await fetch(
-          `${pbBaseUrl}/api/collections/pvl_acc_001/records/${normalized.account_id}`,
-          { cache: 'no-store' },
-        );
-        if (response.ok) {
-          const pbAccount = await response.json();
-          pbConfig = (pbAccount?.cashback_config ?? null) as Json | null;
-        }
-      } catch (pbConfigError) {
-        console.warn('[createTransaction] Failed to fetch PB account config:', pbConfigError);
-      }
-
-      if (pbConfig) {
-        const config = parseCashbackConfig(pbConfig, normalized.account_id);
-        const cycleTag = getCashbackCycleTag(new Date(normalized.occurred_at), config);
-        if (cycleTag) {
-          normalized.persisted_cycle_tag = cycleTag;
-        }
-      }
-
-      const pbType = (normalized.type === 'credit_pay' || normalized.type === 'invest')
-        ? 'transfer'
-        : normalized.type;
-
-      const pbTransactionId = await createPocketBaseTransaction({
-        occurred_at: normalized.occurred_at,
-        note: normalized.note,
-        amount: normalized.amount,
-        type: pbType,
-        account_id: normalized.account_id,
-        target_account_id: normalized.target_account_id,
-        category_id: normalized.category_id,
-        person_id: normalized.person_id,
-        shop_id: normalized.shop_id,
-        metadata: normalized.metadata,
-        is_installment: Boolean(normalized.is_installment),
-        linked_transaction_id: normalized.linked_transaction_id,
-        persisted_cycle_tag: normalized.persisted_cycle_tag,
-        cashback_mode: normalized.cashback_mode,
-        cashback_share_percent: normalized.cashback_share_percent,
-        cashback_share_fixed: normalized.cashback_share_fixed,
-        final_price: normalized.final_price,
-      });
-
-      if (!pbTransactionId) {
-        return null;
-      }
-
-      revalidatePath("/transactions");
-      revalidatePath("/accounts");
-      revalidatePath("/people");
-      if (input.person_id) {
-        revalidatePath(`/people/${input.person_id}`);
-        revalidatePath(`/people/${input.person_id}/details`);
-      }
-
-      return pbTransactionId;
-    }
-
     const supabase = createClient();
 
     // Auto-calculate cycle tag
@@ -969,6 +586,28 @@ export async function createTransaction(
     }
 
     const transactionId = (data as { id?: string }).id ?? null;
+
+    // PB secondary write (fire-and-forget)
+    if (transactionId) {
+      void createPocketBaseTransaction(transactionId, {
+        occurred_at: normalized.occurred_at,
+        note: normalized.note,
+        type: normalized.type,
+        account_id: normalized.account_id,
+        amount: normalized.amount,
+        tag: normalized.tag,
+        category_id: normalized.category_id,
+        person_id: normalized.person_id,
+        target_account_id: normalized.target_account_id,
+        shop_id: normalized.shop_id,
+        status: normalized.status,
+        persisted_cycle_tag: normalized.persisted_cycle_tag,
+        cashback_share_percent: normalized.cashback_share_percent,
+        cashback_share_fixed: normalized.cashback_share_fixed,
+        cashback_mode: normalized.cashback_mode,
+        metadata: normalized.metadata,
+      }).catch((err) => console.error('[DB:PB] transactions.create secondary failed:', err))
+    }
 
     const affectedAccounts = new Set<string>();
     affectedAccounts.add(normalized.account_id);
@@ -1106,54 +745,7 @@ export async function updateTransaction(
   id: string,
   input: CreateTransactionInput,
 ): Promise<boolean> {
-  if (isPocketBaseId(id)) {
-    let normalizedPb: NormalizedTransaction;
-    try {
-      normalizedPb = await normalizeInput(input);
-    } catch (err) {
-      console.error("Invalid PB transaction input:", err);
-      return false;
-    }
-
-    const pbType = (normalizedPb.type === 'credit_pay' || normalizedPb.type === 'invest')
-      ? 'transfer'
-      : normalizedPb.type;
-
-    const updated = await updatePocketBaseTransaction(id, {
-      occurred_at: normalizedPb.occurred_at,
-      note: normalizedPb.note,
-      amount: normalizedPb.amount,
-      type: pbType,
-      account_id: normalizedPb.account_id,
-      target_account_id: normalizedPb.target_account_id,
-      category_id: normalizedPb.category_id,
-      person_id: normalizedPb.person_id,
-      shop_id: normalizedPb.shop_id,
-      metadata: normalizedPb.metadata,
-      is_installment: Boolean(normalizedPb.is_installment),
-      linked_transaction_id: normalizedPb.linked_transaction_id,
-      persisted_cycle_tag: normalizedPb.persisted_cycle_tag,
-      cashback_mode: normalizedPb.cashback_mode,
-      cashback_share_percent: normalizedPb.cashback_share_percent,
-      cashback_share_fixed: normalizedPb.cashback_share_fixed,
-      final_price: normalizedPb.final_price,
-    });
-
-    if (!updated) {
-      return false;
-    }
-
-    revalidatePath("/transactions");
-    revalidatePath("/accounts");
-    revalidatePath("/people");
-    if (input.person_id) {
-      revalidatePath(`/people/${input.person_id}`);
-      revalidatePath(`/people/${input.person_id}/details`);
-    }
-
-    return true;
-  }
-
+  console.log('[DB:SB] transactions.update', { id })
   const supabase = createClient();
 
   // Fetch existing transaction INCLUDING person_id for sheet sync
@@ -1237,6 +829,26 @@ export async function updateTransaction(
     return false;
   }
   console.log(`[Service] Transaction ${id} updated successfully in DB.`);
+
+  // PB secondary write (fire-and-forget)
+  void updatePocketBaseTransaction(id, {
+    occurred_at: normalized.occurred_at,
+    note: normalized.note,
+    type: normalized.type,
+    account_id: normalized.account_id,
+    amount: normalized.amount,
+    tag: normalized.tag,
+    category_id: normalized.category_id,
+    person_id: normalized.person_id,
+    target_account_id: normalized.target_account_id,
+    shop_id: normalized.shop_id,
+    status: normalized.status,
+    persisted_cycle_tag: normalized.persisted_cycle_tag,
+    cashback_share_percent: normalized.cashback_share_percent,
+    cashback_share_fixed: normalized.cashback_share_fixed,
+    cashback_mode: normalized.cashback_mode,
+    metadata: normalized.metadata,
+  }).catch((err) => console.error('[DB:PB] transactions.update secondary failed:', err))
 
   const affectedAccounts = new Set<string>();
   if ((existing as any).account_id)
@@ -1487,19 +1099,8 @@ export async function updateTransaction(
 }
 
 export async function deleteTransaction(id: string): Promise<boolean> {
-  if (isPocketBaseId(id)) {
-    const deleted = await deletePocketBaseTransaction(id);
-    if (!deleted) {
-      return false;
-    }
-    revalidatePath("/transactions");
-    revalidatePath("/accounts");
-    revalidatePath("/people");
-    return true;
-  }
-
+  console.log('[DB:SB] transactions.delete', { id })
   const supabase = createClient();
-  // Fetch existing transaction INCLUDING person_id for sheet sync and installment_plan_id for auto-settle
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
     .select("account_id, target_account_id, person_id, installment_plan_id, metadata, status")
@@ -1625,17 +1226,7 @@ export async function deleteTransaction(id: string): Promise<boolean> {
 }
 
 export async function voidTransaction(id: string): Promise<boolean> {
-  if (isPocketBaseId(id)) {
-    const voided = await voidPocketBaseTransaction(id);
-    if (!voided) {
-      return false;
-    }
-    revalidatePath("/transactions");
-    revalidatePath("/accounts");
-    revalidatePath("/people");
-    return true;
-  }
-
+  console.log('[DB:SB] transactions.void', { id })
   const supabase = createClient();
   const { data: existing } = await supabase
     .from("transactions")
@@ -1730,6 +1321,9 @@ export async function voidTransaction(id: string): Promise<boolean> {
     console.error("Failed to void transaction:", error);
     return false;
   }
+
+  // PB secondary write (fire-and-forget)
+  void voidPocketBaseTransaction(id).catch((err) => console.error('[DB:PB] transactions.void secondary failed:', err))
 
   const affected = new Set<string>();
   if ((existing as any)?.account_id) affected.add((existing as any).account_id);
@@ -2147,11 +1741,6 @@ export async function confirmRefund(
 }
 
 export async function getPendingRefunds(accountId?: string): Promise<PendingRefundItem[]> {
-  // Guard: PB accounts don't have pending refunds (Supabase-only feature)
-  if (accountId && accountId.length === 15) {
-    return []
-  }
-
   const supabase = createClient()
 
   // Logic: status='waiting_refund' OR metadata->has_refund_request=true

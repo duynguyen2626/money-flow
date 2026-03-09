@@ -1,10 +1,13 @@
 import { Suspense } from 'react'
-import { getAccountDetails, getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
-import { getAccountSpendingStats } from '@/services/cashback.service'
-import { loadTransactions } from '@/services/transaction.service'
+import {
+  getPocketBaseAccountDetails,
+  getPocketBaseAccounts,
+  getPocketBaseCategories,
+  getPocketBasePeople,
+  getPocketBaseShops,
+  getPocketBaseAccountSpendingStatsSnapshot,
+  loadPocketBaseTransactionsForAccount,
+} from '@/services/pocketbase/account-details.service'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailViewV2 } from '@/components/accounts/v2/AccountDetailViewV2'
 import { Metadata } from 'next'
@@ -27,7 +30,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params
   const { tab } = await searchParams
-  const account = await getAccountDetails(id)
+  const account = await getPocketBaseAccountDetails(id)
 
   if (!account) return { title: 'Account Not Found' }
 
@@ -56,7 +59,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const account = await getAccountDetails(id)
+  const account = await getPocketBaseAccountDetails(id)
 
   if (!account) {
     notFound()
@@ -64,12 +67,12 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
 
   // Pre-fetch everything needed for V2 view
   const [allAccounts, categories, people, shops, cashbackStats, transactions] = await Promise.all([
-    getAccounts(),
-    getCategories(),
-    getPeople(),
-    getShops(),
-    getAccountSpendingStats(id, new Date()),
-    loadTransactions({ accountId: id, context: 'account', limit: 2000, includeVoided: true }), // Included voided for filtering
+    getPocketBaseAccounts(),
+    getPocketBaseCategories(),
+    getPocketBasePeople(),
+    getPocketBaseShops(),
+    getPocketBaseAccountSpendingStatsSnapshot(id, new Date()),
+    loadPocketBaseTransactionsForAccount(id, 2000),
   ])
 
   // Calculate annual fee waiver stats manually for header display

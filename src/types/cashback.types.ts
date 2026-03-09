@@ -84,6 +84,7 @@ export type AccountSpendingStats = {
   currentSpend: number
   minSpend: number | null
   maxCashback: number | null
+  actualClaimed?: number
   rate: number
   earnedSoFar: number
   sharedAmount: number // Total cashback shared with others

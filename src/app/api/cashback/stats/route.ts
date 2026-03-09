@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { getAccountSpendingStats } from '@/services/cashback.service'
+import { getPocketBaseAccountSpendingStatsSnapshot } from '@/services/pocketbase/account-details.service'
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +21,7 @@ export async function GET(request: NextRequest) {
   const parsedDate = dateParam ? new Date(dateParam) : new Date()
   const referenceDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
 
-  const categoryId = url.searchParams.get('categoryId') ?? undefined
-  const stats = await getAccountSpendingStats(accountId, referenceDate, categoryId, cycleTag)
+  const stats = await getPocketBaseAccountSpendingStatsSnapshot(accountId, referenceDate, cycleTag)
 
   return NextResponse.json(stats)
 }

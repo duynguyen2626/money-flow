@@ -1,23 +1,18 @@
-import { getShops } from '@/services/shop.service'
+import {
+  getPocketBaseShops,
+  getPocketBaseCategories,
+} from '@/services/pocketbase/account-details.service'
 import { AddShopButton } from '@/components/shops/add-shop-button'
 import { EditShopButton } from '@/components/shops/edit-shop-button'
 import { ShoppingBag } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
-import { Category } from '@/types/moneyflow.types'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
-async function getCategories() {
-  const supabase = createClient()
-  const { data } = await supabase.from('categories').select('*').order('name')
-  return (data as unknown) as Category[]
-}
-
 export default async function ShopsPage() {
   const [shops, categories] = await Promise.all([
-    getShops(),
-    getCategories()
+    getPocketBaseShops(),
+    getPocketBaseCategories(),
   ])
 
   return (

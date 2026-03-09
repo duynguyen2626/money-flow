@@ -1,0 +1,3 @@
+{
+  "/api/ai/parse-batch/route": "app/api/ai/parse-batch/route.js"
+}
