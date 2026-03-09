@@ -2,7 +2,7 @@
   "[project]/src/components/moneyflow/app-layout-v2.tsx [app-client] (ecmascript, next/dynamic entry)": {
     "id": "[project]/src/components/moneyflow/app-layout-v2.tsx [app-client] (ecmascript, next/dynamic entry)",
     "files": [
-      "static/chunks/src_597e97bf._.js",
+      "static/chunks/src_e96cd92f._.js",
       "static/chunks/src_components_ui_ba96f785._.js",
       "static/chunks/src_components_navigation_6e1c60e6._.js",
       "static/chunks/src_components_ai_a36c1c8a._.js",
@@ -10,8 +10,8 @@
       "static/chunks/src_components_accounts_v2_db9e5266._.js",
       "static/chunks/src_components_people_2bd2a1d6._.js",
       "static/chunks/src_components_18453823._.js",
-      "static/chunks/src_actions_c7e4c201._.js",
-      "static/chunks/src_services_df8a7672._.js",
+      "static/chunks/src_actions_bb52a7de._.js",
+      "static/chunks/src_services_ce549dcf._.js",
       "static/chunks/src_a4e09419._.js",
       "static/chunks/48b42_lucide-react_dist_esm_icons_0af52663._.js",
       "static/chunks/d6ff3_next_0f871b63._.js",
@@ -23,12 +23,12 @@
       "static/chunks/cd977_@supabase_auth-js_dist_module_7b3787de._.js",
       "static/chunks/node_modules__pnpm_dece486e._.js",
       "static/chunks/src_components_moneyflow_app-layout-v2_tsx_1034c838._.js",
-      "static/chunks/src_services_b1d476b1._.js",
-      "static/chunks/src_services_account_service_ts_801e6e47._.js",
-      "static/chunks/src_actions_3bd57f8c._.js",
-      "static/chunks/src_actions_account-actions_ts_801e6e47._.js",
-      "static/chunks/src_services_a8ffd729._.js",
-      "static/chunks/src_services_transaction_service_ts_801e6e47._.js"
+      "static/chunks/src_services_af55dda0._.js",
+      "static/chunks/src_services_account_service_ts_90a8598e._.js",
+      "static/chunks/src_actions_8415d6d5._.js",
+      "static/chunks/src_actions_account-actions_ts_90a8598e._.js",
+      "static/chunks/src_services_5d2ec420._.js",
+      "static/chunks/src_services_transaction_service_ts_90a8598e._.js"
     ]
   }
 }

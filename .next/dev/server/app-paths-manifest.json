@@ -1,1 +1,8 @@
-{}
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/accounts/[id]/page": "app/accounts/[id]/page.js",
+  "/api/batch/pending-items/route": "app/api/batch/pending-items/route.js",
+  "/api/cashback/stats/route": "app/api/cashback/stats/route.js",
+  "/api/migrate/backfill/route": "app/api/migrate/backfill/route.js",
+  "/api/refunds/pending/route": "app/api/refunds/pending/route.js"
+}

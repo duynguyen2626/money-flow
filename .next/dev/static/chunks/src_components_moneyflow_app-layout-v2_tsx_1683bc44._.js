@@ -1,7 +1,7 @@
 (globalThis.TURBOPACK_CHUNK_LISTS || (globalThis.TURBOPACK_CHUNK_LISTS = [])).push({
     script: typeof document === "object" ? document.currentScript : undefined,
     chunks: [
-  "static/chunks/src_a32396e4._.js",
+  "static/chunks/src_7a25587c._.js",
   "static/chunks/src_components_ui_ba96f785._.js",
   "static/chunks/src_components_navigation_6e1c60e6._.js",
   "static/chunks/src_components_ai_a36c1c8a._.js",
@@ -9,8 +9,8 @@
   "static/chunks/src_components_accounts_v2_db9e5266._.js",
   "static/chunks/src_components_people_2bd2a1d6._.js",
   "static/chunks/src_components_18453823._.js",
-  "static/chunks/src_actions_c7e4c201._.js",
-  "static/chunks/src_services_df8a7672._.js",
+  "static/chunks/src_actions_bb52a7de._.js",
+  "static/chunks/src_services_ce549dcf._.js",
   "static/chunks/src_a4e09419._.js",
   "static/chunks/48b42_lucide-react_dist_esm_icons_0af52663._.js",
   "static/chunks/d6ff3_next_0f871b63._.js",
