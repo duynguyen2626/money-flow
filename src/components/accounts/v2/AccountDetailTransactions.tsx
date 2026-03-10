@@ -191,6 +191,7 @@ export function AccountDetailTransactions({
     const [isCyclesLoading, setIsCyclesLoading] = useState(false)
     const handleCycleChange = (cycle: string | undefined) => {
         startTransition(() => {
+            setIsFilterActive(true)
             setSelectedCycle(cycle)
             if (cycle) {
                 setDateMode('cycle')
@@ -205,6 +206,7 @@ export function AccountDetailTransactions({
 
             const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
             router.push(newUrl, { scroll: false })
+            router.refresh()
         })
     }
 
@@ -608,10 +610,17 @@ export function AccountDetailTransactions({
                             date={date}
                             dateRange={dateRange}
                             mode={dateMode}
-                            onDateChange={setDate}
-                            onRangeChange={setDateRange}
+                            onDateChange={(nextDate) => {
+                                setDate(nextDate)
+                                setIsFilterActive(true)
+                            }}
+                            onRangeChange={(nextRange) => {
+                                setDateRange(nextRange)
+                                setIsFilterActive(true)
+                            }}
                             onModeChange={(mode) => {
                                 setDateMode(mode)
+                                setIsFilterActive(mode !== 'all')
                             }}
                             availableMonths={availableMonths}
                             accountCycleTags={account.type === 'credit_card' ? cycles.map(c => c.value) : undefined}
@@ -790,7 +799,7 @@ export function AccountDetailTransactions({
                                     handleCycleChange(undefined) // Clear URL param
                                     setDate(new Date())
                                     setDateRange(undefined)
-                                    setDateMode(account.type === 'credit_card' ? 'cycle' : 'month')
+                                    setDateMode('month')
                                     setIsFilterActive(false)
                                     toast.success("Filters cleared")
                                 } else {
@@ -800,7 +809,7 @@ export function AccountDetailTransactions({
                                     handleCycleChange(undefined) // Clear URL param
                                     setDate(new Date())
                                     setDateRange(undefined)
-                                    setDateMode(account.type === 'credit_card' ? 'cycle' : 'month')
+                                    setDateMode('month')
                                     setSearchTerm('')
                                     setIsFilterActive(false)
                                     toast.success("All filters and search cleared")

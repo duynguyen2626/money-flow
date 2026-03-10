@@ -74,6 +74,7 @@ export function MonthYearPickerV2({
   const [localRange, setLocalRange] = useState<DateRange | undefined>(dateRange)
   const [localCycle, setLocalCycle] = useState<string | undefined>(selectedCycleValue)
   const [cycleSearch, setCycleSearch] = useState('')
+  const [cycleYearFilter, setCycleYearFilter] = useState<string>(String(new Date().getFullYear()))
   const hasCycleContext = accountCycleTags !== undefined || mode === 'cycle' || selectedCycleValue !== undefined
   const filteredCycles = useMemo(() => {
     const q = cycleSearch.trim().toLowerCase()
@@ -89,13 +90,31 @@ export function MonthYearPickerV2({
     return hasAll ? base : [{ label: 'All cycles', value: 'all' }, ...base]
   }, [cycles])
 
+  const cycleYears = useMemo(() => {
+    const years = new Set<string>()
+    ;(cycles || []).forEach((cycle) => {
+      const yearMatch = cycle.value.match(/^(\d{4})-/)
+      if (yearMatch?.[1]) years.add(yearMatch[1])
+    })
+
+    const sorted = Array.from(years).sort((a, b) => Number(b) - Number(a))
+    return sorted
+  }, [cycles])
+
   const filteredCyclesWithAll = useMemo(() => {
     const q = cycleSearch.trim().toLowerCase()
-    if (!q) return cyclesWithAll
-    return cyclesWithAll.filter(cycle =>
+    const byYear = cyclesWithAll.filter((cycle) => {
+      if (cycle.value === 'all') return true
+      if (cycleYearFilter === 'all') return true
+      const yearMatch = cycle.value.match(/^(\d{4})-/)
+      return yearMatch?.[1] === cycleYearFilter
+    })
+
+    if (!q) return byYear
+    return byYear.filter(cycle =>
       cycle.label.toLowerCase().includes(q) || cycle.value.toLowerCase().includes(q)
     )
-  }, [cyclesWithAll, cycleSearch])
+  }, [cyclesWithAll, cycleSearch, cycleYearFilter])
 
   const availableYears = useMemo(() => {
     const years = new Set<number>()
@@ -146,8 +165,14 @@ export function MonthYearPickerV2({
       setLocalDate(date)
       setLocalRange(dateRange)
       setLocalCycle(selectedCycleValue)
+      if (cycleYears.length > 0) {
+        const currentYear = String(new Date().getFullYear())
+        setCycleYearFilter(cycleYears.includes(currentYear) ? currentYear : cycleYears[0])
+      } else {
+        setCycleYearFilter('all')
+      }
     }
-  }, [open, mode, date, dateRange, selectedCycleValue, hasCycleContext])
+  }, [open, mode, date, dateRange, selectedCycleValue, hasCycleContext, cycleYears])
 
   const handleOpenChange = (newOpen: boolean) => {
     if (locked && newOpen) {
@@ -165,6 +190,12 @@ export function MonthYearPickerV2({
       setLocalDate(date)
       setLocalRange(dateRange)
       setLocalCycle(selectedCycleValue)
+      if (cycleYears.length > 0) {
+        const currentYear = String(new Date().getFullYear())
+        setCycleYearFilter(cycleYears.includes(currentYear) ? currentYear : cycleYears[0])
+      } else {
+        setCycleYearFilter('all')
+      }
       setCycleSearch('')
     }
   }
@@ -296,23 +327,35 @@ export function MonthYearPickerV2({
                   </div>
                 ) : cyclesWithAll.length > 0 ? (
                   <div className="space-y-2">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={cycleSearch}
-                        onChange={(e) => setCycleSearch(e.target.value)}
-                        placeholder="Search cycle..."
-                        className="w-full h-8 rounded-md border border-slate-200 bg-white px-2.5 pr-8 text-xs outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
-                      />
-                      {cycleSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setCycleSearch('')}
-                          className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100"
-                        >
-                          <X className="h-3 w-3 text-slate-400" />
-                        </button>
-                      )}
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={cycleSearch}
+                          onChange={(e) => setCycleSearch(e.target.value)}
+                          placeholder="Search cycle..."
+                          className="w-full h-8 rounded-md border border-slate-200 bg-white px-2.5 pr-8 text-xs outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                        />
+                        {cycleSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setCycleSearch('')}
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-slate-100"
+                          >
+                            <X className="h-3 w-3 text-slate-400" />
+                          </button>
+                        )}
+                      </div>
+                      <select
+                        value={cycleYearFilter}
+                        onChange={(e) => setCycleYearFilter(e.target.value)}
+                        className="h-8 min-w-[86px] rounded-md border border-slate-200 bg-white px-2 text-xs outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                      >
+                        {cycleYears.map((year) => (
+                          <option key={year} value={year}>{year}</option>
+                        ))}
+                        {cycleYears.length === 0 && <option value="all">All</option>}
+                      </select>
                     </div>
 
                     <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">

@@ -51,6 +51,7 @@ export function AccountDetailViewV2({
     const [isPending, startTransition] = useTransition()
     const [isCashbackLoading, setIsCashbackLoading] = useState(false)
     const [cashbackStats, setCashbackStats] = useState<AccountSpendingStats | null>(initialCashbackStats)
+    const [cycleApplyTick, setCycleApplyTick] = useState(0)
 
     // Dynamic Icon for Account Detail (Shows Bank Logo on Tab)
     useAppFavicon(isPending, account.image_url ?? undefined)
@@ -60,6 +61,11 @@ export function AccountDetailViewV2({
 
     // Selected Cycle State (for cashback badge in header)
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
+
+    const handleCycleChange = useCallback((cycle: string | undefined) => {
+        setSelectedCycle(cycle)
+        setCycleApplyTick((prev) => prev + 1)
+    }, [])
 
        // Sync cycle from URL
     useEffect(() => {
@@ -83,7 +89,11 @@ export function AccountDetailViewV2({
                setIsCashbackLoading(false)
                console.warn('Failed to fetch cashback stats:', err)
            })
-       }, [selectedCycle, account.id])
+       }, [selectedCycle, account.id, cycleApplyTick])
+
+    useEffect(() => {
+        setCashbackStats(initialCashbackStats)
+    }, [initialCashbackStats])
 
     // Batch Stats State
     const [pendingItems, setPendingItems] = useState<PendingBatchItem[]>([])
@@ -383,7 +393,7 @@ export function AccountDetailViewV2({
                     people={people}
                     shops={shops}
                     selectedCycle={selectedCycle}
-                    onCycleChange={setSelectedCycle}
+                    onCycleChange={handleCycleChange}
                     onSuccess={syncPendingStats}
                 />
             </div>

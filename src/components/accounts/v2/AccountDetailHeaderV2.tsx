@@ -1043,7 +1043,31 @@ export function AccountDetailHeaderV2({
                 )
             }
 
-            {/* Section 3: Cashback Performance - Only show when cycle selected */}
+            {/* Section 3: Cashback Performance - Prompt when cycle is not selected */}
+            {isCreditCard && (!selectedCycle || selectedCycle === 'all' || !dynamicCashbackStats) && (
+                <div className="flex flex-1 min-w-0 lg:flex-[5]">
+                    <HeaderSection
+                        label="Cashback Performance"
+                        borderColor="border-emerald-100"
+                        className="w-full bg-emerald-50/10"
+                        hideHintInHeader
+                    >
+                        <div className="flex h-full min-h-[92px] w-full items-center justify-center p-2.5">
+                            <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-white/70 px-4 py-2.5">
+                                <svg className="h-8 w-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-black uppercase tracking-wide text-emerald-700">Select a cycle to view cashback details</span>
+                                    <span className="text-[11px] font-medium text-slate-500">Open Cycle tab, choose month/year, then click Apply</span>
+                                </div>
+                            </div>
+                        </div>
+                    </HeaderSection>
+                </div>
+            )}
+
+            {/* Section 3: Cashback Performance - Detailed view when cycle selected */}
             {isCreditCard && dynamicCashbackStats && selectedCycle && selectedCycle !== 'all' && (
                 <div className="flex flex-1 min-w-0 lg:flex-[5]">
                     <HeaderSection
