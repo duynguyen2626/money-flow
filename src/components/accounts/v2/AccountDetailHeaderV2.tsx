@@ -51,6 +51,7 @@ interface AccountDetailHeaderV2Props {
     allAccounts: Account[]
     categories: Category[]
     cashbackStats: AccountSpendingStats | null
+    isCashbackLoading?: boolean
     initialTransactions: Transaction[]
 
     selectedYear: string | null
@@ -93,6 +94,7 @@ export function AccountDetailHeaderV2({
     allAccounts,
     categories,
     cashbackStats,
+    isCashbackLoading,
     initialTransactions,
 
     selectedYear,
@@ -107,7 +109,8 @@ export function AccountDetailHeaderV2({
     const searchParams = useSearchParams()
     const [isSlideOpen, setIsSlideOpen] = React.useState(false)
     const [dynamicCashbackStats, setDynamicCashbackStats] = React.useState<AccountSpendingStats | null>(cashbackStats)
-    const [isCashbackLoading, setIsCashbackLoading] = React.useState(false)
+    // Use passed loading prop or fall back to false
+    const effectiveIsCashbackLoading = isCashbackLoading ?? false
     const [isSyncing, setIsSyncing] = React.useState(false)
 
     // Sync selected year with URL
@@ -1075,6 +1078,13 @@ export function AccountDetailHeaderV2({
                         className="w-full bg-emerald-50/10"
                         hideHintInHeader
                     >
+                                    {/* Loading overlay during async fetch */}
+                                    {effectiveIsCashbackLoading && (
+                                        <div className="absolute inset-0 bg-white/40 backdrop-blur-sm rounded-md flex items-center justify-center z-10 flex-col gap-2 pointer-events-auto">
+                                            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                                            <span className="text-xs font-semibold text-slate-700">Fetching cycle data...</span>
+                                        </div>
+                                    )}
                                     <div className="flex flex-col w-full h-full p-2.5 gap-2">
                                         {/* Main Layout: Circular Progress (Left) + 2x2 Metrics Grid (Right) */}
                                         <div className="flex items-start gap-3 w-full">

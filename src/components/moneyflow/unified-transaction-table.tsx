@@ -2066,7 +2066,8 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
 
 
                         case "shop": {
-                          let shopLogo = txn.shop_image_url;
+                          const resolvedShop = txn.shop_id ? shops.find((shop) => shop.id === txn.shop_id) : null
+                          let shopLogo = txn.shop_image_url || resolvedShop?.image_url || null;
 
                           // ROLLOVER IMAGE OVERRIDE: If category is Rollover, use Category Image (takes precedence over Shop/Bank)
                           if (txn.category_name === 'Rollover' || txn.category_id === '71e71711-83e5-47ba-8ff5-85590f45a70c') {
@@ -2537,8 +2538,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           const sourceIcon = txn.source_image || sourceAccountFromId?.image_url || null
 
                           const personId = (txn as any).person_id
-                          const personName = (txn as any).person_name
-                          const personImage = (txn as any).person_image_url
+                          const resolvedPerson = personId ? people.find((person) => person.id === personId) : null
+                          const personName = (txn as any).person_name || resolvedPerson?.name || 'Unknown'
+                          const personImage = (txn as any).person_image_url || resolvedPerson?.image_url || null
 
                           const destId = txnDestId
                           const destAccountFromId = destId ? accounts.find(a => a.id === destId) : null
@@ -2590,7 +2592,7 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                           ) : null
 
                           // People debt tag badge with click/hover logic
-                          const person = people.find(p => p.id === personId);
+                          const person = resolvedPerson;
                           const cycleSheet = person?.cycle_sheets?.find(s => s.cycle_tag === debtTag);
                           const sheetUrl = cycleSheet?.sheet_url || person?.google_sheet_url || person?.sheet_link;
 
@@ -2853,8 +2855,9 @@ export const UnifiedTransactionTable = React.forwardRef<UnifiedTransactionTableR
                         }
                         case "people": {
                           const personId = (txn as any).person_id
-                          const personName = (txn as any).person_name
-                          const personImage = (txn as any).person_image_url
+                          const resolvedPerson = personId ? people.find((person) => person.id === personId) : null
+                          const personName = (txn as any).person_name || resolvedPerson?.name || 'Unknown'
+                          const personImage = (txn as any).person_image_url || resolvedPerson?.image_url || null
 
                           if (!personId) return <span className="text-slate-300 italic text-xs">-</span>
 
