@@ -1,3 +1,38 @@
+# 🔴 UPDATE 2026-03-10: Transactions Backfill Failed (Needs Full Remigration)
+
+## Current Incident
+- Backfill run result: `Total processed: 307`, `Updated: 0`, `Errors: 307`.
+- Error pattern: `PB transaction not found for SB id ...` on every record.
+
+## Confirmed Cause
+- Old script assumed deterministic transaction id mapping (SB UUID → PB hashed id).
+- Current PB transactions dataset does not match this identity path.
+- Consequence: lookup-by-derived-id always misses.
+
+## Required Next Move (Do not patch blind)
+1. Freeze writes.
+2. Backup current PB transaction/cashback collections.
+3. Drop and recreate PB `transactions` schema with all required business fields.
+4. Re-migrate from SB using `metadata.source_id` as canonical transaction identity.
+5. Resolve relation fields to live PB IDs before insert/update.
+6. Validate `/accounts/[id]` + `/people/[id]` detail flows and cashback calculations.
+
+## Implemented Command Path (2026-03-10)
+- Script implemented: `scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs`
+- Execute remigration with collection recreate:
+    - `node scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs --recreate-collection --reset --apply`
+- Then run a validation dry pass:
+    - `node scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs --reset --limit=100`
+
+## Non-Negotiable Fields In New `transactions`
+- Core: `date`, `occurred_at`, `amount`, `final_price`, `type`, `status`, `note`
+- Relations: `account_id`, `to_account_id`, `category_id`, `shop_id`, `person_id`, `parent_transaction_id`
+- Cashback/Cycle: `persisted_cycle_tag`, `debt_cycle_tag`, `cashback_share_percent`, `cashback_share_fixed`, `cashback_mode`, `cashback_amount`
+- Metadata: `metadata.source_id` (SB UUID)
+
+## Task B
+- Task B (clear-all dropdown) remains pending and is paused until remigration is stable.
+
 # 🎯 HANDOVER: Phase 12.1 - Transaction Table Flow Column Critical Issues
 
 **Date:** Feb 2, 2026  

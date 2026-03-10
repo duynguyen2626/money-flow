@@ -1,5 +1,76 @@
 # PocketBase Migration Progress - March 2026
 
+## 🔴 Critical Update - 2026-03-10 (Transactions Remigration Required)
+
+### Implementation update (done)
+- Added new script: `scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs`
+- Added runbook: `TRANSACTION_REMIGRATE_GUIDE.md`
+- Updated schema blueprint: `scripts/pocketbase/schema.json` (transactions fields)
+
+### Why old sync path is blocked
+- `node scripts/pocketbase/migrate.mjs --sync-schema` currently fails at `accounts` collection update (400 validation), so global schema sync cannot finish.
+- Direct transactions patch can also fail when field type changes are required (`validation_field_type_change`).
+
+### New execution path (authoritative)
+1. Recreate transactions collection + remigrate in one pass:
+  - `node scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs --recreate-collection --reset --apply`
+2. Validation-only pass after recreate:
+  - `node scripts/pocketbase/remigrate-transactions-sourceid-safe.mjs --reset --limit=100`
+
+### Script guarantees
+- Canonical identity: `metadata.source_id` (SB UUID)
+- Reset mode supported (`--reset`)
+- Optional cycle remigrate (default on, disable with `--skip-cycles`)
+- Strict relation guard default on (disable with `--no-strict-relations`)
+- Integrity summary: created/updated/skipped/unresolved/formula-mismatch
+
+### What happened
+- Backfill script completed with `Total processed: 307`, `Updated: 0`, `Errors: 307`.
+- All errors are `PB transaction not found` for Supabase transaction UUID inputs.
+
+### Root cause (confirmed)
+- Current backfill relies on deterministic UUID → PB id hashing for `transactions`.
+- Existing `transactions` records in PocketBase were not created from that deterministic id path (or were recreated with PB auto ids), so hash lookup cannot find records.
+- Result: zero updates; old metadata fallback can hide this partially, but migration state is inconsistent.
+
+### Decision
+- Stop patching old backfill.
+- Execute full **transactions collection reset + schema remap + clean remigration**.
+- Keep `accounts`, `people`, `shops`, `categories` collections intact; only rebuild `transactions` path.
+
+### Execution Plan (authoritative)
+1. **Freeze writes**
+  - Stop UI writes/import jobs while migration runs.
+2. **Export backup**
+  - Export current PB `transactions` + related cashback collections for rollback.
+3. **Drop & recreate PB transactions collection**
+  - Recreate field map with required columns:
+    - Core: `date`, `occurred_at`, `amount`, `final_price`, `type`, `status`, `note`
+    - Relations: `account_id`, `to_account_id`, `category_id`, `shop_id`, `person_id`, `parent_transaction_id`
+    - Cycle/Cashback: `persisted_cycle_tag`, `debt_cycle_tag`, `cashback_share_percent`, `cashback_share_fixed`, `cashback_mode`, `cashback_amount`
+    - Metadata: `metadata` (must include `source_id` = Supabase UUID)
+4. **Re-migrate transactions from Supabase with deterministic strategy**
+  - Upsert by `metadata.source_id` first, not by hashed id lookup.
+  - Resolve all relation IDs (`account_id`, `person_id`, etc.) to current PB IDs before insert.
+  - Recompute/store `final_price` from source values without changing cashback formula semantics.
+5. **Post-migration integrity checks**
+  - Row count parity: SB transactions vs PB transactions.
+  - Sample verify account details pages (`/accounts/[id]`) and people details pages (`/people/[id]`).
+  - Validate cashback stats and annual fee progress unchanged vs pre-reset baseline.
+6. **Enable writes and monitor**
+  - Re-enable normal app writes after checks pass.
+
+### Guardrails for new script
+- Do not derive transaction identity from PB id hashing.
+- Transaction identity key = `metadata.source_id`.
+- Relation mapping must fail-fast with explicit error logs per missing relation.
+- Emit summary metrics: inserted, updated, skipped, unresolved-relations, formula-mismatch.
+- Include `--dry-run`, `--limit`, `--only-id` options for controlled rollout.
+
+### Task B status
+- **Task B (clear-all dropdown bug)** is intentionally paused until transactions remigration stabilizes.
+- Resume only after account/people detail flows pass validation.
+
 ## Executive Summary
 **Branch:** `feat/pb-refactor-clean-20260308`  
 **Status:** Phase 1 Complete - Accounts & Transactions Migrated  
