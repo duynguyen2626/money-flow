@@ -1154,6 +1154,7 @@ export async function loadPocketBaseTransactionsForAccount(sourceAccountId: stri
  * TODO Phase 2: Add support for personId, categoryId, shopId, installmentPlanId
  */
 export async function loadPocketBaseTransactions(options: {
+  transactionId?: string
   accountId?: string
   personId?: string
   personIds?: string[]
@@ -1164,6 +1165,34 @@ export async function loadPocketBaseTransactions(options: {
   context?: 'person' | 'account' | 'general'
   includeVoided?: boolean
 }): Promise<TransactionWithDetails[]> {
+  if (options.transactionId) {
+    const inputId = options.transactionId
+    const hashedId = toPocketBaseId(inputId, 'transactions')
+    const candidateIds = hashedId !== inputId ? [inputId, hashedId] : [inputId]
+
+    for (const candidateId of candidateIds) {
+      try {
+        const records = await listAllRecords('transactions', {
+          perPage: 1,
+          sort: '-date',
+          expand: 'account_id,to_account_id,category_id,shop_id,person_id,parent_transaction_id',
+          filter: `id='${candidateId}'`,
+        })
+        if (records.length > 0) {
+          return records.map((item) => mapTransaction(item, ''))
+        }
+      } catch (error) {
+        console.warn('[DB:PB] transactions.listById attempt failed', {
+          transactionId: inputId,
+          candidateId,
+          error,
+        })
+      }
+    }
+
+    return []
+  }
+
   // Phase 1a: accountId is supported
   if (options.accountId) {
     return loadPocketBaseTransactionsForAccount(options.accountId, options.limit)

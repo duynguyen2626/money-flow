@@ -7,7 +7,7 @@ export async function getRecentShopByCategoryId(categoryId: string): Promise<str
         const pbCatId = toPocketBaseId(categoryId, 'categories')
         const response = await pocketbaseList<any>('transactions', {
             filter: `category_id='${pbCatId}' && shop_id != ''`,
-            sort: '-occurred_at',
+            sort: '-date',
             perPage: 1
         })
         return response.items[0]?.shop_id || null
@@ -22,7 +22,7 @@ export async function getRecentShopIdsByCategoryId(categoryId: string): Promise<
         const pbCatId = toPocketBaseId(categoryId, 'categories')
         const response = await pocketbaseList<any>('transactions', {
             filter: `category_id='${pbCatId}' && shop_id != ''`,
-            sort: '-occurred_at',
+            sort: '-date',
             perPage: 50
         })
         const ids = response.items.map(t => t.shop_id).filter(Boolean)
@@ -38,7 +38,7 @@ export async function getRecentCategoriesByShopId(shopId: string): Promise<strin
         const pbShopId = toPocketBaseId(shopId, 'shops')
         const response = await pocketbaseList<any>('transactions', {
             filter: `shop_id='${pbShopId}' && category_id != ''`,
-            sort: '-occurred_at',
+            sort: '-date',
             perPage: 50
         })
         const ids = response.items.map(t => t.category_id).filter(Boolean)

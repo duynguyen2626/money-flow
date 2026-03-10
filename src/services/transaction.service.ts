@@ -514,6 +514,17 @@ export async function loadTransactions(options: {
 
   console.log('[DB:SB] transactions.select', options)
   const supabase = createClient();
+  const resolvedTransactionId = options.transactionId
+    ? await resolveSupabaseId(options.transactionId, 'transactions')
+    : undefined
+
+  if (options.transactionId && (!resolvedTransactionId || !isUuid(resolvedTransactionId))) {
+    console.warn('[DB:SB] Skip transactions.select for non-UUID transactionId', {
+      transactionId: options.transactionId,
+      resolvedTransactionId,
+    })
+    return []
+  }
 
   let query = supabase
     .from("transactions")
@@ -527,7 +538,7 @@ export async function loadTransactions(options: {
   }
 
   if (options.transactionId) {
-    query = query.eq("id", options.transactionId);
+    query = query.eq("id", resolvedTransactionId!);
   } else {
     if (options.personIds && options.personIds.length > 0) {
       query = query.in("person_id", options.personIds);

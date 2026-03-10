@@ -521,7 +521,7 @@ export function TransactionSlideV2({
                             person_id: txn.person_id || null,
                             tag: txn.tag || null,
                             cashback_mode: txn.cashback_mode || "none_back",
-                            cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : null,
+                            cashback_share_percent: typeof txn.cashback_share_percent === 'number' ? txn.cashback_share_percent * 100 : null,
                             cashback_share_fixed: txn.cashback_share_fixed || null,
                             ui_is_cashback_expanded: !!txn.is_installment || (!!txn.cashback_mode && txn.cashback_mode !== 'none_back'),
                             is_installment: !!txn.is_installment,
