@@ -13,7 +13,7 @@ import {
   upsertTransactionCashback,
   removeTransactionCashback,
 } from "./cashback.service";
-import { loadPocketBaseTransactions } from './pocketbase/account-details.service'
+import { loadPocketBaseTransactions, loadPocketBaseTransactionsForAccount } from './pocketbase/account-details.service'
 import { parseMetadata } from '@/lib/transaction-mapper';
 import {
   parseCashbackConfig,

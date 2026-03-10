@@ -869,6 +869,37 @@ export async function loadPocketBaseTransactionsForAccount(sourceAccountId: stri
   return records.map((item) => mapTransaction(item, sourceAccountId))
 }
 
+/**
+ * Load PocketBase transactions with flexible options
+ * NOTE: Phase 1 implementation - only supports accountId filtering
+ * TODO Phase 2: Add support for personId, categoryId, shopId, installmentPlanId
+ */
+export async function loadPocketBaseTransactions(options: {
+  accountId?: string
+  personId?: string
+  personIds?: string[]
+  categoryId?: string
+  shopId?: string
+  installmentPlanId?: string
+  limit?: number
+  context?: 'person' | 'account' | 'general'
+  includeVoided?: boolean
+}): Promise<TransactionWithDetails[]> {
+  // Phase 1: Only accountId is supported
+  if (options.accountId) {
+    return loadPocketBaseTransactionsForAccount(options.accountId, options.limit)
+  }
+  
+  // Phase 2+: Other filters not yet implemented
+  if (options.personId || options.personIds || options.categoryId || options.shopId || options.installmentPlanId) {
+    console.warn('[loadPocketBaseTransactions] Phase 2 filters not yet implemented, falling back to Supabase')
+    return []
+  }
+  
+  // No filters - not supported in Phase 1
+  return []
+}
+
 export async function getPocketBaseAccountCycleOptions(sourceAccountId: string, limit = 12): Promise<Array<{
   tag: string
   label: string

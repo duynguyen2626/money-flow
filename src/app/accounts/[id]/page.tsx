@@ -7,7 +7,6 @@ import {
   getPocketBaseShops,
   getPocketBaseAccountSpendingStatsSnapshot,
   loadPocketBaseTransactionsForAccount,
-  resolvePocketBaseAccountId,
 } from '@/services/pocketbase/account-details.service'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailViewV2 } from '@/components/accounts/v2/AccountDetailViewV2'
@@ -32,8 +31,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params
   const { tab } = await searchParams
-  const pocketBaseAccountId = await resolvePocketBaseAccountId(id)
-  const account = await getPocketBaseAccountDetails(pocketBaseAccountId)
+  const account = await getPocketBaseAccountDetails(id)
 
   if (!account) return { title: 'Account Not Found' }
 
@@ -62,8 +60,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const pocketBaseAccountId = await resolvePocketBaseAccountId(id)
-  const account = await getPocketBaseAccountDetails(pocketBaseAccountId)
+  const account = await getPocketBaseAccountDetails(id)
 
   if (!account) {
     notFound()
