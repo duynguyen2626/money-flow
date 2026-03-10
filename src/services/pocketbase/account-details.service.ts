@@ -1352,38 +1352,38 @@ export async function getPocketBaseUnifiedTransactions(options: {
   const { limit = 1000, includeVoided = false } = options
   console.log('[DB:PB] transactions.unified.list', { limit, includeVoided })
 
+  // The /transactions page separately loads accounts, categories, people, shops.
+  // Fetching without expand avoids PB 400 errors caused by JOIN complexity on bulk queries.
+  // Names/images are resolved client-side from the separately loaded lookup tables.
   const filter = includeVoided ? undefined : `status != 'void'`
-  // Note: 'to_account_id' is omitted — it's a historical alias, not a real PB relation field.
-  // Using 'target_account_id' only prevents PB 400 errors on bulk queries.
-  const expandFields = 'account_id,target_account_id,category_id,shop_id,person_id'
-  const queryParams = {
-    perPage: 200,
+  const baseParams = {
     sort: '-occurred_at',
-    expand: expandFields,
     ...(filter ? { filter } : {}),
   }
 
   let records: PocketBaseRecord[] = []
-  try {
-    records = await listAllRecords('transactions', queryParams)
-  } catch (err) {
-    console.warn('[DB:PB] transactions.unified.list: full expand failed, retrying with minimal expand', err)
+  let page = 1
+  let totalPages = 1
+
+  while (page <= totalPages && records.length < limit) {
+    const remaining = limit - records.length
+    const perPage = Math.min(200, remaining)
     try {
-      records = await listAllRecords('transactions', {
-        perPage: 200,
-        sort: '-occurred_at',
-        expand: 'account_id,category_id',
-        ...(filter ? { filter } : {}),
+      const response = await pocketbaseList<PocketBaseRecord>('transactions', {
+        page,
+        perPage,
+        ...baseParams,
       })
-    } catch (fallbackErr) {
-      console.warn('[DB:PB] transactions.unified.list: minimal expand also failed, returning empty', fallbackErr)
-      return []
+      records.push(...(response.items || []))
+      totalPages = response.totalPages || 1
+      page += 1
+    } catch (err) {
+      console.warn(`[DB:PB] transactions.unified.list: page ${page} failed, stopping pagination`, err)
+      break
     }
   }
 
-  // Respect the limit after pagination (listAllRecords fetches all pages)
-  const sliced = limit < records.length ? records.slice(0, limit) : records
-  const result = sliced.map((item) => mapTransaction(item, ''))
+  const result = records.map((item) => mapTransaction(item, ''))
   console.log('[DB:PB] transactions.unified.list →', result.length, 'records')
   return result
 }
