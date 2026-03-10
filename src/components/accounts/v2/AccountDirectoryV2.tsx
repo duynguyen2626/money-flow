@@ -9,7 +9,6 @@ import { AccountGridView } from "./AccountGridView";
 import { AccountSlideV2 } from "./AccountSlideV2";
 import { AccountQuickStats } from "./AccountQuickStats";
 import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
-import { getLastTransactionAccountId } from "@/actions/account-actions";
 import { toast } from "sonner";
 import {
     AlertDialog,
@@ -76,7 +75,27 @@ export function AccountDirectoryV2({
     const [lastTxnAccountId, setLastTxnAccountId] = useState<string | null>(null);
 
     useEffect(() => {
-        getLastTransactionAccountId().then(setLastTxnAccountId);
+        let mounted = true;
+        const fetchLastAccountId = async () => {
+            try {
+                const response = await fetch('/api/accounts/last-transaction-account', {
+                    method: 'GET',
+                    cache: 'no-store',
+                });
+                if (!response.ok) return;
+                const payload = await response.json();
+                if (mounted) {
+                    setLastTxnAccountId(payload?.accountId ?? null);
+                }
+            } catch (error) {
+                console.error('Failed to fetch last transaction account id', error);
+            }
+        };
+
+        fetchLastAccountId();
+        return () => {
+            mounted = false;
+        };
     }, []);
 
     const filteredAccounts = useMemo(() => {
