@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getPocketBaseAccounts } from '@/services/pocketbase/account-details.service'
 import { getBankMappings } from '@/services/bank.service'
 import { getSheetWebhookLinks } from '@/services/webhook-link.service'
