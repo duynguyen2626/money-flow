@@ -1353,12 +1353,33 @@ export async function getPocketBaseUnifiedTransactions(options: {
   console.log('[DB:PB] transactions.unified.list', { limit, includeVoided })
 
   const filter = includeVoided ? undefined : `status != 'void'`
-  const records = await listAllRecords('transactions', {
-    perPage: Math.min(limit, 200),
+  // Note: 'to_account_id' is omitted — it's a historical alias, not a real PB relation field.
+  // Using 'target_account_id' only prevents PB 400 errors on bulk queries.
+  const expandFields = 'account_id,target_account_id,category_id,shop_id,person_id'
+  const queryParams = {
+    perPage: 200,
     sort: '-occurred_at',
-    expand: 'account_id,target_account_id,to_account_id,category_id,shop_id,person_id',
+    expand: expandFields,
     ...(filter ? { filter } : {}),
-  })
+  }
+
+  let records: PocketBaseRecord[] = []
+  try {
+    records = await listAllRecords('transactions', queryParams)
+  } catch (err) {
+    console.warn('[DB:PB] transactions.unified.list: full expand failed, retrying with minimal expand', err)
+    try {
+      records = await listAllRecords('transactions', {
+        perPage: 200,
+        sort: '-occurred_at',
+        expand: 'account_id,category_id',
+        ...(filter ? { filter } : {}),
+      })
+    } catch (fallbackErr) {
+      console.warn('[DB:PB] transactions.unified.list: minimal expand also failed, returning empty', fallbackErr)
+      return []
+    }
+  }
 
   // Respect the limit after pagination (listAllRecords fetches all pages)
   const sliced = limit < records.length ? records.slice(0, limit) : records
