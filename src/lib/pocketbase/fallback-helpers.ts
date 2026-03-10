@@ -10,7 +10,10 @@ export function isPocketBase400Or404(error: unknown): boolean {
   const err = error as any
   return err?.status === 400 || err?.status === 404 || 
          err?.message?.includes('400') ||
-         err?.message?.includes('404')
+         err?.message?.includes('404') ||
+         err?.message?.includes('fetch failed') ||
+         err?.code === 'UND_ERR_SOCKET' ||
+         err?.cause?.code === 'UND_ERR_SOCKET'
 }
 
 /**

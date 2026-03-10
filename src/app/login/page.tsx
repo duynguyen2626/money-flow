@@ -9,15 +9,25 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { Loader2, Lock, Mail } from 'lucide-react'
+import { Loader2, Lock, Mail, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
     const [isPending, startTransition] = useTransition()
+    const [showLoginPassword, setShowLoginPassword] = useState(false)
+    const [showSignupPassword, setShowSignupPassword] = useState(false)
     const router = useRouter()
 
     async function handleLogin(formData: FormData) {
         startTransition(async () => {
-            const result = await login(formData)
+            // Trim email before submission
+            const email = formData.get('email') as string
+            const password = formData.get('password') as string
+            
+            const trimmedFormData = new FormData()
+            trimmedFormData.append('email', email?.trim() || '')
+            trimmedFormData.append('password', password)
+            
+            const result = await login(trimmedFormData)
             if (result?.error) {
                 toast.error(result.error)
             } else {
@@ -28,7 +38,15 @@ export default function LoginPage() {
 
     async function handleSignup(formData: FormData) {
         startTransition(async () => {
-            const result = await signup(formData)
+            // Trim email before submission
+            const email = formData.get('email') as string
+            const password = formData.get('password') as string
+            
+            const trimmedFormData = new FormData()
+            trimmedFormData.append('email', email?.trim() || '')
+            trimmedFormData.append('password', password)
+            
+            const result = await signup(trimmedFormData)
             if (result?.error) {
                 toast.error(result.error)
             } else if (result?.success) {
@@ -68,6 +86,9 @@ export default function LoginPage() {
                                             placeholder="name@example.com"
                                             required
                                             className="pl-9"
+                                            onBlur={(event) => {
+                                                event.currentTarget.value = event.currentTarget.value.trim()
+                                            }}
                                             suppressHydrationWarning
                                         />
                                     </div>
@@ -79,11 +100,23 @@ export default function LoginPage() {
                                         <Input
                                             id="password"
                                             name="password"
-                                            type="password"
+                                            type={showLoginPassword ? 'text' : 'password'}
                                             required
-                                            className="pl-9"
+                                            className="pl-9 pr-9"
                                             suppressHydrationWarning
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowLoginPassword(!showLoginPassword)}
+                                            aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                                            className="absolute right-3 top-2.5 z-10 text-slate-500 hover:text-slate-700 focus:outline-none"
+                                        >
+                                            {showLoginPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
                                 <Button type="submit" className="w-full" disabled={isPending}>
@@ -112,6 +145,9 @@ export default function LoginPage() {
                                             placeholder="name@example.com"
                                             required
                                             className="pl-9"
+                                            onBlur={(event) => {
+                                                event.currentTarget.value = event.currentTarget.value.trim()
+                                            }}
                                             suppressHydrationWarning
                                         />
                                     </div>
@@ -123,11 +159,23 @@ export default function LoginPage() {
                                         <Input
                                             id="signup-password"
                                             name="password"
-                                            type="password"
+                                            type={showSignupPassword ? 'text' : 'password'}
                                             required
-                                            className="pl-9"
+                                            className="pl-9 pr-9"
                                             suppressHydrationWarning
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSignupPassword(!showSignupPassword)}
+                                            aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                                            className="absolute right-3 top-2.5 z-10 text-slate-500 hover:text-slate-700 focus:outline-none"
+                                        >
+                                            {showSignupPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
                                 <Button type="submit" className="w-full" disabled={isPending}>

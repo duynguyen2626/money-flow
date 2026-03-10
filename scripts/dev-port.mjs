@@ -1,7 +1,10 @@
 import net from 'node:net'
-import { spawn } from 'node:child_process'
+import { spawn, exec } from 'node:child_process'
+import { promisify } from 'node:util'
 
-const PREFERRED_PORTS = [3000, 3001, 3002, 3003, 3004, 3005]
+const execAsync = promisify(exec)
+
+const PREFERRED_PORTS = [3001, 3002, 3003, 3004, 3005, 3000]
 
 function isPortFree(port) {
   return new Promise((resolve) => {
@@ -46,8 +49,16 @@ async function findPort() {
 }
 
 async function main() {
+  // Kill any existing Next.js dev processes to avoid lock conflicts
+  try {
+    await execAsync('pkill -f "next dev" 2>/dev/null || true')
+    await new Promise(resolve => setTimeout(resolve, 500)) // Wait for cleanup
+  } catch (err) {
+    // Ignore errors from pkill
+  }
+
   const port = await findPort()
-  console.log(`[dev-port] starting Next.js on port ${port}`)
+  console.log(`[dev-port] Starting Next.js on port ${port}`)
 
   const child = spawn('next', ['dev', '-p', String(port)], {
     stdio: 'inherit',
@@ -61,6 +72,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('[dev-port] failed to start dev server', error)
+  console.error('[dev-port] Failed to start dev server:', error)
   process.exit(1)
 })

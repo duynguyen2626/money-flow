@@ -5,10 +5,6 @@ import { cn } from '@/lib/utils'
 import { Search, X, Landmark, User, ChevronRight, ChevronDown, Sparkles, ShoppingBag, Tags, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
-import { getAccounts } from '@/services/account.service'
-import { getPeople } from '@/services/people.service'
-import { getShops } from '@/services/shop.service'
-import { getCategories } from '@/services/category.service'
 import { Account, Person, Category, Shop } from '@/types/moneyflow.types'
 
 interface SidebarSearchProps {
@@ -59,18 +55,19 @@ export function SidebarSearch({
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        const [accs, ppl, shps, cats] = await Promise.all([
-          getAccounts(),
-          getPeople(),
-          getShops(),
-          getCategories()
-        ])
+        const response = await fetch('/api/sidebar/search', {
+          method: 'GET',
+          cache: 'no-store',
+        })
+
+        const payload = await response.json()
+
         if (isMounted) {
           setData({
-            accounts: accs,
-            people: ppl,
-            shops: shps as Shop[],
-            categories: cats
+            accounts: payload.accounts || [],
+            people: payload.people || [],
+            shops: payload.shops || [],
+            categories: payload.categories || []
           })
         }
       } catch (err) {

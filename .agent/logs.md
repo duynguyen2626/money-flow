@@ -1,164 +1,108 @@
- ✓ Starting...
- ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
- ✓ Ready in 1597ms
- ○ Compiling /accounts/[id] ...
-[source:PB] accounts.detail(sf9u1fqj1gc7258)
-[source:PB] accounts.detail(sf9u1fqj1gc7258)
- ⚠ Cross origin request detected from 192.168.1.39 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
-Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
-[source:PB] accounts.detail(sf9u1fqj1gc7258) - success
-[source:PB] accounts.detail(sf9u1fqj1gc7258) - success
-[source:PB] accounts.list
-[source:PB] categories.list
-[source:PB] categories.select
-[source:PB] shops.list
-[source:PB] shops.select
-[loadTransactions] Phase 3 routing: {
-  accountId: 'sf9u1fqj1gc7258',
-  isPBAccountId: true,
-  isSBAccountId: false,
-  context: 'account'
-}
-[loadTransactions] Routing to PB (PB account ID detected)
-[loadPocketBaseTransactions] Query start: {
-  accountId: 'sf9u1fqj1gc7258',
-  transactionId: undefined,
-  personId: undefined,
-  categoryId: undefined,
-  shopId: undefined,
-  includeVoided: true,
-  filters: [
-    "(account_id='sf9u1fqj1gc7258' || to_account_id='sf9u1fqj1gc7258')"
-  ],
-  url: "https://api-db.reiwarden.io.vn/api/collections/pvl_txn_001/records?&filter=(account_id%3D'sf9u1fqj1gc7258'%20%7C%7C%20to_account_id%3D'sf9u1fqj1gc7258')&perPage=2000&sort=-date"
-}
-[source:PB] accounts.list
-[source:PB] accounts.list - success
-[source:PB] accounts.list - success
-[source:PB] shops.select result { count: 29 }
-[source:PB] shops.list - success
-[loadPocketBaseTransactions] Fetched from PB: {
-  count: 0,
-  accountId: 'sf9u1fqj1gc7258',
-  filters: "(account_id='sf9u1fqj1gc7258' || to_account_id='sf9u1fqj1gc7258')",
-  directMatchCount: 0,
-  sample: []
-}
-[loadTransactions] PB raw rows result: { accountId: 'sf9u1fqj1gc7258', rowCount: 0, sample: [] }
-[source:PB] categories.select result { count: 31 }
-[source:PB] categories.list - success
-[loadTransactions] PB returned empty, falling back via legacy SB mapping: {
-  pbAccountId: 'sf9u1fqj1gc7258',
-  legacySupabaseId: '0ece401d-36eb-4414-a637-03814c88c216'
-}
-[loadTransactions] Phase 3 routing: {
-  accountId: '0ece401d-36eb-4414-a637-03814c88c216',
-  isPBAccountId: false,
-  isSBAccountId: true,
-  context: 'account'
-}
-[loadTransactions] Routing to SB (UUID detected or general query)
-[loadTransactions] SB results: { count: 6 }
-[loadPocketBaseTransactions] Query start: {
-  accountId: undefined,
-  transactionId: undefined,
-  personId: undefined,
-  categoryId: undefined,
-  shopId: undefined,
-  includeVoided: true,
-  filters: [],
-  url: 'https://api-db.reiwarden.io.vn/api/collections/pvl_txn_001/records?&perPage=2000&sort=-date'
-}
-[loadPocketBaseTransactions] Fetched from PB: {
-  count: 307,
-  accountId: undefined,
-  filters: '',
-  directMatchCount: 307,
-  sample: [
-    {
-      id: '4d0d82dnrcfur15',
-      account_id: '',
-      to_account_id: '',
-      type: 'expense',
-      date: '2026-03-06 06:49:05.860Z',
-      metadata_status: null
-    },
-    {
-      id: '1o9tb09t7cj0nub',
-      account_id: '',
-      to_account_id: '',
-      type: 'debt',
-      date: '2026-03-06 06:26:56.727Z',
-      metadata_status: null
-    },
-    {
-      id: 'wfxf3p6yd4mesiq',
-      account_id: '',
-      to_account_id: '',
-      type: 'expense',
-      date: '2026-03-06 05:29:13.166Z',
-      metadata_status: null
-    },
-    {
-      id: 'a84uyn7u463ppfr',
-      account_id: '',
-      to_account_id: '',
-      type: 'debt',
-      date: '2026-03-06 00:00:00.000Z',
-      metadata_status: null
-    },
-    {
-      id: 'odrtkrolyhx8lzr',
-      account_id: '',
-      to_account_id: '',
-      type: 'repayment',
-      date: '2026-03-06 00:00:00.000Z',
-      metadata_status: null
-    }
-  ]
-}
-[loadTransactions] PB field backfill from legacy mapping: { requested: 5, successCount: 0, pbAccountId: 'sf9u1fqj1gc7258' }
-[loadTransactions] Legacy SB fallback returned rows: {
-  count: 6,
-  matchedPbIdCount: 5,
-  pbAccountId: 'sf9u1fqj1gc7258',
-  legacySupabaseId: '0ece401d-36eb-4414-a637-03814c88c216'
-}
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 22.7s (compile: 24ms, proxy.ts: 804ms, render: 21.8s)
- GET /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 32.6s (compile: 5.5s, proxy.ts: 2.2s, render: 24.9s)
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 2.2s (compile: 48ms, proxy.ts: 186ms, render: 1962ms)
-[source:PB] shops.list
-[source:PB] shops.select
- GET /api/refunds/pending?accountId=sf9u1fqj1gc7258&t=1773061368273 200 in 883ms (compile: 583ms, proxy.ts: 281ms, render: 19ms)
- GET /api/batch/pending-items?accountId=sf9u1fqj1gc7258&t=1773061368267 200 in 986ms (compile: 766ms, proxy.ts: 216ms, render: 4ms)
- GET /api/batch/pending-items?accountId=sf9u1fqj1gc7258&t=1773061368273 200 in 965ms (compile: 786ms, proxy.ts: 175ms, render: 4ms)
- GET /api/refunds/pending?accountId=sf9u1fqj1gc7258&t=1773061368267 200 in 998ms (compile: 796ms, proxy.ts: 196ms, render: 6ms)
- GET /api/cashback/stats?accountId=sf9u1fqj1gc7258&cycleTag=2026-02 200 in 1263ms (compile: 791ms, proxy.ts: 283ms, render: 189ms)
-[source:PB] shops.select result { count: 29 }
-[source:PB] shops.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 1071ms (compile: 16ms, proxy.ts: 178ms, render: 877ms)
-[source:PB] categories.list
-[source:PB] categories.select
-[source:PB] categories.select result { count: 31 }
-[source:PB] categories.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 614ms (compile: 25ms, proxy.ts: 183ms, render: 406ms)
-[source:PB] accounts.list
-[source:PB] accounts.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 21.4s (compile: 21ms, proxy.ts: 176ms, render: 21.2s)
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 1687ms (compile: 54ms, proxy.ts: 181ms, render: 1452ms)
-[source:PB] shops.list
-[source:PB] shops.select
-[source:PB] shops.select result { count: 29 }
-[source:PB] shops.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 1216ms (compile: 33ms, proxy.ts: 198ms, render: 985ms)
-[source:PB] categories.list
-[source:PB] categories.select
-[source:PB] categories.select result { count: 31 }
-[source:PB] categories.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 605ms (compile: 15ms, proxy.ts: 193ms, render: 396ms)
-[source:PB] accounts.list
-[source:PB] accounts.list - success
- POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 21.8s (compile: 12ms, proxy.ts: 200ms, render: 21.6s)
-[source:PB] accounts.list
-[source:PB] accounts.list - success
-^C POST /accounts/sf9u1fqj1gc7258?tag=2026-02 200 in 2.3s (compile: 44ms, proxy.ts: 184ms, render: 2.1s)
+07:35:03.647 Running build in Washington, D.C., USA (East) – iad1
+07:35:03.648 Build machine configuration: 2 cores, 8 GB
+07:35:03.790 Cloning github.com/rei6688/money-flow (Branch: feat/pb-refactor-clean-20260308, Commit: bde8f14)
+07:35:17.360 Cloning completed: 13.570s
+07:35:17.991 Restored build cache from previous deployment (Fk8xUS8DrQCE59V35ZHHRxK1M4Y8)
+07:35:18.500 Running "vercel build"
+07:35:19.177 Vercel CLI 50.28.0
+07:35:19.697 Detected `pnpm-lock.yaml` 9 which may be generated by pnpm@9.x or pnpm@10.x
+07:35:19.698 Using pnpm@10.x based on project creation date
+07:35:19.698 To use pnpm@9.x, manually opt in using corepack (https://vercel.com/docs/deployments/configure-a-build#corepack)
+07:35:19.701 WARNING: You should not upload the `.next` directory.
+07:35:19.750 Installing dependencies...
+07:35:20.544 Lockfile is up to date, resolution step is skipped
+07:35:20.681 Progress: resolved 1, reused 0, downloaded 0, added 0
+07:35:20.767 Packages: +1
+07:35:20.767 +
+07:35:20.862 Progress: resolved 1, reused 0, downloaded 1, added 1, done
+07:35:21.299 
+07:35:21.299 dependencies:
+07:35:21.300 + pocketbase 0.26.8
+07:35:21.300 
+07:35:21.483 ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+07:35:21.484 │                                                                              │
+07:35:21.484 │   Ignored build scripts: esbuild@0.27.2, sharp@0.34.5,                       │
+07:35:21.484 │   unrs-resolver@1.11.1.                                                      │
+07:35:21.484 │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+07:35:21.485 │   to run scripts.                                                            │
+07:35:21.485 │                                                                              │
+07:35:21.485 ╰──────────────────────────────────────────────────────────────────────────────╯
+07:35:21.488 Done in 1.5s using pnpm v10.28.0
+07:35:21.501 Detected Next.js version: 16.0.10
+07:35:21.529 Running "pnpm run build"
+07:35:21.816 
+07:35:21.817 > money-flow-3@0.1.0 build /vercel/path0
+07:35:21.818 > next build
+07:35:21.818 
+07:35:22.131 [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+07:35:22.988    ▲ Next.js 16.0.10 (Turbopack)
+07:35:22.989    - Environments: .env.local
+07:35:22.989 
+07:35:23.020  ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+07:35:23.068    Creating an optimized production build ...
+07:35:23.257 [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+07:36:03.400 
+07:36:03.401 > Build error occurred
+07:36:03.404 Error: Turbopack build failed with 4 errors:
+07:36:03.405 ./src/app/api/debug/data-source/route.ts:2:1
+07:36:03.406 Export getCategoriesWithSource doesn't exist in target module
+07:36:03.407 [0m [90m 1 |[39m [36mimport[39m { [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m
+07:36:03.407 [31m[1m>[22m[39m[90m 2 |[39m [36mimport[39m { getCategoriesWithSource } [36mfrom[39m [32m'@/services/category.service'[39m
+07:36:03.413  [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+07:36:03.413  [90m 3 |[39m [36mimport[39m { getShopsWithSource } [36mfrom[39m [32m'@/services/shop.service'[39m
+07:36:03.413  [90m 4 |[39m
+07:36:03.413  [90m 5 |[39m [36mexport[39m [36mconst[39m dynamic [33m=[39m [32m'force-dynamic'[39m[0m
+07:36:03.413 
+07:36:03.413 The export getCategoriesWithSource was not found in module [project]/src/services/category.service.ts [app-route] (ecmascript).
+07:36:03.413 Did you mean to import getCategories?
+07:36:03.413 All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+07:36:03.413 
+07:36:03.413 
+07:36:03.414 ./src/app/categories/page.tsx:1:1
+07:36:03.414 Export getCategoriesWithSource doesn't exist in target module
+07:36:03.414 [0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m { getCategoriesWithSource } [36mfrom[39m [32m"@/services/category.service"[39m
+07:36:03.414  [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+07:36:03.414  [90m 2 |[39m [36mimport[39m { getShopsWithSource } [36mfrom[39m [32m"@/services/shop.service"[39m
+07:36:03.414  [90m 3 |[39m [36mimport[39m { getAccounts } [36mfrom[39m [32m"@/services/account.service"[39m
+07:36:03.414  [90m 4 |[39m [36mimport[39m { getPeople } [36mfrom[39m [32m"@/services/people.service"[39m[0m
+07:36:03.414 
+07:36:03.416 The export getCategoriesWithSource was not found in module [project]/src/services/category.service.ts [app-rsc] (ecmascript).
+07:36:03.416 Did you mean to import getCategories?
+07:36:03.416 All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+07:36:03.416 
+07:36:03.416 
+07:36:03.416 ./src/app/api/debug/data-source/route.ts:3:1
+07:36:03.416 Export getShopsWithSource doesn't exist in target module
+07:36:03.416 [0m [90m 1 |[39m [36mimport[39m { [33mNextResponse[39m } [36mfrom[39m [32m'next/server'[39m
+07:36:03.416  [90m 2 |[39m [36mimport[39m { getCategoriesWithSource } [36mfrom[39m [32m'@/services/category.service'[39m
+07:36:03.416 [31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { getShopsWithSource } [36mfrom[39m [32m'@/services/shop.service'[39m
+07:36:03.417  [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+07:36:03.417  [90m 4 |[39m
+07:36:03.417  [90m 5 |[39m [36mexport[39m [36mconst[39m dynamic [33m=[39m [32m'force-dynamic'[39m
+07:36:03.417  [90m 6 |[39m[0m
+07:36:03.417 
+07:36:03.417 The export getShopsWithSource was not found in module [project]/src/services/shop.service.ts [app-route] (ecmascript).
+07:36:03.417 Did you mean to import getShops?
+07:36:03.418 All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+07:36:03.418 
+07:36:03.418 
+07:36:03.418 ./src/app/categories/page.tsx:2:1
+07:36:03.418 Export getShopsWithSource doesn't exist in target module
+07:36:03.418 [0m [90m 1 |[39m [36mimport[39m { getCategoriesWithSource } [36mfrom[39m [32m"@/services/category.service"[39m
+07:36:03.418 [31m[1m>[22m[39m[90m 2 |[39m [36mimport[39m { getShopsWithSource } [36mfrom[39m [32m"@/services/shop.service"[39m
+07:36:03.418  [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+07:36:03.418  [90m 3 |[39m [36mimport[39m { getAccounts } [36mfrom[39m [32m"@/services/account.service"[39m
+07:36:03.418  [90m 4 |[39m [36mimport[39m { getPeople } [36mfrom[39m [32m"@/services/people.service"[39m
+07:36:03.418  [90m 5 |[39m [36mimport[39m { [33mClassificationsManager[39m } [36mfrom[39m [32m"@/components/settings/ClassificationsManager"[39m[0m
+07:36:03.418 
+07:36:03.418 The export getShopsWithSource was not found in module [project]/src/services/shop.service.ts [app-rsc] (ecmascript).
+07:36:03.418 Did you mean to import getShops?
+07:36:03.418 All exports of the module are statically known (It doesn't have dynamic exports). So it's known statically that the requested export doesn't exist.
+07:36:03.418 
+07:36:03.418 
+07:36:03.418     at <unknown> (./src/app/api/debug/data-source/route.ts:2:1)
+07:36:03.418     at <unknown> (./src/app/categories/page.tsx:1:1)
+07:36:03.418     at <unknown> (./src/app/api/debug/data-source/route.ts:3:1)
+07:36:03.418     at <unknown> (./src/app/categories/page.tsx:2:1)
+07:36:03.534  ELIFECYCLE  Command failed with exit code 1.
+07:36:03.553 Error: Command "pnpm run build" exited with 1

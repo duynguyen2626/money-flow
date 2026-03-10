@@ -105,18 +105,23 @@ async function getPocketBaseAccountRows(): Promise<AccountRow[]> {
   let lastErrorText = ''
 
   for (const url of candidateUrls) {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    })
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      const records = Array.isArray(data.items) ? data.items : []
-      return records.map(mapPocketBaseAccountRow)
+      if (response.ok) {
+        const data = await response.json()
+        const records = Array.isArray(data.items) ? data.items : []
+        return records.map(mapPocketBaseAccountRow)
+      }
+
+      lastErrorText = await response.text()
+    } catch (error) {
+      lastErrorText = (error as Error)?.message || 'fetch failed'
+      console.warn(`[source:PB] accounts.list url failed: ${url}`, error)
     }
-
-    lastErrorText = await response.text()
   }
 
   throw new Error(`PB accounts.list failed after retries: ${lastErrorText}`)

@@ -56,7 +56,7 @@ function mapAccount(record: PocketBaseRecord): Account {
 
 function mapCategory(record: PocketBaseRecord): Category {
   return {
-    id: record.id,
+    id: record.slug || record.id,
     name: record.name,
     type: record.type || 'expense',
     icon: record.icon || null,
@@ -68,7 +68,7 @@ function mapCategory(record: PocketBaseRecord): Category {
 
 function mapPerson(record: PocketBaseRecord): Person {
   return {
-    id: record.id,
+    id: record.slug || record.id,
     name: record.name,
     image_url: record.image_url || null,
     is_owner: Boolean(record.is_owner || false),
@@ -77,7 +77,7 @@ function mapPerson(record: PocketBaseRecord): Person {
 
 function mapShop(record: PocketBaseRecord): Shop {
   return {
-    id: record.id,
+    id: record.slug || record.id,
     name: record.name,
     image_url: record.image_url || null,
     default_category_id: record.default_category_id || null,
@@ -158,9 +158,34 @@ async function listAllRecords(collection: string, params: Record<string, string 
   return allItems
 }
 
+async function resolvePocketBaseAccountRecord(sourceOrPocketBaseId: string): Promise<PocketBaseRecord | null> {
+  try {
+    return await pocketbaseGetById<PocketBaseRecord>('accounts', sourceOrPocketBaseId)
+  } catch {
+    // fallthrough: id may be source UUID, not PB id
+  }
+
+  const hashedPocketBaseId = toPocketBaseId(sourceOrPocketBaseId, 'accounts')
+  if (hashedPocketBaseId !== sourceOrPocketBaseId) {
+    try {
+      return await pocketbaseGetById<PocketBaseRecord>('accounts', hashedPocketBaseId)
+    } catch {
+      // fallthrough
+    }
+  }
+
+  const bySlug = await pocketbaseList<PocketBaseRecord>('accounts', {
+    perPage: 1,
+    filter: `slug='${sourceOrPocketBaseId}'`,
+  })
+
+  return bySlug.items?.[0] ?? null
+}
+
 export async function getPocketBaseCategories(): Promise<Category[]> {
   console.log('[DB:PB] categories.list')
-  const records = await listAllRecords('categories', { sort: '-created' })
+  // Removed sort parameter - PocketBase has issues with sorting, results sorted client-side anyway
+  const records = await listAllRecords('categories')
   const items = records.map(mapCategory).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] categories.list →', items.length, 'records')
   return items
@@ -184,6 +209,7 @@ export async function createPocketBaseCategory(
       method: 'POST',
       body: {
         id: pbId,
+        slug: supabaseId,
         name: data.name,
         type: data.type,
         icon: data.icon ?? null,
@@ -212,7 +238,6 @@ export async function updatePocketBaseCategory(
   }>
 ): Promise<boolean> {
   const pbId = toPocketBaseId(supabaseId)
-  console.log('[DB:PB] categories.update', { pbId })
   try {
     await pocketbaseRequest<PocketBaseRecord>(`/api/collections/categories/records/${pbId}`, {
       method: 'PATCH',
@@ -285,7 +310,8 @@ export async function deletePocketBaseCategoriesBulk(supabaseIds: string[]): Pro
 
 export async function getPocketBasePeople(): Promise<Person[]> {
   console.log('[DB:PB] people.list')
-  const records = await listAllRecords('people', { sort: '-created' })
+  // Removed sort parameter - PocketBase has issues with sorting, results sorted client-side anyway
+  const records = await listAllRecords('people')
   const items = records.map(mapPerson).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] people.list →', items.length, 'records')
   return items
@@ -293,7 +319,8 @@ export async function getPocketBasePeople(): Promise<Person[]> {
 
 export async function getPocketBaseShops(): Promise<Shop[]> {
   console.log('[DB:PB] shops.list')
-  const records = await listAllRecords('shops', { sort: '-created' })
+  // Removed sort parameter - PocketBase has issues with sorting, results sorted client-side anyway
+  const records = await listAllRecords('shops')
   const items = records.map(mapShop).sort((a, b) => a.name.localeCompare(b.name))
   console.log('[DB:PB] shops.list →', items.length, 'records')
   return items
@@ -315,6 +342,7 @@ export async function createPocketBaseShop(
       method: 'POST',
       body: {
         id: pbId,
+        slug: supabaseId,
         name: data.name,
         image_url: data.image_url ?? null,
         default_category_id: pbCategoryId,
@@ -688,7 +716,9 @@ export async function updatePocketBaseAccountConfig(
 }
 
 export async function getPocketBaseAccounts(): Promise<Account[]> {
-  const records = await listAllRecords('accounts', { sort: '-created' })
+  // Note: removed sort parameter - PocketBase has issues with sorting on this collection
+  // Results are sorted client-side anyway
+  const records = await listAllRecords('accounts')
   const mapped = records.map(mapAccount).sort((a, b) => a.name.localeCompare(b.name))
 
   const byPocketBaseId = new Map(records.map((item) => [item.id, item]))
@@ -708,8 +738,9 @@ export async function getPocketBaseAccounts(): Promise<Account[]> {
 }
 
 export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId: string, date: Date, cycleTag?: string): Promise<AccountSpendingStats | null> {
-  const pocketBaseAccountId = toPocketBaseId(sourceAccountId, 'accounts')
-  const accountRecord = await pocketbaseGetById<PocketBaseRecord>('accounts', pocketBaseAccountId)
+  const accountRecord = await resolvePocketBaseAccountRecord(sourceAccountId)
+  if (!accountRecord) return null
+  const pocketBaseAccountId = accountRecord.id
   const account = mapAccount(accountRecord)
 
   if (account.type !== 'credit_card') return null
@@ -770,9 +801,12 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
 }
 
 export async function getPocketBaseAccountDetails(sourceAccountId: string): Promise<Account | null> {
+  // Resolve the account record using multi-strategy lookup (direct ID, hashed ID, or slug filter)
+  const accountRecord = await resolvePocketBaseAccountRecord(sourceAccountId)
+  if (!accountRecord) return null
+
+  const account = mapAccount(accountRecord)
   const allAccounts = await getPocketBaseAccounts()
-  const account = allAccounts.find((item) => item.id === sourceAccountId)
-  if (!account) return null
 
   const usagePercent = account.type === 'credit_card'
     ? getCreditCardUsage({ type: account.type, credit_limit: account.credit_limit || 0, current_balance: account.current_balance || 0 }).percent
@@ -822,7 +856,9 @@ export async function getPocketBaseAccountDetails(sourceAccountId: string): Prom
 }
 
 export async function loadPocketBaseTransactionsForAccount(sourceAccountId: string, limit = 2000): Promise<TransactionWithDetails[]> {
-  const pocketBaseAccountId = toPocketBaseId(sourceAccountId, 'accounts')
+  const accountRecord = await resolvePocketBaseAccountRecord(sourceAccountId)
+  if (!accountRecord) return []
+  const pocketBaseAccountId = accountRecord.id
   const records = await listAllRecords('transactions', {
     perPage: Math.min(limit, 200),
     sort: '-occurred_at',
@@ -845,9 +881,9 @@ export async function getPocketBaseAccountCycleOptions(sourceAccountId: string, 
     virtual_profit: number
   }
 }>> {
-  const pocketBaseAccountId = toPocketBaseId(sourceAccountId, 'accounts')
-
-  const accountRecord = await pocketbaseGetById<PocketBaseRecord>('accounts', pocketBaseAccountId)
+  const accountRecord = await resolvePocketBaseAccountRecord(sourceAccountId)
+  if (!accountRecord) return []
+  const pocketBaseAccountId = accountRecord.id
   const account = mapAccount(accountRecord)
   const config = parseCashbackConfig(account.cashback_config, account.id)
 

@@ -1,23 +1,37 @@
 import { NextResponse } from 'next/server'
-import { getCategoriesWithSource } from '@/services/category.service'
-import { getShopsWithSource } from '@/services/shop.service'
+import { getCategories } from '@/services/category.service'
+import { getShops } from '@/services/shop.service'
+import { getPocketBaseCategories, getPocketBaseShops } from '@/services/pocketbase/account-details.service'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const [categories, shops] = await Promise.all([
-      getCategoriesWithSource(),
-      getShopsWithSource(),
+    const [supabaseCategories, supabaseShops, pbCategories, pbShops] = await Promise.all([
+      getCategories(),
+      getShops(),
+      getPocketBaseCategories(),
+      getPocketBaseShops(),
     ])
+
+    const categories = { source: 'Supabase', data: supabaseCategories }
+    const shops = { source: 'Supabase', data: supabaseShops }
 
     return NextResponse.json({
       ok: true,
-      categories: {
+      supabase: {
+        categories: { count: supabaseCategories.length },
+        shops: { count: supabaseShops.length },
+      },
+      pocketbase: {
+        categories: { count: pbCategories.length },
+        shops: { count: pbShops.length },
+      },
+      _legacy_categories: {
         source: categories.source,
         count: categories.data.length,
       },
-      shops: {
+      _legacy_shops: {
         source: shops.source,
         count: shops.data.length,
       },
