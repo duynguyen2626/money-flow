@@ -813,13 +813,11 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
   let rawTransactions: PocketBaseRecord[] = []
   const queryAttempts = [
     {
-      perPage: 2000,
       filter: `account_id='${pocketBaseAccountId}'`,
       sort: '-date',
       fields: 'id,amount,type,category_id,cashback_amount,cashback_share_percent,cashback_share_fixed,metadata,date,occurred_at,note,description',
     },
     {
-      perPage: 2000,
       filter: `account_id='${pocketBaseAccountId}'`,
       fields: 'id,amount,type,category_id,cashback_amount,cashback_share_percent,cashback_share_fixed,metadata,date,occurred_at,note,description',
     },
@@ -833,8 +831,7 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
         filter: params.filter,
         sort: params.sort,
       })
-      const transactionResponse = await pocketbaseList<PocketBaseRecord>('transactions', params)
-      rawTransactions = transactionResponse.items || []
+      rawTransactions = await listAllRecords('transactions', params)
       console.log('[DB:PB] account spending stats: transaction query succeeded', {
         attempt: attemptIdx + 1,
         count: rawTransactions.length,
