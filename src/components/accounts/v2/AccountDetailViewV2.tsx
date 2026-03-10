@@ -61,26 +61,29 @@ export function AccountDetailViewV2({
     // Selected Cycle State (for cashback badge in header)
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
 
-    // Sync cycle from URL and fetch cashback stats simultaneously
+       // Sync cycle from URL
     useEffect(() => {
         const tag = searchParams.get('tag')
         if (tag && tag !== selectedCycle) {
             setSelectedCycle(tag)
-            
-            // Fetch cashback stats at the same time as cycle change
-            // This ensures both transactions and cashback load together
-            setIsCashbackLoading(true)
-            getAccountCashbackStatsAction(account.id, tag).then(result => {
-                setIsCashbackLoading(false)
-                if (result.success && result.data) {
-                    setCashbackStats(result.data)
-                }
-            }).catch(err => {
-                setIsCashbackLoading(false)
-                console.warn('Failed to fetch cashback stats:', err)
-            })
         }
-    }, [searchParams])
+       }, [searchParams, selectedCycle])
+
+       // Fetch cashback when cycle changes (from any source: URL or dropdown)
+       useEffect(() => {
+           if (!selectedCycle) return
+       
+           setIsCashbackLoading(true)
+           getAccountCashbackStatsAction(account.id, selectedCycle).then(result => {
+               setIsCashbackLoading(false)
+               if (result.success && result.data) {
+                   setCashbackStats(result.data)
+               }
+           }).catch(err => {
+               setIsCashbackLoading(false)
+               console.warn('Failed to fetch cashback stats:', err)
+           })
+       }, [selectedCycle, account.id])
 
     // Batch Stats State
     const [pendingItems, setPendingItems] = useState<PendingBatchItem[]>([])
