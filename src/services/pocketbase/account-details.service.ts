@@ -69,7 +69,7 @@ function mapCategory(record: PocketBaseRecord): Category {
 
 function mapPerson(record: PocketBaseRecord): Person {
   return {
-    id: record.slug || record.id,
+    id: record.id,
     name: record.name,
     image_url: record.image_url || null,
     is_owner: Boolean(record.is_owner || false),
@@ -78,7 +78,7 @@ function mapPerson(record: PocketBaseRecord): Person {
 
 function mapShop(record: PocketBaseRecord): Shop {
   return {
-    id: record.slug || record.id,
+    id: record.id,
     name: record.name,
     image_url: record.image_url || null,
     default_category_id: record.default_category_id || null,
@@ -136,7 +136,8 @@ function mapTransaction(record: PocketBaseRecord, currentAccountSourceId: string
 
   return {
     id: record.id,
-    occurred_at: record.occurred_at,
+    // PB collection uses 'date' field (not 'occurred_at')
+    occurred_at: record.date || record.occurred_at,
     date: record.date || record.occurred_at,
     note: record.note || record.description || null,
     amount: Number(record.amount || 0),
@@ -1112,17 +1113,15 @@ export async function loadPocketBaseTransactionsForAccount(sourceAccountId: stri
   const accountRecord = await resolvePocketBaseAccountRecord(sourceAccountId)
   if (!accountRecord) return []
   const pocketBaseAccountId = accountRecord.id
+  // Attempts in priority order. PB schema notes:
+  //   - 'occurred_at' does NOT exist in PB → use 'date' for sort
+  //   - 'to_account_id' is a plain text field, not a PB relation → cannot expand
+  //   - 'target_account_id' is the actual PB relation for destination account
   const attempts: Array<Record<string, string | number | boolean | undefined>> = [
     {
       perPage: Math.min(limit, 200),
       sort: '-date',
-      expand: 'account_id,to_account_id,category_id,shop_id,person_id',
-      filter: `(account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}')`,
-    },
-    {
-      perPage: Math.min(limit, 200),
-      sort: '-occurred_at',
-      expand: 'account_id,target_account_id,to_account_id,category_id,shop_id,person_id,parent_transaction_id',
+      expand: 'account_id,target_account_id,category_id,shop_id,person_id',
       filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}')`,
     },
     {
@@ -1165,13 +1164,27 @@ export async function loadPocketBaseTransactions(options: {
   context?: 'person' | 'account' | 'general'
   includeVoided?: boolean
 }): Promise<TransactionWithDetails[]> {
-  // Phase 1: Only accountId is supported
+  // Phase 1a: accountId is supported
   if (options.accountId) {
     return loadPocketBaseTransactionsForAccount(options.accountId, options.limit)
   }
   
+  // Phase 1b: personId/personIds is now supported via simple filter
+  if (options.personId || options.personIds) {
+    const personIds = options.personIds && options.personIds.length > 0 ? options.personIds : (options.personId ? [options.personId] : [])
+    if (personIds.length === 0) return []
+    
+    // Build OR filter for multiple person IDs
+    const filterParts = personIds.map(pid => `person_id='${pid}'`).join(' || ')
+    const records = await listAllRecords('transactions', {
+      sort: '-date',
+      filter: filterParts,
+    })
+    return records.map((item) => mapTransaction(item, ''))
+  }
+  
   // Phase 2+: Other filters not yet implemented
-  if (options.personId || options.personIds || options.categoryId || options.shopId || options.installmentPlanId) {
+  if (options.categoryId || options.shopId || options.installmentPlanId) {
     console.warn('[loadPocketBaseTransactions] Phase 2 filters not yet implemented, falling back to Supabase')
     return []
   }
@@ -1241,10 +1254,14 @@ export async function getPocketBaseAccountCycleOptions(sourceAccountId: string, 
 
 export async function getPocketBaseCycleTransactions(sourceAccountId: string, cycleTag: string): Promise<TransactionWithDetails[]> {
   const pocketBaseAccountId = toPocketBaseId(sourceAccountId, 'accounts')
+  // Notes:
+  //   - PB uses 'date' not 'occurred_at' for sort
+  //   - 'to_account_id' is not a real PB relation field, omit from expand
+  //   - 'persisted_cycle_tag' lives inside metadata JSON, not as top-level field
   const records = await listAllRecords('transactions', {
-    sort: '-occurred_at',
-    expand: 'account_id,target_account_id,to_account_id,category_id,shop_id,person_id,parent_transaction_id',
-    filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}') && (persisted_cycle_tag='${cycleTag}' || tag='${cycleTag}')`,
+    sort: '-date',
+    expand: 'account_id,target_account_id,category_id,shop_id,person_id,parent_transaction_id',
+    filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}') && metadata.persisted_cycle_tag='${cycleTag}'`,
   })
 
   return records.map((item) => mapTransaction(item, sourceAccountId))
@@ -1355,12 +1372,14 @@ export async function getPocketBaseUnifiedTransactions(options: {
   // The /transactions page separately loads accounts, categories, people, shops.
   // Fetching without expand avoids PB 400 errors caused by JOIN complexity on bulk queries.
   // Names/images are resolved client-side from the separately loaded lookup tables.
-  const filter = includeVoided ? undefined : `status != 'void'`
-  // Use '-created' (PB built-in, always indexed) instead of '-occurred_at'
-  // (occurred_at is not indexed on large collections → PB 400 on sort without filter)
+  //
+  // PB schema notes:
+  //   - 'status' field does NOT exist in PB transactions collection → never use as filter
+  //   - 'occurred_at' field does NOT exist → use 'date' for sorting
+  //   - 'created' (PB built-in) also causes 400 on this collection → use 'date'
+  //   - includeVoided param is kept for API compat but PB has no 'void' status field
   const baseParams = {
-    sort: '-created',
-    ...(filter ? { filter } : {}),
+    sort: '-date',
   }
 
   let records: PocketBaseRecord[] = []
