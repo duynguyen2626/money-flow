@@ -95,6 +95,33 @@ function parseCycleTagFromTransaction(record: PocketBaseRecord): string | null {
   return null
 }
 
+function inferTieredPolicyByCategoryName(account: Account, categoryName: string | undefined): { rate: number; maxReward?: number } | null {
+  if (!categoryName || account.cb_type !== 'tiered') return null
+  const tiers = Array.isArray((account.cb_rules_json as any)?.tiers) ? (account.cb_rules_json as any).tiers : []
+  const policies = (tiers[0]?.policies || []) as Array<{ rate?: number; max?: number }>
+  if (policies.length === 0) return null
+
+  const normalizedPolicies = policies
+    .map((item) => ({ rate: Number(item.rate || 0), maxReward: item.max != null ? Number(item.max) : undefined }))
+    .filter((item) => item.rate > 0)
+
+  if (normalizedPolicies.length === 0) return null
+
+  const lowerName = categoryName.toLowerCase()
+  const byRateAsc = [...normalizedPolicies].sort((left, right) => left.rate - right.rate)
+  const byRateDesc = [...normalizedPolicies].sort((left, right) => right.rate - left.rate)
+
+  if (lowerName.includes('online')) {
+    return byRateAsc[0]
+  }
+
+  if (lowerName.includes('offline') || lowerName.includes('utilities') || lowerName.includes('utility')) {
+    return byRateDesc[0]
+  }
+
+  return null
+}
+
 function mapTransaction(record: PocketBaseRecord, currentAccountSourceId: string): TransactionWithDetails {
   const expandedAccount = record.expand?.account_id
   const expandedTargetAccount = record.expand?.target_account_id || record.expand?.to_account_id
@@ -761,8 +788,20 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
   if (account.type !== 'credit_card') return null
 
   const config = parseCashbackConfig(account.cashback_config, account.id)
-  const cycleRange = getCashbackCycleRange(config, date)
-  const resolvedCycleTag = cycleTag || formatIsoCycleTag(cycleRange?.end ?? date)
+
+  let cycleRange = getCashbackCycleRange(config, date)
+  let resolvedCycleTag = cycleTag || formatIsoCycleTag(cycleRange?.end ?? date)
+
+  if (cycleTag) {
+    const [yearStr, monthStr] = String(cycleTag).split('-')
+    const year = Number(yearStr)
+    const month = Number(monthStr)
+    if (Number.isFinite(year) && Number.isFinite(month) && year > 2000 && month >= 1 && month <= 12) {
+      const refDate = new Date(year, month - 1, 1)
+      cycleRange = getCashbackCycleRange(config, refDate)
+      resolvedCycleTag = cycleTag
+    }
+  }
 
   const cycleResponse = await pocketbaseList<PocketBaseRecord>('cashback_cycles', {
     perPage: 1,
@@ -772,21 +811,50 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
   const cycle = cycleResponse.items?.[0]
 
   let rawTransactions: PocketBaseRecord[] = []
-  try {
-    const transactionResponse = await pocketbaseList<PocketBaseRecord>('transactions', {
+  const queryAttempts = [
+    {
       perPage: 2000,
-      filter: `account_id='${pocketBaseAccountId}' && status!='void'`,
-      sort: '-occurred_at,-created',
+      filter: `account_id='${pocketBaseAccountId}'`,
+      sort: '-date',
       fields: 'id,amount,type,category_id,cashback_amount,cashback_share_percent,cashback_share_fixed,metadata,date,occurred_at,note,description',
-    })
-    rawTransactions = transactionResponse.items || []
-  } catch (err) {
-    console.warn('[DB:PB] account spending stats: transaction query failed, falling back to cycle snapshot', {
+    },
+    {
+      perPage: 2000,
+      filter: `account_id='${pocketBaseAccountId}'`,
+      fields: 'id,amount,type,category_id,cashback_amount,cashback_share_percent,cashback_share_fixed,metadata,date,occurred_at,note,description',
+    },
+  ]
+
+  for (let attemptIdx = 0; attemptIdx < queryAttempts.length; attemptIdx++) {
+    const params = queryAttempts[attemptIdx]
+    try {
+      console.log('[DB:PB] account spending stats: transaction query attempt', {
+        attempt: attemptIdx + 1,
+        filter: params.filter,
+        sort: params.sort,
+      })
+      const transactionResponse = await pocketbaseList<PocketBaseRecord>('transactions', params)
+      rawTransactions = transactionResponse.items || []
+      console.log('[DB:PB] account spending stats: transaction query succeeded', {
+        attempt: attemptIdx + 1,
+        count: rawTransactions.length,
+      })
+      if (rawTransactions.length > 0) break
+    } catch (err) {
+      console.warn('[DB:PB] account spending stats: transaction query attempt failed', {
+        sourceAccountId,
+        cycleTag: resolvedCycleTag,
+        attempt: attemptIdx + 1,
+        error: String(err),
+      })
+    }
+  }
+
+  if (rawTransactions.length === 0) {
+    console.warn('[DB:PB] account spending stats: all transaction query attempts exhausted, falling back to cycle snapshot', {
       sourceAccountId,
       cycleTag: resolvedCycleTag,
-      error: String(err),
     })
-    // Fallback: continue without transaction details; use cycle precomputed values below
   }
   const cycleStartTime = cycleRange?.start ? cycleRange.start.getTime() : null
   const cycleEndTime = cycleRange?.end ? cycleRange.end.getTime() : null
@@ -819,6 +887,13 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
         sourceId: categoryRecord.slug || categoryRecord.id,
         name: String(categoryRecord.name || ''),
       })
+      if (process.env.DEBUG_CASHBACK) {
+        console.log('[DEBUG:CategoryMap] Loaded category', {
+          pbId: categoryRecord.id,
+          slug: categoryRecord.slug,
+          name: categoryRecord.name,
+        })
+      }
     }
   }
 
@@ -852,9 +927,35 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
         cycleTotals: { spent: spendForPolicy },
       })
 
-      let txnEstimate = amount * Number(policy.rate || 0)
-      if (policy.maxReward && policy.maxReward > 0) {
-        txnEstimate = Math.min(txnEstimate, Number(policy.maxReward))
+      const categoryFallbackPolicy = inferTieredPolicyByCategoryName(account, category?.name)
+      const shouldUseFallbackCategoryPolicy =
+        Boolean(categoryFallbackPolicy) &&
+        (policy.metadata?.policySource === 'program_default' || policy.metadata?.policySource === 'level_default')
+
+      const effectiveRate = shouldUseFallbackCategoryPolicy
+        ? Number(categoryFallbackPolicy?.rate || policy.rate || 0)
+        : Number(policy.rate || 0)
+
+      const effectiveMaxReward = shouldUseFallbackCategoryPolicy
+        ? categoryFallbackPolicy?.maxReward
+        : policy.maxReward
+
+      if (process.env.DEBUG_CASHBACK) {
+        console.log('[DEBUG:Cashback] Transaction policy resolution', {
+          txnId: tx.id,
+          amount,
+          pbCategoryId: tx.category_id,
+          categoryName: category?.name,
+          categorySourcId: category?.sourceId,
+          policyRate: policy.rate,
+          policySource: policy.metadata?.policySource,
+          spendForPolicy,
+        })
+      }
+
+      let txnEstimate = amount * effectiveRate
+      if (effectiveMaxReward && effectiveMaxReward > 0) {
+        txnEstimate = Math.min(txnEstimate, Number(effectiveMaxReward))
       }
       estimatedCashback += txnEstimate
 
@@ -871,10 +972,22 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
       sharedAmount += txnShared
 
       const metadata = policy.metadata || {}
-      const ruleId = String(metadata.ruleId || `${category?.sourceId || 'general'}-${policy.rate}`)
+      
+      if (process.env.DEBUG_CASHBACK) {
+        console.log('[DEBUG:Cashback] Transaction processing detail', {
+          txnId: tx.id,
+          categoryId: tx.category_id,
+          categoryName: category?.name,
+          categorySourceId: category?.sourceId,
+          policyRate: policy.rate,
+          policyMetadata: metadata,
+          ruleIdBeforeConstruction: metadata.ruleId,
+        })
+      }
+      const ruleId = String(metadata.ruleId || `${category?.sourceId || category?.id || 'general'}-${effectiveRate}`)
       const ruleName = category?.name
-        ? `${Math.round(Number(policy.rate || 0) * 100)}% ${category.name}`
-        : `Rule ${Math.round(Number(policy.rate || 0) * 100)}%`
+        ? `${Math.round(effectiveRate * 100)}% ${category.name}`
+        : `Rule ${Math.round(effectiveRate * 100)}%`
 
       const prev = activeRuleMap.get(ruleId)
       if (prev) {
@@ -884,10 +997,10 @@ export async function getPocketBaseAccountSpendingStatsSnapshot(sourceAccountId:
         activeRuleMap.set(ruleId, {
           ruleId,
           name: ruleName,
-          rate: Math.round(Number(policy.rate || 0) * 100),
+          rate: Math.round(effectiveRate * 100),
           spent: amount,
           earned: txnEstimate,
-          max: policy.maxReward,
+          max: effectiveMaxReward,
         })
       }
     }
