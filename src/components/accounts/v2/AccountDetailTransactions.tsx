@@ -180,7 +180,7 @@ export function AccountDetailTransactions({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year' | 'cycle'>(account.type === 'credit_card' ? 'cycle' : 'month')
+    const [dateMode, setDateMode] = useState<'all' | 'date' | 'month' | 'range' | 'year' | 'cycle'>('month')
     const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>()
 
     // Use external state if provided, otherwise use internal
@@ -281,18 +281,8 @@ export function AccountDetailTransactions({
                 return
             }
 
-            // Auto-select current cycle ONLY on first mount and only if not already set
-            if (!hasAutoSelectedCycle.current && !selectedCycle && account.cashback_config) {
-                if (currentCycleRef.current) {
-                    const currentTag = currentCycleRef.current
-                    const matchingCycle = cycleOptions.find(c => c.value === currentTag)
-                    if (matchingCycle) {
-                        setSelectedCycle(currentTag)
-                        setDateMode('cycle')
-                        hasAutoSelectedCycle.current = true
-                    }
-                }
-            }
+            // Do not auto-select cycle on initial load.
+            // Keep default month mode for faster first render; user can opt into cycle mode.
         })
         .catch(err => {
             console.error('Failed to fetch cycle options:', err)
@@ -403,8 +393,8 @@ export function AccountDetailTransactions({
                 })
             }
 
-            // Cycle filter (credit cards)
-            if (selectedCycle && selectedCycle !== 'all') {
+            // Cycle filter (credit cards) - apply only when cycle mode is selected
+            if (dateMode === 'cycle' && selectedCycle && selectedCycle !== 'all') {
                 result = result.filter(t => {
                     const txCycle = t.persisted_cycle_tag || t.derived_cycle_tag || ''
                     return txCycle === selectedCycle
@@ -431,14 +421,6 @@ export function AccountDetailTransactions({
                     return isWithinInterval(txDate, { start: dateRange.from!, end: rangeEnd })
                 })
             }
-        } else if (account.type === 'credit_card' && currentCycleRef.current && !isFilterActive && selectedCycle !== 'all' && statusFilter === 'active') {
-            // Default behavior for credit cards: always show current cycle for "active" view
-            // BUT skip if user explicitly selected 'all' (even if filter not "active" in standard sense)
-            // AND skip if we are looking at "Void" or "Pending" tabs
-            result = result.filter(t => {
-                const txCycle = t.persisted_cycle_tag || t.derived_cycle_tag || ''
-                return txCycle === currentCycleRef.current
-            })
         }
 
         return result
@@ -453,6 +435,7 @@ export function AccountDetailTransactions({
         // Ignore 'dateFrom/dateTo' as they should be derived from cycle
         if (account.type === 'credit_card' && tag) {
             setSelectedCycle(tag)
+            setDateMode('cycle')
             // If tag is 'all', we still want to activate filter mode
             setIsFilterActive(true)
         }
