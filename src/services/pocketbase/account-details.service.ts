@@ -58,7 +58,7 @@ function mapCategory(record: PocketBaseRecord): Category {
   return {
     id: record.slug || record.id,
     name: record.name,
-    type: record.type || 'expense',
+    type: (record.type || 'expense').toLowerCase() as Category['type'],
     icon: record.icon || null,
     image_url: record.image_url || null,
     kind: record.kind || null,

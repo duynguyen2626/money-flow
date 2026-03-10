@@ -91,7 +91,7 @@ export function SidebarSearch({
 
     // Search Mode: Match all types
     const filter = (list: any[], type: ResultItem['type'], limit = 2) => {
-      const matched = list.filter(item => item.name.toLowerCase().includes(query))
+      const matched = list.filter(item => item?.name?.toLowerCase()?.includes(query))
       return matched.slice(0, limit).map(item => ({
         id: item.id,
         name: item.name,

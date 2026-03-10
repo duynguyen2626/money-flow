@@ -7,6 +7,7 @@ import {
   getPocketBaseShops,
   getPocketBaseAccountSpendingStatsSnapshot,
   loadPocketBaseTransactionsForAccount,
+  resolvePocketBaseAccountId,
 } from '@/services/pocketbase/account-details.service'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailViewV2 } from '@/components/accounts/v2/AccountDetailViewV2'
@@ -21,6 +22,7 @@ type PageProps = {
   }>
   searchParams: Promise<{
     tab?: string
+    tag?: string
   }>
 }
 
@@ -30,7 +32,8 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params
   const { tab } = await searchParams
-  const account = await getPocketBaseAccountDetails(id)
+  const pocketBaseAccountId = await resolvePocketBaseAccountId(id)
+  const account = await getPocketBaseAccountDetails(pocketBaseAccountId)
 
   if (!account) return { title: 'Account Not Found' }
 
@@ -52,18 +55,21 @@ export async function generateMetadata({
 
 export default async function AccountPage({ params, searchParams }: PageProps) {
   const { id } = await params
-  const { tab } = await searchParams
+  const { tab, tag } = await searchParams
   const activeTab = tab === 'cashback' ? 'cashback' : 'transactions'
 
   if (!id || id === 'undefined') {
     notFound()
   }
 
-  const account = await getPocketBaseAccountDetails(id)
+  const pocketBaseAccountId = await resolvePocketBaseAccountId(id)
+  const account = await getPocketBaseAccountDetails(pocketBaseAccountId)
 
   if (!account) {
     notFound()
   }
+
+  const resolvedDate = new Date() // Fallback
 
   // Pre-fetch everything needed for V2 view
   const [allAccounts, categories, people, shops, cashbackStats, transactions] = await Promise.all([
@@ -71,13 +77,13 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     getPocketBaseCategories(),
     getPocketBasePeople(),
     getPocketBaseShops(),
-    getPocketBaseAccountSpendingStatsSnapshot(id, new Date()),
-    loadPocketBaseTransactionsForAccount(id, 2000),
+    getPocketBaseAccountSpendingStatsSnapshot(pocketBaseAccountId, resolvedDate, tag),
+    loadPocketBaseTransactionsForAccount(pocketBaseAccountId, 2000),
   ])
 
   // Calculate annual fee waiver stats manually for header display
   let accountWithStats = account
-  if (account.type === 'credit_card' && account.annual_fee && account.annual_fee > 0) {
+  if (account.type === 'credit_card') {
     const waiver_target = account.annual_fee_waiver_target ?? null
     if (waiver_target && waiver_target > 0) {
       // Calculate total expense spend from ALL transactions (not just cashback)
@@ -102,18 +108,21 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
         stats: {
           usage_percent,
           remaining_limit,
-          spent_this_cycle: spent,
+          spent_this_cycle: cashbackStats?.currentSpend ?? account.stats?.spent_this_cycle ?? 0,
           min_spend: cashbackStats?.minSpend ?? null,
-          missing_for_min: cashbackStats?.minSpend ? Math.max(0, cashbackStats.minSpend - spent) : null,
+          missing_for_min: cashbackStats?.minSpend ? Math.max(0, cashbackStats.minSpend - (cashbackStats.currentSpend || 0)) : null,
           is_qualified: cashbackStats?.is_min_spend_met ?? false,
           cycle_range: cashbackStats?.cycle?.label ?? '',
           due_date_display: null,
           due_date: null,
           remains_cap: cashbackStats?.remainingBudget ?? null,
           shared_cashback: cashbackStats?.sharedAmount ?? null,
+          real_awarded: cashbackStats?.actualClaimed ?? 0,
+          virtual_profit: cashbackStats?.netProfit ?? 0,
           annual_fee_waiver_target: waiver_target,
           annual_fee_waiver_progress: progress,
           annual_fee_waiver_met: met,
+          max_budget: cashbackStats?.maxCashback ?? null,
         }
       }
     }

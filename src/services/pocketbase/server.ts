@@ -81,6 +81,7 @@ export async function pocketbaseRequest<T>(
   const token = await getAuthToken()
   const query = buildQuery(options?.params)
   const url = `${POCKETBASE_URL}${path}${query}`
+  console.log(`[DB:PB] fetch: ${url}`)
 
   const response = await fetch(url, {
     method: options?.method || 'GET',
@@ -136,6 +137,11 @@ export function toPocketBaseId(sourceId: string, fallbackPrefix = 'mf3'): string
     return randomId
   }
 
+  // Idempotency: If already 15-char lowercase alphanumeric, assume it's a PB ID
+  if (/^[a-z0-9]{15}$/.test(sourceId)) {
+    return sourceId
+  }
+
   const digest = createHash('sha256').update(String(sourceId)).digest()
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
   let result = ''
@@ -143,4 +149,23 @@ export function toPocketBaseId(sourceId: string, fallbackPrefix = 'mf3'): string
     result += chars[digest[index] % chars.length]
   }
   return result
+}
+export async function pocketbaseCreate<T>(collection: string, body: unknown): Promise<T> {
+  return pocketbaseRequest<T>(`/api/collections/${collection}/records`, {
+    method: 'POST',
+    body,
+  })
+}
+
+export async function pocketbaseUpdate<T>(collection: string, id: string, body: unknown): Promise<T> {
+  return pocketbaseRequest<T>(`/api/collections/${collection}/records/${id}`, {
+    method: 'PATCH',
+    body,
+  })
+}
+
+export async function pocketbaseDelete(collection: string, id: string): Promise<void> {
+  return pocketbaseRequest<void>(`/api/collections/${collection}/records/${id}`, {
+    method: 'DELETE',
+  })
 }

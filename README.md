@@ -12,15 +12,14 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 
 ---
 
-## 🚀 Current Milestone: Phase 16 (Feb 2026)
-**Focus**: Accounts & Cashback Refinement
+## 🚀 Current Milestone: Phase 17 (March 2026)
+**Focus**: PocketBase Data Migration & ID Stabilization
 
 ### Key Deliverables:
-- ✅ **Unified Cycle Logic**: Merged reward/calculation cycles into a single stable configuration.
-- ✅ **Statement Cycle Support**: Verified accurate calculation for statement-based bank cycles (e.g., Techcombank).
-- ✅ **Batch UI Overhaul**: Consolidated header and optimized progress display for multi-month processing.
-- ✅ **Currency Readability**: Enhanced numerical display for large transaction values in checklists.
-- ✅ **Deterministic Cashback**: Aligned SQL backend with frontend configuration for real-time accuracy.
+- ✅ **PocketBase Integration**: Implemented server-side services for PocketBase (Server-side & Client-side clients).
+- ✅ **ID Unification**: Solved fragmentation between Slug (8 chars), UUID (Supabase), and Native ID (PocketBase).
+- ✅ **Transaction Listing Fix**: Resolved 400 Bad Request errors in transaction fetching caused by invalid 'expand' fields.
+- ✅ **Data Quality**: Re-migrated Categories, Shops, and People data for visual consistency.
 
 ---
 
@@ -30,7 +29,7 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 1. **[MASTER_CONTEXT_LOAD.md](./.agent/prompts/MASTER_CONTEXT_LOAD.md)**: Run this first to initialize your session with full repo context.
 2. **[TASK_TEMPLATE.md](./.agent/prompts/TASK_TEMPLATE.md)**: Use this template for defining and executing specific tasks.
 3. **[ONBOARDING.md](./.agent/prompts/ONBOARDING.md)**: Core onboarding guide and reading list.
-4. **[HANDOVER_ACCOUNTS_CASHBACK.md](./.agent/prompts/HANDOVER_ACCOUNTS_CASHBACK.md)**: Latest phase handover notes.
+4. **[handover_pocketbase_fix.md](./.agent/handovers/handover_pocketbase_fix.md)**: CRITICAL handover notes for PocketBase migration state.
 
 
 ### 📖 For Developers & Users
@@ -43,7 +42,8 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 ## 🏗️ Project Structure
 - `src/app`: Page routes and layouts.
 - `src/components`: UI components (moneyflow, people, etc).
-- `src/services`: Core business logic (Single source of truth).
+- `src/services/pocketbase`: New PocketBase service layer.
+- `src/services`: Core business logic (Transitioning from Supabase to PocketBase).
 - `src/actions`: Server actions for data mutation.
 - `src/types`: TypeScript definitions.
 
@@ -73,6 +73,6 @@ pnpm build
 
 ---
 
-**Version**: 3.2.0 (Phase 16)  
-**Last Updated**: Feb 23, 2026  
+**Version**: 3.3.0 (Phase 17)  
+**Last Updated**: March 7, 2026  
 **License**: Internal project - Money Flow 3

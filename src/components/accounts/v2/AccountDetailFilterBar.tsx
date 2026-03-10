@@ -186,7 +186,11 @@ export function AccountDetailFilterBar({
                 mode={dateMode}
                 onDateChange={onDateChange}
                 onRangeChange={onRangeChange}
-                onModeChange={onModeChange}
+                onModeChange={(mode) => {
+                    if (mode !== 'cycle') {
+                        onModeChange(mode)
+                    }
+                }}
                 disabledRange={disabledRange}
                 availableMonths={availableMonths}
                 accountCycleTags={cycles.map(c => c.value)}

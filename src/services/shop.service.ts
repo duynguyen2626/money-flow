@@ -16,20 +16,36 @@ type ShopRow = Database['public']['Tables']['shops']['Row']
 type ShopInsert = Database['public']['Tables']['shops']['Insert']
 type ShopUpdate = Database['public']['Tables']['shops']['Update']
 
+import { getPocketBaseShops } from './pocketbase/account-details.service'
+
 export async function getShops(): Promise<ShopRow[]> {
-  console.log('[DB:SB] shops.getAll')
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from('shops')
-    .select('id, name, image_url, default_category_id, is_archived')
-    .order('name', { ascending: true })
+  console.log('[DB:PB] shops.list')
+  try {
+    const shops = await getPocketBaseShops()
+    return shops.map(s => ({
+      id: s.id,
+      name: s.name,
+      image_url: s.image_url,
+      default_category_id: s.default_category_id,
+      is_archived: s.is_archived
+    } as ShopRow))
+  } catch (err) {
+    console.error('[DB:PB] shops.list failed, falling back to Supabase:', err)
 
-  if (error) {
-    console.error('[DB:SB] shops.getAll failed:', error)
-    return []
+    console.log('[DB:SB] shops.select')
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('shops')
+      .select('id, name, image_url, default_category_id, is_archived')
+      .order('name', { ascending: true })
+
+    if (error) {
+      console.error('[DB:SB] shops.select failed:', error)
+      return []
+    }
+
+    return (data ?? []) as ShopRow[]
   }
-
-  return (data ?? []) as ShopRow[]
 }
 
 export async function getShopById(id: string): Promise<ShopRow | null> {

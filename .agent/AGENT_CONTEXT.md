@@ -1,7 +1,7 @@
 # Money Flow 3 - Agent Context & Project State
 
-**Last Updated:** February 17, 2026  
-**Current Phase:** Phase 15 - Categories UI & Account Table Refinements
+**Last Updated:** March 7, 2026  
+**Current Phase:** Phase 17 - PocketBase Integration & ID Stabilization
 
 ---
 

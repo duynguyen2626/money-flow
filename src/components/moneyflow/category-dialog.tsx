@@ -75,7 +75,7 @@ export function CategoryDialog({
                 : "";
             form.reset({
                 name: category.name,
-                type: category.type,
+                type: category.type === 'investment' ? 'expense' : category.type,
                 icon: category.icon || "",
                 image_url: category.image_url || "",
                 mcc_codes: mccCodesStr,

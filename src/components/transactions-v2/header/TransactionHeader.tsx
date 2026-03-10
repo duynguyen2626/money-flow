@@ -300,16 +300,16 @@ export function TransactionHeader({
     updates: Partial<{
       date: Date
       range: DateRange | undefined
-      mode: 'month' | 'range' | 'date' | 'all' | 'year'
+      mode: 'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'
     }>
   ) => {
     if (updates.date !== undefined) setLocalDate(updates.date)
     if (updates.range !== undefined) setLocalDateRange(updates.range)
-    if (updates.mode !== undefined) setLocalDateMode(updates.mode)
+    if (updates.mode !== undefined && updates.mode !== 'cycle') setLocalDateMode(updates.mode)
 
     if (hasActiveFilters) {
       // Apply immediately if filtering
-      if (updates.mode !== undefined) onModeChange(updates.mode)
+      if (updates.mode !== undefined && updates.mode !== 'cycle') onModeChange(updates.mode)
       if (updates.date !== undefined) onDateChange(updates.date)
       if (updates.range !== undefined) onRangeChange(updates.range)
     }
@@ -421,7 +421,11 @@ export function TransactionHeader({
         mode={localDateMode}
         onDateChange={(d) => handleDateUpdate({ date: d })}
         onRangeChange={(r) => handleDateUpdate({ range: r })}
-        onModeChange={(m) => handleDateUpdate({ mode: m })}
+        onModeChange={(m) => {
+          if (m !== 'cycle') {
+            handleDateUpdate({ mode: m })
+          }
+        }}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
         availableDateRange={availableDateRange}
@@ -648,7 +652,11 @@ export function TransactionHeader({
                 // Mobile doesn't use hybrid real-time, just local buffer until Apply
                 onDateChange={setLocalDate}
                 onRangeChange={setLocalDateRange}
-                onModeChange={setLocalDateMode}
+                onModeChange={(m) => {
+                  if (m !== 'cycle') {
+                    setLocalDateMode(m)
+                  }
+                }}
                 disabledRange={disabledRange}
                 availableMonths={availableMonths}
                 fullWidth
