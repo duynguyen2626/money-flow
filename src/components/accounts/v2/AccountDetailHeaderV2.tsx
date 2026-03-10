@@ -1044,7 +1044,7 @@ export function AccountDetailHeaderV2({
             }
 
             {/* Section 3: Cashback Performance - Prompt when cycle is not selected */}
-            {isCreditCard && (!selectedCycle || selectedCycle === 'all' || !dynamicCashbackStats) && (
+            {isCreditCard && (!selectedCycle || selectedCycle === 'all') && (
                 <div className="flex flex-1 min-w-0 lg:flex-[5]">
                     <HeaderSection
                         label="Cashback Performance"
@@ -1061,6 +1061,25 @@ export function AccountDetailHeaderV2({
                                     <span className="text-xs font-black uppercase tracking-wide text-emerald-700">Select a cycle to view cashback details</span>
                                     <span className="text-[11px] font-medium text-slate-500">Open Cycle tab, choose month/year, then click Apply</span>
                                 </div>
+                            </div>
+                        </div>
+                    </HeaderSection>
+                </div>
+            )}
+
+            {/* Section 3: Cashback Performance - Loading state when cycle selected */}
+            {isCreditCard && selectedCycle && selectedCycle !== 'all' && !dynamicCashbackStats && effectiveIsCashbackLoading && (
+                <div className="flex flex-1 min-w-0 lg:flex-[5]">
+                    <HeaderSection
+                        label="Cashback Performance"
+                        borderColor="border-emerald-100"
+                        className="w-full bg-emerald-50/10"
+                        hideHintInHeader
+                    >
+                        <div className="flex h-full min-h-[92px] w-full items-center justify-center p-2.5">
+                            <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-white/70 px-4 py-2.5">
+                                <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                                <span className="text-xs font-semibold text-slate-700">Fetching cycle data...</span>
                             </div>
                         </div>
                     </HeaderSection>

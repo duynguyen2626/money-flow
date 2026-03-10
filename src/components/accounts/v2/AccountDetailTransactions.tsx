@@ -190,13 +190,14 @@ export function AccountDetailTransactions({
     const [cycles, setCycles] = useState<Array<{ label: string; value: string }>>([])
     const [isCyclesLoading, setIsCyclesLoading] = useState(false)
     const handleCycleChange = (cycle: string | undefined) => {
-        startTransition(() => {
-            setIsFilterActive(true)
-            setSelectedCycle(cycle)
-            if (cycle) {
-                setDateMode('cycle')
-            }
+        // Update UI state immediately so selected cycle is persistent while loading
+        setIsFilterActive(true)
+        setSelectedCycle(cycle)
+        if (cycle) {
+            setDateMode('cycle')
+        }
 
+        startTransition(() => {
             const params = new URLSearchParams(window.location.search)
             if (cycle) {
                 params.set('tag', cycle)

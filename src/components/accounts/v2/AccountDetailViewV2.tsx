@@ -63,6 +63,12 @@ export function AccountDetailViewV2({
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
 
     const handleCycleChange = useCallback((cycle: string | undefined) => {
+        // Trigger cashback loading immediately so health spinner starts together with txn spinner
+        if (cycle && cycle !== 'all') {
+            setIsCashbackLoading(true)
+        } else {
+            setIsCashbackLoading(false)
+        }
         setSelectedCycle(cycle)
         setCycleApplyTick((prev) => prev + 1)
     }, [])

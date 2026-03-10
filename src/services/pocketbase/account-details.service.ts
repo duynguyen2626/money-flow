@@ -1122,12 +1122,12 @@ export async function loadPocketBaseTransactionsForAccount(sourceAccountId: stri
       perPage: Math.min(limit, 200),
       sort: '-date',
       expand: 'account_id,target_account_id,category_id,shop_id,person_id',
-      filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}')`,
+      filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}')`,
     },
     {
       perPage: Math.min(limit, 200),
       sort: '-date',
-      filter: `(account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}')`,
+      filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}')`,
     },
   ]
 
@@ -1256,12 +1256,12 @@ export async function getPocketBaseCycleTransactions(sourceAccountId: string, cy
   const pocketBaseAccountId = toPocketBaseId(sourceAccountId, 'accounts')
   // Notes:
   //   - PB uses 'date' not 'occurred_at' for sort
-  //   - 'to_account_id' is not a real PB relation field, omit from expand
+  //   - 'to_account_id' is not a real PB relation field, omit from filter/expand
   //   - 'persisted_cycle_tag' lives inside metadata JSON, not as top-level field
   const records = await listAllRecords('transactions', {
     sort: '-date',
     expand: 'account_id,target_account_id,category_id,shop_id,person_id,parent_transaction_id',
-    filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}' || to_account_id='${pocketBaseAccountId}') && metadata.persisted_cycle_tag='${cycleTag}'`,
+    filter: `(account_id='${pocketBaseAccountId}' || target_account_id='${pocketBaseAccountId}') && metadata.persisted_cycle_tag='${cycleTag}'`,
   })
 
   return records.map((item) => mapTransaction(item, sourceAccountId))
