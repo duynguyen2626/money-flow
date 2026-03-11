@@ -1,607 +1,690 @@
 [
-    {
-        "id": "pvl_people_001",
-        "name": "people",
-        "type": "base",
-        "fields": [
-            {
-                "id": "f_id_01",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "f_name_01",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "f_role_01",
-                "name": "role",
-                "type": "text"
-            },
-            {
-                "id": "f_img_01",
-                "name": "image_url",
-                "type": "text"
-            },
-            {
-                "id": "f_own_01",
-                "name": "is_owner",
-                "type": "bool"
-            }
-        ]
-    },
-    {
-        "id": "pvl_cat_001",
-        "name": "categories",
-        "type": "base",
-        "fields": [
-            {
-                "id": "f_id_04",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "f_name_04",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "f_icon_01",
-                "name": "icon",
-                "type": "text"
-            },
-            {
-                "id": "f_type_04",
-                "name": "type",
-                "type": "text"
-            },
-            {
-                "id": "f_img_04",
-                "name": "image_url",
-                "type": "text"
-            },
-            {
-                "id": "f_kind_01",
-                "name": "kind",
-                "type": "text"
-            },
-            {
-                "id": "f_arch_01",
-                "name": "is_archived",
-                "type": "bool"
-            },
-            {
-                "id": "f_mcc_01",
-                "name": "mcc_codes",
-                "type": "json"
-            },
-            {
-                "id": "f_pcat_01",
-                "name": "parent_id",
-                "type": "relation",
-                "collectionId": "pvl_cat_001",
-                "maxSelect": 1
-            }
-        ]
-    },
-    {
-        "id": "pvl_shop_001",
-        "name": "shops",
-        "type": "base",
-        "fields": [
-            {
-                "id": "f_id_05",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "f_name_05",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "f_img_05",
-                "name": "image_url",
-                "type": "text"
-            },
-            {
-                "id": "f_def_cat_01",
-                "name": "default_category_id",
-                "type": "relation",
-                "collectionId": "pvl_cat_001",
-                "maxSelect": 1
-            },
-            {
-                "id": "f_arch_02",
-                "name": "is_archived",
-                "type": "bool"
-            }
-        ]
-    },
-    {
-        "id": "pvl_acc_001",
-        "name": "accounts",
-        "type": "base",
-        "fields": [
-            {
-                "id": "f_id_02",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "f_name_02",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "f_slug_01",
-                "name": "slug",
-                "type": "text"
-            },
-            {
-                "id": "f_type_01",
-                "name": "type",
-                "type": "select",
-                "options": {
-                    "values": [
-                        "bank",
-                        "credit_card",
-                        "e_wallet",
-                        "receivable",
-                        "debt",
-                        "savings",
-                        "cash",
-                        "system",
-                        "brokerage",
-                        "prepaid",
-                        "investment",
-                        "credit",
-                        "loan"
-                    ]
-                }
-            },
-            {
-                "id": "f_cur_01",
-                "name": "currency",
-                "type": "text"
-            },
-            {
-                "id": "f_climit_01",
-                "name": "credit_limit",
-                "type": "number"
-            },
-            {
-                "id": "f_cbal_01",
-                "name": "current_balance",
-                "type": "number"
-            },
-            {
-                "id": "f_oid_01",
-                "name": "owner_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_people_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_conf_01",
-                "name": "cashback_config",
-                "type": "json"
-            },
-            {
-                "id": "f_act_01",
-                "name": "is_active",
-                "type": "bool"
-            },
-            {
-                "id": "f_img_02",
-                "name": "image_url",
-                "type": "text"
-            },
-            {
-                "id": "f_anum_01",
-                "name": "account_number",
-                "type": "text"
-            },
-            {
-                "id": "f_rnam_01",
-                "name": "receiver_name",
-                "type": "text"
-            },
-            {
-                "id": "f_sday_01",
-                "name": "statement_day",
-                "type": "number"
-            },
-            {
-                "id": "f_dday_01",
-                "name": "due_date",
-                "type": "number"
-            },
-            {
-                "id": "f_ctyp_01",
-                "name": "cb_cycle_type",
-                "type": "text"
-            },
-            {
-                "id": "f_cbtype_01",
-                "name": "cb_type",
-                "type": "text"
-            },
-            {
-                "id": "f_cbrate_01",
-                "name": "cb_base_rate",
-                "type": "number"
-            },
-            {
-                "id": "f_cbmb_01",
-                "name": "cb_max_budget",
-                "type": "number"
-            },
-            {
-                "id": "f_cbunl_01",
-                "name": "cb_is_unlimited",
-                "type": "bool"
-            },
-            {
-                "id": "f_cbrul_01",
-                "name": "cb_rules_json",
-                "type": "json"
-            },
-            {
-                "id": "f_cbms_01",
-                "name": "cb_min_spend",
-                "type": "number"
-            }
-        ]
-    },
-    {
-        "id": "pvl_txn_001",
-        "name": "transactions",
-        "type": "base",
-        "fields": [
-            {
-                "id": "f_id_03",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "f_date_01",
-                "name": "date",
-                "type": "date",
-                "required": true
-            },
-            {
-                "id": "f_occ_01",
-                "name": "occurred_at",
-                "type": "date"
-            },
-            {
-                "id": "f_desc_01",
-                "name": "description",
-                "type": "text"
-            },
-            {
-                "id": "f_note_01",
-                "name": "note",
-                "type": "text"
-            },
-            {
-                "id": "f_amt_01",
-                "name": "amount",
-                "type": "number",
-                "required": true
-            },
-            {
-                "id": "f_type_02",
-                "name": "type",
-                "type": "select",
-                "options": {
-                    "values": [
-                        "income",
-                        "expense",
-                        "transfer",
-                        "debt",
-                        "repayment"
-                    ]
-                }
-            },
-            {
-                "id": "f_stat_01",
-                "name": "status",
-                "type": "select",
-                "options": {
-                    "values": [
-                        "posted",
-                        "pending",
-                        "void"
-                    ]
-                }
-            },
-            {
-                "id": "f_acc_01",
-                "name": "account_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_acc_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_toacc_01",
-                "name": "to_account_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_acc_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_cat_02",
-                "name": "category_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_cat_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_shop_02",
-                "name": "shop_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_shop_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_pers_01",
-                "name": "person_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_people_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_final_01",
-                "name": "final_price",
-                "type": "number"
-            },
-            {
-                "id": "f_cbamt_01",
-                "name": "cashback_amount",
-                "type": "number"
-            },
-            {
-                "id": "f_cbshpct_01",
-                "name": "cashback_share_percent",
-                "type": "number"
-            },
-            {
-                "id": "f_cbshfix_01",
-                "name": "cashback_share_fixed",
-                "type": "number"
-            },
-            {
-                "id": "f_cbmode_01",
-                "name": "cashback_mode",
-                "type": "text"
-            },
-            {
-                "id": "f_debtcyc_01",
-                "name": "debt_cycle_tag",
-                "type": "text"
-            },
-            {
-                "id": "f_pcyc_01",
-                "name": "persisted_cycle_tag",
-                "type": "text"
-            },
-            {
-                "id": "f_isinst_01",
-                "name": "is_installment",
-                "type": "bool"
-            },
-            {
-                "id": "f_partxn_01",
-                "name": "parent_transaction_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_txn_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "f_meta_01",
-                "name": "metadata",
-                "type": "json"
-            }
-        ]
-    },
-    {
-        "id": "pvl_cbcyc_001",
-        "name": "cashback_cycles",
-        "type": "base",
-        "fields": [
-            {
-                "id": "cb_id_01",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "cb_acc_01",
-                "name": "account_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_acc_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "cb_tag_01",
-                "name": "cycle_tag",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "cb_spent_01",
-                "name": "spent_amount",
-                "type": "number"
-            },
-            {
-                "id": "cb_award_01",
-                "name": "real_awarded",
-                "type": "number"
-            },
-            {
-                "id": "cb_prof_01",
-                "name": "virtual_profit",
-                "type": "number"
-            },
-            {
-                "id": "cb_mb_01",
-                "name": "max_budget",
-                "type": "number"
-            },
-            {
-                "id": "cb_ms_01",
-                "name": "min_spend_target",
-                "type": "number"
-            },
-            {
-                "id": "cb_exh_01",
-                "name": "is_exhausted",
-                "type": "bool"
-            },
-            {
-                "id": "cb_met_01",
-                "name": "met_min_spend",
-                "type": "bool"
-            },
-            {
-                "id": "cb_loss_01",
-                "name": "overflow_loss",
-                "type": "number"
-            }
-        ]
-    },
-    {
-        "id": "pvl_serv_001",
-        "name": "services",
-        "type": "base",
-        "fields": [
-            {
-                "id": "sv_id_01",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "sv_name_01",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "sv_amt_01",
-                "name": "amount",
-                "type": "number"
-            },
-            {
-                "id": "sv_type_01",
-                "name": "type",
-                "type": "select",
-                "options": {
-                    "values": [
-                        "subscription",
-                        "recurring",
-                        "debt"
-                    ]
-                }
-            },
-            {
-                "id": "sv_acc_01",
-                "name": "account_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_acc_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "sv_bday_01",
-                "name": "billing_day",
-                "type": "number"
-            },
-            {
-                "id": "sv_stat_01",
-                "name": "is_active",
-                "type": "bool"
-            }
-        ]
-    },
-    {
-        "id": "pvl_batch_001",
-        "name": "batches",
-        "type": "base",
-        "fields": [
-            {
-                "id": "ba_id_01",
-                "name": "id",
-                "type": "text",
-                "primaryKey": true,
-                "system": true
-            },
-            {
-                "id": "ba_name_01",
-                "name": "name",
-                "type": "text",
-                "required": true
-            },
-            {
-                "id": "ba_acc_01",
-                "name": "source_account_id",
-                "type": "relation",
-                "options": {
-                    "collectionId": "pvl_acc_001",
-                    "maxSelect": 1
-                }
-            },
-            {
-                "id": "ba_stat_01",
-                "name": "status",
-                "type": "text"
-            },
-            {
-                "id": "ba_bank_01",
-                "name": "bank_type",
-                "type": "text"
-            },
-            {
-                "id": "ba_my_01",
-                "name": "month_year",
-                "type": "text"
-            }
-        ]
-    }
+  {
+    "id": "pvl_people_001",
+    "name": "people",
+    "type": "base",
+    "fields": [
+      {
+        "id": "f_id_01",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "f_name_01",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "f_role_01",
+        "name": "role",
+        "type": "text"
+      },
+      {
+        "id": "f_img_01",
+        "name": "image_url",
+        "type": "text"
+      },
+      {
+        "id": "f_own_01",
+        "name": "is_owner",
+        "type": "bool"
+      },
+      {
+        "id": "f_people_8prmy",
+        "name": "google_sheet_url",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "f_people_ondwb",
+        "name": "sheet_linked_bank_id",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "f_people_iqu6g",
+        "name": "sheet_link",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "f_people_q9vci",
+        "name": "sheet_full_img",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "f_people_xwlj5",
+        "name": "sheet_bank_info",
+        "type": "text",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {
+          "min": null,
+          "max": null,
+          "pattern": ""
+        }
+      },
+      {
+        "id": "f_people_b_rf1ip",
+        "name": "sheet_show_bank_account",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "id": "f_people_b_nm2eo",
+        "name": "sheet_show_qr_image",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "unique": false,
+        "options": {}
+      }
+    ]
+  },
+  {
+    "id": "pvl_cat_001",
+    "name": "categories",
+    "type": "base",
+    "fields": [
+      {
+        "id": "f_id_04",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "f_name_04",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "f_icon_01",
+        "name": "icon",
+        "type": "text"
+      },
+      {
+        "id": "f_type_04",
+        "name": "type",
+        "type": "text"
+      },
+      {
+        "id": "f_img_04",
+        "name": "image_url",
+        "type": "text"
+      },
+      {
+        "id": "f_kind_01",
+        "name": "kind",
+        "type": "text"
+      },
+      {
+        "id": "f_arch_01",
+        "name": "is_archived",
+        "type": "bool"
+      },
+      {
+        "id": "f_mcc_01",
+        "name": "mcc_codes",
+        "type": "json"
+      },
+      {
+        "id": "f_pcat_01",
+        "name": "parent_id",
+        "type": "relation",
+        "collectionId": "pvl_cat_001",
+        "maxSelect": 1
+      }
+    ]
+  },
+  {
+    "id": "pvl_shop_001",
+    "name": "shops",
+    "type": "base",
+    "fields": [
+      {
+        "id": "f_id_05",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "f_name_05",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "f_img_05",
+        "name": "image_url",
+        "type": "text"
+      },
+      {
+        "id": "f_def_cat_01",
+        "name": "default_category_id",
+        "type": "relation",
+        "collectionId": "pvl_cat_001",
+        "maxSelect": 1
+      },
+      {
+        "id": "f_arch_02",
+        "name": "is_archived",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "id": "pvl_acc_001",
+    "name": "accounts",
+    "type": "base",
+    "fields": [
+      {
+        "id": "f_id_02",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "f_name_02",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "f_slug_01",
+        "name": "slug",
+        "type": "text"
+      },
+      {
+        "id": "f_type_01",
+        "name": "type",
+        "type": "select",
+        "options": {
+          "values": [
+            "bank",
+            "credit_card",
+            "e_wallet",
+            "receivable",
+            "debt",
+            "savings",
+            "cash",
+            "system",
+            "brokerage",
+            "prepaid",
+            "investment",
+            "credit",
+            "loan"
+          ]
+        }
+      },
+      {
+        "id": "f_cur_01",
+        "name": "currency",
+        "type": "text"
+      },
+      {
+        "id": "f_climit_01",
+        "name": "credit_limit",
+        "type": "number"
+      },
+      {
+        "id": "f_cbal_01",
+        "name": "current_balance",
+        "type": "number"
+      },
+      {
+        "id": "f_oid_01",
+        "name": "owner_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_people_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_conf_01",
+        "name": "cashback_config",
+        "type": "json"
+      },
+      {
+        "id": "f_act_01",
+        "name": "is_active",
+        "type": "bool"
+      },
+      {
+        "id": "f_img_02",
+        "name": "image_url",
+        "type": "text"
+      },
+      {
+        "id": "f_anum_01",
+        "name": "account_number",
+        "type": "text"
+      },
+      {
+        "id": "f_rnam_01",
+        "name": "receiver_name",
+        "type": "text"
+      },
+      {
+        "id": "f_sday_01",
+        "name": "statement_day",
+        "type": "number"
+      },
+      {
+        "id": "f_dday_01",
+        "name": "due_date",
+        "type": "number"
+      },
+      {
+        "id": "f_ctyp_01",
+        "name": "cb_cycle_type",
+        "type": "text"
+      },
+      {
+        "id": "f_cbtype_01",
+        "name": "cb_type",
+        "type": "text"
+      },
+      {
+        "id": "f_cbrate_01",
+        "name": "cb_base_rate",
+        "type": "number"
+      },
+      {
+        "id": "f_cbmb_01",
+        "name": "cb_max_budget",
+        "type": "number"
+      },
+      {
+        "id": "f_cbunl_01",
+        "name": "cb_is_unlimited",
+        "type": "bool"
+      },
+      {
+        "id": "f_cbrul_01",
+        "name": "cb_rules_json",
+        "type": "json"
+      },
+      {
+        "id": "f_cbms_01",
+        "name": "cb_min_spend",
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "id": "pvl_txn_001",
+    "name": "transactions",
+    "type": "base",
+    "fields": [
+      {
+        "id": "f_id_03",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "f_date_01",
+        "name": "date",
+        "type": "date",
+        "required": true
+      },
+      {
+        "id": "f_occ_01",
+        "name": "occurred_at",
+        "type": "date"
+      },
+      {
+        "id": "f_desc_01",
+        "name": "description",
+        "type": "text"
+      },
+      {
+        "id": "f_note_01",
+        "name": "note",
+        "type": "text"
+      },
+      {
+        "id": "f_amt_01",
+        "name": "amount",
+        "type": "number",
+        "required": true
+      },
+      {
+        "id": "f_type_02",
+        "name": "type",
+        "type": "select",
+        "options": {
+          "values": [
+            "income",
+            "expense",
+            "transfer",
+            "debt",
+            "repayment"
+          ]
+        }
+      },
+      {
+        "id": "f_stat_01",
+        "name": "status",
+        "type": "select",
+        "options": {
+          "values": [
+            "posted",
+            "pending",
+            "void"
+          ]
+        }
+      },
+      {
+        "id": "f_acc_01",
+        "name": "account_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_acc_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_toacc_01",
+        "name": "to_account_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_acc_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_cat_02",
+        "name": "category_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_cat_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_shop_02",
+        "name": "shop_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_shop_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_pers_01",
+        "name": "person_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_people_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_final_01",
+        "name": "final_price",
+        "type": "number"
+      },
+      {
+        "id": "f_cbamt_01",
+        "name": "cashback_amount",
+        "type": "number"
+      },
+      {
+        "id": "f_cbshpct_01",
+        "name": "cashback_share_percent",
+        "type": "number"
+      },
+      {
+        "id": "f_cbshfix_01",
+        "name": "cashback_share_fixed",
+        "type": "number"
+      },
+      {
+        "id": "f_cbmode_01",
+        "name": "cashback_mode",
+        "type": "text"
+      },
+      {
+        "id": "f_debtcyc_01",
+        "name": "debt_cycle_tag",
+        "type": "text"
+      },
+      {
+        "id": "f_pcyc_01",
+        "name": "persisted_cycle_tag",
+        "type": "text"
+      },
+      {
+        "id": "f_isinst_01",
+        "name": "is_installment",
+        "type": "bool"
+      },
+      {
+        "id": "f_partxn_01",
+        "name": "parent_transaction_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_txn_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "f_meta_01",
+        "name": "metadata",
+        "type": "json"
+      }
+    ]
+  },
+  {
+    "id": "pvl_cbcyc_001",
+    "name": "cashback_cycles",
+    "type": "base",
+    "fields": [
+      {
+        "id": "cb_id_01",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "cb_acc_01",
+        "name": "account_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_acc_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "cb_tag_01",
+        "name": "cycle_tag",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "cb_spent_01",
+        "name": "spent_amount",
+        "type": "number"
+      },
+      {
+        "id": "cb_award_01",
+        "name": "real_awarded",
+        "type": "number"
+      },
+      {
+        "id": "cb_prof_01",
+        "name": "virtual_profit",
+        "type": "number"
+      },
+      {
+        "id": "cb_mb_01",
+        "name": "max_budget",
+        "type": "number"
+      },
+      {
+        "id": "cb_ms_01",
+        "name": "min_spend_target",
+        "type": "number"
+      },
+      {
+        "id": "cb_exh_01",
+        "name": "is_exhausted",
+        "type": "bool"
+      },
+      {
+        "id": "cb_met_01",
+        "name": "met_min_spend",
+        "type": "bool"
+      },
+      {
+        "id": "cb_loss_01",
+        "name": "overflow_loss",
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "id": "pvl_serv_001",
+    "name": "services",
+    "type": "base",
+    "fields": [
+      {
+        "id": "sv_id_01",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "sv_name_01",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "sv_amt_01",
+        "name": "amount",
+        "type": "number"
+      },
+      {
+        "id": "sv_type_01",
+        "name": "type",
+        "type": "select",
+        "options": {
+          "values": [
+            "subscription",
+            "recurring",
+            "debt"
+          ]
+        }
+      },
+      {
+        "id": "sv_acc_01",
+        "name": "account_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_acc_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "sv_bday_01",
+        "name": "billing_day",
+        "type": "number"
+      },
+      {
+        "id": "sv_stat_01",
+        "name": "is_active",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "id": "pvl_batch_001",
+    "name": "batches",
+    "type": "base",
+    "fields": [
+      {
+        "id": "ba_id_01",
+        "name": "id",
+        "type": "text",
+        "primaryKey": true,
+        "system": true
+      },
+      {
+        "id": "ba_name_01",
+        "name": "name",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "ba_acc_01",
+        "name": "source_account_id",
+        "type": "relation",
+        "options": {
+          "collectionId": "pvl_acc_001",
+          "maxSelect": 1
+        }
+      },
+      {
+        "id": "ba_stat_01",
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "id": "ba_bank_01",
+        "name": "bank_type",
+        "type": "text"
+      },
+      {
+        "id": "ba_my_01",
+        "name": "month_year",
+        "type": "text"
+      }
+    ]
+  }
 ]

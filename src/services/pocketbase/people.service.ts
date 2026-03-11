@@ -143,25 +143,9 @@ export async function getPocketBasePersonDetails(sourceOrPocketBaseId: string): 
         return mapped
       }
 
-      // 1. Base hydration from people table (Wait! PB Schema lacks these config fields, so we MUST fetch from Supabase until schema is updated)
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('people')
-        .select('sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_bank_info, sheet_linked_bank_id, sheet_show_qr_image')
-        .eq('id', sourcePersonId)
-        .maybeSingle()
-
-      const sbPerson = (data || {}) as any
-
+      // 1. Base hydration from people table (Wait! PB Schema now has these fields, rely on PB)
       const hydrated = {
         ...mapped,
-        sheet_link: mapped.sheet_link ?? sbPerson.sheet_link ?? null,
-        google_sheet_url: mapped.google_sheet_url ?? sbPerson.google_sheet_url ?? null,
-        sheet_full_img: mapped.sheet_full_img ?? sbPerson.sheet_full_img ?? null,
-        sheet_show_bank_account: mapped.sheet_show_bank_account ?? sbPerson.sheet_show_bank_account ?? null,
-        sheet_bank_info: mapped.sheet_bank_info ?? sbPerson.sheet_bank_info ?? null,
-        sheet_linked_bank_id: mapped.sheet_linked_bank_id ?? sbPerson.sheet_linked_bank_id ?? null,
-        sheet_show_qr_image: mapped.sheet_show_qr_image ?? sbPerson.sheet_show_qr_image ?? null,
       }
 
       // 2. Fallbacks for missing configurations

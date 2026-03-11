@@ -166,8 +166,8 @@ function mapTransaction(record: PocketBaseRecord, currentAccountSourceId: string
     person_name: expandedPerson?.name || null,
     person_image_url: expandedPerson?.image_url || null,
     persisted_cycle_tag: parseCycleTagFromTransaction(record),
-    debt_cycle_tag: record.debt_cycle_tag || record.metadata?.debt_cycle_tag || record.tag || null,
-    tag: record.debt_cycle_tag || record.metadata?.debt_cycle_tag || record.tag || null,
+    debt_cycle_tag: record.debt_cycle_tag || record.tag || record.metadata?.debt_cycle_tag || null,
+    tag: record.debt_cycle_tag || record.tag || record.metadata?.debt_cycle_tag || null,
     cashback_mode: record.cashback_mode || null,
     cashback_share_percent: record.cashback_share_percent ?? record.metadata?.cashback_share_percent ?? null,
     cashback_share_fixed: record.cashback_share_fixed ?? record.metadata?.cashback_share_fixed ?? null,
@@ -191,7 +191,7 @@ async function listAllRecords(collection: string, params: Record<string, string 
   while (page <= totalPages) {
     const response = await pocketbaseList<PocketBaseRecord>(collection, {
       page,
-      perPage: 200,
+      perPage: 500,
       ...params,
     })
 
@@ -228,7 +228,7 @@ async function resolvePocketBaseAccountRecord(sourceOrPocketBaseId: string): Pro
 }
 
 export async function getPocketBaseCategories(): Promise<Category[]> {
-  console.log('[DB:PB] categories.list')
+  // log removed for production-like feel
   // Removed sort parameter - PocketBase has issues with sorting, results sorted client-side anyway
   const records = await listAllRecords('categories')
   const items = records.map(mapCategory).sort((a, b) => a.name.localeCompare(b.name))
@@ -248,7 +248,6 @@ export async function createPocketBaseCategory(
   }
 ): Promise<boolean> {
   const pbId = toPocketBaseId(supabaseId)
-  console.log('[DB:PB] categories.create', { pbId, name: data.name })
   try {
     await pocketbaseRequest<PocketBaseRecord>('/api/collections/categories/records', {
       method: 'POST',
@@ -354,7 +353,7 @@ export async function deletePocketBaseCategoriesBulk(supabaseIds: string[]): Pro
 }
 
 export async function getPocketBasePeople(): Promise<Person[]> {
-  console.log('[DB:PB] people.list')
+  // log removed for noise reduction
   // Removed sort parameter - PocketBase has issues with sorting, results sorted client-side anyway
   const records = await listAllRecords('people')
   const items = records.map(mapPerson).sort((a, b) => a.name.localeCompare(b.name))

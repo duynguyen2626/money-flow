@@ -528,9 +528,15 @@ async function migrate() {
                 cashback_amount: parseFloat(t.cashback_share_fixed || 0),
                 is_installment: t.is_installment || false,
                 parent_transaction_id: t.parent_transaction_id ? toPocketBaseId(t.parent_transaction_id, 'transactions') : null,
+                debt_cycle_tag: t.tag ?? null,
+                persisted_cycle_tag: persistedCycleTag ?? null,
+                cashback_share_percent: t.cashback_share_percent ?? null,
+                cashback_share_fixed: t.cashback_share_fixed ?? null,
+                cashback_mode: t.cashback_mode ?? null,
                 metadata: {
                     ...(t.metadata || {}),
-                    persisted_cycle_tag: persistedCycleTag
+                    persisted_cycle_tag: persistedCycleTag,
+                    debt_cycle_tag: t.tag ?? null,
                 }
             };
 
