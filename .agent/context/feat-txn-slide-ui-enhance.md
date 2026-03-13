@@ -39,6 +39,10 @@
 
 ## Pending awareness
 - `SplitBillSection` (`src/components/transaction/slide-v2/single-mode/split-bill-section.tsx`) still has an outstanding selector/sync issue; the Installment + Split Bill group now sits at the bottom for visibility, but plan to revisit the underlying bug after this UI iteration.
+- Edit slide regressions to fix (left for next agent):
+  - Category still blanks when opening an existing transaction; need a robust mapping from PB ids/slugs and avoid auto-overwrite in cascade effects.
+  - Amount card design is broken: layout inconsistent, share toggle misaligned; re-design entire Amount/Fee/Total cluster to be compact and consistent with other inputs.
+  - Downstream tasks pending: unified-table Flow people badge + date styling, account page Flow color tweaks, cycle picker suggestions with counts.
 
 ## Test Notes
 - `npm run lint`: fails (repo-wide lint includes `Archive/` + `.archive/` and many deprecated files).
