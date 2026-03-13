@@ -221,6 +221,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                         }
                                     }}
                                     placeholder="Personal Flow (No one)"
+                                    hideTriggerBadge
                                     className="w-full h-11 bg-white border-slate-200 shadow-sm transition-all hover:bg-slate-50/50"
                                     onAddNew={onAddNewPerson}
                                     addLabel="Person"
@@ -263,6 +264,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                             }
                                         }}
                                         placeholder={sourcePlaceholder}
+                                        hideTriggerBadge
                                         triggerClassName={cn(
                                             "h-11 border-slate-200 transition-all duration-300",
                                             isIncomeFlow && "opacity-40 border-dashed bg-slate-50 grayscale",
@@ -305,6 +307,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                             }
                                         }}
                                         placeholder={targetPlaceholder}
+                                        hideTriggerBadge
                                         triggerClassName={cn(
                                             "h-11 border-slate-200 transition-all duration-300",
                                             isExpenseFlow && "opacity-40 border-dashed bg-slate-50 grayscale",

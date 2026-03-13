@@ -206,6 +206,9 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         }
 
         const currentCategoryId = form.getValues('category_id');
+        if (currentCategoryId) {
+            return;
+        }
         const selectedShop = shops.find(s => s.id === shopId);
 
         const applyCategory = async () => {
@@ -241,7 +244,18 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
 
     // Auto-select defaults logic
     useEffect(() => {
-        if (form.getValues('category_id')) return;
+        const currentCategoryId = form.getValues('category_id');
+        const isCurrentCategoryCompatible = !!currentCategoryId && filteredCategories.some(c => c.id === currentCategoryId);
+
+        if (isCurrentCategoryCompatible) return;
+
+        if (currentCategoryId && !isCurrentCategoryCompatible) {
+            const fallback = filteredCategories[0];
+            if (fallback) {
+                form.setValue('category_id', fallback.id, { shouldDirty: true });
+            }
+            return;
+        }
 
         if (transactionType === 'debt') {
             const shoppingCat = categories.find(c => c.name === 'Shopping' || c.name === 'Mua sắm');
@@ -249,8 +263,11 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
         } else if (transactionType === 'repayment') {
             const repaymentCat = categories.find(c => c.name === 'Repayment' || c.name === 'Thu nợ');
             if (repaymentCat) form.setValue('category_id', repaymentCat.id);
+        } else {
+            const fallback = filteredCategories[0];
+            if (fallback) form.setValue('category_id', fallback.id);
         }
-    }, [transactionType, categories, form]);
+    }, [transactionType, categories, filteredCategories, form]);
 
     // Shop is only truly irrelevant for Internal Transfers, Credit Card Payments, Income and Repayment
     const isShopHidden = ['transfer', 'credit_pay', 'income', 'repayment'].includes(transactionType);
@@ -291,6 +308,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
                                     value={field.value || undefined}
                                     onValueChange={field.onChange}
                                     placeholder="Select Category"
+                                    hideTriggerBadge
                                     className="w-full h-11 bg-slate-50/50 border-slate-200 rounded-xl"
                                     onAddNew={onAddNewCategory}
                                     addLabel="Category"
@@ -318,6 +336,7 @@ export function CategoryShopSection({ shops, categories, onAddNewCategory, onAdd
                                         value={field.value || undefined}
                                         onValueChange={field.onChange}
                                         placeholder="External Source"
+                                        hideTriggerBadge
                                         className="w-full h-11 bg-slate-50/50 border-slate-200 rounded-xl"
                                         onAddNew={onAddNewShop}
                                         addLabel="Shop"

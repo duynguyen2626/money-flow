@@ -100,6 +100,7 @@ export function TransactionSlideV2({
     const [localCategories, setLocalCategories] = useState(categories);
     const [isLoadingShops, setIsLoadingShops] = useState(false);
     const [localShops, setLocalShops] = useState(shops);
+    const isConfigReloading = isLoadingCategories || isLoadingShops;
 
     // Sync localCategories and localShops with prop changes
     useEffect(() => {
@@ -807,6 +808,14 @@ export function TransactionSlideV2({
                                         <Loader2 className="h-6 w-6 text-slate-900 animate-spin" />
                                     </div>
                                     <span className="text-sm font-bold text-slate-900 uppercase tracking-widest animate-pulse">Loading Details...</span>
+                                </div>
+                            </div>
+                        )}
+                        {!isLoadingEdit && isConfigReloading && (
+                            <div className="absolute inset-0 z-40 bg-white/45 backdrop-blur-[1px] flex items-center justify-center animate-in fade-in duration-150 pointer-events-none">
+                                <div className="flex items-center gap-2 bg-white/90 px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
+                                    <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Updating options...</span>
                                 </div>
                             </div>
                         )}

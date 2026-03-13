@@ -115,6 +115,20 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
         });
     }, [activeAccount, categoryId, totalGrossAmount, category, cycleStats]);
 
+    // Compute potential policy bypassing minSpendTarget gate — shows what rate would apply once threshold is met
+    const potentialPolicy = useMemo(() => {
+        if (!activeAccount || !policy) return null;
+        if (!policy.metadata?.reason?.includes('Below min spend')) return null;
+        return resolveCashbackPolicy({
+            account: activeAccount as Account,
+            categoryId,
+            amount: totalGrossAmount,
+            cycleTotals: { spent: Infinity },
+            categoryName: category?.name,
+            categorySlug: category?.slug ?? undefined
+        });
+    }, [activeAccount, categoryId, totalGrossAmount, category, policy]);
+
     const { actualBankReward, remainsCap } = useMemo(() => {
         const rate = policy?.rate ?? 0;
         const raw = totalGrossAmount * rate;
@@ -254,6 +268,11 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 {activeAccount?.name} applies <span className="text-slate-900 font-bold">{(policy?.rate ? policy.rate * 100 : 0).toFixed(2)}%</span> reward rate
                                 {policy?.maxReward ? ` (Capped at ${formatVN(policy.maxReward)})` : " (Unlimited per transaction)"}.
                             </p>
+                            {potentialPolicy && potentialPolicy.rate > 0 && (
+                                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                                    Potential: <span className="text-emerald-600 font-bold">{(potentialPolicy.rate * 100).toFixed(2)}%</span> for this category once min spend is met.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -397,7 +416,12 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                                 </div>
                                                 <span className="font-black text-slate-900 tabular-nums tracking-tight">{formatVN(actualBankReward)}</span>
                                             </div>
-                                            {(actualBankReward === 0 && activeAccount?.type === 'credit_card') && (
+                                            {(actualBankReward === 0 && activeAccount?.type === 'credit_card' && policy?.metadata?.reason?.includes('Below min spend')) && (
+                                                <span className="text-[8px] font-black text-amber-500 uppercase tracking-tighter mt-0.5">
+                                                    Spend gate not met
+                                                </span>
+                                            )}
+                                            {(actualBankReward === 0 && activeAccount?.type === 'credit_card' && !policy?.metadata?.reason?.includes('Below min spend') && (!policy || policy.rate === 0)) && (
                                                 <span className="text-[8px] font-black text-rose-500 uppercase tracking-tighter mt-0.5 animate-pulse">
                                                     No policy matched
                                                 </span>

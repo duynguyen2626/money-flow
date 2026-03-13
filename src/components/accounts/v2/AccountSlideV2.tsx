@@ -965,10 +965,10 @@ export function AccountSlideV2({
                     }
                 }
 
-                console.log('[AccountSlideV2] Calling updateAccountConfigAction...', { id: account.id, cbType });
+                console.log('[AccountSlideV2] Calling updateAccountConfigAction...', { id: account.id, cbType, holderPersonId, holderType });
 
                 const { updateAccountConfigAction } = await import('@/actions/account-actions');
-                const success = await updateAccountConfigAction({
+                const result = await updateAccountConfigAction({
                     id: account.id,
                     name,
                     type,
@@ -1009,7 +1009,8 @@ export function AccountSlideV2({
                     } as any : null
                 });
 
-                if (success) {
+                console.log('[AccountSlideV2] updateAccountConfigAction result:', result);
+                if (result?.success) {
                     console.log('[AccountSlideV2] Update success');
                     toast.success("Account updated successfully");
                     onOpenChange(false);
@@ -1017,8 +1018,8 @@ export function AccountSlideV2({
                         router.refresh();
                     });
                 } else {
-                    console.error('[AccountSlideV2] Update failed');
-                    toast.error("Failed to update account");
+                    console.error('[AccountSlideV2] Update failed:', result?.error);
+                    toast.error(result?.error ? `Failed: ${result.error}` : "Failed to update account");
                 }
             } else {
                 // Implementation for create
@@ -1062,9 +1063,10 @@ export function AccountSlideV2({
                     } : null
                 });
 
-                if (result.error) {
-                    console.error('[AccountSlideV2] Create failed', result.error);
-                    toast.error(`Failed to create account: ${result.error.message}`);
+                console.log('[AccountSlideV2] createAccount result:', result);
+                if (!result?.success) {
+                    console.error('[AccountSlideV2] Create failed', result?.error);
+                    toast.error(result?.error ? `Failed to create: ${result.error}` : "Failed to create account");
                 } else {
                     console.log('[AccountSlideV2] Create success');
                     toast.success("Account created successfully");
