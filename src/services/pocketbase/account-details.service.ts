@@ -681,7 +681,7 @@ export async function updatePocketBaseAccountInfo(
   }>
 ): Promise<boolean> {
   const pbId = toPocketBaseId(supabaseAccountId)
-  console.log('[DB:PB] accounts.updateInfo', { pbId })
+  console.log('[DB:PB] accounts.updateInfo START', { supabaseAccountId, pbId, fields: Object.keys(data) })
   const body: Record<string, unknown> = { ...data }
   if ('parent_account_id' in body && body.parent_account_id) {
     body.parent_account_id = toPocketBaseId(body.parent_account_id as string)
@@ -752,13 +752,14 @@ export async function updatePocketBaseAccountConfig(
     body.holder_person_id = toPocketBaseId(body.holder_person_id as string)
   }
   try {
-    await pocketbaseRequest<Record<string, unknown>>(`/api/collections/accounts/records/${pbId}`, {
+    const result = await pocketbaseRequest<Record<string, unknown>>(`/api/collections/accounts/records/${pbId}`, {
       method: 'PATCH',
       body,
     })
+    console.log('[DB:PB] accounts.updateInfo SUCCESS', { pbId, updatedFields: Object.keys(result || {}) })
     return true
   } catch (err) {
-    console.error('[DB:PB] accounts.updateConfig failed:', err)
+    console.error('[DB:PB] accounts.updateInfo FAILED', { pbId, error: String(err) })
     return false
   }
 }

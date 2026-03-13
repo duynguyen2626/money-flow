@@ -73,15 +73,13 @@ type CreateAccountParams = {
 export async function createAccount(params: CreateAccountParams) {
   console.log('[DB:PB] accounts.create', { name: params.name, type: params.type })
 
-  // For PB-only, we can generate a random ID or let PB generate it.
-  // But our createPocketBaseAccount expects a supabase-style ID to hash.
-  // We'll generate a random UUID-like string to hash.
   const tempId = crypto.randomUUID()
-  
+
   try {
+    console.log('[DB:PB] accounts.create SENDING', { tempId, name: params.name, type: params.type, holder_person_id: params.holder_person_id })
     const success = await createPocketBaseAccount(tempId, {
       ...params,
-      owner_id: 'SYSTEM_MIGRATED', // Update this if you have a real user system in PB
+      owner_id: 'SYSTEM_MIGRATED',
       current_balance: 0,
       is_active: true,
       statement_day: params.statementDay,
@@ -90,11 +88,12 @@ export async function createAccount(params: CreateAccountParams) {
 
     if (!success) throw new Error('Failed to create account in PocketBase')
 
+    console.log('[DB:PB] accounts.create SUCCESS', { name: params.name })
     revalidatePath('/accounts')
     return { success: true }
   } catch (error) {
-    console.error('[DB:PB] accounts.create failed:', error)
-    return { success: false, error: (error as any).message }
+    console.error('[DB:PB] accounts.create FAILED', { error: String(error) })
+    return { success: false, error: (error as Error).message }
   }
 }
 
@@ -157,7 +156,16 @@ export async function updateAccountConfigAction(params: {
   holder_type?: 'me' | 'relative' | 'other'
   holder_person_id?: string | null
 }) {
-  console.log('[DB:PB] accounts.updateConfig', { id: params.id })
+  console.log('[DB:PB] accounts.updateConfig START', {
+    id: params.id,
+    name: params.name,
+    type: params.type,
+    holder_type: params.holder_type,
+    holder_person_id: params.holder_person_id,
+    cb_type: params.cb_type,
+    has_cashback_config: !!params.cashbackConfig,
+    has_cb_rules_json: !!params.cb_rules_json,
+  })
 
   try {
     const success = await updatePocketBaseAccountInfo(params.id, {
@@ -176,7 +184,7 @@ export async function updateAccountConfigAction(params: {
       due_date: params.dueDate,
       holder_type: params.holder_type,
       holder_person_id: params.holder_person_id,
-      // Mapping these because updatePocketBaseAccountInfo uses partial fields
+      // cb_* columns + cashback_config JSON
       ...({
         cb_type: params.cb_type,
         cb_base_rate: params.cb_base_rate,
@@ -184,18 +192,20 @@ export async function updateAccountConfigAction(params: {
         cb_is_unlimited: params.cb_is_unlimited,
         cb_rules_json: params.cb_rules_json,
         cb_min_spend: params.cb_min_spend,
-        cb_cycle_type: params.cb_cycle_type
+        cb_cycle_type: params.cb_cycle_type,
+        cashback_config: params.cashbackConfig,   // FIX: was missing — cashback_config JSON never updated before
       } as any)
     })
 
     if (!success) throw new Error('Failed to update account config in PocketBase')
 
+    console.log('[DB:PB] accounts.updateConfig SUCCESS', { id: params.id })
     revalidatePath('/accounts')
     revalidatePath(`/accounts/${params.id}`)
     return { success: true }
   } catch (error) {
-    console.error('[DB:PB] accounts.updateConfig failed:', error)
-    return { success: false, error: (error as any).message }
+    console.error('[DB:PB] accounts.updateConfig FAILED', { id: params.id, error: String(error) })
+    return { success: false, error: (error as Error).message }
   }
 }
 
