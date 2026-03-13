@@ -158,6 +158,20 @@ export function TransactionSlideV2({
 
   // Get default values based on initialData - memoized to prevent infinite loops
   const defaultFormValues = useMemo((): SingleTransactionFormValues => {
+    const resolveCategoryId = (catId: string | null | undefined) => {
+      if (!catId) return null;
+      const matched = localCategories.find(
+        (c) => c.id === catId || c.slug === catId,
+      );
+      return matched?.id ?? catId;
+    };
+
+    const resolveShopId = (shopId: string | null | undefined) => {
+      if (!shopId) return null;
+      const matched = localShops.find((s) => s.id === shopId);
+      return matched?.id ?? shopId;
+    };
+
     console.log("🎨 defaultFormValues computed:");
     console.log("   initialData:", initialData);
     console.log("   operationMode:", operationMode);
@@ -188,7 +202,7 @@ export function TransactionSlideV2({
       const isIncome = type === "income" || type === "repayment";
       const values: SingleTransactionFormValues = {
         type,
-        category_id: initialData.category_id ?? null,
+        category_id: resolveCategoryId(initialData.category_id),
         occurred_at: occurredAt,
         amount: Math.round(Math.abs(initialData.amount ?? 0)),
         note: note,
@@ -200,7 +214,7 @@ export function TransactionSlideV2({
             initialData.target_account_id ??
             null)
           : (initialData.target_account_id ?? null),
-        shop_id: initialData.shop_id ?? null,
+        shop_id: resolveShopId(initialData.shop_id),
         person_id: initialData.person_id ?? null,
         tag: initialData.tag ?? null,
         cashback_mode: initialData.cashback_mode || "none_back",
