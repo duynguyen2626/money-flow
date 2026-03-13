@@ -3399,7 +3399,17 @@ export const UnifiedTransactionTable = React.forwardRef<
                               sourceAccountFromId?.image_url ||
                               null;
 
-                            const personId = (txn as any).person_id;
+                            const personPocketBaseId = (txn as any)
+                              .person_pocketbase_id as
+                              | string
+                              | null
+                              | undefined;
+                            const personId =
+                              personPocketBaseId ||
+                              ((txn as any).person_id as
+                                | string
+                                | null
+                                | undefined);
                             const resolvedPerson = personId
                               ? people.find((person) => person.id === personId)
                               : null;
@@ -3883,7 +3893,17 @@ export const UnifiedTransactionTable = React.forwardRef<
                             );
                           }
                           case "people": {
-                            const personId = (txn as any).person_id;
+                            const personPocketBaseId = (txn as any)
+                              .person_pocketbase_id as
+                              | string
+                              | null
+                              | undefined;
+                            const personId =
+                              personPocketBaseId ||
+                              ((txn as any).person_id as
+                                | string
+                                | null
+                                | undefined);
                             const resolvedPerson = personId
                               ? people.find((person) => person.id === personId)
                               : null;
