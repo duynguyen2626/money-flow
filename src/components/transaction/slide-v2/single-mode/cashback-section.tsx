@@ -38,11 +38,13 @@ import { Input } from "@/components/ui/input";
 type CashbackSectionProps = {
   accounts?: Account[];
   categories?: Category[];
+  hideHeader?: boolean;
 };
 
 export function CashbackSection({
   accounts,
   categories = [],
+  hideHeader = false,
 }: CashbackSectionProps) {
   const form = useFormContext<SingleTransactionFormValues>();
   const isExpanded = useWatch({
