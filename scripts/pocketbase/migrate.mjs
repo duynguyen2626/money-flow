@@ -88,6 +88,30 @@ function normalizeCashbackFields(account) {
     };
 }
 
+function remapCashbackConfigCategoryIds(value) {
+    if (Array.isArray(value)) {
+        return value.map(remapCashbackConfigCategoryIds);
+    }
+
+    if (!value || typeof value !== 'object') {
+        return value;
+    }
+
+    const result = {};
+    for (const [key, raw] of Object.entries(value)) {
+        if (key === 'cat_ids' && Array.isArray(raw)) {
+            result[key] = raw
+                .filter((id) => typeof id === 'string' && id.trim().length > 0)
+                .map((id) => toPocketBaseId(id, 'categories'));
+            continue;
+        }
+
+        result[key] = remapCashbackConfigCategoryIds(raw);
+    }
+
+    return result;
+}
+
 function calculateCycleTag(dateStr, statementDay) {
     if (!statementDay) return null;
     const date = new Date(dateStr);
@@ -474,13 +498,13 @@ async function migrate() {
 
             return {
                 name: a.name,
-                slug: a.id?.substring(0, 8),
+                slug: a.id || null,
                 type: normalizeAccountType(a.type),
                 currency: a.currency,
                 credit_limit: parseFloat(a.credit_limit || 0),
                 current_balance: parseFloat(a.current_balance || 0),
                 owner_id: a.owner_id ? toPocketBaseId(a.owner_id, 'people') : null,
-                cashback_config: a.cashback_config,
+                cashback_config: remapCashbackConfigCategoryIds(a.cashback_config),
                 cashback_config_version: a.cashback_config_version ?? null,
                 is_active: a.is_active,
                 image_url: a.image_url,

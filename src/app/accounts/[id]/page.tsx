@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { cache } from 'react'
 import {
   getPocketBaseAccountDetails,
   getPocketBaseAccounts,
@@ -16,6 +17,10 @@ import { Loader2 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
+const getCachedPocketBaseAccountDetails = cache(async (id: string) => {
+  return getPocketBaseAccountDetails(id)
+})
+
 type PageProps = {
   params: Promise<{
     id: string
@@ -32,7 +37,7 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params
   const { tab } = await searchParams
-  const account = await getPocketBaseAccountDetails(id)
+  const account = await getCachedPocketBaseAccountDetails(id)
 
   if (!account) return { title: 'Account Not Found' }
 
@@ -61,7 +66,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     notFound()
   }
 
-  const account = await getPocketBaseAccountDetails(id)
+  const account = await getCachedPocketBaseAccountDetails(id)
 
   if (!account) {
     notFound()
@@ -83,15 +88,31 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
 
   const resolvedDate = new Date() // Fallback
 
-  // Pre-fetch everything needed for V2 view
-  const [allAccounts, categories, people, shops, cashbackStats, transactions] = await Promise.all([
+  // Pre-fetch everything needed for V2 view with graceful fallback for transient PB timeouts
+  const [
+    allAccountsResult,
+    categoriesResult,
+    peopleResult,
+    shopsResult,
+    cashbackStatsResult,
+    transactionsResult,
+  ] = await Promise.allSettled([
     getPocketBaseAccounts(),
     getPocketBaseCategories(),
     getPocketBasePeople(),
     getPocketBaseShops(),
-    getPocketBaseAccountSpendingStatsSnapshot(pocketBaseAccountId, resolvedDate, tag),
+    account.type === 'credit_card'
+      ? getPocketBaseAccountSpendingStatsSnapshot(pocketBaseAccountId, resolvedDate, tag)
+      : Promise.resolve(null),
     loadPocketBaseTransactionsForAccount(pocketBaseAccountId, 2000),
   ])
+
+  const allAccounts = allAccountsResult.status === 'fulfilled' ? allAccountsResult.value : []
+  const categories = categoriesResult.status === 'fulfilled' ? categoriesResult.value : []
+  const people = peopleResult.status === 'fulfilled' ? peopleResult.value : []
+  const shops = shopsResult.status === 'fulfilled' ? shopsResult.value : []
+  const cashbackStats = cashbackStatsResult.status === 'fulfilled' ? cashbackStatsResult.value : null
+  const transactions = transactionsResult.status === 'fulfilled' ? transactionsResult.value : []
 
   // Calculate annual fee waiver stats manually for header display
   let accountWithStats = account

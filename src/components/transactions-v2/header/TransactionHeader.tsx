@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Account, Person } from '@/types/moneyflow.types'
-import { MonthYearPickerV2 } from '@/components/transactions-v2/header/MonthYearPickerV2'
+import { UnifiedSmartDatePicker } from '@/components/transactions-v2/header/UnifiedSmartDatePicker'
 import { QuickFilterDropdown } from '@/components/transactions-v2/header/QuickFilterDropdown'
 import { TypeFilterDropdown } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusDropdown } from '@/components/transactions-v2/header/StatusDropdown'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
-import { CycleFilterDropdown } from '@/components/transactions-v2/header/CycleFilterDropdown'
 import { FilterX, ListFilter, X, Search, Filter, Trash2, ChevronDown, Clipboard, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -82,6 +81,7 @@ interface TransactionHeaderProps {
   cycles: { label: string; value: string }[]
   selectedCycle?: string
   onCycleChange: (cycle?: string) => void
+  isCycleLoading?: boolean
   disabledRange?: { start: Date; end: Date } | undefined
 
   // Available months for constraints
@@ -100,13 +100,11 @@ interface TransactionHeaderProps {
 }
 
 interface ClearDropdownButtonProps {
-  onReset?: () => void
   onClearFilters?: () => void
   setConfirmClearOpen: (open: boolean) => void
-  handleApplyFilters: () => void
 }
 
-function ClearDropdownButton({ onReset, onClearFilters, setConfirmClearOpen, handleApplyFilters }: ClearDropdownButtonProps) {
+function ClearDropdownButton({ onClearFilters, setConfirmClearOpen }: ClearDropdownButtonProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
@@ -206,6 +204,7 @@ export function TransactionHeader({
   cycles,
   selectedCycle,
   onCycleChange,
+  isCycleLoading = false,
   disabledRange,
   availableMonths,
   availableDateRange,
@@ -226,7 +225,7 @@ export function TransactionHeader({
   // Date State Buffer
   const [localDate, setLocalDate] = useState(date)
   const [localDateRange, setLocalDateRange] = useState(dateRange)
-  const [localDateMode, setLocalDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>(dateMode)
+  const [localDateMode, setLocalDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'>(dateMode)
 
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
@@ -246,7 +245,7 @@ export function TransactionHeader({
     setLocalCycle(selectedCycle)
     setLocalDate(date)
     setLocalDateRange(dateRange)
-    setLocalDateMode(dateMode)
+    setLocalDateMode(selectedCycle ? 'cycle' : dateMode)
   }, [
     accountId, personId, categoryId, searchTerm, filterType, statusFilter,
     selectedCycle, date, dateRange, dateMode
@@ -294,6 +293,7 @@ export function TransactionHeader({
   // Wrapper for Cycle Change
   const handleCycleChange = (val: string | undefined) => {
     setLocalCycle(val)
+    setLocalDateMode('cycle')
     if (hasActiveFilters) {
       onCycleChange(val)
     }
@@ -329,7 +329,7 @@ export function TransactionHeader({
     onCycleChange(localCycle)
 
     // Apply Date Changes
-    onModeChange(localDateMode)
+    onModeChange(localDateMode === 'cycle' ? 'all' : localDateMode)
     onDateChange(localDate)
     onRangeChange(localDateRange)
   }
@@ -345,7 +345,7 @@ export function TransactionHeader({
     onSearchChange(localSearchTerm)
   }
 
-  const DesktopFilters = () => (
+  const renderDesktopFilters = () => (
     <div className="hidden md:flex items-center gap-2 shrink-0">
       {onRefresh && (
         <Button
@@ -419,25 +419,26 @@ export function TransactionHeader({
         disabled={cycles.length === 0}
       /> */}
 
-      <MonthYearPickerV2
+      <UnifiedSmartDatePicker
         date={localDate}
         dateRange={localDateRange}
-        mode={localDateMode}
+        mode={localDateMode as 'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'}
         onDateChange={(d) => handleDateUpdate({ date: d })}
         onRangeChange={(r) => handleDateUpdate({ range: r })}
         onModeChange={(m) => {
-          if (m !== 'cycle') {
-            handleDateUpdate({ mode: m })
+          if (m === 'cycle') {
+            setLocalDateMode('cycle')
+            return
           }
+          handleDateUpdate({ mode: m })
         }}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
         availableDateRange={availableDateRange}
-        accountCycleTags={isCreditCard ? cycles.map(cycle => cycle.value) : undefined}
         cycles={isCreditCard ? cycles : []}
         selectedCycleValue={isCreditCard ? localCycle : undefined}
         onCycleSelect={handleCycleChange}
-        isCycleLoading={false}
+        isCycleLoading={isCycleLoading}
         locked={isCreditCard ? !!localCycle : false}
       />
 
@@ -454,16 +455,14 @@ export function TransactionHeader({
         </Button>
       ) : (
         <ClearDropdownButton
-          onReset={onReset}
           onClearFilters={onClearFilters}
           setConfirmClearOpen={setConfirmClearOpen}
-          handleApplyFilters={handleApplyFilters}
         />
       )}
     </div>
   )
 
-  const MobileFilterButton = () => (
+  const renderMobileFilterButton = () => (
     <Button
       variant={hasActiveFilters ? 'destructive' : 'default'}
       size="sm"
@@ -500,7 +499,7 @@ export function TransactionHeader({
           </button>
         </div>
 
-        <MobileFilterButton />
+        {renderMobileFilterButton()}
 
         <div className="shrink-0">
           <AddTransactionDropdown onSelect={onAdd} />
@@ -509,7 +508,7 @@ export function TransactionHeader({
 
       {/* Desktop Header */}
       <div className="hidden md:flex items-center gap-2 px-4 py-3">
-        <DesktopFilters />
+        {renderDesktopFilters()}
 
         <div className="flex items-center gap-2 flex-1 ml-2 relative">
           <div className="relative flex-1 max-w-sm">
@@ -634,36 +633,27 @@ export function TransactionHeader({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Cycle</label>
-              <CycleFilterDropdown
-                cycles={cycles}
-                value={localCycle}
-                onChange={setLocalCycle}
-                disabled={!isCreditCard || cycles.length === 0}
-                fullWidth
-              />
-            </div>
-
-            <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Date</label>
-              <MonthYearPickerV2
+              <UnifiedSmartDatePicker
                 date={localDate}
                 dateRange={localDateRange}
-                mode={localDateMode}
+                mode={localDateMode as 'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'}
                 // Mobile doesn't use hybrid real-time, just local buffer until Apply
                 onDateChange={setLocalDate}
                 onRangeChange={setLocalDateRange}
                 onModeChange={(m) => {
-                  if (m !== 'cycle') {
-                    setLocalDateMode(m)
-                  }
+                  setLocalDateMode(m)
                 }}
                 disabledRange={disabledRange}
                 availableMonths={availableMonths}
                 fullWidth
-                accountCycleTags={isCreditCard ? cycles.map(cycle => cycle.value) : undefined}
                 cycles={isCreditCard ? cycles : []}
                 selectedCycleValue={isCreditCard ? localCycle : undefined}
+                onCycleSelect={(cycle) => {
+                  setLocalCycle(cycle)
+                  setLocalDateMode('cycle')
+                }}
+                isCycleLoading={isCycleLoading}
                 locked={isCreditCard ? !!localCycle : false}
               />
             </div>

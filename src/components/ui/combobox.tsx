@@ -45,6 +45,7 @@ type ComboboxProps = {
   isLoading?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  hideTriggerBadge?: boolean
 }
 
 export function Combobox({
@@ -66,6 +67,7 @@ export function Combobox({
   isLoading,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
+  hideTriggerBadge = false,
 }: ComboboxProps) {
   const [internalOpen, setInternalOpen] = React.useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
@@ -133,7 +135,7 @@ export function Combobox({
                   <span className="text-[11px] text-slate-500 truncate">{selectedItem.description}</span>
                 )}
               </span>
-              {selectedItem?.badge && (
+              {selectedItem?.badge && !hideTriggerBadge && (
                 <span className="flex-shrink-0 ml-2">
                   {selectedItem.badge}
                 </span>

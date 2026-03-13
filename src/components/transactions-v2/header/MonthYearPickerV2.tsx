@@ -79,7 +79,8 @@ export function MonthYearPickerV2({
   const [localCycle, setLocalCycle] = useState<string | undefined>(selectedCycleValue)
   const [cycleSearch, setCycleSearch] = useState('')
   const [cycleYearFilter, setCycleYearFilter] = useState<string>(String(new Date().getFullYear()))
-  const hasCycleContext = accountCycleTags !== undefined || mode === 'cycle' || selectedCycleValue !== undefined
+  const hasCycleOptions = (Array.isArray(cycles) && cycles.length > 0) || (Array.isArray(accountCycleTags) && accountCycleTags.length > 0)
+  const hasCycleContext = hasCycleOptions || mode === 'cycle' || selectedCycleValue !== undefined
   const filteredCycles = useMemo(() => {
     const q = cycleSearch.trim().toLowerCase()
     if (!q) return cycles || []

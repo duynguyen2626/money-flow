@@ -10,7 +10,7 @@ import { RolloverDebtDialog } from '@/components/people/rollover-debt-dialog'
 import { TypeFilterDropdown, FilterType } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusDropdown, StatusFilter } from '@/components/transactions-v2/header/StatusDropdown'
 import { QuickFilterDropdown } from '@/components/transactions-v2/header/QuickFilterDropdown'
-import { MonthYearPickerV2 } from '@/components/transactions-v2/header/MonthYearPickerV2'
+import { UnifiedSmartDatePicker } from '@/components/transactions-v2/header/UnifiedSmartDatePicker'
 import { DateRange } from 'react-day-picker'
 import { toast } from 'sonner'
 
@@ -252,18 +252,20 @@ export function TransactionControlBar({
                         />
                     </div>
 
-                    <MonthYearPickerV2
+                    <UnifiedSmartDatePicker
                         date={date}
                         dateRange={dateRange}
                         mode={dateMode}
                         onDateChange={onDateChange}
                         onRangeChange={onRangeChange}
                         onModeChange={onModeChange}
-                        cycles={allCycles.map(cycle => ({
+                        cycles={selectedAccountId ? allCycles.map(cycle => ({
                             label: getMonthDisplayName(cycle.tag),
                             value: cycle.tag,
-                        }))}
-                        selectedCycleValue={activeCycle.tag}
+                        })) : []}
+                        selectedCycleValue={selectedAccountId ? activeCycle.tag : 'all'}
+                        selectedYearValue={selectedYear}
+                        onYearSelect={onYearChange}
                         onCycleSelect={(tag) => {
                             if (onCycleSelect) {
                                 onCycleSelect(tag, selectedYear)

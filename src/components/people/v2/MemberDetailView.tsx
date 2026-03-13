@@ -350,7 +350,18 @@ export function MemberDetailView({
     const handleAccountChange = (value?: string) => {
         setSelectedAccountId(value)
 
-        if (!value) return
+        if (!value) {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('tag', 'all')
+            params.delete('year')
+            params.delete('dateFrom')
+            params.delete('dateTo')
+            startTransition(() => {
+                router.push(`?${params.toString()}`, { scroll: false })
+            })
+            toast.info('Switched debt cycle to All History')
+            return
+        }
 
         if (urlTag !== 'all') {
             const params = new URLSearchParams(searchParams.toString())
