@@ -142,6 +142,9 @@ export function TransactionSlideV2({
   // Unsaved Changes Dialog State
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingClose, setPendingClose] = useState(false);
+  const isEditingContext = Boolean(
+    editingId || initialData || operationMode !== "add",
+  );
 
   // DEBUG: Verify schemas are defined
   useEffect(() => {
@@ -201,7 +204,10 @@ export function TransactionSlideV2({
         person_id: initialData.person_id ?? null,
         tag: initialData.tag ?? null,
         cashback_mode: initialData.cashback_mode || "none_back",
-        cashback_share_percent: initialData.cashback_share_percent ?? null,
+        cashback_share_percent:
+          typeof initialData.cashback_share_percent === "number"
+            ? initialData.cashback_share_percent * 100
+            : null,
         cashback_share_fixed: initialData.cashback_share_fixed ?? null,
         ui_is_cashback_expanded: initialData.ui_is_cashback_expanded ?? false,
         is_installment: initialData.is_installment ?? false,
@@ -1036,6 +1042,7 @@ export function TransactionSlideV2({
                           onAddNewShop={onAddNewShop}
                           isLoadingCategories={isLoadingCategories}
                           isLoadingShops={isLoadingShops}
+                          isEditing={isEditingContext}
                         />
 
                         <AmountSection />
