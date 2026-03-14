@@ -1671,19 +1671,17 @@ export const UnifiedTransactionTable = React.forwardRef<
 
             {divider}
 
-            {(txn.history_count || 0) > 0 && (
-              <button
-                className={neutralItemClass}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setHistoryTarget(txn);
-                  setActionMenuOpen(null);
-                }}
-              >
-                <History className="h-4 w-4" />
-                <span>View History</span>
-              </button>
-            )}
+            <button
+              className={neutralItemClass}
+              onClick={(event) => {
+                event.stopPropagation();
+                setHistoryTarget(txn);
+                setActionMenuOpen(null);
+              }}
+            >
+              <History className="h-4 w-4" />
+              <span>View History</span>
+            </button>
           </>
         );
       }
@@ -1765,19 +1763,17 @@ export const UnifiedTransactionTable = React.forwardRef<
               </button>
             </>
           )}
-          {(txn.history_count || 0) > 0 && (
-            <button
-              className={neutralItemClass}
-              onClick={(event) => {
-                event.stopPropagation();
-                setHistoryTarget(txn);
-                setActionMenuOpen(null);
-              }}
-            >
-              <History className="h-4 w-4" />
-              <span>View History</span>
-            </button>
-          )}
+          <button
+            className={neutralItemClass}
+            onClick={(event) => {
+              event.stopPropagation();
+              setHistoryTarget(txn);
+              setActionMenuOpen(null);
+            }}
+          >
+            <History className="h-4 w-4" />
+            <span>View History</span>
+          </button>
 
           {divider}
 
@@ -3703,7 +3699,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                                 <div className="flex items-center gap-1.5 w-full min-w-0 h-9">
                                   {borderedTypeIconWide}
 
-                                  <div className="flex-1 min-w-0 max-w-[calc(88%+15px)] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm">
+                                  <div className="flex-1 min-w-0 max-w-[42%] h-9 px-1.5 py-1 rounded-md bg-slate-50 border border-slate-200 flex items-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors group/pill shadow-sm">
                                     {/* Flow Badge */}
                                     {flowBadgeType && (
                                       <span
@@ -4125,10 +4121,15 @@ export const UnifiedTransactionTable = React.forwardRef<
                                     !visibleColumns.total_back && (
                                       <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
                                         -
-                                        {(percentDisp > 1
-                                          ? percentDisp
-                                          : percentDisp * 100
-                                        ).toFixed(0)}
+                                        {(() => {
+                                          const percentBadgeValue =
+                                            percentDisp > 1
+                                              ? percentDisp
+                                              : percentDisp * 100;
+                                          return percentBadgeValue % 1 === 0
+                                            ? percentBadgeValue.toFixed(0)
+                                            : percentBadgeValue.toFixed(2);
+                                        })()}
                                         %
                                       </span>
                                     )}
@@ -4247,10 +4248,15 @@ export const UnifiedTransactionTable = React.forwardRef<
                                       !visibleColumns.total_back && (
                                         <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
                                           -
-                                          {(percentDisp > 1
-                                            ? percentDisp
-                                            : percentDisp * 100
-                                          ).toFixed(0)}
+                                          {(() => {
+                                            const percentBadgeValue =
+                                              percentDisp > 1
+                                                ? percentDisp
+                                                : percentDisp * 100;
+                                            return percentBadgeValue % 1 === 0
+                                              ? percentBadgeValue.toFixed(0)
+                                              : percentBadgeValue.toFixed(2);
+                                          })()}
                                           %
                                         </span>
                                       )}
@@ -4337,7 +4343,11 @@ export const UnifiedTransactionTable = React.forwardRef<
                                 >
                                   <div className="flex items-baseline gap-1.5 justify-end cursor-help">
                                     <span className="text-[10px] font-bold text-emerald-600">
-                                      -{effectivePercent.toFixed(0)}% =
+                                      -
+                                      {effectivePercent % 1 === 0
+                                        ? effectivePercent.toFixed(0)
+                                        : effectivePercent.toFixed(2)}
+                                      % =
                                     </span>
                                     <span className="font-black text-emerald-700 tabular-nums">
                                       {numberFormatter.format(cashbackAmount)}
@@ -4367,7 +4377,14 @@ export const UnifiedTransactionTable = React.forwardRef<
                               <div className="flex flex-col text-[1em]">
                                 {(pRaw || fRaw) && (
                                   <span className="text-[0.7em] text-slate-500 mb-0.5">
-                                    {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ""}
+                                    {pRaw
+                                      ? `${
+                                          ((pRaw > 1 ? pRaw : pRaw * 100) % 1 ===
+                                          0
+                                            ? (pRaw > 1 ? pRaw : pRaw * 100).toFixed(0)
+                                            : (pRaw > 1 ? pRaw : pRaw * 100).toFixed(2))
+                                        }%`
+                                      : ""}
                                     {pRaw && fRaw ? " + " : ""}
                                     {fRaw ? numberFormatter.format(fRaw) : ""}
                                   </span>

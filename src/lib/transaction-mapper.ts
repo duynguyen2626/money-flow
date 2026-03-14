@@ -103,15 +103,27 @@ export function parseMetadata(value: TransactionWithDetails['metadata']) {
 }
 
 export function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
+    const toFiniteNumber = (value: unknown): number | undefined => {
+        const n = Number(value)
+        return Number.isFinite(n) ? n : undefined
+    }
+
     const baseAmount =
         typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
-    const percentValue =
-        typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
+    const percentFromTxn = toFiniteNumber(txn.cashback_share_percent)
+    const fixedFromTxn = toFiniteNumber(txn.cashback_share_fixed)
 
     let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
 
     const categoryName = txn.category_name?.toLowerCase() ?? '';
     const meta = parseMetadata(txn.metadata);
+    const percentFromMeta = toFiniteNumber(meta?.cashback_share_percent) ?? toFiniteNumber((meta as any)?.cashback?.cashback_share_percent)
+    const fixedFromMeta = toFiniteNumber(meta?.cashback_share_fixed) ?? toFiniteNumber((meta as any)?.cashback?.cashback_share_fixed)
+    const percentValue = percentFromTxn ?? percentFromMeta
+    const fixedValue = fixedFromTxn ?? fixedFromMeta
+    const rawMode = String(txn.cashback_mode ?? (meta as any)?.cashback_mode ?? '').trim()
+    const normalizedMode = rawMode === 'percent' ? 'real_percent' : rawMode === 'fixed' ? 'real_fixed' : rawMode
+    const inferredMode = (percentValue ?? 0) > 0 ? 'real_percent' : (fixedValue ?? 0) > 0 ? 'real_fixed' : 'none_back'
 
     if (meta && meta.is_debt_repayment_parent) {
         derivedType = 'repayment';
@@ -174,12 +186,11 @@ export function buildEditInitialValues(txn: TransactionWithDetails): Partial<Tra
         cashback_share_percent:
             percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined, // Multiply by 100 for UI (0.01 → 1%)
         cashback_share_fixed:
-            txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
+            fixedValue,
         is_installment: txn.is_installment ?? false,
         // CRITICAL: Preserve cashback_mode from database (especially 'voluntary'), don't auto-infer
-        cashback_mode: (txn.cashback_mode as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary') ||
-            ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
-                (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back'),
+        cashback_mode: (normalizedMode as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary') || inferredMode,
+        ui_is_cashback_expanded: (normalizedMode && normalizedMode !== 'none_back') || ((percentValue ?? 0) > 0) || ((fixedValue ?? 0) > 0),
         metadata: meta,
     };
 

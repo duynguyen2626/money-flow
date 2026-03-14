@@ -119,7 +119,7 @@ function resolvePercentValue(row) {
         row.back_percent
     );
     var val = toNumberSafe(percent);
-    if (val > 0 && val < 1) val = Math.round(val * 100);
+    if (val > 0 && val < 1) val = val * 100;
     return val;
 }
 
