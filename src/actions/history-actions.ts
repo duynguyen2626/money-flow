@@ -31,14 +31,28 @@ export async function getTransactionHistory(
     try {
         const pbTxnId = toPocketBaseId(transactionId, 'transactions');
 
-        // Fetch history records ordered by created_at descending (created in PB)
+        // Primary query: direct relation by transaction_id
         const historyResp = await pocketbaseList<any>('transaction_history', {
-            filter: `transaction_id = "${pbTxnId}" || snapshot_before.id = "${pbTxnId}" || snapshot_before.id = "${transactionId}"`,
+            filter: `transaction_id = "${pbTxnId}"`,
             sort: '-created', // PocketBase uses 'created' for timestamp
             perPage: 100
         });
 
-        const historyItems = historyResp.items;
+        let historyItems = historyResp.items;
+
+        // Fallback for legacy migrated rows where transaction_id may be empty
+        // and the transaction reference lives inside snapshot_before.id.
+        if (!historyItems.length) {
+            const fallbackResp = await pocketbaseList<any>('transaction_history', {
+                sort: '-created',
+                perPage: 500
+            });
+            historyItems = (fallbackResp.items || []).filter((item) => {
+                const snapshot = parseSnapshot(item.snapshot_before)
+                const snapshotId = String((snapshot as any).id || '')
+                return snapshotId === pbTxnId || snapshotId === transactionId
+            })
+        }
 
         // Fetch current transaction state for comparison
         const currentTxn = await pocketbaseGetById<any>('transactions', pbTxnId);
@@ -88,10 +102,21 @@ export async function hasTransactionHistory(transactionId: string): Promise<bool
     try {
         const pbTxnId = toPocketBaseId(transactionId, 'transactions');
         const resp = await pocketbaseList<any>('transaction_history', {
-            filter: `transaction_id = "${pbTxnId}" || snapshot_before.id = "${pbTxnId}" || snapshot_before.id = "${transactionId}"`,
+            filter: `transaction_id = "${pbTxnId}"`,
             perPage: 1
         });
-        return resp.totalItems > 0;
+
+        if (resp.totalItems > 0) return true
+
+        const fallbackResp = await pocketbaseList<any>('transaction_history', {
+            sort: '-created',
+            perPage: 500
+        })
+        return (fallbackResp.items || []).some((item) => {
+            const snapshot = parseSnapshot(item.snapshot_before)
+            const snapshotId = String((snapshot as any).id || '')
+            return snapshotId === pbTxnId || snapshotId === transactionId
+        })
     } catch {
         return false
     }
