@@ -175,6 +175,48 @@ type LookupMaps = {
   shops: Map<string, any>;
 };
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function fetchHistoryCountMap(transactionIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (transactionIds.length === 0) return counts;
+
+  const chunks = chunkArray(transactionIds, 60);
+
+  for (const chunk of chunks) {
+    const filter = chunk.map((id) => `transaction_id="${id}"`).join(" || ");
+    let page = 1;
+
+    while (true) {
+      const response = await pocketbaseList<any>("transaction_history", {
+        filter,
+        page,
+        perPage: 500,
+        fields: "transaction_id",
+      });
+
+      for (const row of response.items ?? []) {
+        const txnId = String(row.transaction_id || "");
+        if (!txnId) continue;
+        counts.set(txnId, (counts.get(txnId) ?? 0) + 1);
+      }
+
+      const totalPages = Number(response.totalPages ?? 1);
+      if (page >= totalPages) break;
+      page += 1;
+    }
+  }
+
+  return counts;
+}
+
 function revalidatePersonPaths(personId: string | null | undefined) {
   if (!personId) return;
   try {
@@ -300,9 +342,10 @@ export async function mapTransactionRow(
     lookups: LookupMaps;
     contextAccountId?: string;
     contextMode?: "person" | "account" | "general";
+    historyCountMap?: Map<string, number>;
   },
 ): Promise<TransactionWithDetails> {
-  const { lookups, contextAccountId } = options;
+  const { lookups, contextAccountId, historyCountMap } = options;
   const baseType = resolveBaseType(row.type);
   const account = lookups.accounts.get(row.account_id) ?? null;
   const target = row.target_account_id ? (lookups.accounts.get(row.target_account_id) ?? null) : null;
@@ -351,7 +394,7 @@ export async function mapTransactionRow(
     person_pocketbase_id: person?.id ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
-    history_count: 0, // Fill on demand
+    history_count: historyCountMap?.get(row.id) ?? 0,
     bank_back: 0,
     cashback_share_amount: (row.cashback_share_fixed ?? 0) + (Math.abs(row.amount) * (row.cashback_share_percent ?? 0)),
     profit: 0,
@@ -406,6 +449,7 @@ export async function loadTransactions(options: {
 
     const rows = response.items as unknown as FlatTransactionRow[];
     const lookups = await fetchLookups(rows);
+    const historyCountMap = await fetchHistoryCountMap(rows.map((row) => row.id));
     
     return Promise.all(
       rows.map((row) =>
@@ -413,6 +457,7 @@ export async function loadTransactions(options: {
           lookups,
           contextAccountId: options.accountId,
           contextMode: options.context ?? "general",
+          historyCountMap,
         }),
       )
     );
