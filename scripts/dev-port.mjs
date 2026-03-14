@@ -1,6 +1,7 @@
 import net from 'node:net'
 import { spawn, exec } from 'node:child_process'
 import { promisify } from 'node:util'
+import { rm } from 'node:fs/promises'
 
 const execAsync = promisify(exec)
 
@@ -55,6 +56,13 @@ async function main() {
     await new Promise(resolve => setTimeout(resolve, 500)) // Wait for cleanup
   } catch (err) {
     // Ignore errors from pkill
+  }
+
+  // Clear dev cache to avoid stale Turbopack chunk references between restarts.
+  try {
+    await rm('.next/dev', { recursive: true, force: true })
+  } catch (err) {
+    // Ignore cache cleanup failures and continue starting dev server.
   }
 
   const port = await findPort()
