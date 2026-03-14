@@ -277,10 +277,38 @@ async function logHistory(
 ) {
   try {
     const pbTxnId = toPocketBaseId(transactionId, 'transactions');
+    const compactSnapshot = {
+      id: snapshot?.id ?? pbTxnId,
+      occurred_at: snapshot?.occurred_at ?? snapshot?.date ?? null,
+      date: snapshot?.date ?? snapshot?.occurred_at ?? null,
+      note: snapshot?.note ?? snapshot?.description ?? null,
+      type: snapshot?.type ?? null,
+      status: snapshot?.status ?? null,
+      amount: snapshot?.amount ?? null,
+      original_amount: snapshot?.original_amount ?? null,
+      final_price: snapshot?.final_price ?? null,
+      account_id: snapshot?.account_id ?? null,
+      target_account_id: snapshot?.target_account_id ?? snapshot?.to_account_id ?? null,
+      person_id: snapshot?.person_id ?? null,
+      category_id: snapshot?.category_id ?? null,
+      shop_id: snapshot?.shop_id ?? null,
+      cashback_mode: snapshot?.cashback_mode ?? null,
+      cashback_share_percent: snapshot?.cashback_share_percent ?? null,
+      cashback_share_fixed: snapshot?.cashback_share_fixed ?? null,
+      tag: snapshot?.tag ?? null,
+      debt_cycle_tag: snapshot?.debt_cycle_tag ?? null,
+      persisted_cycle_tag: snapshot?.persisted_cycle_tag ?? null,
+      statement_cycle_tag: snapshot?.statement_cycle_tag ?? null,
+      metadata:
+        snapshot?.metadata && typeof snapshot.metadata === "object"
+          ? snapshot.metadata
+          : null,
+    };
+
     await pocketbaseCreate('transaction_history', {
       transaction_id: pbTxnId,
       change_type: changeType,
-      snapshot_before: snapshot,
+      snapshot_before: compactSnapshot,
       changed_at: new Date().toISOString()
     });
   } catch (err) {

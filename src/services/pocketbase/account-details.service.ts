@@ -99,6 +99,8 @@ function mapPerson(record: PocketBaseRecord): Person {
     id: record.id,
     name: record.name,
     image_url: record.image_url || null,
+    sheet_link: record.sheet_link || null,
+    google_sheet_url: record.google_sheet_url || null,
     is_owner: Boolean(record.is_owner || false),
   };
 }

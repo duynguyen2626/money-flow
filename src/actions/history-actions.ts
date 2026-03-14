@@ -33,7 +33,7 @@ export async function getTransactionHistory(
 
         // Fetch history records ordered by created_at descending (created in PB)
         const historyResp = await pocketbaseList<any>('transaction_history', {
-            filter: `transaction_id = "${pbTxnId}"`,
+            filter: `transaction_id = "${pbTxnId}" || snapshot_before.id = "${pbTxnId}" || snapshot_before.id = "${transactionId}"`,
             sort: '-created', // PocketBase uses 'created' for timestamp
             perPage: 100
         });
@@ -88,7 +88,7 @@ export async function hasTransactionHistory(transactionId: string): Promise<bool
     try {
         const pbTxnId = toPocketBaseId(transactionId, 'transactions');
         const resp = await pocketbaseList<any>('transaction_history', {
-            filter: `transaction_id = "${pbTxnId}"`,
+            filter: `transaction_id = "${pbTxnId}" || snapshot_before.id = "${pbTxnId}" || snapshot_before.id = "${transactionId}"`,
             perPage: 1
         });
         return resp.totalItems > 0;

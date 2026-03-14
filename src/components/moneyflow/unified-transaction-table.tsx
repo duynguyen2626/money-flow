@@ -1671,19 +1671,17 @@ export const UnifiedTransactionTable = React.forwardRef<
 
             {divider}
 
-            {(txn.history_count || 0) > 0 && (
-              <button
-                className={neutralItemClass}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setHistoryTarget(txn);
-                  setActionMenuOpen(null);
-                }}
-              >
-                <History className="h-4 w-4" />
-                <span>View History</span>
-              </button>
-            )}
+            <button
+              className={neutralItemClass}
+              onClick={(event) => {
+                event.stopPropagation();
+                setHistoryTarget(txn);
+                setActionMenuOpen(null);
+              }}
+            >
+              <History className="h-4 w-4" />
+              <span>View History</span>
+            </button>
           </>
         );
       }
@@ -1765,19 +1763,17 @@ export const UnifiedTransactionTable = React.forwardRef<
               </button>
             </>
           )}
-          {(txn.history_count || 0) > 0 && (
-            <button
-              className={neutralItemClass}
-              onClick={(event) => {
-                event.stopPropagation();
-                setHistoryTarget(txn);
-                setActionMenuOpen(null);
-              }}
-            >
-              <History className="h-4 w-4" />
-              <span>View History</span>
-            </button>
-          )}
+          <button
+            className={neutralItemClass}
+            onClick={(event) => {
+              event.stopPropagation();
+              setHistoryTarget(txn);
+              setActionMenuOpen(null);
+            }}
+          >
+            <History className="h-4 w-4" />
+            <span>View History</span>
+          </button>
 
           {divider}
 
