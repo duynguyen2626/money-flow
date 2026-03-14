@@ -1,13 +1,9 @@
 @layer theme, base, components, utilities;
 
-@source "../**/*.{ts,tsx,js,jsx,mdx}";
-
-@layer utilities {
-  @tailwind utilities source(none);
-}
-
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
+
+@source "../**/*.{ts,tsx,js,jsx,mdx}";
 
 /* 
   IDE Tip: If you see "Unknown at rule" warnings for @theme, @custom-variant, or @apply, 
