@@ -1,22 +1,56 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Plus, X } from "lucide-react";
 import {
   FormControl,
   FormField,
   FormItem,
-  FormMessage,
   FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { formatShortVietnameseCurrency } from "@/lib/number-to-text";
 import { SingleTransactionFormValues } from "../types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Account, Category } from "@/types/moneyflow.types";
+import { CashbackSection } from "./cashback-section";
 
-export function AmountSection() {
+type AmountSectionProps = {
+  accounts: Account[];
+  categories: Category[];
+};
+
+function renderHighlightedNumericWords(text: string): ReactNode {
+  const normalized = text?.trim();
+  if (!normalized) return null;
+  const parts = normalized.split(/(\d+[.,]?\d*)/g);
+
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (!part) return null;
+        const isNumber = /\d/.test(part);
+        if (isNumber) {
+          return (
+            <span key={`num-${index}`} className="font-extrabold text-rose-500">
+              {part}
+            </span>
+          );
+        }
+
+        return <span key={`txt-${index}`}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+export function AmountSection({
+  accounts,
+  categories,
+}: AmountSectionProps) {
   const form = useFormContext<SingleTransactionFormValues>();
   const amount = useWatch({ control: form.control, name: "amount" });
   const serviceFee = useWatch({ control: form.control, name: "service_fee" });
@@ -27,157 +61,176 @@ export function AmountSection() {
     name: "ui_is_cashback_expanded",
   });
 
-  const [isFeeVisible, setIsFeeVisible] = useState<boolean>(() => {
+  const [showFeeInput, setShowFeeInput] = useState<boolean>(() => {
     const existing = form.getValues("service_fee");
     return typeof existing === "number" && existing > 0;
   });
 
   useEffect(() => {
-    if (isHideFee) {
-      if ((form.getValues("service_fee") || 0) > 0) {
-        form.setValue("service_fee", null, { shouldDirty: true });
-      }
-      setIsFeeVisible(false);
+    if (!isHideFee && (Number(serviceFee) || 0) > 0) {
+      setShowFeeInput(true);
     }
-  }, [form, isHideFee]);
+  }, [serviceFee, isHideFee]);
 
-  useEffect(() => {
-    if (isHideFee) return;
-    if ((Number(serviceFee) || 0) > 0) setIsFeeVisible(true);
-  }, [isHideFee, serviceFee]);
+  const isFeeVisible =
+    !isHideFee && (showFeeInput || (Number(serviceFee) || 0) > 0);
 
   const principal = Number(amount) || 0;
   const fee = isFeeVisible ? Number(serviceFee) || 0 : 0;
   const total = principal + fee;
 
   const totalText = useMemo(
-    () => new Intl.NumberFormat("vi-VN").format(total),
+    () => (total > 0 ? new Intl.NumberFormat("vi-VN").format(total) : ""),
     [total],
   );
 
+  const amountSummaryText = principal > 0
+    ? formatShortVietnameseCurrency(principal)
+    : "";
+
+  const feeSummaryText = fee > 0 ? formatShortVietnameseCurrency(fee) : "";
+  const totalSummaryText = total > 0 ? formatShortVietnameseCurrency(total) : "";
+
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-stretch">
-          <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-inner">
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-slate-500 mb-2">
-              Amount
-            </p>
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem className="space-y-0">
-                  <FormControl>
-                    <SmartAmountInput
-                      value={field.value}
-                      onChange={field.onChange}
-                      hideLabel
-                      className="text-3xl font-black h-14 bg-transparent border-none focus-visible:ring-0 focus-visible:border-indigo-500 px-0"
-                      placeholder="0"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {!isHideFee && (
-            <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm flex flex-col gap-2">
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.35em] text-slate-500">
-                <span>Fee</span>
-                {!isFeeVisible && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsFeeVisible(true)}
-                    className="h-7 px-2 text-[10px] font-black uppercase tracking-[0.35em] text-indigo-600"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Add
-                  </Button>
-                )}
-              </div>
-              {isFeeVisible && (
-                <div className="flex items-center gap-2">
-                  <FormField
-                    control={form.control}
-                    name="service_fee"
-                    render={({ field }) => (
-                      <FormItem className="flex-1 space-y-0">
-                        <FormControl>
-                          <SmartAmountInput
-                            value={field.value || undefined}
-                            onChange={field.onChange}
-                            hideLabel
-                            placeholder="0"
-                            className="h-11 font-black bg-slate-50 border border-slate-200 rounded-lg focus-visible:border-indigo-500 focus-visible:ring-0 text-right px-2"
-                            compact
-                            hideCurrencyText
-                            hideCalculator
-                            hideClearButton
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3 border-t border-slate-100 pt-4">
+      {/* Row 1: Amount + Fee — same compact style as Date/Tag row */}
+      <div className="flex gap-3">
+        {/* Amount */}
+        <div className="min-w-0 flex-1">
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem className="space-y-0">
+                <FormLabel className="flex items-center gap-1.5 text-[10px] font-bold text-violet-500 capitalize tracking-wide mb-1.5 min-h-[14px]">
+                  Amount
+                </FormLabel>
+                <FormControl>
+                  <SmartAmountInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    hideLabel
+                    className="h-10 border-slate-200 bg-white px-3 text-sm font-black focus-visible:border-indigo-500"
+                    placeholder="0"
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      form.setValue("service_fee", null, { shouldDirty: true });
-                      setIsFeeVisible(false);
-                    }}
-                    className="h-11 w-11 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 transition"
-                    aria-label="Remove service fee"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              {!isFeeVisible && (
-                <p className="text-[9px] text-slate-400">
-                  Optional. Click Add to include a fee.
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="rounded-xl border border-indigo-100 bg-indigo-600/90 text-white p-3 shadow-lg flex flex-col gap-2">
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.35em]">
-              <span>Total</span>
-              {!isHideFee && fee > 0 && (
-                <span className="text-[9px] text-indigo-100">
-                  Fee: {new Intl.NumberFormat("vi-VN").format(fee)}
-                </span>
-              )}
-            </div>
-            <div className="text-2xl font-black tabular-nums leading-tight">
-              {totalText}
-            </div>
-            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.35em]">
-              <span>Share cashback?</span>
-              <Switch
-                checked={Boolean(isCashbackExpanded)}
-                onCheckedChange={(checked) =>
-                  form.setValue("ui_is_cashback_expanded", checked)
-                }
-                className="data-[state=checked]:bg-white data-[state=checked]:text-indigo-600"
-              />
-            </div>
-          </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {/* Line 2: text hint */}
+          <p className="mt-1 text-[12px] font-semibold text-slate-500 truncate">
+            {amountSummaryText
+              ? renderHighlightedNumericWords(amountSummaryText)
+              : <span className="font-medium text-slate-400">Input to show text</span>}
+          </p>
         </div>
 
-        <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.35em] text-slate-400 px-1">
-          <span>
-            {principal > 0
-              ? formatShortVietnameseCurrency(principal)
-              : "Enter amount"}
+        {/* Fee */}
+        {!isHideFee && (
+          <div className="w-[130px] shrink-0">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold text-amber-500 capitalize tracking-wide mb-1.5 min-h-[14px]">
+              Fee
+            </p>
+            {isFeeVisible ? (
+              <div className="flex items-center gap-1">
+                <FormField
+                  control={form.control}
+                  name="service_fee"
+                  render={({ field }) => (
+                    <FormItem className="min-w-0 flex-1 space-y-0">
+                      <FormControl>
+                        <SmartAmountInput
+                          value={field.value || undefined}
+                          onChange={field.onChange}
+                          hideLabel
+                          placeholder="0"
+                          className="h-10 border-slate-200 bg-white px-3 text-right text-sm font-black focus-visible:border-indigo-500"
+                          compact
+                          hideCurrencyText
+                          hideCalculator
+                          hideClearButton
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    form.setValue("service_fee", null, { shouldDirty: true });
+                    setShowFeeInput(false);
+                  }}
+                  className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:text-slate-700"
+                  aria-label="Remove service fee"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFeeInput(true)}
+                className="h-10 w-full border-slate-200 bg-white text-[10px] font-bold text-slate-400 hover:text-indigo-600"
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Add fee
+              </Button>
+            )}
+            {/* Line 2: text hint for fee */}
+            <p className="mt-1 text-[12px] font-semibold text-slate-500 truncate">
+              {!isHideFee
+                ? (isFeeVisible && feeSummaryText
+                  ? renderHighlightedNumericWords(feeSummaryText)
+                  : <span className="font-medium text-slate-400">Input to show text</span>)
+                : null}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Row 3: Total */}
+      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 text-[12px] font-semibold text-slate-500 truncate">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 mr-2">Total:</span>
+            {totalSummaryText
+              ? renderHighlightedNumericWords(totalSummaryText)
+              : <span className="font-medium text-slate-400">Input to show text</span>}
+          </div>
+          <span className="text-sm font-black tabular-nums text-slate-900 shrink-0">
+            {totalText}
           </span>
         </div>
       </div>
+
+      {/* Cashback toggle */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">
+            Cashback Reward
+          </p>
+          <p className="text-[10px] text-slate-400">
+            Toggle to reveal optimizations
+          </p>
+        </div>
+        <Switch
+          checked={Boolean(isCashbackExpanded)}
+          onCheckedChange={(checked) =>
+            form.setValue("ui_is_cashback_expanded", checked)
+          }
+        />
+      </div>
+
+      {/* Cashback detail (expanded) */}
+      <CashbackSection
+        accounts={accounts}
+        categories={categories}
+        hideHeader
+      />
     </div>
   );
 }

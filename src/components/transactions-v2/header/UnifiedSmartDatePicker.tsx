@@ -24,7 +24,7 @@ interface UnifiedSmartDatePickerProps {
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
   availableDateRange?: DateRange | undefined
-  cycles?: Array<{ label: string; value: string }>
+  cycles?: Array<{ label: string; value: string; count?: number; highlight?: boolean }>
   selectedCycleValue?: string
   onCycleSelect?: (cycleValue: string) => void
   isCycleLoading?: boolean
@@ -405,12 +405,35 @@ export function UnifiedSmartDatePicker({
                       key={cycle.value}
                       type="button"
                       className={cn(
-                        'w-full text-left px-2 py-1.5 rounded text-xs hover:bg-slate-100',
-                        localCycle === cycle.value && 'bg-primary/10 text-primary font-semibold'
+                        'w-full rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
+                        localCycle === cycle.value
+                          ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+                          : cycle.highlight
+                            ? 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                            : 'border-transparent hover:border-slate-200 hover:bg-slate-100'
                       )}
                       onClick={() => setLocalCycle(cycle.value)}
                     >
-                      {cycle.label}
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <div className="truncate font-medium">{cycle.label}</div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {cycle.value !== 'all' && (
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              {cycle.value}
+                            </span>
+                          )}
+                          {cycle.highlight && cycle.value !== 'all' && (
+                            <span className="rounded-full bg-amber-200/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-900">
+                              Current
+                            </span>
+                          )}
+                          {cycle.value !== 'all' && (
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                              {cycle.count ?? 0}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </button>
                   ))
                 )}

@@ -26,7 +26,7 @@ interface MonthYearPickerV2Props {
   availableMonths?: Set<string>
   availableDateRange?: DateRange | undefined // Smart date range from filtered transactions
   accountCycleTags?: string[] // Cycle tags for auto-set (e.g., ['2025-01', '2025-02'])
-  cycles?: Array<{ label: string; value: string }> // Cycle dropdown options from account
+  cycles?: Array<{ label: string; value: string; count?: number; highlight?: boolean }> // Cycle dropdown options from account
   selectedCycleValue?: string // Currently selected cycle
   onCycleSelect?: (cycleValue: string) => void // Called when cycle is selected
   isCycleLoading?: boolean // Loading state for cycles
@@ -398,10 +398,44 @@ export function MonthYearPickerV2({
                           "w-full px-3 py-2 rounded-md border text-sm transition-colors text-left",
                           localCycle === cycle.value
                             ? "bg-primary text-primary-foreground border-primary shadow-md"
-                            : "border-slate-200 hover:bg-accent"
+                            : cycle.highlight
+                              ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                              : "border-slate-200 hover:bg-accent"
                         )}
                       >
-                        <span className="font-medium">{cycle.label}</span>
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                          <span className="font-medium truncate">{cycle.label}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {cycle.value !== 'all' && (
+                              <span className={cn(
+                                "text-[10px] font-semibold uppercase tracking-[0.12em]",
+                                localCycle === cycle.value ? "text-primary-foreground/80" : "text-slate-500"
+                              )}>
+                                {cycle.value}
+                              </span>
+                            )}
+                            {cycle.highlight && cycle.value !== 'all' && (
+                              <span className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em]",
+                                localCycle === cycle.value
+                                  ? "bg-primary-foreground/20 text-primary-foreground"
+                                  : "bg-amber-200/70 text-amber-900"
+                              )}>
+                                Current
+                              </span>
+                            )}
+                            {cycle.value !== 'all' && (
+                              <span className={cn(
+                                "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                localCycle === cycle.value
+                                  ? "border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground"
+                                  : "border-slate-200 bg-white text-slate-600"
+                              )}>
+                                {cycle.count ?? 0}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </button>
                     ))}
                     </div>

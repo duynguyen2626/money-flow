@@ -67,6 +67,7 @@ import {
   ShoppingBag,
   Book,
   FileText,
+  ExternalLink,
 } from "lucide-react";
 import { normalizeCashbackConfig } from "@/lib/cashback";
 import { ColumnCustomizer } from "./column-customizer";
@@ -381,7 +382,7 @@ export const UnifiedTransactionTable = React.forwardRef<
       [],
     );
     const defaultColumns: ColumnConfig[] = [
-      { key: "date", label: "Date", defaultWidth: 110, minWidth: 90 },
+      { key: "date", label: "Date", defaultWidth: 138, minWidth: 124 },
       { key: "shop", label: "Notes Flow", defaultWidth: 420, minWidth: 320 },
       { key: "account", label: "Flow", defaultWidth: 240, minWidth: 180 },
       { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
@@ -2307,7 +2308,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                             });
 
                             return (
-                              <div className="flex items-center gap-3 overflow-visible w-full">
+                              <div className="flex items-center gap-2 w-full min-w-0">
                                 <input
                                   type="checkbox"
                                   className="rounded border-slate-300 pointer-events-auto"
@@ -2328,13 +2329,18 @@ export const UnifiedTransactionTable = React.forwardRef<
                                 />
 
                                 <CustomTooltip content={fullDateStr}>
-                                  <div className="flex flex-col items-start justify-center cursor-help rounded px-0.5 group min-w-[34px]">
-                                    <span className="text-sm font-bold text-slate-700 leading-none group-hover:text-blue-600 transition-colors">
-                                      {sequenceNumber} | {day}.{month}
+                                  <div className="group flex cursor-help items-center gap-2 min-w-0">
+                                    <span className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-md border border-slate-200 bg-white px-1 text-[10px] font-black text-slate-500 shrink-0">
+                                      {sequenceNumber}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5 group-hover:text-blue-500 transition-colors">
-                                      {timeStr}
-                                    </span>
+                                    <div className="flex min-w-0 flex-col items-start justify-center">
+                                      <span className="text-sm font-black text-slate-700 leading-none group-hover:text-blue-700 transition-colors whitespace-nowrap">
+                                        {day}.{month}
+                                      </span>
+                                      <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400 leading-tight group-hover:text-blue-500 transition-colors whitespace-nowrap">
+                                        {timeStr}
+                                      </span>
+                                    </div>
                                   </div>
                                 </CustomTooltip>
                               </div>
@@ -3553,13 +3559,13 @@ export const UnifiedTransactionTable = React.forwardRef<
                                         }}
                                         className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 h-6 text-[9px] font-black uppercase tracking-tighter cursor-pointer hover:bg-emerald-100 transition-colors shadow-sm"
                                       >
-                                        <FileText className="h-3 w-3" />
+                                        <ExternalLink className="h-3 w-3" />
                                         SHEET
                                       </button>
                                     </CustomTooltip>
                                   )}
                                   <CustomTooltip
-                                    content={`Open details for ${personName} in new tab filtered by cycle ${debtTag}`}
+                                    content={`Open Debt Cycle for ${personName} (${debtTag})`}
                                   >
                                     <span
                                       onClick={(e) => {
@@ -3573,7 +3579,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                                       }}
                                       className="inline-flex items-center justify-center gap-1 rounded-[4px] bg-blue-50 border border-blue-200 text-blue-700 px-2 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[110px] cursor-pointer hover:bg-blue-100 transition-colors shadow-sm"
                                     >
-                                      <User className="h-3 w-3" />
+                                      <ExternalLink className="h-3 w-3" />
                                       {debtTag}
                                     </span>
                                   </CustomTooltip>
@@ -3629,6 +3635,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                               let displayLink = sourceId
                                 ? `/accounts/${sourceId}`
                                 : null;
+                              let displayIsAccount = true;
                               let badgeToDisplay = sourceCycleBadge;
                               let isCycleBadge = true;
 
@@ -3638,7 +3645,12 @@ export const UnifiedTransactionTable = React.forwardRef<
                                 displayLink = personRouteId
                                   ? `/people/${personRouteId}`
                                   : null;
-                                badgeToDisplay = peopleDebtTag;
+                                displayIsAccount = false;
+                                badgeToDisplay = (
+                                  <div className="flex items-center gap-1.5">
+                                    {peopleDebtTag}
+                                  </div>
+                                );
                                 isCycleBadge = false;
                               } else if (entityToShow === "dest") {
                                 displayName = destName;
@@ -3646,6 +3658,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                                 displayLink = destId
                                   ? `/accounts/${destId}`
                                   : null;
+                                displayIsAccount = !hasPerson;
                                 // Destination usually no badge unless debt, but for account transfer no badge currently
                                 badgeToDisplay = null;
                                 isCycleBadge = false;
@@ -3697,8 +3710,12 @@ export const UnifiedTransactionTable = React.forwardRef<
                                         className={cn(
                                           "inline-flex items-center justify-center rounded-[4px] h-6 text-[10px] font-extrabold whitespace-nowrap shrink-0 w-11 shadow-sm transition-all group-hover/pill:scale-105",
                                           flowBadgeType === "FROM"
-                                            ? "bg-orange-50 border border-orange-200 text-orange-700"
-                                            : "bg-sky-50 border border-sky-200 text-sky-700",
+                                            ? context === "account"
+                                              ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                                              : "bg-orange-50 border border-orange-200 text-orange-700"
+                                            : context === "account"
+                                              ? "bg-rose-50 border border-rose-200 text-rose-700"
+                                              : "bg-sky-50 border border-sky-200 text-sky-700",
                                         )}
                                       >
                                         {flowBadgeType}
@@ -3727,11 +3744,27 @@ export const UnifiedTransactionTable = React.forwardRef<
                                             <img
                                               src={displayImage}
                                               alt=""
-                                              className="h-full w-full object-contain rounded-none"
+                                              className={cn(
+                                                "h-full w-full object-contain",
+                                                displayIsAccount
+                                                  ? "rounded-sm"
+                                                  : "rounded-none",
+                                              )}
                                             />
                                           ) : (
-                                            <div className="h-full w-full flex items-center justify-center border border-slate-100 rounded-none bg-white">
-                                              <Wallet className="h-4 w-4 text-slate-400" />
+                                            <div
+                                              className={cn(
+                                                "h-full w-full flex items-center justify-center border border-slate-100 bg-white",
+                                                displayIsAccount
+                                                  ? "rounded-sm"
+                                                  : "rounded-none",
+                                              )}
+                                            >
+                                              {displayIsAccount ? (
+                                                <Wallet className="h-4 w-4 text-slate-400" />
+                                              ) : (
+                                                <User className="h-4 w-4 text-slate-400" />
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -3836,12 +3869,20 @@ export const UnifiedTransactionTable = React.forwardRef<
                                         <img
                                           src={entity.icon}
                                           alt=""
-                                          className="h-full w-full object-contain rounded-none"
+                                          className={cn(
+                                            "h-full w-full object-contain",
+                                            entity.isAccount
+                                              ? "rounded-sm"
+                                              : "rounded-none",
+                                          )}
                                         />
                                       ) : (
                                         <div
                                           className={cn(
-                                            "h-full w-full flex items-center justify-center border border-slate-100 bg-white rounded-none",
+                                            "h-full w-full flex items-center justify-center border border-slate-100 bg-white",
+                                            entity.isAccount
+                                              ? "rounded-sm"
+                                              : "rounded-none",
                                           )}
                                         >
                                           {entity.isAccount ? (
@@ -3930,7 +3971,7 @@ export const UnifiedTransactionTable = React.forwardRef<
                                     <img
                                       src={personImage}
                                       alt={personName}
-                                      className="h-full w-full object-cover"
+                                      className="h-full w-full object-contain"
                                     />
                                   ) : (
                                     <User className="h-3 w-3 text-slate-400" />

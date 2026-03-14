@@ -94,11 +94,6 @@ export function QuickFilterDropdown({
                 <span className="text-sm shrink-0">{selectedItem.icon}</span>
               ) : null}
               <span className="truncate">{selectedItem.name}</span>
-              {selectedItem.badge && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-muted font-bold text-muted-foreground uppercase tracking-tight shrink-0">
-                  {selectedItem.badge}
-                </span>
-              )}
             </div>
           ) : (
             <span className="truncate">{placeholder}</span>

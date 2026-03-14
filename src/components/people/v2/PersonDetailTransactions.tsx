@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Person, Account, Category, Shop, TransactionWithDetails } from "@/types/moneyflow.types";
 import { UnifiedTransactionTable } from "@/components/moneyflow/unified-transaction-table";
 import { TypeFilterDropdown } from "@/components/transactions-v2/header/TypeFilterDropdown";
@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation";
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { buildEditInitialValues } from "@/lib/transaction-mapper";
+import { formatCycleTag } from "@/lib/cycle-utils";
+import { isYYYYMM, normalizeMonthTag } from "@/lib/month-tag";
 
 interface PersonDetailTransactionsProps {
     person: Person;
@@ -29,6 +31,39 @@ interface PersonDetailTransactionsProps {
 
 type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback';
 type StatusFilter = 'active' | 'void' | 'pending';
+
+function resolveCycleTagByStatementDay(date: Date, statementDay?: number | null): string {
+    const day = Number(statementDay || 0);
+    let year = date.getFullYear();
+    let month = date.getMonth() + 1;
+
+    if (day > 0 && date.getDate() > day) {
+        month += 1;
+        if (month > 12) {
+            month = 1;
+            year += 1;
+        }
+    }
+
+    return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function resolveTransactionCycleTagForAccount(transaction: TransactionWithDetails, statementDay?: number | null): string {
+    const persisted = normalizeMonthTag(transaction.persisted_cycle_tag || transaction.account_billing_cycle || '');
+    if (persisted && isYYYYMM(persisted)) return persisted;
+
+    const derived = normalizeMonthTag(transaction.derived_cycle_tag || '');
+    if (derived && isYYYYMM(derived)) return derived;
+
+    if ((statementDay || 0) > 0) {
+        const parsed = parseISO(transaction.occurred_at || transaction.created_at || '');
+        if (!Number.isNaN(parsed.getTime())) {
+            return resolveCycleTagByStatementDay(parsed, statementDay);
+        }
+    }
+
+    return normalizeMonthTag(transaction.tag || '') || '';
+}
 
 export function PersonDetailTransactions({
     person,
@@ -53,8 +88,9 @@ export function PersonDetailTransactions({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
     const [date, setDate] = useState<Date>(new Date());
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>('month');
+    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'>('month');
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>();
+    const [selectedCycle, setSelectedCycle] = useState<string | undefined>();
     const [isFilterActive, setIsFilterActive] = useState(false);
 
     // Available Filter Options
@@ -75,6 +111,62 @@ export function PersonDetailTransactions({
         });
         return months;
     }, [transactions]);
+
+    const selectedAccount = useMemo(
+        () => accounts.find((account) => account.id === selectedAccountId),
+        [accounts, selectedAccountId],
+    );
+
+    const cycleOptions = useMemo(() => {
+        if (!selectedAccountId) return [];
+
+        const relevantTxns = transactions.filter(
+            (txn) => txn.source_account_id === selectedAccountId || txn.target_account_id === selectedAccountId || txn.account_id === selectedAccountId,
+        );
+
+        const statementDay = Number(
+            selectedAccount?.statement_day ??
+            selectedAccount?.credit_card_info?.statement_day ??
+            0,
+        ) || undefined;
+        const cycleCountByTag = relevantTxns.reduce<Record<string, number>>((acc, txn) => {
+            const tag = resolveTransactionCycleTagForAccount(txn, statementDay);
+            if (!tag) return acc;
+            acc[tag] = (acc[tag] || 0) + 1;
+            return acc;
+        }, {});
+
+        const currentCycleTag = statementDay
+            ? resolveCycleTagByStatementDay(new Date(), statementDay)
+            : undefined;
+
+        return Object.keys(cycleCountByTag)
+            .sort((a, b) => b.localeCompare(a))
+            .map((tag) => ({
+                value: tag,
+                label: formatCycleTag(tag) || tag,
+                count: cycleCountByTag[tag],
+                highlight: tag === currentCycleTag,
+            }));
+    }, [transactions, selectedAccountId, selectedAccount]);
+
+    useEffect(() => {
+        if (!selectedAccountId) {
+            setSelectedCycle(undefined);
+            if (dateMode === 'cycle') setDateMode('month');
+            return;
+        }
+
+        if (cycleOptions.length === 0) {
+            setSelectedCycle(undefined);
+            return;
+        }
+
+        if (selectedCycle && cycleOptions.some((cycle) => cycle.value === selectedCycle)) return;
+
+        const highlighted = cycleOptions.find((cycle) => cycle.highlight);
+        setSelectedCycle(highlighted?.value || cycleOptions[0].value);
+    }, [selectedAccountId, cycleOptions, selectedCycle, dateMode]);
 
     // Filtering Logic
     const filteredTransactions = useMemo(() => {
@@ -128,17 +220,25 @@ export function PersonDetailTransactions({
                     const txDate = parseISO(t.occurred_at || t.created_at || '');
                     return isWithinInterval(txDate, { start: dateRange!.from!, end: rangeEnd! });
                 });
+            } else if (dateMode === 'cycle' && selectedCycle && selectedCycle !== 'all' && selectedAccountId) {
+                const statementDay = selectedAccount?.statement_day;
+                result = result.filter((txn) => {
+                    if (!(txn.source_account_id === selectedAccountId || txn.target_account_id === selectedAccountId || txn.account_id === selectedAccountId)) return false;
+                    return resolveTransactionCycleTagForAccount(txn, statementDay) === selectedCycle;
+                });
             }
         }
 
         return result;
-    }, [transactions, isFilterActive, filterType, selectedAccountId, searchTerm, date, dateRange, dateMode, statusFilter]);
+    }, [transactions, isFilterActive, filterType, selectedAccountId, searchTerm, date, dateRange, dateMode, statusFilter, selectedCycle, selectedAccount]);
 
     const handleReset = () => {
         setFilterType('all');
         setSelectedAccountId(undefined);
+        setSelectedCycle(undefined);
         setDate(new Date());
         setDateRange(undefined);
+        setDateMode('month');
         setIsFilterActive(false);
         setSearchTerm('');
     };
@@ -223,12 +323,11 @@ export function PersonDetailTransactions({
                             mode={dateMode}
                             onDateChange={setDate}
                             onRangeChange={setDateRange}
-                            onModeChange={(mode) => {
-                                if (mode !== 'cycle') {
-                                    setDateMode(mode)
-                                }
-                            }}
+                            onModeChange={setDateMode}
                             availableMonths={availableMonths}
+                            cycles={cycleOptions}
+                            selectedCycleValue={selectedCycle}
+                            onCycleSelect={setSelectedCycle}
                         />
 
                         <div className="relative flex-1 max-w-sm">

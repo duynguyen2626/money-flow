@@ -145,10 +145,21 @@ export function buildEditInitialValues(txn: TransactionWithDetails): Partial<Tra
         destinationAccountId = txn.target_account_id ?? undefined;
     }
 
+    const rawServiceFee = meta?.service_fee;
+    const parsedServiceFee =
+        rawServiceFee !== undefined && rawServiceFee !== null
+            ? Number(rawServiceFee)
+            : undefined;
+    const resolvedServiceFee =
+        typeof parsedServiceFee === "number" && Number.isFinite(parsedServiceFee)
+            ? parsedServiceFee
+            : undefined;
+
     const result = {
         occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
         type: derivedType,
         amount: Math.abs(baseAmount ?? 0),
+        service_fee: resolvedServiceFee,
         note: txn.note ?? "",
         tag: txn.tag ?? generateTag(new Date()),
         source_account_id: sourceAccountId,

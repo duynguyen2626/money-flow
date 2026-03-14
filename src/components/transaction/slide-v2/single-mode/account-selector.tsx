@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useFormContext, useWatch, Controller } from "react-hook-form";
 import {
-  Users,
   Landmark,
   CreditCard,
   Wallet,
@@ -11,6 +10,7 @@ import {
   PiggyBank,
   Pencil,
   Database,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useParams } from "next/navigation";
@@ -24,8 +24,6 @@ import {
 import { SingleTransactionFormValues } from "../types";
 import { Account, Person } from "@/types/moneyflow.types";
 import { Combobox, ComboboxGroup } from "@/components/ui/combobox";
-import { PersonAvatar } from "@/components/ui/person-avatar";
-import { getLastTransactionPersonId } from "@/actions/account-actions";
 
 type AccountSelectorProps = {
   accounts: Account[];
@@ -50,18 +48,19 @@ function AccountActionBadges({
   if (!accountId) return null;
 
   return (
-    <div className="flex items-center gap-1.5 pt-1">
+    <div className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={() => onEditAccount?.(accountId)}
         className={cn(
-          "inline-flex items-center justify-center rounded-[6px] border px-2 h-7 shadow-sm transition-colors",
-          "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100",
+          "inline-flex items-center justify-center gap-1 rounded-md border px-2.5 h-7 shadow-sm transition-colors",
+          "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300",
         )}
         title="Edit selected account"
         aria-label="Edit selected account"
       >
         <Pencil className="h-3.5 w-3.5" />
+        <span className="text-[10px] font-semibold">Edit</span>
       </button>
       <button
         type="button"
@@ -73,13 +72,14 @@ function AccountActionBadges({
           );
         }}
         className={cn(
-          "inline-flex items-center justify-center rounded-[6px] border px-2 h-7 shadow-sm transition-colors",
-          "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100",
+          "inline-flex items-center justify-center gap-1 rounded-md border px-2.5 h-7 shadow-sm transition-colors",
+          "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300",
         )}
         title="Open in PocketBase Admin"
         aria-label="Open in PocketBase Admin"
       >
         <Database className="h-3.5 w-3.5" />
+        <span className="text-[10px] font-semibold">DB</span>
       </button>
     </div>
   );
@@ -89,7 +89,6 @@ export function AccountSelector({
   accounts,
   people,
   onAddNewAccount,
-  onAddNewPerson,
   onEditAccount,
 }: AccountSelectorProps) {
   const form = useFormContext<SingleTransactionFormValues>();
@@ -106,23 +105,6 @@ export function AccountSelector({
 
   const params = useParams();
   const currentAccountId = params?.id as string | undefined;
-
-  // MF5.5: Recent People Optimization
-  const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<
-    string | null
-  >(null);
-  const [lastClickedPersonId, setLastClickedPersonId] = useState<string | null>(
-    () => {
-      if (typeof window !== "undefined") {
-        return localStorage.getItem("mf_last_clicked_person_id");
-      }
-      return null;
-    },
-  );
-
-  useEffect(() => {
-    getLastTransactionPersonId().then(setLastSubmittedPersonId);
-  }, []);
 
   const selectedPerson = useMemo(
     () => people.find((p) => p.id === personId),
@@ -263,51 +245,6 @@ export function AccountSelector({
     ];
   };
 
-  const peopleGroups: ComboboxGroup[] = useMemo(() => {
-    const recentIds = Array.from(
-      new Set([lastClickedPersonId, lastSubmittedPersonId].filter(Boolean)),
-    ) as string[];
-    const recentPeopleList = people.filter((p) => recentIds.includes(p.id));
-    const allOtherPeople = people.filter((p) => !recentIds.includes(p.id));
-
-    return [
-      ...(recentPeopleList.length > 0
-        ? [
-            {
-              label: "Recent Involved",
-              items: recentPeopleList.map((p) => ({
-                value: p.id,
-                label: p.name,
-                icon: (
-                  <PersonAvatar
-                    name={p.name}
-                    imageUrl={p.image_url}
-                    size="sm"
-                    className="rounded-none"
-                  />
-                ),
-              })),
-            },
-          ]
-        : []),
-      {
-        label: "All People",
-        items: allOtherPeople.map((p) => ({
-          value: p.id,
-          label: p.name,
-          icon: (
-            <PersonAvatar
-              name={p.name}
-              imageUrl={p.image_url}
-              size="sm"
-              className="rounded-none"
-            />
-          ),
-        })),
-      },
-    ];
-  }, [people, lastClickedPersonId, lastSubmittedPersonId]);
-
   const isIncomeFlow = !sourceId && !!targetId;
   const isExpenseFlow = !!sourceId && !targetId;
   const isTransferFlow = isSpecialMode || (!!sourceId && !!targetId);
@@ -330,57 +267,32 @@ export function AccountSelector({
   }, [sourceId, isSpecialMode, personId, selectedPerson]);
 
   return (
-    <div className="space-y-6 pt-2">
-      {/* ROW 1: PEOPLE */}
-      <div className="animate-in fade-in slide-in-from-top-1 duration-300">
-        <Controller
-          control={form.control}
-          name="person_id"
-          render={({ field }) => (
-            <FormItem className="w-full">
-              <FormLabel className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 capitalize tracking-wide mb-1.5">
-                <Users className="w-3 h-3" />
-                Involved Person
-              </FormLabel>
-              <FormControl>
-                <Combobox
-                  groups={peopleGroups}
-                  value={field.value ?? undefined}
-                  onValueChange={(val) => {
-                    field.onChange(val);
-                    if (val) {
-                      setLastClickedPersonId(val);
-                      localStorage.setItem("mf_last_clicked_person_id", val);
-                    }
-                  }}
-                  placeholder="Personal Flow (No one)"
-                  hideTriggerBadge
-                  className="w-full h-11 bg-white border-slate-200 shadow-sm transition-all hover:bg-slate-50/50"
-                  onAddNew={onAddNewPerson}
-                  addLabel="Person"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
-
-      {/* ROW 2: ACCOUNT FLOW */}
+    <div className="space-y-4 pt-1">
+      {/* ACCOUNT FLOW */}
       <div className="grid grid-cols-2 gap-4 items-start relative">
         {/* Visual Connector: The BẬP BÊNH beam */}
         <div className="absolute left-1/2 top-11 -translate-x-1/2 w-8 h-[2px] bg-slate-100 z-0 hidden sm:block" />
 
         {/* SOURCE */}
         <div className="space-y-1.5 z-10">
-          <FormLabel
-            className={cn(
-              "text-[10px] font-black uppercase tracking-wider block mb-1 transition-colors",
-              isIncomeFlow ? "text-slate-200" : "text-rose-500",
-            )}
-          >
-            Pay With (Từ)
-          </FormLabel>
+          <div className="flex items-center justify-between mb-1">
+            <FormLabel
+              className={cn(
+                "text-[10px] font-black uppercase tracking-wider block transition-colors",
+                isIncomeFlow ? "text-slate-200" : "text-rose-500",
+              )}
+            >
+              Pay With (Từ)
+            </FormLabel>
+            <div className="flex h-7 min-w-[124px] items-center justify-end">
+              {!isIncomeFlow && (
+                <AccountActionBadges
+                  accountId={sourceId || null}
+                  onEditAccount={onEditAccount}
+                />
+              )}
+            </div>
+          </div>
 
           <Controller
             control={form.control}
@@ -388,37 +300,44 @@ export function AccountSelector({
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Combobox
-                    groups={getAccountGroups("source")}
-                    value={field.value ?? undefined}
-                    onValueChange={(val) => {
-                      field.onChange(val || undefined); // Use undefined instead of null to fix lint
-                      // BẬP BÊNH logic: Selecting source clears target if standard mode
-                      if (val && !isSpecialMode && targetId) {
-                        form.setValue("target_account_id", undefined as any);
-                      }
-                    }}
-                    placeholder={sourcePlaceholder}
-                    hideTriggerBadge
-                    triggerClassName={cn(
-                      "h-11 border-slate-200 transition-all duration-300",
-                      isIncomeFlow &&
-                        "opacity-40 border-dashed bg-slate-50 grayscale",
-                      field.value &&
-                        "border-rose-100 shadow-sm ring-1 ring-rose-50",
+                  <div className="flex items-center gap-1">
+                    <Combobox
+                      groups={getAccountGroups("source")}
+                      value={field.value ?? undefined}
+                      onValueChange={(val) => {
+                        field.onChange(val || undefined); // Use undefined instead of null to fix lint
+                        // BẬP BÊNH logic: Selecting source clears target if standard mode
+                        if (val && !isSpecialMode && targetId) {
+                          form.setValue("target_account_id", undefined as any);
+                        }
+                      }}
+                      placeholder={sourcePlaceholder}
+                      hideTriggerBadge
+                      hideClearButton
+                      triggerClassName={cn(
+                        "h-11 border-slate-200 transition-all duration-300",
+                        isIncomeFlow &&
+                          "opacity-40 border-dashed bg-slate-50 grayscale",
+                        field.value &&
+                          "border-rose-100 shadow-sm ring-1 ring-rose-50",
+                      )}
+                      className="w-full"
+                      onAddNew={onAddNewAccount}
+                      addLabel="Account"
+                    />
+                    {field.value && !isIncomeFlow && (
+                      <button
+                        type="button"
+                        onClick={() => field.onChange(undefined)}
+                        className="flex h-11 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:text-slate-700"
+                        aria-label="Clear source account"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                    className="w-full"
-                    onAddNew={onAddNewAccount}
-                    addLabel="Account"
-                  />
+                  </div>
                 </FormControl>
                 <FormMessage />
-                {!isIncomeFlow && (
-                  <AccountActionBadges
-                    accountId={field.value || null}
-                    onEditAccount={onEditAccount}
-                  />
-                )}
               </FormItem>
             )}
           />
@@ -426,14 +345,24 @@ export function AccountSelector({
 
         {/* TARGET */}
         <div className="space-y-1.5 z-10">
-          <FormLabel
-            className={cn(
-              "text-[10px] font-black uppercase tracking-wider block mb-1 transition-colors",
-              isExpenseFlow ? "text-slate-200" : "text-emerald-500",
-            )}
-          >
-            Deposit To (Đến)
-          </FormLabel>
+          <div className="flex items-center justify-between mb-1">
+            <FormLabel
+              className={cn(
+                "text-[10px] font-black uppercase tracking-wider block transition-colors",
+                isExpenseFlow ? "text-slate-200" : "text-emerald-500",
+              )}
+            >
+              Deposit To (Đến)
+            </FormLabel>
+            <div className="flex h-7 min-w-[124px] items-center justify-end">
+              {!isExpenseFlow && (
+                <AccountActionBadges
+                  accountId={targetId || null}
+                  onEditAccount={onEditAccount}
+                />
+              )}
+            </div>
+          </div>
 
           <Controller
             control={form.control}
@@ -441,37 +370,44 @@ export function AccountSelector({
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Combobox
-                    groups={getAccountGroups("target")}
-                    value={field.value ?? undefined}
-                    onValueChange={(val) => {
-                      field.onChange(val || undefined);
-                      // BẬP BÊNH logic: Selecting target clears source if standard mode
-                      if (val && !isSpecialMode && sourceId) {
-                        form.setValue("source_account_id", undefined as any);
-                      }
-                    }}
-                    placeholder={targetPlaceholder}
-                    hideTriggerBadge
-                    triggerClassName={cn(
-                      "h-11 border-slate-200 transition-all duration-300",
-                      isExpenseFlow &&
-                        "opacity-40 border-dashed bg-slate-50 grayscale",
-                      field.value &&
-                        "border-emerald-100 shadow-sm ring-1 ring-emerald-50",
+                  <div className="flex items-center gap-1">
+                    <Combobox
+                      groups={getAccountGroups("target")}
+                      value={field.value ?? undefined}
+                      onValueChange={(val) => {
+                        field.onChange(val || undefined);
+                        // BẬP BÊNH logic: Selecting target clears source if standard mode
+                        if (val && !isSpecialMode && sourceId) {
+                          form.setValue("source_account_id", undefined as any);
+                        }
+                      }}
+                      placeholder={targetPlaceholder}
+                      hideTriggerBadge
+                      hideClearButton
+                      triggerClassName={cn(
+                        "h-11 border-slate-200 transition-all duration-300",
+                        isExpenseFlow &&
+                          "opacity-40 border-dashed bg-slate-50 grayscale",
+                        field.value &&
+                          "border-emerald-100 shadow-sm ring-1 ring-emerald-50",
+                      )}
+                      className="w-full"
+                      onAddNew={onAddNewAccount}
+                      addLabel="Account"
+                    />
+                    {field.value && !isExpenseFlow && (
+                      <button
+                        type="button"
+                        onClick={() => field.onChange(undefined)}
+                        className="flex h-11 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:text-slate-700"
+                        aria-label="Clear target account"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     )}
-                    className="w-full"
-                    onAddNew={onAddNewAccount}
-                    addLabel="Account"
-                  />
+                  </div>
                 </FormControl>
                 <FormMessage />
-                {!isExpenseFlow && (
-                  <AccountActionBadges
-                    accountId={field.value || null}
-                    onEditAccount={onEditAccount}
-                  />
-                )}
               </FormItem>
             )}
           />

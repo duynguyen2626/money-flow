@@ -1,6 +1,6 @@
 import { Search, RotateCcw, UserMinus, Plus, Check, ChevronDown, RefreshCw, RefreshCcw, X, Clipboard, Info, ArrowUpRight } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { DebtCycle } from '@/hooks/use-person-details'
 import { Input } from '@/components/ui/input'
@@ -74,6 +74,30 @@ function getMonthDisplayName(tag: string) {
     return tag
 }
 
+function resolveCycleTagByStatementDay(date: Date, statementDay?: number | null): string {
+    const day = Number(statementDay || 0)
+    let year = date.getFullYear()
+    let month = date.getMonth() + 1
+    if (day > 0 && date.getDate() > day) {
+        month += 1
+        if (month > 12) {
+            month = 1
+            year += 1
+        }
+    }
+    return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function transactionMatchesAccount(txn: any, accountId?: string): boolean {
+    if (!accountId) return true
+    return (
+        txn.account_id === accountId ||
+        txn.source_account_id === accountId ||
+        txn.target_account_id === accountId ||
+        txn.to_account_id === accountId
+    )
+}
+
 export function TransactionControlBar({
     person,
     activeCycle,
@@ -117,6 +141,51 @@ export function TransactionControlBar({
     const isCurrentCycle = activeCycle.tag === currentCycleTag
     const isAllHistory = selectedYear === null
     const cycleLabel = isAllHistory ? 'All History' : activeCycle.tag
+    const prevAccountIdRef = useRef<string | undefined>(selectedAccountId)
+
+    const selectedAccount = useMemo(
+        () => accounts.find((account) => account.id === selectedAccountId),
+        [accounts, selectedAccountId],
+    )
+
+    const accountCurrentCycleTag = useMemo(() => {
+        const statementDay = selectedAccount?.statement_day ?? selectedAccount?.credit_card_info?.statement_day
+        if (statementDay) {
+            return resolveCycleTagByStatementDay(new Date(), statementDay)
+        }
+        return currentCycleTag
+    }, [selectedAccount, currentCycleTag])
+
+    const cycleOptions = useMemo(() => {
+        if (!selectedAccountId) return [] as Array<{ label: string; value: string; count?: number; highlight?: boolean }>
+
+        return allCycles
+            .filter((cycle) => isYYYYMM(cycle.tag))
+            .map((cycle) => {
+                const count = cycle.transactions.filter((txn) => transactionMatchesAccount(txn, selectedAccountId)).length
+                return {
+                    label: getMonthDisplayName(cycle.tag),
+                    value: cycle.tag,
+                    count,
+                    highlight: cycle.tag === accountCurrentCycleTag,
+                }
+            })
+            .filter((cycle) => cycle.count! > 0 || cycle.highlight)
+            .sort((a, b) => b.value.localeCompare(a.value))
+    }, [allCycles, selectedAccountId, accountCurrentCycleTag])
+
+    useEffect(() => {
+        const accountChanged = prevAccountIdRef.current !== selectedAccountId
+        prevAccountIdRef.current = selectedAccountId
+        if (!accountChanged || !selectedAccountId) return
+
+        const nextCycle = cycleOptions.find((cycle) => cycle.highlight)?.value || 'all'
+        if (onCycleSelect) {
+            onCycleSelect(nextCycle, selectedYear)
+        } else {
+            onCycleChange(nextCycle)
+        }
+    }, [selectedAccountId, cycleOptions, onCycleChange, onCycleSelect, selectedYear])
 
     const handleCycleChange = (tag: string) => {
         onCycleChange(tag)
@@ -259,11 +328,8 @@ export function TransactionControlBar({
                         onDateChange={onDateChange}
                         onRangeChange={onRangeChange}
                         onModeChange={onModeChange}
-                        cycles={selectedAccountId ? allCycles.map(cycle => ({
-                            label: getMonthDisplayName(cycle.tag),
-                            value: cycle.tag,
-                        })) : []}
-                        selectedCycleValue={selectedAccountId ? activeCycle.tag : 'all'}
+                        cycles={cycleOptions}
+                        selectedCycleValue={selectedAccountId ? (isYYYYMM(activeCycle.tag) ? activeCycle.tag : 'all') : 'all'}
                         selectedYearValue={selectedYear}
                         onYearSelect={onYearChange}
                         onCycleSelect={(tag) => {

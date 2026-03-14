@@ -78,7 +78,7 @@ interface TransactionHeaderProps {
   onAdd: (type?: string) => void
 
   // Cycle Filter
-  cycles: { label: string; value: string }[]
+  cycles: { label: string; value: string; count?: number; highlight?: boolean }[]
   selectedCycle?: string
   onCycleChange: (cycle?: string) => void
   isCycleLoading?: boolean
@@ -229,6 +229,7 @@ export function TransactionHeader({
 
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  const prevAccountIdRef = useRef<string | undefined>(accountId)
 
   const isCreditCard = useMemo(() => {
     return localAccountId ? accounts.find(a => a.id === localAccountId)?.type === 'credit_card' : false
@@ -250,6 +251,28 @@ export function TransactionHeader({
     accountId, personId, categoryId, searchTerm, filterType, statusFilter,
     selectedCycle, date, dateRange, dateMode
   ])
+
+  // Account-first cycle UX: when an account is selected, switch to Cycle tab immediately
+  // and auto-select current cycle if available, else default to All.
+  useEffect(() => {
+    const accountChanged = prevAccountIdRef.current !== localAccountId
+    prevAccountIdRef.current = localAccountId
+
+    if (!accountChanged) return
+
+    if (!localAccountId) {
+      setLocalCycle(undefined)
+      setLocalDateMode(dateMode)
+      return
+    }
+
+    setLocalDateMode('cycle')
+    const currentCycle = cycles.find((cycle) => cycle.highlight && cycle.value !== 'all')?.value
+    const hasValidSelectedCycle = !localCycle || cycles.some((cycle) => cycle.value === localCycle)
+    if (!hasValidSelectedCycle) {
+      setLocalCycle(currentCycle)
+    }
+  }, [localAccountId, cycles, localCycle, dateMode])
 
   // Debounced Search Effect
   useEffect(() => {
@@ -385,19 +408,6 @@ export function TransactionHeader({
       />
 
       <QuickFilterDropdown
-        items={filteredAccounts.map(a => ({
-          id: a.id,
-          name: a.name,
-          image: a.image_url,
-          type: 'account'
-        }))}
-        value={localAccountId}
-        onValueChange={handleFilterChange(setLocalAccountId, onAccountChange)}
-        placeholder="Account"
-        emptyText="No accounts found"
-      />
-
-      <QuickFilterDropdown
         items={filteredCategories.map(c => ({
           id: c.id,
           name: c.name,
@@ -409,6 +419,22 @@ export function TransactionHeader({
         onValueChange={handleFilterChange(setLocalCategoryId, onCategoryChange)}
         placeholder="Category"
         emptyText="No categories found"
+      />
+
+      <QuickFilterDropdown
+        items={filteredAccounts.map(a => ({
+          id: a.id,
+          name: a.name,
+          image: a.image_url,
+          type: 'account'
+        }))}
+        value={localAccountId}
+        onValueChange={(id) => {
+          setLocalAccountId(id)
+          onAccountChange(id)
+        }}
+        placeholder="Account"
+        emptyText="No accounts found"
       />
 
       {/* REMOVED: Cycle filter is now integrated into date picker */}
@@ -435,8 +461,8 @@ export function TransactionHeader({
         disabledRange={disabledRange}
         availableMonths={availableMonths}
         availableDateRange={availableDateRange}
-        cycles={isCreditCard ? cycles : []}
-        selectedCycleValue={isCreditCard ? localCycle : undefined}
+        cycles={cycles}
+        selectedCycleValue={localCycle}
         onCycleSelect={handleCycleChange}
         isCycleLoading={isCycleLoading}
         locked={isCreditCard ? !!localCycle : false}
@@ -609,18 +635,6 @@ export function TransactionHeader({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Account</label>
-              <QuickFilterDropdown
-                items={filteredAccounts.map(a => ({ id: a.id, name: a.name, image: a.image_url, type: 'account' }))}
-                value={localAccountId}
-                onValueChange={setLocalAccountId}
-                placeholder="Account"
-                fullWidth
-                emptyText="No accounts found"
-              />
-            </div>
-
-            <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Category</label>
               <QuickFilterDropdown
                 items={filteredCategories.map(c => ({ id: c.id, name: c.name, image: c.image, icon: c.icon, type: 'category' }))}
@@ -629,6 +643,21 @@ export function TransactionHeader({
                 placeholder="Category"
                 fullWidth
                 emptyText="No categories found"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Account</label>
+              <QuickFilterDropdown
+                items={filteredAccounts.map(a => ({ id: a.id, name: a.name, image: a.image_url, type: 'account' }))}
+                value={localAccountId}
+                onValueChange={(id) => {
+                  setLocalAccountId(id)
+                  onAccountChange(id)
+                }}
+                placeholder="Account"
+                fullWidth
+                emptyText="No accounts found"
               />
             </div>
 
@@ -647,8 +676,8 @@ export function TransactionHeader({
                 disabledRange={disabledRange}
                 availableMonths={availableMonths}
                 fullWidth
-                cycles={isCreditCard ? cycles : []}
-                selectedCycleValue={isCreditCard ? localCycle : undefined}
+                cycles={cycles}
+                selectedCycleValue={localCycle}
                 onCycleSelect={(cycle) => {
                   setLocalCycle(cycle)
                   setLocalDateMode('cycle')

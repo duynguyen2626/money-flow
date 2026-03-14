@@ -137,9 +137,9 @@ export function TransactionTypeSelector({ accounts, people }: { accounts: Accoun
             </div>
 
             {/* Automated Flow Summary Container */}
-            <div className="bg-slate-50 rounded-xl p-2.5 flex items-start gap-3 transition-all overflow-hidden border border-slate-200/80">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-2.5 py-2 flex items-start gap-2.5 transition-all overflow-hidden">
                 <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border shadow-sm transition-all duration-500",
+                    "w-6.5 h-6.5 rounded-md flex items-center justify-center shrink-0 border transition-all duration-300",
                     type === 'invest' ? "bg-sky-600 text-white border-sky-700 shadow-sky-100" :
                         type === 'credit_pay' ? "bg-violet-600 text-white border-violet-700 shadow-violet-100" :
                             type === 'transfer' || (!!sourceId && !!targetId) ? "bg-blue-500 text-white border-blue-600 shadow-blue-100" :
@@ -147,16 +147,16 @@ export function TransactionTypeSelector({ accounts, people }: { accounts: Accoun
                                     isExpenseFlow ? "bg-rose-500 text-white border-rose-600 shadow-rose-100" :
                                         "bg-white text-slate-400 border-slate-200"
                 )}>
-                    {type === 'invest' ? <PiggyBank className="w-5 h-5 animate-pulse" /> :
-                        type === 'credit_pay' ? <RefreshCcw className="w-5 h-5 animate-spin-slow" /> :
-                            type === 'transfer' || (!!sourceId && !!targetId) ? <ArrowRightLeft className="w-5 h-5" /> :
-                                isIncomeFlow ? <ArrowUpRight className="w-5 h-5 animate-pulse" /> :
-                                    isExpenseFlow ? <ArrowDownLeft className="w-5 h-5 animate-pulse" /> :
-                                        <User className="w-5 h-5" />}
+                    {type === 'invest' ? <PiggyBank className="w-3.5 h-3.5" /> :
+                        type === 'credit_pay' ? <RefreshCcw className="w-3.5 h-3.5" /> :
+                            type === 'transfer' || (!!sourceId && !!targetId) ? <ArrowRightLeft className="w-3.5 h-3.5" /> :
+                                isIncomeFlow ? <ArrowUpRight className="w-3.5 h-3.5" /> :
+                                    isExpenseFlow ? <ArrowDownLeft className="w-3.5 h-3.5" /> :
+                                        <User className="w-3.5 h-3.5" />}
                 </div>
                 <div className="space-y-0.5 flex-1 min-w-0">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-0.5">Automated Flow Summary</span>
-                    <p className="text-[10px] text-slate-600 leading-snug font-bold">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em] block">Flow</span>
+                    <p className="text-[11px] text-slate-600 leading-snug font-medium">
                         {type === 'credit_pay' ? (
                             sourceId && targetId ? "Card Repayment Match: Moving funds to settle credit debt." : "Card Repayment Mode: Please choose source bank and target credit card."
                         ) : type === 'invest' ? (

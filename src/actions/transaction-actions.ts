@@ -40,32 +40,11 @@ export type CreateTransactionInput = {
 };
 
 export async function createTransaction(input: CreateTransactionInput): Promise<string | null> {
-  const tag = normalizeMonthTag(input.tag) ?? input.tag;
-
-  // 1. PB-PRIMARY Write
+  // 1. PB-PRIMARY Write (+ sheet sync handled inside service)
   const transactionId = await createPBTransaction(input as any);
   if (!transactionId) {
     console.error('[DB:PB] Failed to create transaction in PocketBase');
     return null;
-  }
-
-  // 2. Additional logic (Sheet Sync)
-  const personId = input.person_id ?? null;
-  if (personId && (input.type === 'repayment' || input.type === 'debt' || input.type === 'transfer')) {
-    void syncTransactionToSheet(
-      personId,
-      {
-        id: transactionId,
-        occurred_at: input.occurred_at,
-        note: input.note,
-        tag,
-        amount: input.amount,
-        original_amount: input.amount,
-        cashback_share_percent: input.cashback_share_percent ?? undefined,
-        cashback_share_fixed: input.cashback_share_fixed ?? undefined,
-      },
-      'create'
-    ).catch(err => console.error('Sheet Sync Error (Create):', err));
   }
 
   return transactionId;
@@ -74,51 +53,16 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
   const pbId = toPocketBaseId(id, 'transactions');
   
-  // 1. PB-PRIMARY Write
+  // 1. PB-PRIMARY Write (+ sheet sync handled inside service)
   const success = await updatePBTransaction(pbId, input as any);
   if (!success) return false;
-
-  // 2. Sheet Sync (Update)
-  const personId = input.person_id ?? null;
-  if (personId && (input.type === 'repayment' || input.type === 'debt' || input.type === 'transfer')) {
-    const tag = normalizeMonthTag(input.tag) ?? input.tag;
-    void syncTransactionToSheet(
-      personId,
-      {
-        id: pbId,
-        occurred_at: input.occurred_at,
-        note: input.note,
-        tag,
-        amount: input.amount,
-        original_amount: input.amount,
-        cashback_share_percent: input.cashback_share_percent ?? undefined,
-        cashback_share_fixed: input.cashback_share_fixed ?? undefined,
-      },
-      'create' // Sheet usually handles create/update via the same method
-    ).catch(err => console.error('Sheet Sync Error (Update):', err));
-  }
 
   return true;
 }
 
 export async function voidTransactionAction(id: string): Promise<boolean> {
   const pbId = toPocketBaseId(id, 'transactions');
-  
-  // Fetch info for Sheet Sync BEFORE voiding
-  try {
-    const existing = await pocketbaseGetById<any>('transactions', pbId);
-    if (existing?.person_id) {
-       void syncTransactionToSheet(existing.person_id, {
-         id: pbId,
-         occurred_at: existing.occurred_at,
-         tag: existing.tag,
-         amount: 0
-       } as any, 'delete').catch(err => console.error('Sheet Sync Error (Void):', err));
-    }
-  } catch (err) {
-    console.error('Failed to fetch transaction for void sync:', err);
-  }
-
+  // Sheet sync is handled inside service layer.
   return await voidPBTransaction(pbId);
 }
 

@@ -27,6 +27,39 @@ import {
   loadPocketBaseTransactionsForAccount 
 } from './pocketbase/account-details.service'
 
+type SheetSyncAction = "create" | "update" | "delete";
+
+async function trySyncPeopleSheet(
+  personId: string | null | undefined,
+  payload: {
+    id: string;
+    occurred_at?: string | null;
+    note?: string | null;
+    tag?: string | null;
+    amount?: number | null;
+    original_amount?: number | null;
+    cashback_share_percent?: number | null;
+    cashback_share_fixed?: number | null;
+    type?: string | null;
+    shop_name?: string | null;
+    status?: string | null;
+  },
+  action: SheetSyncAction,
+) {
+  if (!personId) return;
+  try {
+    const { syncTransactionToSheet } = await import("./sheet.service");
+    await syncTransactionToSheet(personId, payload as any, action);
+  } catch (error) {
+    console.error("[Sheet Sync] transaction.service sync failed:", {
+      action,
+      personId,
+      transactionId: payload.id,
+      error,
+    });
+  }
+}
+
 export async function loadAccountTransactionsV2(accountId: string, limit = 2000) {
   return loadPocketBaseTransactionsForAccount(accountId, limit);
 }
@@ -87,6 +120,9 @@ export type CreateTransactionInput = {
   cashback_share_fixed?: number | null;
   cashback_mode?: CashbackMode | null;
   linked_transaction_id?: string | null;
+  debt_cycle_tag?: string | null;
+  persisted_cycle_tag?: string | null;
+  statement_cycle_tag?: string | null;
 };
 
 type FlatTransactionRow = {
@@ -178,6 +214,9 @@ async function normalizeInput(input: CreateTransactionInput) {
     person_id: input.person_id ? toPocketBaseId(input.person_id, 'people') : null,
     shop_id: input.shop_id ? toPocketBaseId(input.shop_id, 'shops') : null,
     tag: input.tag,
+    debt_cycle_tag: input.debt_cycle_tag || null,
+    persisted_cycle_tag: input.persisted_cycle_tag || null,
+    statement_cycle_tag: input.statement_cycle_tag || null,
     status: "posted" as TransactionStatus,
     metadata: input.metadata || {},
     is_installment: input.is_installment || false,
@@ -413,6 +452,26 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     revalidatePath("/people");
     revalidatePersonPaths(input.person_id);
 
+    // Keep People Sheet in sync for debt-person flows.
+    if (normalized.person_id) {
+      await trySyncPeopleSheet(
+        normalized.person_id,
+        {
+          id,
+          occurred_at: normalized.occurred_at,
+          note: normalized.note ?? null,
+          tag: normalized.tag ?? normalized.debt_cycle_tag ?? null,
+          amount: Math.abs(normalized.amount ?? 0),
+          original_amount: Math.abs(normalized.amount ?? 0),
+          cashback_share_percent: normalized.cashback_share_percent ?? null,
+          cashback_share_fixed: normalized.cashback_share_fixed ?? null,
+          type: normalized.type,
+          status: "posted",
+        },
+        "create",
+      );
+    }
+
     return id;
   } catch (error) {
     console.error("[DB:PB] createTransaction failed:", error);
@@ -447,6 +506,45 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
     await recalcForAccounts(affectedAccounts);
 
+    const oldPersonId = existing.person_id as string | null;
+    const newPersonId = normalized.person_id as string | null;
+    const oldTag = (existing.tag || existing.debt_cycle_tag || existing.persisted_cycle_tag || null) as string | null;
+    const newTag = (normalized.tag || normalized.debt_cycle_tag || normalized.persisted_cycle_tag || null) as string | null;
+
+    // If transaction moved person or cycle, remove stale row from old sheet first.
+    if (oldPersonId && (oldPersonId !== newPersonId || oldTag !== newTag)) {
+      await trySyncPeopleSheet(
+        oldPersonId,
+        {
+          id: pbId,
+          occurred_at: existing.occurred_at || existing.date || null,
+          tag: oldTag,
+          amount: 0,
+          status: "void",
+        },
+        "delete",
+      );
+    }
+
+    if (newPersonId) {
+      await trySyncPeopleSheet(
+        newPersonId,
+        {
+          id: pbId,
+          occurred_at: normalized.occurred_at,
+          note: normalized.note ?? null,
+          tag: newTag,
+          amount: Math.abs(normalized.amount ?? 0),
+          original_amount: Math.abs(normalized.amount ?? 0),
+          cashback_share_percent: normalized.cashback_share_percent ?? null,
+          cashback_share_fixed: normalized.cashback_share_fixed ?? null,
+          type: normalized.type,
+          status: "posted",
+        },
+        "update",
+      );
+    }
+
     revalidatePath("/transactions");
     revalidatePath(`/transactions/${pbId}`);
     return true;
@@ -471,6 +569,18 @@ export async function voidTransaction(id: string): Promise<boolean> {
     affectedAccounts.add(existing.account_id);
     if (existing.target_account_id) affectedAccounts.add(existing.target_account_id);
     await recalcForAccounts(affectedAccounts);
+
+    await trySyncPeopleSheet(
+      (existing.person_id as string | null) ?? null,
+      {
+        id: pbId,
+        occurred_at: existing.occurred_at || existing.date || null,
+        tag: (existing.tag || existing.debt_cycle_tag || existing.persisted_cycle_tag || null) as string | null,
+        amount: 0,
+        status: "void",
+      },
+      "delete",
+    );
 
     revalidatePath("/transactions");
     return true;
@@ -501,6 +611,18 @@ export async function deleteTransactionCascade(id: string): Promise<boolean> {
     affectedAccounts.add(existing.account_id);
     if (existing.target_account_id) affectedAccounts.add(existing.target_account_id);
     await recalcForAccounts(affectedAccounts);
+
+    await trySyncPeopleSheet(
+      (existing.person_id as string | null) ?? null,
+      {
+        id: pbId,
+        occurred_at: existing.occurred_at || existing.date || null,
+        tag: (existing.tag || existing.debt_cycle_tag || existing.persisted_cycle_tag || null) as string | null,
+        amount: 0,
+        status: "void",
+      },
+      "delete",
+    );
 
     revalidatePath("/transactions");
     return true;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Book, Store, Tag } from "lucide-react";
 import Image from "next/image";
@@ -22,7 +22,6 @@ import {
   getRecentShopIdsByCategoryId,
   getRecentCategoriesByShopId,
 } from "@/actions/cascade-actions";
-import { useState } from "react";
 
 type CategoryShopSectionProps = {
   shops: Shop[];
@@ -49,6 +48,40 @@ export function CategoryShopSection({
   const shopId = useWatch({ control: form.control, name: "shop_id" });
   const isEditingMode = Boolean(isEditing);
 
+  const normalizeValue = useCallback(
+    (value: string | null | undefined) => value?.trim().toLowerCase() || null,
+    [],
+  );
+
+  const resolveCategoryValue = useCallback((value: string | null | undefined) => {
+    const normalized = normalizeValue(value);
+    if (!normalized) return null;
+
+    const matched = categories.find((category) => {
+      return (
+        normalizeValue(category.id) === normalized ||
+        normalizeValue(category.slug ?? null) === normalized ||
+        normalizeValue(category.name) === normalized
+      );
+    });
+
+    return matched?.id ?? value ?? null;
+  }, [categories, normalizeValue]);
+
+  const resolveShopValue = useCallback((value: string | null | undefined) => {
+    const normalized = normalizeValue(value);
+    if (!normalized) return null;
+
+    const matched = shops.find((shop) => {
+      return (
+        normalizeValue(shop.id) === normalized ||
+        normalizeValue(shop.name) === normalized
+      );
+    });
+
+    return matched?.id ?? value ?? null;
+  }, [normalizeValue, shops]);
+
   // Track historical relationships to support many-to-many
   const [shopHistoricalCategoryIds, setShopHistoricalCategoryIds] = useState<
     string[]
@@ -60,6 +93,15 @@ export function CategoryShopSection({
   // Filter categories based on transaction type
   const filteredCategories = useMemo(() => {
     return categories.filter((c) => {
+      const normalizedCurrentCategoryId = normalizeValue(categoryId);
+      const isCurrentSelection =
+        normalizedCurrentCategoryId !== null &&
+        [normalizeValue(c.id), normalizeValue(c.slug ?? null), normalizeValue(c.name)].includes(
+          normalizedCurrentCategoryId,
+        );
+
+      if (isCurrentSelection) return true;
+
       if (!c.type) return true;
       const catType = c.type.toLowerCase();
       const txType = transactionType?.toLowerCase() || "expense";
@@ -72,7 +114,25 @@ export function CategoryShopSection({
 
       return true;
     });
-  }, [categories, transactionType]);
+  }, [categories, categoryId, transactionType]);
+
+  useEffect(() => {
+    const normalizedCategoryId = resolveCategoryValue(categoryId);
+    if (normalizedCategoryId && normalizedCategoryId !== categoryId) {
+      form.setValue("category_id", normalizedCategoryId, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+
+    const normalizedShopId = resolveShopValue(shopId);
+    if (normalizedShopId && normalizedShopId !== shopId) {
+      form.setValue("shop_id", normalizedShopId, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+  }, [categoryId, form, shopId, categories, shops]);
 
   const isValidUrl = (url: string | null | undefined): url is string => {
     if (!url) return false;
@@ -87,6 +147,13 @@ export function CategoryShopSection({
 
   // 2. Derive many-to-many relationship for shops (CASCADE)
   // If a category is selected, prioritize shops that belong to it or have been used with it.
+  const effectiveCategoryHistoricalShopIds = categoryId
+    ? categoryHistoricalShopIds
+    : [];
+  const effectiveShopHistoricalCategoryIds = shopId
+    ? shopHistoricalCategoryIds
+    : [];
+
   const sortedShopOptions = useMemo(() => {
     if (!categoryId) {
       return shops.map((s) => ({
@@ -106,7 +173,7 @@ export function CategoryShopSection({
       }));
     }
 
-    const historicalSet = new Set(categoryHistoricalShopIds);
+    const historicalSet = new Set(effectiveCategoryHistoricalShopIds);
 
     // Filter and sort:
     // 1. Matches via default_category_id or History
@@ -136,7 +203,7 @@ export function CategoryShopSection({
           <Store className="w-4 h-4 text-slate-400" />
         ),
       }));
-  }, [shops, categoryId, categoryHistoricalShopIds]);
+  }, [shops, categoryId, effectiveCategoryHistoricalShopIds]);
 
   const categoryOptions = filteredCategories.map((c) => {
     let badgeLabel =
@@ -197,10 +264,10 @@ export function CategoryShopSection({
 
   // Prioritize categories that this shop has been used with (many-to-many relationship support)
   const sortedCategoryOptions = useMemo(() => {
-    if (!shopId || shopHistoricalCategoryIds.length === 0)
+    if (!shopId || effectiveShopHistoricalCategoryIds.length === 0)
       return categoryOptions;
 
-    const historicalSet = new Set(shopHistoricalCategoryIds);
+    const historicalSet = new Set(effectiveShopHistoricalCategoryIds);
     return [...categoryOptions].sort((a, b) => {
       const aIsHist = historicalSet.has(a.value);
       const bIsHist = historicalSet.has(b.value);
@@ -208,14 +275,11 @@ export function CategoryShopSection({
       if (!aIsHist && bIsHist) return 1;
       return 0;
     });
-  }, [categoryOptions, shopId, shopHistoricalCategoryIds]);
+  }, [categoryOptions, shopId, effectiveShopHistoricalCategoryIds]);
 
   // CASCADE: Select Category -> Suggest Shop
   useEffect(() => {
-    if (!categoryId) {
-      setCategoryHistoricalShopIds([]);
-      return;
-    }
+    if (!categoryId) return;
 
     const currentShopId = form.getValues("shop_id");
 
@@ -224,19 +288,7 @@ export function CategoryShopSection({
       const recentShopIds = await getRecentShopIdsByCategoryId(categoryId);
       setCategoryHistoricalShopIds(recentShopIds);
 
-      // Determine if current shop is compatible with the new category
-      const currentShop = shops.find((s) => s.id === currentShopId);
-      const isCurrentShopCompatible =
-        currentShopId &&
-        (recentShopIds.includes(currentShopId) ||
-          currentShop?.default_category_id === categoryId);
-
-      // Auto-select if:
-      // 1. No shop is selected
-      // 2. The current shop has NO relationship with the NEW category (not recent, not default)
-      const shouldOverwrite = !currentShopId || !isCurrentShopCompatible;
-
-      if (shouldOverwrite) {
+      if (!currentShopId) {
         if (recentShopIds.length > 0) {
           form.setValue("shop_id", recentShopIds[0], { shouldDirty: true });
         } else {
@@ -244,9 +296,6 @@ export function CategoryShopSection({
           const recentShopId = await getRecentShopByCategoryId(categoryId);
           if (recentShopId) {
             form.setValue("shop_id", recentShopId, { shouldDirty: true });
-          } else if (currentShopId && !isCurrentShopCompatible) {
-            // If current shop is incompatible and no new match found, clear it
-            form.setValue("shop_id", null, { shouldDirty: true });
           }
         }
       }
@@ -257,10 +306,7 @@ export function CategoryShopSection({
 
   // CASCADE: Select Shop -> Auto-set Category
   useEffect(() => {
-    if (!shopId) {
-      setShopHistoricalCategoryIds([]);
-      return;
-    }
+    if (!shopId) return;
 
     const currentCategoryId = form.getValues("category_id");
     if (currentCategoryId) {
@@ -274,27 +320,20 @@ export function CategoryShopSection({
       setShopHistoricalCategoryIds(recentCategoryIds);
 
       // Determine if current category is compatible with the new shop
-      const isCurrentCategoryCompatible =
-        currentCategoryId &&
-        (recentCategoryIds.includes(currentCategoryId) ||
-          selectedShop?.default_category_id === currentCategoryId);
-
-      // Auto-set if:
-      // 1. No category is selected
-      // 2. The current category has NO relationship with the NEW shop
-      const shouldOverwrite =
-        !currentCategoryId || !isCurrentCategoryCompatible;
-
-      if (shouldOverwrite) {
+      if (!currentCategoryId) {
         // 1. Try default category from shop definition
         if (selectedShop?.default_category_id) {
-          form.setValue("category_id", selectedShop.default_category_id, {
+          form.setValue(
+            "category_id",
+            resolveCategoryValue(selectedShop.default_category_id),
+            {
             shouldDirty: true,
-          });
+            },
+          );
         }
         // 2. Or use the most recent one from history
         else if (recentCategoryIds.length > 0) {
-          form.setValue("category_id", recentCategoryIds[0], {
+          form.setValue("category_id", resolveCategoryValue(recentCategoryIds[0]), {
             shouldDirty: true,
           });
         }
@@ -302,12 +341,12 @@ export function CategoryShopSection({
     };
 
     applyCategory();
-  }, [shopId, form, shops]);
+  }, [shopId, form, shops, resolveCategoryValue]);
 
   // Auto-select defaults logic
   useEffect(() => {
     if (isEditingMode) return;
-    const currentCategoryId = form.getValues("category_id");
+    const currentCategoryId = resolveCategoryValue(form.getValues("category_id"));
     const isCurrentCategoryCompatible =
       !!currentCategoryId &&
       filteredCategories.some((c) => c.id === currentCategoryId);
@@ -343,7 +382,7 @@ export function CategoryShopSection({
 
     const fallback = filteredCategories[0];
     if (fallback) form.setValue("category_id", fallback.id);
-  }, [transactionType, categories, filteredCategories, form, isEditingMode]);
+  }, [transactionType, categories, filteredCategories, form, isEditingMode, resolveCategoryValue]);
 
   // Shop is only truly irrelevant for Internal Transfers, Credit Card Payments, Income and Repayment
   const isShopHidden = [
@@ -362,20 +401,7 @@ export function CategoryShopSection({
   }, [isShopHidden, form]);
 
   return (
-    <div className="space-y-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm transition-all hover:border-slate-300">
-      <div className="flex items-center gap-2 mb-1 px-1 border-b border-slate-50 pb-2">
-        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-          <Tag className="w-4 h-4 text-indigo-600" />
-        </div>
-        <div>
-          <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest block">
-            Classifications
-          </span>
-          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-            Grouping & Context
-          </span>
-        </div>
-      </div>
+    <div className="space-y-4">
 
       <div
         className={cn(

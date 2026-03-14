@@ -46,6 +46,7 @@ type ComboboxProps = {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   hideTriggerBadge?: boolean
+  hideClearButton?: boolean
 }
 
 export function Combobox({
@@ -68,6 +69,7 @@ export function Combobox({
   open: controlledOpen,
   onOpenChange: setControlledOpen,
   hideTriggerBadge = false,
+  hideClearButton = false,
 }: ComboboxProps) {
   const [internalOpen, setInternalOpen] = React.useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
@@ -143,7 +145,7 @@ export function Combobox({
             </span>
             <span className="flex items-center gap-1 flex-shrink-0 ml-2">
               {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />}
-              {selectedItem && !disabled && (
+              {selectedItem && !disabled && !hideClearButton && (
                 <span
                   role="button"
                   tabIndex={-1}

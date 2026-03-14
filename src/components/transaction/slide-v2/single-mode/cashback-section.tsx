@@ -163,14 +163,23 @@ export function CashbackSection({
     });
   }, [activeAccount, categoryId, totalGrossAmount, category, policy]);
 
-  const { actualBankReward, remainsCap } = useMemo(() => {
-    const rate = policy?.rate ?? 0;
-    const raw = totalGrossAmount * rate;
+  const displayPolicy = potentialPolicy ?? policy;
 
-    const cappedByRule =
-      policy?.maxReward !== undefined && policy.maxReward !== null
-        ? Math.min(raw, policy.maxReward)
-        : raw;
+  const { actualBankReward, previewBankReward, remainsCap } = useMemo(() => {
+    const estimateWithPolicy = (
+      candidatePolicy: typeof policy | null,
+      remains: number,
+    ) => {
+      const rate = candidatePolicy?.rate ?? 0;
+      const raw = totalGrossAmount * rate;
+      const cappedByRule =
+        candidatePolicy?.maxReward !== undefined &&
+        candidatePolicy.maxReward !== null
+          ? Math.min(raw, candidatePolicy.maxReward)
+          : raw;
+      return Math.min(cappedByRule, remains);
+    };
+
     const rawRemains =
       cycleStats?.remainingBudget ?? activeAccount?.stats?.remains_cap;
     const remains =
@@ -178,9 +187,10 @@ export function CashbackSection({
 
     return {
       remainsCap: rawRemains,
-      actualBankReward: Math.min(cappedByRule, remains),
+      actualBankReward: estimateWithPolicy(policy, remains),
+      previewBankReward: estimateWithPolicy(displayPolicy, remains),
     };
-  }, [totalGrossAmount, policy, activeAccount, cycleStats]);
+  }, [totalGrossAmount, policy, displayPolicy, activeAccount, cycleStats]);
 
   const isSharing = ["real_percent", "real_fixed", "voluntary"].includes(
     cashbackMode,
@@ -193,19 +203,21 @@ export function CashbackSection({
   }, [totalGrossAmount, sharePercent, shareFixed, isSharing]);
 
   const netProfitValue = useMemo(() => {
-    return actualBankReward - totalSharedVal;
-  }, [actualBankReward, totalSharedVal]);
+    return previewBankReward - totalSharedVal;
+  }, [previewBankReward, totalSharedVal]);
 
   // AMBIGUITY FIX: Show Net Profit % in the header instead of sharing %
   const netProfitPercent = useMemo(() => {
     if (totalGrossAmount > 0)
       return ((netProfitValue / totalGrossAmount) * 100).toFixed(2);
-    return (policy?.rate ? policy.rate * 100 : 0).toFixed(2);
-  }, [totalGrossAmount, netProfitValue, policy]);
+    return (displayPolicy?.rate ? displayPolicy.rate * 100 : 0).toFixed(2);
+  }, [totalGrossAmount, netProfitValue, displayPolicy]);
 
   const suggestedShareRate = useMemo(() => {
-    return policy?.rate ? Number((policy.rate * 100).toFixed(2)) : undefined;
-  }, [policy]);
+    return displayPolicy?.rate
+      ? Number((displayPolicy.rate * 100).toFixed(2))
+      : undefined;
+  }, [displayPolicy]);
 
   const toggleSharing = (checked: boolean) => {
     if (!checked) {
@@ -219,7 +231,9 @@ export function CashbackSection({
   };
 
   const lastAutoPopulatedSig = useRef<string | null>(null);
-  const policySignature = policy ? `${policy.rate}-${policy.maxReward}` : null;
+  const policySignature = displayPolicy
+    ? `${displayPolicy.rate}-${displayPolicy.maxReward}`
+    : null;
 
   useEffect(() => {
     if (
@@ -288,9 +302,9 @@ export function CashbackSection({
                 <span className="text-sm font-bold text-slate-800">
                   Cashback Reward
                 </span>
-                {actualBankReward > 0 && !isExpanded && (
+                {previewBankReward > 0 && !isExpanded && (
                   <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-md font-bold border border-emerald-100">
-                    ~{formatVN(actualBankReward)}
+                    ~{formatVN(previewBankReward)}
                   </span>
                 )}
               </div>
@@ -359,11 +373,11 @@ export function CashbackSection({
               <p className="text-xs text-slate-600 font-medium leading-relaxed">
                 {activeAccount?.name} applies{" "}
                 <span className="text-slate-900 font-bold">
-                  {(policy?.rate ? policy.rate * 100 : 0).toFixed(2)}%
+                  {(displayPolicy?.rate ? displayPolicy.rate * 100 : 0).toFixed(2)}%
                 </span>{" "}
                 reward rate
-                {policy?.maxReward
-                  ? ` (Capped at ${formatVN(policy.maxReward)})`
+                {displayPolicy?.maxReward
+                  ? ` (Capped at ${formatVN(displayPolicy.maxReward)})`
                   : " (Unlimited per transaction)"}
                 .
               </p>
@@ -559,7 +573,7 @@ export function CashbackSection({
                           </span>
                         </div>
                         <span className="font-black text-slate-900 tabular-nums tracking-tight">
-                          {formatVN(actualBankReward)}
+                          {formatVN(previewBankReward)}
                         </span>
                       </div>
                       {actualBankReward === 0 &&
@@ -593,16 +607,16 @@ export function CashbackSection({
                       </span>
                       <div className="bg-white/10 p-2 rounded text-[11px] font-mono">
                         {formatVN(totalGrossAmount)} ×{" "}
-                        {(policy?.rate ? policy.rate * 100 : 0).toFixed(2)}%
-                        {policy?.maxReward
-                          ? ` (Cap: ${formatVN(policy.maxReward)})`
+                        {(displayPolicy?.rate ? displayPolicy.rate * 100 : 0).toFixed(2)}%
+                        {displayPolicy?.maxReward
+                          ? ` (Cap: ${formatVN(displayPolicy.maxReward)})`
                           : ""}
                         <div className="mt-1 pt-1 border-t border-white/10 text-emerald-400 font-bold">
-                          = {formatVN(actualBankReward)}
+                          = {formatVN(previewBankReward)}
                         </div>
                       </div>
                       <span className="text-[9px] opacity-60 italic pt-1 border-t border-white/5">
-                        * Using {policy?.metadata?.reason || "default"} strategy
+                        * Using {displayPolicy?.metadata?.reason || "default"} strategy
                         for this category.
                       </span>
                     </div>
@@ -669,7 +683,7 @@ export function CashbackSection({
                           Net Formula:
                         </span>
                         <div className="bg-white/10 p-2 rounded text-[11px] font-mono">
-                          {formatVN(actualBankReward)} (Bank) -{" "}
+                          {formatVN(previewBankReward)} (Bank) -{" "}
                           {formatVN(totalSharedVal)} (Shared)
                           <div
                             className={cn(

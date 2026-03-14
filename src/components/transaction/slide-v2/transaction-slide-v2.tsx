@@ -19,7 +19,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Switch } from "@/components/ui/switch";
 import { CategoryShopSection } from "./single-mode/category-shop-section";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +53,6 @@ import { TransactionTypeSelector } from "./single-mode/type-selector";
 import { AmountSection } from "./single-mode/amount-section";
 import { BasicInfoSection } from "@/components/transaction/slide-v2/single-mode/basic-info-section";
 import { AccountSelector } from "@/components/transaction/slide-v2/single-mode/account-selector";
-import { CashbackSection } from "@/components/transaction/slide-v2/single-mode/cashback-section";
 import { SplitBillSection } from "@/components/transaction/slide-v2/single-mode/split-bill-section";
 import { InstallmentSelector } from "./single-mode/installment-selector";
 import { BulkInputSection } from "@/components/transaction/slide-v2/bulk-mode/bulk-input-section";
@@ -64,6 +62,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { generateTag } from "@/lib/tag";
+import { isYYYYMM } from "@/lib/month-tag";
 
 // Dialogs
 import { AccountSlideV2 } from "@/components/accounts/v2/AccountSlideV2";
@@ -90,6 +90,65 @@ function upsertFeeNote(note: string, principal: number, fee: number): string {
   if (!fee || fee <= 0) return cleaned;
   const marker = `(${formatVndNumber(principal)} | Fee: ${formatVndNumber(fee)})`;
   return cleaned ? `${cleaned} ${marker}` : marker;
+}
+
+function normalizeLookup(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized || null;
+}
+
+function resolveCategoryOptionId(
+  value: string | null | undefined,
+  categories: Array<{ id: string; slug?: string | null; name: string }>,
+  fallbacks: Array<string | null | undefined> = [],
+): string | null {
+  const candidates = [value, ...fallbacks]
+    .map(normalizeLookup)
+    .filter((candidate): candidate is string => Boolean(candidate));
+
+  if (candidates.length === 0) return value ?? null;
+
+  for (const candidate of candidates) {
+    const matched = categories.find((category) => {
+      const categoryId = normalizeLookup(category.id);
+      const categorySlug = normalizeLookup(category.slug ?? null);
+      const categoryName = normalizeLookup(category.name);
+      return (
+        categoryId === candidate ||
+        categorySlug === candidate ||
+        categoryName === candidate
+      );
+    });
+
+    if (matched) return matched.id;
+  }
+
+  return value ?? null;
+}
+
+function resolveShopOptionId(
+  value: string | null | undefined,
+  shops: Array<{ id: string; name: string }>,
+  fallbacks: Array<string | null | undefined> = [],
+): string | null {
+  const candidates = [value, ...fallbacks]
+    .map(normalizeLookup)
+    .filter((candidate): candidate is string => Boolean(candidate));
+
+  if (candidates.length === 0) return value ?? null;
+
+  for (const candidate of candidates) {
+    const matched = shops.find((shop) => {
+      const shopId = normalizeLookup(shop.id);
+      const shopName = normalizeLookup(shop.name);
+      return shopId === candidate || shopName === candidate;
+    });
+
+    if (matched) return matched.id;
+  }
+
+  return value ?? null;
 }
 
 export function TransactionSlideV2({
@@ -200,6 +259,17 @@ export function TransactionSlideV2({
       }
 
       const isIncome = type === "income" || type === "repayment";
+      const candidateTag =
+        initialData.tag ??
+        (initialData as any).debt_cycle_tag ??
+        (initialData as any).persisted_cycle_tag ??
+        null;
+      const normalizedInitialTag = isYYYYMM(String(candidateTag || "").trim())
+        ? String(candidateTag).trim()
+        : calculatePersistedCycleTag(
+            occurredAt ? new Date(occurredAt) : new Date(),
+            undefined,
+          );
       const values: SingleTransactionFormValues = {
         type,
         category_id: resolveCategoryId(initialData.category_id),
@@ -216,7 +286,7 @@ export function TransactionSlideV2({
           : (initialData.target_account_id ?? null),
         shop_id: resolveShopId(initialData.shop_id),
         person_id: initialData.person_id ?? null,
-        tag: initialData.tag ?? null,
+        tag: normalizedInitialTag,
         cashback_mode: initialData.cashback_mode || "none_back",
         cashback_share_percent:
           typeof initialData.cashback_share_percent === "number"
@@ -328,11 +398,6 @@ export function TransactionSlideV2({
     control: singleForm.control,
     name: "cashback_share_fixed",
   });
-  const isCashbackExpanded = useWatch({
-    control: singleForm.control,
-    name: "ui_is_cashback_expanded",
-  });
-
   // --- Bulk Transaction Form ---
   const bulkForm = useForm<BulkTransactionFormValues>({
     resolver: safeResolver(
@@ -369,6 +434,14 @@ export function TransactionSlideV2({
       singleForm.setValue("ui_is_cashback_expanded", true);
     }
   }, [cashbackPercentWatch, cashbackFixedWatch, isEditingContext, singleForm]);
+
+  useEffect(() => {
+    if (!open || !isEditingContext) return;
+    singleForm.setValue("ui_is_cashback_expanded", true, {
+      shouldDirty: false,
+      shouldTouch: false,
+    });
+  }, [open, isEditingContext, singleForm]);
 
   const { isDirty: isBulkDirty } = bulkForm.formState;
 
@@ -413,6 +486,54 @@ export function TransactionSlideV2({
       onHasChanges?.(false);
     }
   }, [open, defaultFormValues]);
+
+  useEffect(() => {
+    if (!open || !isEditingContext) return;
+
+    const currentCategoryId = singleForm.getValues("category_id");
+    const normalizedCategoryId = resolveCategoryOptionId(
+      currentCategoryId,
+      localCategories,
+      [
+        (initialData as any)?.category_slug,
+        (initialData as any)?.category_name,
+      ],
+    );
+
+    if (
+      normalizedCategoryId &&
+      normalizedCategoryId !== currentCategoryId &&
+      localCategories.some((category) => category.id === normalizedCategoryId)
+    ) {
+      singleForm.setValue("category_id", normalizedCategoryId, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+
+    const currentShopId = singleForm.getValues("shop_id");
+    const normalizedShopId = resolveShopOptionId(currentShopId, localShops, [
+      (initialData as any)?.shop_name,
+    ]);
+
+    if (
+      normalizedShopId &&
+      normalizedShopId !== currentShopId &&
+      localShops.some((shop) => shop.id === normalizedShopId)
+    ) {
+      singleForm.setValue("shop_id", normalizedShopId, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+  }, [
+    open,
+    isEditingContext,
+    initialData,
+    localCategories,
+    localShops,
+    singleForm,
+  ]);
 
   // Watch for bulk form rows
   const bulkRows = useWatch({ control: bulkForm.control, name: "rows" });
@@ -665,7 +786,12 @@ export function TransactionSlideV2({
                 category_id: txn.category_id || null,
                 shop_id: txn.shop_id || null,
                 person_id: txn.person_id || null,
-                tag: txn.tag || null,
+                tag: isYYYYMM(String(txn.tag || "").trim())
+                  ? String(txn.tag).trim()
+                  : calculatePersistedCycleTag(
+                      new Date(txn.occurred_at),
+                      undefined,
+                    ),
                 cashback_mode: txn.cashback_mode || "none_back",
                 cashback_share_percent:
                   typeof txn.cashback_share_percent === "number"
@@ -718,16 +844,21 @@ export function TransactionSlideV2({
       editingId ? "updateTransaction()" : "createTransaction()",
     );
 
+    const effectiveServiceFee =
+      data.type === "income" || data.type === "repayment"
+        ? 0
+        : Number(data.service_fee) || 0;
+
     // Auto-Note for Fee: Append "(principal | Fee: fee)" if service_fee exists
     const finalNote = upsertFeeNote(
       data.note || "",
       data.amount,
-      Number(data.service_fee) || 0,
+      effectiveServiceFee,
     );
 
     const payload: any = {
       occurred_at: data.occurred_at.toISOString(),
-      amount: data.amount + (data.service_fee || 0),
+      amount: data.amount + effectiveServiceFee,
       note: finalNote,
       type: data.type,
       // Directional Logic:
@@ -754,9 +885,25 @@ export function TransactionSlideV2({
       installment_plan_id: data.installment_plan_id,
       metadata: {
         ...data.metadata,
-        service_fee: data.service_fee || undefined,
+        service_fee: effectiveServiceFee || undefined,
       },
     };
+
+    const resolvedCycleTag = isYYYYMM(String(data.tag || "").trim())
+      ? String(data.tag).trim()
+      : generateTag(data.occurred_at);
+
+    if (data.type === "debt" || data.type === "repayment") {
+      payload.tag = resolvedCycleTag;
+      payload.debt_cycle_tag = resolvedCycleTag;
+      payload.persisted_cycle_tag = resolvedCycleTag;
+      payload.statement_cycle_tag = resolvedCycleTag;
+      payload.metadata = {
+        ...payload.metadata,
+        debt_cycle_tag: resolvedCycleTag,
+        persisted_cycle_tag: resolvedCycleTag,
+      };
+    }
 
     console.log("🚀 Mapped Payload for Service:", payload);
 
@@ -886,7 +1033,7 @@ export function TransactionSlideV2({
           showClose={false}
           className={cn(
             "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[500] max-w-screen",
-            mode === "single" ? "sm:max-w-[550px]" : "sm:max-w-[1000px]",
+            mode === "single" ? "sm:max-w-[680px]" : "sm:max-w-[1000px]",
           )}
           side="right"
           onInteractOutside={(e) => {
@@ -1088,42 +1235,19 @@ export function TransactionSlideV2({
                           />
 
                           <div className="space-y-4">
-                            <AmountSection />
-
-                            <div className="flex items-center justify-between border-t border-slate-100/70 pt-4">
-                              <div>
-                                <p className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-400">
-                                  Cashback Reward
-                                </p>
-                                <p className="text-[10px] text-slate-500">
-                                  Toggle to reveal optimizations
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                                <span>Show</span>
-                                <Switch
-                                  checked={Boolean(isCashbackExpanded)}
-                                  onCheckedChange={(checked) =>
-                                    singleForm.setValue(
-                                      "ui_is_cashback_expanded",
-                                      checked,
-                                    )
-                                  }
-                                />
-                              </div>
-                            </div>
-
-                            <CashbackSection
+                            <AmountSection
                               accounts={accounts}
                               categories={categories}
-                              hideHeader
                             />
                           </div>
                         </div>
 
                         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 space-y-4">
-                          <InstallmentSelector />
-                          <SplitBillSection people={people} />
+                          <InstallmentSelector forceShow={isEditingContext} />
+                          <SplitBillSection
+                            people={people}
+                            forceShow={isEditingContext}
+                          />
                         </div>
                       </div>
                     </form>

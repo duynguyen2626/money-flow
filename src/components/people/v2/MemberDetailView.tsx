@@ -10,7 +10,7 @@ import { SimpleTransactionTableSkeleton } from '@/components/people/v2/SimpleTra
 import { PaidTransactionsModal } from '@/components/people/paid-transactions-modal'
 import { PeopleHeader } from '@/components/people/v2/PeopleHeader'
 import { TransactionControlBar } from '@/components/people/v2/TransactionControlBar'
-import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
+import { isYYYYMM, normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
 import { useRecentItems } from '@/hooks/use-recent-items'
 import { useBreadcrumbs } from '@/context/breadcrumb-context'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
@@ -619,13 +619,16 @@ export function MemberDetailView({
     const slideInitialData = useMemo(() => {
         if (slideOverrideType) {
             const isRepayment = slideOverrideType === 'repayment';
+            const initialTag = activeCycle?.tag && isYYYYMM(activeCycle.tag)
+                ? activeCycle.tag
+                : undefined
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
                 amount: isRepayment ? Math.round(activeCycle?.remains || 0) : 0,
                 cashback_mode: "none_back" as const,
                 person_id: person.id,
-                tag: activeCycle?.tag || undefined,
+                tag: initialTag,
                 target_account_id: (isRepayment && person.sheet_linked_bank_id) ? person.sheet_linked_bank_id : undefined,
             }
         }
@@ -731,17 +734,15 @@ export function MemberDetailView({
                     />
                     <div className="flex-1 overflow-y-auto px-4 py-3 relative">
                         {(isSubmitting || isGlobalLoading) && (
-                            <div className="absolute inset-0 bg-white/40 z-50 flex items-center justify-center backdrop-blur-[1px] animate-in fade-in duration-300">
-                                <div className="flex items-center gap-3 bg-slate-900 shadow-2xl border border-slate-800 px-6 py-3 rounded-full text-white scale-90 animate-in zoom-in-95 duration-300">
+                            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[120] pointer-events-none">
+                                <div className="flex items-center gap-3 bg-slate-900/95 shadow-2xl border border-slate-800 px-6 py-3 rounded-full text-white animate-in fade-in slide-in-from-bottom-4 duration-200">
                                     <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
-                                    <div className="flex flex-col">
-                                        <span className="text-[11px] font-black uppercase tracking-widest leading-none">
-                                            {isGlobalLoading ? (loadingMessage || 'Executing...') :
-                                                slideMode === 'edit' ? 'Updating...' :
-                                                    slideMode === 'duplicate' ? 'Cloning...' :
-                                                        'Saving...'}
-                                        </span>
-                                    </div>
+                                    <span className="text-[11px] font-black uppercase tracking-widest leading-none">
+                                        {isGlobalLoading ? (loadingMessage || 'Executing...') :
+                                            slideMode === 'edit' ? 'Updating...' :
+                                                slideMode === 'duplicate' ? 'Cloning...' :
+                                                    'Saving...'}
+                                    </span>
                                 </div>
                             </div>
                         )}

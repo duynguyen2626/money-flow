@@ -2,6 +2,7 @@
 
 import { toPocketBaseId, pocketbaseGetById, pocketbaseList, pocketbaseCreate, pocketbaseUpdate } from './pocketbase/server'
 import { yyyyMMToLegacyMMMYY } from '@/lib/month-tag'
+import { isYYYYMM } from '@/lib/month-tag'
 import { Account, Person } from '@/types/moneyflow.types'
 
 type SheetSyncTransaction = {
@@ -25,6 +26,94 @@ function getCycleTag(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   return `${year}-${month}`
+}
+
+function resolveCycleTagForSheet(tag: unknown, occurredAt?: string | null): string {
+  const rawTag = typeof tag === 'string' ? tag.trim() : ''
+  if (isYYYYMM(rawTag)) return rawTag
+
+  const parsedDate = occurredAt ? new Date(occurredAt) : new Date()
+  if (Number.isNaN(parsedDate.getTime())) {
+    return getCycleTag(new Date())
+  }
+
+  return getCycleTag(parsedDate)
+}
+
+function numberOrDefault(value: unknown, fallback = 0): number {
+  if (value === null || value === undefined || value === '') return fallback
+  if (typeof value === 'number') return Number.isFinite(value) ? value : fallback
+
+  let text = String(value).trim()
+  if (!text) return fallback
+
+  // Accept both 1,234,567 and 1.234.567 notations from legacy/imported records.
+  text = text.replace(/\s+/g, '')
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(text)) {
+    text = text.replace(/\./g, '').replace(',', '.')
+  } else {
+    text = text.replace(/,/g, '')
+  }
+
+  const numeric = Number(text)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function firstFiniteNumber(values: unknown[], fallback = 0): number {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue
+    const numeric = numberOrDefault(value, Number.NaN)
+    if (Number.isFinite(numeric)) return numeric
+  }
+  return fallback
+}
+
+function firstNonZeroNumber(values: unknown[], fallback = 0): number {
+  let finiteFallback: number | null = null
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue
+    const numeric = numberOrDefault(value, Number.NaN)
+    if (!Number.isFinite(numeric)) continue
+    if (Math.abs(numeric) > 0) return numeric
+    if (finiteFallback === null) finiteFallback = numeric
+  }
+  return finiteFallback ?? fallback
+}
+
+function extractAmountFromFeeNote(note: unknown): number {
+  const text = String(note ?? '').trim()
+  if (!text) return 0
+
+  // Examples:
+  // "Điện Th2 (1.635.230 | Fee: 33.828)"
+  // "ABC (166,000/6)"
+  const paren = text.match(/\(([^)]+)\)/)
+  if (!paren || !paren[1]) return 0
+
+  const candidate = paren[1]
+    .split('|')[0]
+    .split('/')[0]
+    .trim()
+
+  return Math.abs(numberOrDefault(candidate, 0))
+}
+
+function resolveOriginalAmountForSheet(txn: any, metadata: any): number {
+  const direct = firstNonZeroNumber([
+    txn?.original_amount,
+    txn?.amount,
+    txn?.final_price,
+    metadata?.original_amount,
+    metadata?.principal,
+    metadata?.base_amount,
+    metadata?.gross_amount,
+    metadata?.final_price,
+  ], 0)
+
+  if (Math.abs(direct) > 0) return Math.abs(direct)
+
+  const fromNote = extractAmountFromFeeNote(txn?.note ?? txn?.description)
+  return Math.abs(fromNote)
 }
 
 function isValidWebhook(url: string | null | undefined): url is string {
@@ -51,9 +140,21 @@ function normalizePercent(value: number | null | undefined): number {
 
 function calculateTotals(txn: SheetSyncTransaction) {
   const originalAmount = Math.abs(Number(txn.original_amount ?? txn.amount ?? 0)) || 0
-  const percentRate = normalizePercent(
-    txn.cashback_share_percent_input ?? txn.cashback_share_percent ?? undefined
+  const percentCandidate = firstNonZeroNumber(
+    [
+      txn.cashback_share_percent_input,
+      txn.cashback_share_percent,
+    ],
+    firstFiniteNumber(
+      [
+        txn.cashback_share_percent,
+        txn.cashback_share_percent_input,
+      ],
+      0,
+    ),
   )
+
+  const percentRate = normalizePercent(percentCandidate)
   const fixedBack = Math.max(0, Number(txn.cashback_share_fixed ?? 0) || 0)
   const percentBack = originalAmount * percentRate
   const totalBackCandidate =
@@ -178,6 +279,8 @@ async function postToSheet(sheetLink: string, payload: Record<string, unknown>):
 }
 
 function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | 'update') {
+  const resolvedOccurredAt = txn.occurred_at ?? txn.date ?? null
+  const resolvedTag = resolveCycleTagForSheet(txn.tag, resolvedOccurredAt)
   const { originalAmount, percentRate, fixedBack, totalBack } = calculateTotals(txn)
 
   // If amount is negative, it's a credit to the debt account (Repayment) -> Type "In"
@@ -189,8 +292,8 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     action: action === 'update' ? 'edit' : action, // Map 'update' to 'edit' for backend if needed, or keep 'update'
     id: txn.id,
     type: type,
-    date: txn.occurred_at ?? txn.date ?? null,
-    occurred_at: txn.occurred_at ?? txn.date ?? null, // Legacy compatibility
+    date: resolvedOccurredAt,
+    occurred_at: resolvedOccurredAt, // Legacy compatibility
     shop: txn.shop_name ?? '',
     notes: txn.note ?? '',
     note: txn.note ?? '', // Legacy compatibility
@@ -202,7 +305,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     percent_back: Math.round(percentRate * 100 * 100) / 100, // Round to 2 decimals for safety
     fixed_back: fixedBack,
     total_back: totalBack,
-    tag: txn.tag ?? undefined,
+    tag: resolvedTag,
     img: txn.img_url ?? undefined
   }
 }
@@ -256,7 +359,7 @@ export async function syncTransactionToSheet(
     const payload = {
       ...buildPayload(txn, action),
       person_id: personId,
-      cycle_tag: txn.tag ?? undefined,
+      cycle_tag: resolveCycleTagForSheet(txn.tag, txn.occurred_at ?? txn.date ?? null),
       bank_account: showBankAccount ? resolvedBankInfo : '', // Send empty to clear if disabled
       img: showQrImage && qrImageUrl ? qrImageUrl : '' // Send empty to clear if disabled
     }
@@ -346,16 +449,65 @@ export async function syncAllTransactions(personId: string) {
 
     const rows = (data.items || []).map(txn => {
       const expanded = (txn as any).expand || {}
-      return {
+      const metadata = (txn as any).metadata && typeof (txn as any).metadata === 'object'
+        ? (txn as any).metadata
+        : {}
+      const occurredAt = (txn as any).occurred_at || (txn as any).date
+        const resolvedOriginalAmount = resolveOriginalAmountForSheet(txn as any, metadata)
+
+        return {
         id: (txn as any).id,
-        occurred_at: (txn as any).occurred_at || (txn as any).date,
+        occurred_at: occurredAt,
         note: (txn as any).note || (txn as any).description,
         status: (txn as any).status,
-        tag: (txn as any).tag || (txn as any).debt_cycle_tag,
+        tag: resolveCycleTagForSheet((txn as any).tag || (txn as any).debt_cycle_tag, occurredAt),
         type: (txn as any).type,
         amount: (txn as any).amount,
-        cashback_share_percent: (txn as any).cashback_share_percent,
-        cashback_share_fixed: (txn as any).cashback_share_fixed,
+          original_amount: resolvedOriginalAmount,
+        cashback_share_percent: numberOrDefault(
+          firstNonZeroNumber([
+            (txn as any).cashback_share_percent_input,
+            (txn as any).cashback_share_percent,
+            (txn as any).percent_back,
+            (txn as any).cashback_percent,
+            metadata.cashback_share_percent_input,
+            metadata.cashback_share_percent,
+            metadata.percent_back,
+          ], firstFiniteNumber([
+            (txn as any).cashback_share_percent,
+            metadata.cashback_share_percent,
+            (txn as any).cashback_share_percent_input,
+            metadata.cashback_share_percent_input,
+          ], 0)),
+          0,
+        ),
+        cashback_share_percent_input: numberOrDefault(
+          firstFiniteNumber([
+            (txn as any).cashback_share_percent_input,
+            (txn as any).percent_back,
+            metadata.cashback_share_percent_input,
+            metadata.percent_back,
+          ], 0),
+          0,
+        ),
+        cashback_share_fixed: numberOrDefault(
+          firstNonZeroNumber([
+            (txn as any).cashback_share_fixed,
+            (txn as any).fixed_back,
+            metadata.cashback_share_fixed,
+            metadata.fixed_back,
+          ], firstFiniteNumber([
+            (txn as any).cashback_share_fixed,
+            metadata.cashback_share_fixed,
+          ], 0)),
+          0,
+        ),
+        cashback_share_amount: numberOrDefault(
+          (txn as any).cashback_share_amount
+            ?? metadata.cashback_share_amount
+            ?? metadata.total_back,
+          0,
+        ),
         shop_id: (txn as any).shop_id,
         shops: expanded.shop_id ? { name: expanded.shop_id.name } : null,
         account_id: (txn as any).account_id,
@@ -372,7 +524,7 @@ export async function syncAllTransactions(personId: string) {
     const cycleMap = new Map<string, typeof rows>()
 
     for (const txn of eligibleRows) {
-      const cycleTag = txn.tag || getCycleTag(new Date(txn.occurred_at))
+      const cycleTag = resolveCycleTagForSheet(txn.tag, txn.occurred_at)
       if (!cycleMap.has(cycleTag)) {
         cycleMap.set(cycleTag, [])
       }
@@ -513,6 +665,7 @@ export async function syncCycleTransactions(
     const data = await pocketbaseList('transactions', {
       filter: `person_id = "${pbId}" && status != "void" && (${tagFilter})`,
       expand: 'shop_id,account_id,category_id',
+      fields: 'id,occurred_at,date,note,description,status,tag,debt_cycle_tag,type,amount,original_amount,final_price,cashback_share_percent,cashback_share_percent_input,cashback_share_fixed,cashback_share_amount,metadata,person_id,shop_id,account_id,category_id,expand.shop_id.id,expand.shop_id.name,expand.account_id.id,expand.account_id.name,expand.category_id.id,expand.category_id.name',
       sort: 'occurred_at'
     })
 
@@ -528,6 +681,8 @@ export async function syncCycleTransactions(
       .filter(txn => !shouldExcludeFromSheet(txn.note || txn.description))
       .map(txn => {
         const expanded = txn.expand || {}
+        const metadata = txn.metadata && typeof txn.metadata === 'object' ? txn.metadata : {}
+        const occurredAt = txn.occurred_at || txn.date
         let shopName = expanded.shop_id?.name
 
         if (!shopName) {
@@ -541,11 +696,78 @@ export async function syncCycleTransactions(
         }
 
         // Pass the raw transaction fields that buildPayload needs
+        const resolvedOriginalAmount = resolveOriginalAmountForSheet(txn, metadata)
+
         return buildPayload({
           ...txn,
+          occurred_at: occurredAt,
+          tag: resolveCycleTagForSheet(txn.tag || txn.debt_cycle_tag, occurredAt),
+          original_amount: resolvedOriginalAmount,
+          cashback_share_percent: numberOrDefault(
+            firstNonZeroNumber([
+              txn.cashback_share_percent_input,
+              txn.cashback_share_percent,
+              txn.percent_back,
+              txn.cashback_percent,
+              metadata.cashback_share_percent_input,
+              metadata.cashback_share_percent,
+              metadata.percent_back,
+            ], firstFiniteNumber([
+              txn.cashback_share_percent,
+              metadata.cashback_share_percent,
+              txn.cashback_share_percent_input,
+              metadata.cashback_share_percent_input,
+            ], 0)),
+            0,
+          ),
+          cashback_share_percent_input: numberOrDefault(
+            firstFiniteNumber([
+              txn.cashback_share_percent_input,
+              txn.percent_back,
+              metadata.cashback_share_percent_input,
+              metadata.percent_back,
+            ], 0),
+            0,
+          ),
+          cashback_share_fixed: numberOrDefault(
+            firstNonZeroNumber([
+              txn.cashback_share_fixed,
+              txn.fixed_back,
+              metadata.cashback_share_fixed,
+              metadata.fixed_back,
+            ], firstFiniteNumber([
+              txn.cashback_share_fixed,
+              metadata.cashback_share_fixed,
+            ], 0)),
+            0,
+          ),
+          cashback_share_amount: numberOrDefault(
+            txn.cashback_share_amount
+              ?? metadata.cashback_share_amount
+              ?? metadata.total_back,
+            0,
+          ),
           shop_name: shopName
         }, 'create')
       })
+
+    const missingIdRows = rows.filter((r: any) => !r?.id)
+    const zeroAmountRows = rows.filter((r: any) => Number(r?.amount || 0) === 0)
+
+    console.log('[syncCycleTransactions] Mapped rows diagnostics:', {
+      total: rows.length,
+      missingId: missingIdRows.length,
+      zeroAmount: zeroAmountRows.length,
+      sample: rows.slice(0, 5).map((r: any) => ({
+        id: r.id,
+        date: r.date,
+        tag: r.tag,
+        amount: r.amount,
+        percent_back: r.percent_back,
+        fixed_back: r.fixed_back,
+        notes: r.notes,
+      }))
+    })
 
     console.log(`[Sheet Sync] Sending ${rows.length} mapped transactions to ${personId} for cycle ${cycleTag}`)
 

@@ -83,13 +83,14 @@ function mapAccount(record: PocketBaseRecord): Account {
 
 function mapCategory(record: PocketBaseRecord): Category {
   return {
-    id: record.slug || record.id,
+    id: record.id,
     name: record.name,
     type: (record.type || "expense").toLowerCase() as Category["type"],
     icon: record.icon || null,
     image_url: record.image_url || null,
     kind: record.kind || null,
     is_archived: Boolean(record.is_archived || false),
+    slug: record.slug || null,
   };
 }
 
@@ -213,10 +214,11 @@ function mapTransaction(
     destination_name: expandedTargetAccount?.name || null,
     destination_image: expandedTargetAccount?.image_url || null,
     account_name: expandedAccount?.name || null,
-    category_id: expandedCategory?.slug || record.category_id || null,
-    shop_id: expandedShop?.slug || record.shop_id || null,
-    person_id: expandedPerson?.slug || record.person_id || null,
+    category_id: expandedCategory?.id || record.category_id || null,
+    shop_id: expandedShop?.id || record.shop_id || null,
+    person_id: expandedPerson?.id || record.person_id || null,
     person_pocketbase_id: expandedPerson?.id || record.person_id || null,
+    category_slug: expandedCategory?.slug || null,
     category_name: expandedCategory?.name || null,
     category_icon: expandedCategory?.icon || null,
     category_image_url: expandedCategory?.image_url || null,

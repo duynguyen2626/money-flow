@@ -17,7 +17,11 @@ import { Combobox, ComboboxGroup } from "@/components/ui/combobox";
 import { getActiveInstallments, Installment } from "@/services/installment.service";
 import { CreateInstallmentDialog } from "@/components/installments/create-installment-dialog";
 
-export function InstallmentSelector() {
+type InstallmentSelectorProps = {
+    forceShow?: boolean;
+};
+
+export function InstallmentSelector({ forceShow = false }: InstallmentSelectorProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const isInstallment = useWatch({ control: form.control, name: "is_installment" });
     const transactionType = useWatch({ control: form.control, name: "type" });
@@ -45,7 +49,7 @@ export function InstallmentSelector() {
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
     // Only show for Expense, Repayment, Credit Pay, Income, or Debt
-    const shouldShowByType = ['expense', 'repayment', 'credit_pay', 'income', 'debt'].includes(transactionType);
+    const shouldShowByType = forceShow || ['expense', 'repayment', 'credit_pay', 'income', 'debt'].includes(transactionType);
 
     // Don't show if type doesn't match
     if (!shouldShowByType) return null;

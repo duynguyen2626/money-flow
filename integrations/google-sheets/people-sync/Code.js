@@ -1,7 +1,7 @@
 /**
  * MoneyFlow 3 - Google Apps Script
- * @version 7.8 (Auto-Shift Row & Safety Backup)
- * @date 2026-02-19 13:45
+ * @version 7.9 (Robust Payload Parsing + Sync Diagnostics)
+ * @date 2026-03-14 22:40
  *
  * LAYOUT v7.6 (Explicit Columns):
  * A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
@@ -73,6 +73,67 @@ function doPost(e) {
     }
 }
 
+function pickFirstDefined() {
+    for (var i = 0; i < arguments.length; i++) {
+        if (arguments[i] !== undefined && arguments[i] !== null && arguments[i] !== "") {
+            return arguments[i];
+        }
+    }
+    return null;
+}
+
+function toNumberSafe(value) {
+    if (value === undefined || value === null || value === "") return 0;
+    if (typeof value === "number") return isNaN(value) ? 0 : value;
+
+    var str = String(value).trim();
+    if (!str) return 0;
+
+    // Accept strings like "1,234,567" and "1.234.567"
+    str = str.replace(/,/g, "").replace(/\s+/g, "");
+    if (/^\d+\.\d+\.\d+$/.test(str)) {
+        str = str.replace(/\./g, "");
+    }
+
+    var n = Number(str);
+    return isNaN(n) ? 0 : n;
+}
+
+function resolveAmountValue(row) {
+    var amount = pickFirstDefined(
+        row.amount,
+        row.original_amount,
+        row.base_amount,
+        row.gross_amount,
+        row.final_amount
+    );
+    return Math.abs(toNumberSafe(amount));
+}
+
+function resolvePercentValue(row) {
+    var percent = pickFirstDefined(
+        row.percent_back,
+        row.cashback_share_percent,
+        row.cashback_percent,
+        row.percent,
+        row.back_percent
+    );
+    var val = toNumberSafe(percent);
+    if (val > 0 && val < 1) val = Math.round(val * 100);
+    return val;
+}
+
+function resolveFixedValue(row) {
+    var fixed = pickFirstDefined(
+        row.fixed_back,
+        row.cashback_share_fixed,
+        row.cashback_fixed,
+        row.fixed,
+        row.back_fixed
+    );
+    return toNumberSafe(fixed);
+}
+
 function handleTestCreate(payload) {
     var personId = personId = payload.personId || payload.person_id || "TEST";
     var ss = getOrCreateSpreadsheet(personId, payload);
@@ -109,10 +170,10 @@ function handleEnsureSheet(payload) {
 function handleSyncTransactions(payload) {
     var personId = payload.personId || payload.person_id || null;
     var cycleTag = payload.cycleTag || payload.cycle_tag || null;
-    var transactions = payload.rows || [];
+    var transactions = payload.rows || payload.transactions || [];
 
     if (!cycleTag && transactions.length > 0) {
-        cycleTag = getCycleTagFromDate(new Date(transactions[0].date));
+        cycleTag = getCycleTagFromDate(new Date(transactions[0].date || transactions[0].occurred_at));
     }
 
     var ss = getOrCreateSpreadsheet(personId, payload);
@@ -131,7 +192,7 @@ function handleSyncTransactions(payload) {
     setupNewSheet(sheet, syncOptions.summaryOptions);
 
     // UPDATE VERSION NOTE (Verification)
-    sheet.getRange('A1').setNote('Script Version: 7.8\nUpdated: ' + new Date().toISOString());
+    sheet.getRange('A1').setNote('Script Version: 7.9\nUpdated: ' + new Date().toISOString());
 
     // --- UPSERT STRATEGY v6.9 ---
     // A: ID (Hidden) | B: Type | C: Date | D: Shop | E: Notes
@@ -215,6 +276,13 @@ function handleSyncTransactions(payload) {
     var validTxns = transactions.filter(function (txn) { return txn.status !== 'void'; });
     var payloadIds = validTxns.map(function (t) { return t.id; });
 
+    Logger.log('[handleSyncTransactions] Incoming rows: ' + transactions.length + ', valid rows: ' + validTxns.length);
+    if (validTxns.length > 0) {
+        var sample = validTxns[0];
+        Logger.log('[handleSyncTransactions] Sample row keys: ' + Object.keys(sample).join(','));
+        Logger.log('[handleSyncTransactions] Sample resolved numbers: amount=' + resolveAmountValue(sample) + ', percent=' + resolvePercentValue(sample) + ', fixed=' + resolveFixedValue(sample));
+    }
+
     // Sort transactions by Date ASC
     validTxns.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
 
@@ -223,7 +291,7 @@ function handleSyncTransactions(payload) {
     for (var i = 0; i < validTxns.length; i++) {
         var txn = validTxns[i];
         var type = normalizeType(txn.type, txn.amount);
-        var amt = Math.abs(Number(txn.amount || 0));
+        var amt = resolveAmountValue(txn);
         var dateObj = new Date(txn.date || txn.occurred_at);
         var shopSrc = (txn.shop || txn.shop_name || "");
 
@@ -237,11 +305,10 @@ function handleSyncTransactions(payload) {
         rowData[5] = amt;       // F: Amount
 
         // % Back Mapping (Force to whole number if decimal detected)
-        var pBackVal = Number(txn.percent_back || txn.cashback_share_percent || 0);
-        if (pBackVal > 0 && pBackVal < 1) pBackVal = Math.round(pBackVal * 100);
+        var pBackVal = resolvePercentValue(txn);
         rowData[6] = pBackVal; // G
 
-        rowData[7] = Number(txn.fixed_back || txn.cashback_share_fixed || 0);   // H
+        rowData[7] = resolveFixedValue(txn);   // H
         rowData[8] = "";        // I: S Back (Formula)
         rowData[9] = "";        // J: Final (Formula)
         rowData[10] = shopSrc;  // K: Shop Source (Hidden)
@@ -448,15 +515,14 @@ function handleSingleTransaction(payload, action) {
 
     sheet.getRange(targetRow, 5).setValue(payload.notes || payload.note || ""); // E: Note
 
-    var amt = Math.abs(Number(payload.amount || 0));
+    var amt = resolveAmountValue(payload);
     sheet.getRange(targetRow, 6).setValue(amt); // F: Amount
 
     // % Back Mapping (Force to whole number if decimal detected)
-    var singlePBack = Number(payload.percent_back || payload.cashback_share_percent || 0);
-    if (singlePBack > 0 && singlePBack < 1) singlePBack = Math.round(singlePBack * 100);
+    var singlePBack = resolvePercentValue(payload);
     sheet.getRange(targetRow, 7).setValue(singlePBack); // G
 
-    sheet.getRange(targetRow, 8).setValue(Number(payload.fixed_back || payload.cashback_share_fixed || 0));   // H
+    sheet.getRange(targetRow, 8).setValue(resolveFixedValue(payload));   // H
     sheet.getRange(targetRow, 11).setValue(payload.shop || payload.shop_name || ""); // K: ShopSource
 
     // Force Black Text for the updated row (A:J only)
@@ -574,7 +640,7 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
             // Number Formats
             sheet.getRange(2, 3, totalRows, 1).setNumberFormat('dd-MM'); // Date(C)
             sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0'); // Amount(F)
-            sheet.getRange(2, 7, totalRows, 1).setNumberFormat('0');     // % Back (G) - Force Whole Number
+            sheet.getRange(2, 7, totalRows, 1).setNumberFormat('0.00');  // % Back (G) - Keep 2 decimals
             sheet.getRange(2, 8, totalRows, 3).setNumberFormat('#,##0'); // H-J (đ, S, Final)
         }
     }
@@ -641,7 +707,7 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 7.7');
+    sheet.getRange('A1').setNote('Script Version: 7.9');
     setMonthTabColor(sheet);
 
     sheet.getRange('A:O').setFontSize(12);

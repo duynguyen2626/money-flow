@@ -4,6 +4,10 @@ import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 import { createCycleSheet, syncCycleTransactions, createTestSheet } from '@/services/sheet.service'
 import type { ManageCycleSheetRequest, ManageCycleSheetResponse } from '@/types/sheet.types'
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as ManageCycleSheetRequest
@@ -43,20 +47,26 @@ export async function POST(request: Request) {
     const supabase = createClient()
     type CycleSheetRow = { id: string; sheet_id?: string | null; sheet_url?: string | null }
     let existing: CycleSheetRow | null = null
-    let tableAvailable = true
+    let tableAvailable = isUuidLike(personId)
 
-    const existingResult = await (supabase as any)
-      .from('person_cycle_sheets')
-      .select('id, sheet_id, sheet_url')
-      .eq('person_id', personId)
-      .eq('cycle_tag', normalizedCycle)
-      .maybeSingle()
+    if (!tableAvailable) {
+      console.info('[ManageSheet API] skip person_cycle_sheets lookup: personId is not UUID, using direct create/sync path', { personId })
+    }
 
-    if (existingResult.error) {
-      tableAvailable = false
-      console.warn('person_cycle_sheets lookup failed:', existingResult.error)
-    } else {
-      existing = existingResult.data as CycleSheetRow | null
+    if (tableAvailable) {
+      const existingResult = await (supabase as any)
+        .from('person_cycle_sheets')
+        .select('id, sheet_id, sheet_url')
+        .eq('person_id', personId)
+        .eq('cycle_tag', normalizedCycle)
+        .maybeSingle()
+
+      if (existingResult.error) {
+        tableAvailable = false
+        console.warn('person_cycle_sheets lookup failed:', existingResult.error)
+      } else {
+        existing = existingResult.data as CycleSheetRow | null
+      }
     }
 
     let status: ManageCycleSheetResponse['status'] = 'synced'

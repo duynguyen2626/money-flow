@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronDown, History, Split, Edit, Calendar, TrendingUp, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronDown, History, Split, Edit, Calendar, TrendingUp, Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { Person } from '@/types/moneyflow.types'
@@ -102,8 +102,8 @@ export function PeopleHeader({
     return (
         <div className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col gap-4 sticky top-0 z-60 shadow-sm relative">
             {isSyncing && (
-                <div className="absolute inset-0 bg-white/45 backdrop-blur-[1px] z-50 flex items-center justify-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 bg-white shadow-sm">
+                <div className="absolute top-3 right-4 z-50 pointer-events-none">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 bg-white/95 shadow-md">
                         <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-600">
                             {syncingText || 'Syncing...'}
@@ -312,54 +312,22 @@ export function PeopleHeader({
 
                 {/* Right: Tools & Actions */}
                 <div className="flex items-center gap-2 ml-auto rounded-xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
-                    {/* Year Filter */}
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <button className="h-9 px-3 flex items-center gap-2 bg-white border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 transition-colors text-xs font-medium bg-white shadow-sm">
-                                <span className="font-bold">{selectedYear || 'All Time'}</span>
-                                <ChevronDown className="h-3.5 w-3.5 opacity-50" />
-                            </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-32 p-1" align="end">
-                            <button
-                                onClick={() => onYearChange(null)}
-                                className={cn(
-                                    "w-full text-left px-3 py-2 rounded-sm text-xs",
-                                    !selectedYear ? "bg-slate-100 font-bold" : "hover:bg-slate-50"
-                                )}
-                            >
-                                All Time
-                            </button>
-                            {availableYears.map(year => (
-                                <button
-                                    key={year}
-                                    onClick={() => onYearChange(year)}
-                                    className={cn(
-                                        "w-full text-left px-3 py-2 rounded-sm text-xs",
-                                        selectedYear === year ? "bg-indigo-50 text-indigo-700 font-bold" : "hover:bg-slate-50"
-                                    )}
-                                >
-                                    {year}
-                                </button>
-                            ))}
-                        </PopoverContent>
-                    </Popover>
-
-                    <div className="h-8 w-px bg-slate-200 mx-0.5" />
-
-                    {/* Action Buttons */}
-                    <button
-                        onClick={() => onTabChange(activeTab === 'history' ? 'timeline' : 'history')}
+                    <a
+                        href={person.google_sheet_url || person.sheet_link || '#'}
+                        target="_blank"
+                        rel="noreferrer"
                         className={cn(
-                            "h-9 px-3 flex items-center gap-1.5 border rounded-md text-xs font-medium transition-colors shadow-sm",
-                            activeTab === 'history'
-                                ? "bg-slate-800 text-white border-slate-800"
-                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                            "h-9 px-3 inline-flex items-center justify-center gap-1.5 border rounded-md text-xs font-medium text-slate-600 transition-colors bg-white shadow-sm whitespace-nowrap",
+                            person.google_sheet_url || person.sheet_link
+                                ? "border-slate-200 hover:bg-slate-50"
+                                : "border-slate-100 text-slate-300 pointer-events-none"
                         )}
+                        aria-label="Open sheet in new tab"
+                        title="Open sheet"
                     >
-                        <History className="h-3.5 w-3.5" />
-                        History
-                    </button>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Sheet
+                    </a>
 
                     <button
                         onClick={() => onTabChange('split-bill')}

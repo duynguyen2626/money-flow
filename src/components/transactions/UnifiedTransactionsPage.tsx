@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { TransactionHeader } from '@/components/transactions-v2/header/TransactionHeader'
 import { formatCycleTag } from '@/lib/cycle-utils'
-import { normalizeMonthTag } from '@/lib/month-tag'
+import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 
 import {
     AlertDialog,
@@ -58,13 +58,50 @@ function resolveTransactionCycleTagForAccount(transaction: TransactionWithDetail
     if (derived) return derived
 
     if ((statementDay || 0) > 0) {
-        const parsed = parseISO(transaction.occurred_at)
+        const parsed = parseISO(transaction.occurred_at || transaction.created_at || '')
         if (!Number.isNaN(parsed.getTime())) {
             return resolveCycleTagByStatementDay(parsed, statementDay)
         }
     }
 
     return normalizeMonthTag(transaction.tag || '') || ''
+}
+
+function resolveAccountStatementDay(account?: Account): number | null {
+    const raw = account?.statement_day ?? account?.credit_card_info?.statement_day
+    const day = Number(raw || 0)
+    return day > 0 ? day : null
+}
+
+function transactionMatchesAccount(transaction: TransactionWithDetails, accountId?: string): boolean {
+    if (!accountId) return true
+    return (
+        transaction.account_id === accountId ||
+        transaction.source_account_id === accountId ||
+        transaction.target_account_id === accountId ||
+        (transaction as any).to_account_id === accountId
+    )
+}
+
+function getTransactionAccountIds(transaction: TransactionWithDetails): string[] {
+    const ids = [
+        transaction.account_id,
+        transaction.source_account_id,
+        transaction.target_account_id,
+        (transaction as any).to_account_id,
+    ].filter((value): value is string => Boolean(value))
+    return Array.from(new Set(ids))
+}
+
+function getCycleTagForSelection(transaction: TransactionWithDetails, statementDay?: number | null): string {
+    const normalizedPersisted = normalizeMonthTag(transaction.persisted_cycle_tag || transaction.account_billing_cycle || undefined)
+    if (normalizedPersisted && isYYYYMM(normalizedPersisted)) return normalizedPersisted
+
+    const normalizedDerived = normalizeMonthTag(transaction.derived_cycle_tag || undefined)
+    if (normalizedDerived && isYYYYMM(normalizedDerived)) return normalizedDerived
+
+    const fallback = resolveTransactionCycleTagForAccount(transaction, statementDay)
+    return isYYYYMM(fallback) ? fallback : ''
 }
 
 export function UnifiedTransactionsPage({
@@ -84,14 +121,14 @@ export function UnifiedTransactionsPage({
 
     const [date, setDate] = useState<Date>(new Date())
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
-    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year'>('year')
+    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date' | 'all' | 'year' | 'cycle'>('year')
 
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>()
     const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
     const [disabledRange, setDisabledRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
-    const [fetchedCycles, setFetchedCycles] = useState<Array<{ label: string; value: string }>>([])
+    const [fetchedCycles, setFetchedCycles] = useState<Array<{ label: string; value: string; count?: number; highlight?: boolean }>>([])
     const [isCyclesLoading, setIsCyclesLoading] = useState(false)
 
     const isManualDateChange = useRef(false)
@@ -151,14 +188,24 @@ export function UnifiedTransactionsPage({
 
         const selectedAccount = accounts.find(account => account.id === selectedAccountId)
 
-        const relevantTxns = transactions.filter(
-            t => t.account_id === selectedAccountId || t.to_account_id === selectedAccountId
-        )
+        const relevantTxns = transactions.filter((t) => transactionMatchesAccount(t, selectedAccountId))
+
+        const statementDay = resolveAccountStatementDay(selectedAccount)
+        const cycleCountByTag = relevantTxns.reduce<Record<string, number>>((acc, txn) => {
+            const tag = getCycleTagForSelection(txn, statementDay)
+            if (!tag) return acc
+            acc[tag] = (acc[tag] || 0) + 1
+            return acc
+        }, {})
+
+        const currentCycleTag = statementDay
+            ? resolveCycleTagByStatementDay(new Date(), statementDay)
+            : undefined
 
         // Build transaction-derived cycles (always available as fallback)
         const txnTags = new Set<string>()
         relevantTxns.forEach(t => {
-            const normalized = normalizeMonthTag(t.persisted_cycle_tag || t.account_billing_cycle || undefined)
+            const normalized = getCycleTagForSelection(t, statementDay)
             if (normalized) txnTags.add(normalized)
         })
         const txnDerivedCycles = Array.from(txnTags)
@@ -166,16 +213,12 @@ export function UnifiedTransactionsPage({
             .map(tag => ({
                 value: tag,
                 label: formatCycleTag(tag) || tag,
+                count: cycleCountByTag[tag] || 0,
+                highlight: tag === currentCycleTag,
             }))
 
-        if (selectedAccount?.type === 'credit_card') {
-            // Use API-fetched cycles; fall back to txnDerived if API returned nothing
-            const base = fetchedCycles.length > 0 ? fetchedCycles : txnDerivedCycles
-            if (selectedCycle === 'custom') return [{ value: 'custom', label: 'Custom' }, ...base]
-            return base
-        }
-
-        const base = txnDerivedCycles
+        // Use API-fetched cycles when available; otherwise fall back to derived cycles.
+        const base = fetchedCycles.length > 0 ? fetchedCycles : txnDerivedCycles
         if (selectedCycle === 'custom') base.unshift({ value: 'custom', label: 'Custom' })
         return base
     }, [transactions, selectedAccountId, selectedCycle, accounts, fetchedCycles])
@@ -188,11 +231,15 @@ export function UnifiedTransactionsPage({
         }
 
         const selectedAccount = accounts.find(account => account.id === selectedAccountId)
-        if (selectedAccount?.type !== 'credit_card') {
-            setFetchedCycles([])
-            setIsCyclesLoading(false)
-            return
-        }
+
+        const relevantTxns = transactions.filter((t) => transactionMatchesAccount(t, selectedAccountId))
+        const statementDay = resolveAccountStatementDay(selectedAccount)
+        const cycleCountByTag = relevantTxns.reduce<Record<string, number>>((acc, txn) => {
+            const tag = getCycleTagForSelection(txn, statementDay)
+            if (!tag) return acc
+            acc[tag] = (acc[tag] || 0) + 1
+            return acc
+        }, {})
 
         setIsCyclesLoading(true)
         fetch(`/api/cashback/cycle-options?accountId=${encodeURIComponent(selectedAccountId)}&t=${Date.now()}`, {
@@ -205,25 +252,35 @@ export function UnifiedTransactionsPage({
                 const mapped = options.map((opt: any) => ({
                     label: opt.label,
                     value: opt.tag,
+                    count: cycleCountByTag[opt.tag] || 0,
+                    highlight: statementDay
+                        ? opt.tag === resolveCycleTagByStatementDay(new Date(), statementDay)
+                        : options.length > 0 && opt.tag === options[0].tag,
                 }))
                 setFetchedCycles(mapped)
                 setIsCyclesLoading(false)
-
-                // Auto-select current cycle only when API returns actual data
-                // (txnDerived fallback is handled via cycleOptions memo)
-                if (!selectedCycle && mapped.length > 0) {
-                    const currentTag = resolveCycleTagByStatementDay(new Date(), selectedAccount.statement_day)
-                    const defaultCycle = mapped.some((cycle) => cycle.value === currentTag)
-                        ? currentTag
-                        : mapped[0].value
-                    setSelectedCycle(defaultCycle)
-                }
             })
             .catch(() => {
                 setFetchedCycles([])
                 setIsCyclesLoading(false)
             })
-    }, [selectedAccountId, accounts, selectedCycle])
+    }, [selectedAccountId, accounts, transactions])
+
+    useEffect(() => {
+        if (!selectedAccountId) {
+            setSelectedCycle(undefined)
+            if (dateMode === 'cycle') setDateMode('all')
+            return
+        }
+
+        if (dateMode !== 'cycle') setDateMode('cycle')
+
+        const hasValidCurrent = !selectedCycle || cycleOptions.some((option) => option.value === selectedCycle)
+        if (hasValidCurrent) return
+
+        const highlighted = cycleOptions.find((option) => option.highlight && option.value !== 'all')
+        setSelectedCycle(highlighted?.value)
+    }, [selectedAccountId, cycleOptions, selectedCycle, dateMode])
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -392,7 +449,7 @@ export function UnifiedTransactionsPage({
     }, [search])
 
     const handleCycleChange = (cycle?: string) => {
-        setSelectedCycle(cycle)
+        setSelectedCycle(cycle === 'all' ? undefined : cycle)
     }
 
     const hasActiveFilters =
@@ -414,7 +471,7 @@ export function UnifiedTransactionsPage({
         const preFiltered = transactions.filter(t => {
             // Account Context
             if (selectedAccountId) {
-                if (t.account_id !== selectedAccountId && t.to_account_id !== selectedAccountId) return false
+                if (!transactionMatchesAccount(t, selectedAccountId)) return false
             }
 
             // Person Context
@@ -494,12 +551,12 @@ export function UnifiedTransactionsPage({
 
             // 2. Account Filter
             if (selectedAccountId) {
-                if (t.account_id !== selectedAccountId && t.to_account_id !== selectedAccountId) return false
+                if (!transactionMatchesAccount(t, selectedAccountId)) return false
             }
 
             if (selectedCycle && selectedAccountId && selectedCycle !== 'all') {
                 const selectedAccount = accounts.find(account => account.id === selectedAccountId)
-                const txCycle = resolveTransactionCycleTagForAccount(t, selectedAccount?.statement_day)
+                const txCycle = resolveTransactionCycleTagForAccount(t, resolveAccountStatementDay(selectedAccount))
                 if (txCycle !== selectedCycle) return false
             }
 
@@ -529,8 +586,7 @@ export function UnifiedTransactionsPage({
                             return false;
                         }
                     })() ||
-                    (t.account_id && matchedAccountIds.includes(t.account_id)) ||
-                    (t.to_account_id && matchedAccountIds.includes(t.to_account_id)) ||
+                    getTransactionAccountIds(t).some((accId) => matchedAccountIds.includes(accId)) ||
                     (t.person_id && matchedPersonIds.includes(t.person_id))
 
                 if (!match) return false
@@ -566,7 +622,7 @@ export function UnifiedTransactionsPage({
     }, [
         transactions, search, filterType, statusFilter,
         date, dateRange, dateMode,
-        selectedAccountId, selectedPersonId, selectedCategoryId
+        selectedAccountId, selectedPersonId, selectedCategoryId, selectedCycle
     ])
 
     // Calculate available filter options based on current filtered view
@@ -579,8 +635,7 @@ export function UnifiedTransactionsPage({
         const catIds = new Set<string>()
 
         filteredTransactions.forEach(t => {
-            if (t.account_id) accIds.add(t.account_id)
-            if (t.to_account_id) accIds.add(t.to_account_id)
+            getTransactionAccountIds(t).forEach((accId) => accIds.add(accId))
             if (t.person_id) personIds.add(t.person_id)
             if (t.category_id) catIds.add(t.category_id)
         })
